@@ -110,6 +110,19 @@ def crea_servidor(projecte: Projecte, port: int) -> ThreadingHTTPServer:
             except (BrokenPipeError, ConnectionResetError):
                 pass  # el navegador ha tallat la descàrrega (passa sovint en saltar pel vídeo)
 
+        def _index(self):
+            html = (PAGINA / "index.html").read_text(encoding="utf-8")
+            for nom in ("app.js", "estil.css"):
+                versio = int((PAGINA / nom).stat().st_mtime)
+                html = html.replace(f"/pagina/{nom}", f"/pagina/{nom}?v={versio}")
+            cos = html.encode()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(cos)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(cos)
+
         def _cos(self) -> dict:
             n = int(self.headers.get("Content-Length") or 0)
             return json.loads(self.rfile.read(n) or b"{}")
@@ -118,7 +131,7 @@ def crea_servidor(projecte: Projecte, port: int) -> ThreadingHTTPServer:
         def do_GET(self):
             ruta = unquote(urlparse(self.path).path)
             if ruta == "/":
-                return self._fitxer(PAGINA / "index.html")
+                return self._index()
             if ruta.startswith("/pagina/"):
                 return self._segur(PAGINA, ruta[len("/pagina/"):])
             if ruta == "/proxy.mp4":
@@ -162,6 +175,11 @@ def crea_servidor(projecte: Projecte, port: int) -> ThreadingHTTPServer:
                 if ruta == "/api/notes":
                     projecte.desa_notes(cos.get("notes", []))
                     return self._json({"notes": projecte.notes()})
+                if ruta == "/api/registre":  # què fa el reproductor al navegador (per trobar errors)
+                    with (projecte.carpeta / "registre-pagina.log").open("a", encoding="utf-8") as f:
+                        for e in cos.get("events", [])[:500]:
+                            f.write(json.dumps(e, ensure_ascii=False) + "\n")
+                    return self._json({"ok": True})
                 if ruta == "/api/mostra":  # obre el Finder amb el fitxer seleccionat
                     path = (projecte.carpeta / EXPORTS / cos.get("nom", "")).resolve()
                     if path.parent != (projecte.carpeta / EXPORTS).resolve() or not path.exists():

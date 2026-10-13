@@ -23,6 +23,26 @@ const limita = (v, a, b) => Math.min(b, Math.max(a, v));
 const copia = (o) => JSON.parse(JSON.stringify(o));
 const arrodoneix = (n) => Math.round(n * 100) / 100;
 
+// --- Registre de diagnòstic ---------------------------------------------------------------
+// La pàgina apunta què fa el reproductor; el servidor ho desa a registre-pagina.log
+// dins la carpeta del projecte (no surt de l'ordinador). Serveix per trobar errors.
+const registreCua = [];
+const registreInici = performance.now();
+function registre(tipus, dades = {}) {
+  registreCua.push({ t: Math.round(performance.now() - registreInici), tipus, ...dades });
+  if (registreCua.length > 600) registreCua.splice(0, 200);
+}
+setInterval(() => {
+  if (!registreCua.length) return;
+  const events = registreCua.splice(0);
+  fetch("/api/registre", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ events }) }).catch(() => {});
+}, 1500);
+const ev = (v) => (v ? { id: v.id.replace("video-", ""), t: +v.currentTime.toFixed(3), pausat: v.paused,
+  ready: v.readyState, amagat: v.classList.contains("amagat"), muted: v.muted } : null);
+window.addEventListener("error", (e) => registre("error-js", { msg: e.message, linia: e.lineno }));
+window.addEventListener("unhandledrejection", (e) => registre("promesa-rebutjada", { msg: String(e.reason) }));
+
 const ICONES = {
   treu: '<svg viewBox="0 0 16 16"><path d="M4 8h8"/></svg>',
   deixa: '<svg viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></svg>',
@@ -117,6 +137,7 @@ function refes() {
 function aplicaTrams(r) {
   trams = r.trams;
   duradaFinal = r.durada_final;
+  registre("trams", { n: trams.length, primers: trams.slice(0, 3), durada: duradaFinal });
   acum = [];
   let t = 0;
   for (const [a, b] of trams) { acum.push(t); t += b - a; }
@@ -364,7 +385,10 @@ function actualitzaPropostes() {
 
 // --- Reproductor ------------------------------------------------------------------------
 
-const R = { a: $("#video-a"), b: $("#video-b"), actiu: null, altre: null, k: 0, reproduint: false, aturaA: null, unic: false };
+// Un sol vídeo que salta de tros en tros. (Vam provar dos vídeos alternats per evitar la
+// micropausa dels salts, però al Safari el segon vídeo deixava de dir per on anava i
+// el muntatge sonava sencer, també el que estava tret.)
+const R = { v: $("#video-a"), k: 0, reproduint: false, aturaA: null, vigila: { t: -1, des: 0 } };
 
 // --- Escoltar cada tall ---------------------------------------------------------------------
 // En treure o recuperar paraules amb el vídeo aturat, el reproductor fa sonar uns segons
@@ -394,6 +418,7 @@ function muntatgeDe(t) {
 function escoltaTall(t) {
   if (!trams.length || sona()) return;
   const m = muntatgeDe(t);
+  registre("escolta", { t, m: +m.toFixed(3) });
   vesA(Math.max(0, m - 1.5));
   reprodueix();
   R.aturaA = Math.min(duradaFinal, m + 1.5);
@@ -410,17 +435,10 @@ function tempsMuntatge() {
   if (!trams.length) return 0;
   const k = Math.min(R.k, trams.length - 1);
   const [a, b] = trams[k];
-  return acum[k] + limita(R.actiu.currentTime - a, 0, b - a);
+  return acum[k] + limita(R.v.currentTime - a, 0, b - a);
 }
 
 function durada() { return vista === "esborrany" ? (esborrany?.durada || vE.duration || 0) : duradaFinal; }
-
-function preparaSeguent() {
-  const seguent = trams[R.k + 1];
-  if (!seguent || R.unic) return;
-  R.altre.pause();
-  if (Math.abs(R.altre.currentTime - seguent[0]) > 0.02) R.altre.currentTime = seguent[0];
-}
 
 function vesA(m) {
   m = limita(m, 0, durada());
@@ -429,8 +447,8 @@ function vesA(m) {
   let k = 0;
   while (k + 1 < trams.length && acum[k + 1] <= m + 1e-6) k++;
   R.k = k;
-  R.actiu.currentTime = trams[k][0] + (m - acum[k]);
-  preparaSeguent();
+  R.v.currentTime = trams[k][0] + (m - acum[k]);
+  registre("vesA", { m: +m.toFixed(3), k, video: ev(R.v) });
 }
 
 function vesAOriginal(t) {
@@ -442,89 +460,59 @@ function vesAOriginal(t) {
 // Si s'ha editat mentre sonava, continuem pel tros que toca.
 function recolloca() {
   if (!trams.length) { atura(); return; }
-  const t = R.actiu.currentTime;
+  const t = R.v.currentTime;
   const k = indexTram(t);
+  registre("recolloca", { t: +t.toFixed(3), k, kAbans: R.k });
   if (k >= trams.length) { R.k = trams.length - 1; if (R.reproduint) atura(); return; }
   R.k = k;
-  if (t < trams[k][0] - 0.01 && R.reproduint) R.actiu.currentTime = trams[k][0];
-  preparaSeguent();
+  if (t < trams[k][0] - 0.01 && R.reproduint) R.v.currentTime = trams[k][0];
 }
 
 function salta() {
   const k = R.k + 1;
-  if (k >= trams.length) {
-    atura();
-    return;
-  }
-  if (R.unic) {  // mode d'un sol vídeo: saltem dins del mateix (hi pot haver una micropausa)
-    R.k = k;
-    R.actiu.currentTime = trams[k][0];
-    return;
-  }
-  const anterior = R.actiu;
-  const seguent = R.altre;
-  if (Math.abs(seguent.currentTime - trams[k][0]) > 0.06) seguent.currentTime = trams[k][0];
-  seguent.classList.remove("amagat");
-  anterior.classList.add("amagat");
-  anterior.pause();
-  R.altre = anterior;
-  R.actiu = seguent;
+  if (k >= trams.length) { atura(); return; }
+  registre("salta", { k, cap: trams[k][0], video: ev(R.v) });
   R.k = k;
-  seguent.play().then(preparaSeguent).catch(() => {
-    // El Safari no deixa sonar aquest vídeo: continuem amb l'altre, saltant dins seu.
-    R.unic = true;
-    seguent.classList.add("amagat");
-    anterior.classList.remove("amagat");
-    R.actiu = anterior;
-    R.altre = seguent;
-    anterior.currentTime = trams[k][0];
-    if (R.reproduint) anterior.play().catch(() => atura());
-  });
-}
-
-// El Safari només deixa sonar un vídeo si l'has activat amb un clic. Al primer clic
-// o tecla, «despertem» els dos vídeos del reproductor en silenci.
-function desbloqueja() {
-  for (const v of [R.a, R.b, vE]) {
-    if (v.dataset.desbloquejat || !v.paused || !v.src) continue;
-    v.dataset.desbloquejat = "1";
-    const temps = v.currentTime;
-    v.muted = true;
-    v.play().then(() => {
-      if (!(R.reproduint && v === R.actiu)) { v.pause(); v.currentTime = temps; }
-    }).catch(() => { delete v.dataset.desbloquejat; }).finally(() => { v.muted = false; });
-  }
+  R.v.currentTime = trams[k][0];
 }
 
 function reprodueix() {
   if (vista === "esborrany") { vE.play(); return; }
   if (!trams.length) return;
   if (tempsMuntatge() >= duradaFinal - 0.05) vesA(0);
-  const t = R.actiu.currentTime;
+  const t = R.v.currentTime;
   const k = indexTram(t);
   if (k >= trams.length) vesA(0);
-  else { R.k = k; if (t < trams[k][0]) R.actiu.currentTime = trams[k][0]; }
-  preparaSeguent();
+  else { R.k = k; if (t < trams[k][0]) R.v.currentTime = trams[k][0]; }
   R.reproduint = true;
+  R.vigila = { t: -1, des: performance.now() };
   document.body.classList.add("reproduint");
-  R.actiu.play().catch(() => {
-    // Aquest vídeo encara no té permís per sonar: provem amb l'altre al mateix punt.
-    const altre = R.altre;
-    altre.currentTime = R.actiu.currentTime;
-    altre.classList.remove("amagat");
-    R.actiu.classList.add("amagat");
-    R.altre = R.actiu;
-    R.actiu = altre;
-    R.unic = true;
-    altre.play().catch(() => { atura(); avis("Toca el botó de reproduir per començar."); });
+  registre("play", { k: R.k, video: ev(R.v) });
+  R.v.play().then(() => registre("play-ok", { video: ev(R.v) })).catch((e) => {
+    registre("play-rebutjat", { error: e.name, video: ev(R.v) });
+    atura();
+    avis("Toca el botó de reproduir per començar.");
   });
 }
 
 function atura() {
+  if (R.reproduint) registre("atura", { k: R.k, video: ev(R.v) });
   R.aturaA = null;
   R.reproduint = false;
-  R.a.pause(); R.b.pause(); vE.pause();
+  R.v.pause(); vE.pause();
   document.body.classList.remove("reproduint");
+}
+
+// Vigilant: si el vídeo diu que sona però el seu temps no avança, el despertem.
+function vigila() {
+  if (!R.reproduint || R.v.paused || R.v.seeking || R.v.readyState < 3) { R.vigila.des = performance.now(); return; }
+  const t = R.v.currentTime;
+  if (t !== R.vigila.t) { R.vigila = { t, des: performance.now() }; return; }
+  if (performance.now() - R.vigila.des > 600) {
+    registre("congelat", { video: ev(R.v) });
+    R.vigila.des = performance.now();
+    R.v.currentTime = t + 0.001;
+  }
 }
 
 const sona = () => (vista === "esborrany" ? !vE.paused : R.reproduint);
@@ -536,12 +524,18 @@ function reprodueixDes(id) {
 }
 
 // Bucle sincronitzat amb la pantalla: salta els trossos tallats i marca la paraula que sona.
+let darreraMostra = 0;
 function bucle() {
   requestAnimationFrame(bucle);
   if (!P) return;
+  if (R.reproduint && performance.now() - darreraMostra > 300) {
+    darreraMostra = performance.now();
+    registre("mostra", { k: R.k, m: +tempsMuntatge().toFixed(3), video: ev(R.v) });
+  }
+  vigila();
   if (R.aturaA != null && R.reproduint && tempsMuntatge() >= R.aturaA) { atura(); }
   if (vista === "directe" && R.reproduint && trams.length) {
-    const t = R.actiu.currentTime;
+    const t = R.v.currentTime;
     const [a, b] = trams[Math.min(R.k, trams.length - 1)];
     if (t < a - 0.3 || t > b + 0.3) recolloca();
     else if (t >= b - 0.03) salta();
@@ -553,7 +547,7 @@ function bucle() {
 let paraulaMarcada = null;
 function paraulaActual() {
   let t;
-  if (vista === "directe") t = R.actiu.currentTime;
+  if (vista === "directe") t = R.v.currentTime;
   else if (esborrany?.trams) {
     const m = vE.currentTime;
     let k = 0;
@@ -603,13 +597,12 @@ function pintaMarques(llista, inicis, total) {
 }
 
 function instalaReproductor() {
-  document.addEventListener("pointerdown", desbloqueja, { capture: true });
-  document.addEventListener("keydown", desbloqueja, { capture: true });
-  R.a.src = R.b.src = "/proxy.mp4";
-  R.actiu = R.a;
-  R.altre = R.b;
-  R.a.addEventListener("error", () => avis("No puc obrir la còpia lleugera del vídeo (proxy.mp4)."));
-  R.a.addEventListener("loadedmetadata", () => { vesA(0); pintaTemps(); }, { once: true });
+  R.v.src = "/proxy.mp4";
+  for (const nom of ["play", "pause", "seeking", "seeked", "waiting", "stalled", "error", "ended"]) {
+    R.v.addEventListener(nom, () => registre("v-" + nom, ev(R.v)));
+  }
+  R.v.addEventListener("error", () => avis("No puc obrir la còpia lleugera del vídeo (proxy.mp4)."));
+  R.v.addEventListener("loadedmetadata", () => { vesA(0); pintaTemps(); }, { once: true });
 
   const commutaPlay = () => { R.aturaA = null; sona() ? atura() : reprodueix(); };
   $("#play").addEventListener("click", commutaPlay);
@@ -648,8 +641,7 @@ function canviaVista(nova) {
   vista = nova;
   for (const b of $$("#vista button")) b.setAttribute("aria-checked", String(b.dataset.vista === vista));
   const directe = vista === "directe";
-  R.actiu.classList.toggle("amagat", !directe);
-  R.altre.classList.add("amagat");
+  R.v.classList.toggle("amagat", !directe);
   vE.classList.toggle("amagat", directe);
   $("#nova-nota").hidden = directe;
   $("#escolta").hidden = !directe;
@@ -922,6 +914,7 @@ async function inicia() {
     return;
   }
   document.title = `${P.nom} · tallat`;
+  registre("inici", { navegador: navigator.userAgent, finestra: [innerWidth, innerHeight] });
   $("#nom-projecte").textContent = P.nom;
   $("#durada-original").textContent = fmt(P.durada);
   estat = P.estat;
