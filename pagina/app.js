@@ -66,6 +66,7 @@ const refer = [];
 let mode = "talla";
 let vista = "directe";
 const spans = new Map();   // id de paraula → <span>
+let paragrafsEl = [];      // [{el, ids}] per marcar les frases tretes senceres
 let esborrany = null;      // {nom, trams, acum, durada} de la versió que es mira
 let liniesSub = [];        // subtítols en temps del muntatge (calculats pel servidor)
 let notes = [];
@@ -158,9 +159,11 @@ function pintaText() {
   const cont = $("#transcripcio");
   cont.textContent = "";
   spans.clear();
+  paragrafsEl = [];
   for (const ids of P.paragrafs) {
     const par = document.createElement("p");
     par.className = "paragraf";
+    paragrafsEl.push({ el: par, ids });
     const marca = document.createElement("button");
     marca.className = "marca-temps";
     marca.textContent = fmt(P.paraules[ids[0]].inici);
@@ -219,6 +222,7 @@ function actualitzaParaules() {
       : proposta ? `${PROPOSTES[proposta] || "Proposta"}: toca-la per treure-la`
       : correccio != null ? `Original: ${P.paraules[id].text}` : "";
   }
+  for (const { el, ids } of paragrafsEl) el.classList.toggle("tot-fora", ids.every(esFora));
 }
 
 function commuta(ids, treure) {
