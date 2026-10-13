@@ -29,6 +29,12 @@ class TestEdicio(unittest.TestCase):
         self.assertLessEqual(t[0][1], 1.6 + 1 / 30)   # el tall no entra a «eh»
         self.assertGreaterEqual(t[1][0], 2.0 - 1 / 30)
 
+    def test_res_de_la_paraula_esborrada_es_cola(self):
+        r, _ = edicio.compara(P, "Hola, com estàs?\n\nBé.")
+        t = edicio.trams(r, fps=29.97, durada=10)
+        self.assertLessEqual(t[0][1], 1.6)   # «eh,» comença a 1,6
+        self.assertGreaterEqual(t[1][0], 2.0)  # i acaba a 2,0
+
     def test_correccio_ortografica_no_talla(self):
         r, avisos = edicio.compara(P, "Hola, eh, com estas?\n\nBé.")
         self.assertTrue(all(p["conservada"] for p in r))

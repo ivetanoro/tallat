@@ -179,22 +179,27 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
         final = c[-1]["final"] + marge
         anterior = per_id.get(c[0]["id"] - 1)
         seguent = per_id.get(c[-1]["id"] + 1)
+        tanca_inici = tanca_final = False  # el costat toca una paraula esborrada
         if anterior is not None:
             if anterior["conservada"]:  # tall per silenci: deixem mitja pausa a cada costat
                 inici = max(inici - pausa_maxima / 2 + marge, anterior["final"])
             else:                       # no deixem entrar el final d'una paraula esborrada
                 inici = max(inici, anterior["final"])
+                tanca_inici = True
         if seguent is not None:
             if seguent["conservada"]:
                 final = min(final + pausa_maxima / 2 - marge, seguent["inici"])
             else:
                 final = min(final, seguent["inici"])
-        brut.append((max(0.0, inici), min(durada, final)))
+                tanca_final = True
+        brut.append((max(0.0, inici), min(durada, final), tanca_inici, tanca_final))
 
+    # Ajustem a fotogrames sencers. Al costat d'una paraula esborrada arrodonim cap endins,
+    # perquè no se'n coli ni un fotograma (una «s» de 30 ms ja se sent).
     ajustats = []
-    for a, b in brut:
-        a = math.floor(a * fps) / fps
-        b = math.ceil(b * fps) / fps
+    for a, b, tanca_a, tanca_b in brut:
+        a = (math.ceil(a * fps - 1e-6) if tanca_a else math.floor(a * fps + 1e-6)) / fps
+        b = (math.floor(b * fps + 1e-6) if tanca_b else math.ceil(b * fps - 1e-6)) / fps
         if b - a < 1 / fps:
             continue
         if ajustats and a <= ajustats[-1][1]:

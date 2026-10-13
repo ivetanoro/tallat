@@ -364,7 +364,7 @@ function actualitzaPropostes() {
 
 // --- Reproductor ------------------------------------------------------------------------
 
-const R = { a: $("#video-a"), b: $("#video-b"), actiu: null, altre: null, k: 0, reproduint: false, aturaA: null };
+const R = { a: $("#video-a"), b: $("#video-b"), actiu: null, altre: null, k: 0, reproduint: false, aturaA: null, unic: false };
 
 // --- Escoltar cada tall ---------------------------------------------------------------------
 // En treure o recuperar paraules amb el vídeo aturat, el reproductor fa sonar uns segons
@@ -417,7 +417,7 @@ function durada() { return vista === "esborrany" ? (esborrany?.durada || vE.dura
 
 function preparaSeguent() {
   const seguent = trams[R.k + 1];
-  if (!seguent) return;
+  if (!seguent || R.unic) return;
   R.altre.pause();
   if (Math.abs(R.altre.currentTime - seguent[0]) > 0.02) R.altre.currentTime = seguent[0];
 }
@@ -456,16 +456,44 @@ function salta() {
     atura();
     return;
   }
+  if (R.unic) {  // mode d'un sol vídeo: saltem dins del mateix (hi pot haver una micropausa)
+    R.k = k;
+    R.actiu.currentTime = trams[k][0];
+    return;
+  }
+  const anterior = R.actiu;
   const seguent = R.altre;
   if (Math.abs(seguent.currentTime - trams[k][0]) > 0.06) seguent.currentTime = trams[k][0];
-  seguent.play().catch(() => {});
   seguent.classList.remove("amagat");
-  R.actiu.classList.add("amagat");
-  R.actiu.pause();
-  R.altre = R.actiu;
+  anterior.classList.add("amagat");
+  anterior.pause();
+  R.altre = anterior;
   R.actiu = seguent;
   R.k = k;
-  preparaSeguent();
+  seguent.play().then(preparaSeguent).catch(() => {
+    // El Safari no deixa sonar aquest vídeo: continuem amb l'altre, saltant dins seu.
+    R.unic = true;
+    seguent.classList.add("amagat");
+    anterior.classList.remove("amagat");
+    R.actiu = anterior;
+    R.altre = seguent;
+    anterior.currentTime = trams[k][0];
+    if (R.reproduint) anterior.play().catch(() => atura());
+  });
+}
+
+// El Safari només deixa sonar un vídeo si l'has activat amb un clic. Al primer clic
+// o tecla, «despertem» els dos vídeos del reproductor en silenci.
+function desbloqueja() {
+  for (const v of [R.a, R.b, vE]) {
+    if (v.dataset.desbloquejat || !v.paused || !v.src) continue;
+    v.dataset.desbloquejat = "1";
+    const temps = v.currentTime;
+    v.muted = true;
+    v.play().then(() => {
+      if (!(R.reproduint && v === R.actiu)) { v.pause(); v.currentTime = temps; }
+    }).catch(() => { delete v.dataset.desbloquejat; }).finally(() => { v.muted = false; });
+  }
 }
 
 function reprodueix() {
@@ -477,9 +505,19 @@ function reprodueix() {
   if (k >= trams.length) vesA(0);
   else { R.k = k; if (t < trams[k][0]) R.actiu.currentTime = trams[k][0]; }
   preparaSeguent();
-  R.actiu.play().catch(() => {});
   R.reproduint = true;
   document.body.classList.add("reproduint");
+  R.actiu.play().catch(() => {
+    // Aquest vídeo encara no té permís per sonar: provem amb l'altre al mateix punt.
+    const altre = R.altre;
+    altre.currentTime = R.actiu.currentTime;
+    altre.classList.remove("amagat");
+    R.actiu.classList.add("amagat");
+    R.altre = R.actiu;
+    R.actiu = altre;
+    R.unic = true;
+    altre.play().catch(() => { atura(); avis("Toca el botó de reproduir per començar."); });
+  });
 }
 
 function atura() {
@@ -565,6 +603,8 @@ function pintaMarques(llista, inicis, total) {
 }
 
 function instalaReproductor() {
+  document.addEventListener("pointerdown", desbloqueja, { capture: true });
+  document.addEventListener("keydown", desbloqueja, { capture: true });
   R.a.src = R.b.src = "/proxy.mp4";
   R.actiu = R.a;
   R.altre = R.b;
