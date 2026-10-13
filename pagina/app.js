@@ -63,6 +63,7 @@ function sincronitza() {
       const r = await api("/api/estat", estat);
       estat.revisio = r.estat.revisio;
       aplicaTrams(r);
+      if (!pendent && escoltaPendent != null) { escoltaTall(escoltaPendent); escoltaPendent = null; }
     } catch (e) {
       if (e.codi !== 409) throw e;
       // La pàgina també és oberta en una altra pestanya i allà s'ha desat després.
@@ -196,6 +197,7 @@ function actualitzaParaules() {
 }
 
 function commuta(ids, treure) {
+  demanaEscolta(Math.min(...ids));
   canvia((e) => {
     for (const id of ids) {
       const k = String(id);
@@ -315,6 +317,7 @@ function context(id) {
 }
 
 function decideix(ids, treure) {
+  if (ids.length === 1 && treure) demanaEscolta(ids[0]);
   canvia((e) => {
     for (const id of ids) {
       const k = String(id);
@@ -361,7 +364,40 @@ function actualitzaPropostes() {
 
 // --- Reproductor ------------------------------------------------------------------------
 
-const R = { a: $("#video-a"), b: $("#video-b"), actiu: null, altre: null, k: 0, reproduint: false };
+const R = { a: $("#video-a"), b: $("#video-b"), actiu: null, altre: null, k: 0, reproduint: false, aturaA: null };
+
+// --- Escoltar cada tall ---------------------------------------------------------------------
+// En treure o recuperar paraules amb el vídeo aturat, el reproductor fa sonar uns segons
+// al voltant del tall perquè se senti l'efecte al moment.
+let escoltaPendent = null;
+let escoltaActiva = (() => { try { return localStorage.getItem("tallat.escolta") !== "no"; } catch { return true; } })();
+
+function demanaEscolta(id) {
+  if (!escoltaActiva || sona()) return;
+  escoltaPendent = P.paraules[id].inici;
+  if (vista !== "directe") {
+    canviaVista("directe");
+    avis("Ara veus el muntatge en directe. L'esborrany no té aquest canvi.");
+  }
+}
+
+// Temps del vídeo original → temps del muntatge (si cau dins d'un tall, l'inici del tros següent).
+function muntatgeDe(t) {
+  for (let k = 0; k < trams.length; k++) {
+    const [a, b] = trams[k];
+    if (t < a) return acum[k];
+    if (t <= b) return acum[k] + (t - a);
+  }
+  return duradaFinal;
+}
+
+function escoltaTall(t) {
+  if (!trams.length || sona()) return;
+  const m = muntatgeDe(t);
+  vesA(Math.max(0, m - 1.5));
+  reprodueix();
+  R.aturaA = Math.min(duradaFinal, m + 1.5);
+}
 const vE = $("#video-esborrany");
 
 function indexTram(t, llista = trams) {
@@ -447,6 +483,7 @@ function reprodueix() {
 }
 
 function atura() {
+  R.aturaA = null;
   R.reproduint = false;
   R.a.pause(); R.b.pause(); vE.pause();
   document.body.classList.remove("reproduint");
@@ -464,6 +501,7 @@ function reprodueixDes(id) {
 function bucle() {
   requestAnimationFrame(bucle);
   if (!P) return;
+  if (R.aturaA != null && R.reproduint && tempsMuntatge() >= R.aturaA) { atura(); }
   if (vista === "directe" && R.reproduint && trams.length) {
     const t = R.actiu.currentTime;
     const [a, b] = trams[Math.min(R.k, trams.length - 1)];
@@ -533,7 +571,7 @@ function instalaReproductor() {
   R.a.addEventListener("error", () => avis("No puc obrir la còpia lleugera del vídeo (proxy.mp4)."));
   R.a.addEventListener("loadedmetadata", () => { vesA(0); pintaTemps(); }, { once: true });
 
-  const commutaPlay = () => (sona() ? atura() : reprodueix());
+  const commutaPlay = () => { R.aturaA = null; sona() ? atura() : reprodueix(); };
   $("#play").addEventListener("click", commutaPlay);
   $("#gran-play").addEventListener("click", commutaPlay);
   $("#enrere").addEventListener("click", () => vesA(tempsMuntatge() - 5));
@@ -788,6 +826,14 @@ function instalaControls() {
       avis("Neteja feta. Les paraules que havies recuperat es respecten.");
     } catch (e) { avis(e.message); }
   });
+  const interruptor = $("#escolta");
+  interruptor.setAttribute("aria-checked", String(escoltaActiva));
+  interruptor.addEventListener("click", () => {
+    escoltaActiva = !escoltaActiva;
+    interruptor.setAttribute("aria-checked", String(escoltaActiva));
+    try { localStorage.setItem("tallat.escolta", escoltaActiva ? "si" : "no"); } catch { /* sense memòria del navegador */ }
+    avis(escoltaActiva ? "Sentiràs cada tall en fer-lo." : "Ja no sonarà res en fer un tall.");
+  });
   $("#desfes").addEventListener("click", desfes);
   $("#refes").addEventListener("click", refes);
   $("#esborrany").addEventListener("click", () => comencaRender("esborrany"));
@@ -812,7 +858,7 @@ function instalaControls() {
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea")) return;
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
-    if (e.key === " ") { e.preventDefault(); sona() ? atura() : reprodueix(); }
+    if (e.key === " ") { e.preventDefault(); R.aturaA = null; sona() ? atura() : reprodueix(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); vesA(tempsMuntatge() - 5); }
     else if (e.key === "ArrowRight") { e.preventDefault(); vesA(tempsMuntatge() + 5); }
     else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? refes() : desfes(); }

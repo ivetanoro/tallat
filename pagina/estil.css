@@ -240,6 +240,23 @@ body.mode-corregeix .p { cursor: text; }
 .icona:active { transform: scale(0.92); }
 .icona:disabled { opacity: 0.3; cursor: default; background: none; transform: none; }
 
+.interruptor {
+  display: inline-flex; align-items: center; gap: 8px; border: 0; background: none;
+  padding: 4px 6px; border-radius: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; white-space: nowrap;
+}
+.interruptor:hover { color: var(--text); }
+.interruptor .pista {
+  position: relative; width: 30px; height: 18px; border-radius: 9px; background: var(--linia);
+  transition: background-color 200ms ease-out;
+}
+.interruptor .bola {
+  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 260ms var(--molla);
+}
+.interruptor[aria-checked="true"] .pista { background: var(--accent); }
+.interruptor[aria-checked="true"] .bola { transform: translateX(12px); }
+
 .feina { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .barra-progres { width: 90px; height: 4px; border-radius: 2px; background: var(--linia); overflow: hidden; }
 .barra-progres span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width 300ms ease-out; }
