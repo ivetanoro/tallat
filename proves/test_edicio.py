@@ -104,3 +104,24 @@ class TestSilenciReal(unittest.TestCase):
         t = edicio.trams(self.paraules(), fps=30, durada=3, pausa_maxima=0.35, veu=self.veu(0.8))
         self.assertEqual(len(t), 2)
         self.assertGreaterEqual(t[0][1], 0.8)  # el primer tros arriba fins on acaba la veu
+
+
+class TestFiDeLaVeu(unittest.TestCase):
+    def paraules(self):
+        return [{"id": 0, "text": "gravat.", "inici": 0.0, "final": 0.4, "frase": 0, "conservada": True},
+                {"id": 1, "text": "I", "inici": 1.3, "final": 1.5, "frase": 1, "conservada": False}]
+
+    def test_allarga_fins_on_acaba_la_veu_si_hi_ha_silenci_abans_de_la_treta(self):
+        import numpy as np
+        v = np.zeros(200, dtype=bool)
+        v[0:85] = True      # «gravat» sona fins a 0,85 (l'alineador deia 0,4)
+        v[125:150] = True   # «I» (treta)
+        t = edicio.trams(self.paraules(), fps=30, durada=2, veu=v)
+        self.assertGreaterEqual(t[0][1], 0.85 - 1 / 30)
+        self.assertLessEqual(t[0][1], 1.3)
+
+    def test_sense_silenci_entremig_no_allarga(self):
+        import numpy as np
+        v = np.ones(200, dtype=bool)  # tot és veu: no sabem de qui és el so
+        t = edicio.trams(self.paraules(), fps=30, durada=2, veu=v)
+        self.assertLessEqual(t[0][1], 0.45)

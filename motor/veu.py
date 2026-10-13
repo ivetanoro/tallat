@@ -57,3 +57,37 @@ def silenci_mes_llarg(veu: np.ndarray, t0: float, t1: float) -> tuple[float, flo
                 millor = (inici, k)
             inici = None
     return (millor[0] * PAS, millor[1] * PAS) if millor else None
+
+
+MINIM_SILENCI = 0.06  # segons de silenci que separen dues paraules
+
+
+def _trossos_de_silenci(veu: np.ndarray, t0: float, t1: float):
+    """Trossos de silenci (inici, final) d'almenys MINIM_SILENCI entre t0 i t1, en ordre."""
+    a, b = max(0, int(np.ceil(t0 / PAS))), min(len(veu), int(t1 / PAS))
+    minim = max(1, int(round(MINIM_SILENCI / PAS)))
+    trossos, inici = [], None
+    for k in range(a, b + 1):
+        silenci = k < b and not veu[k]
+        if silenci and inici is None:
+            inici = k
+        elif not silenci and inici is not None:
+            if k - inici >= minim:
+                trossos.append((inici * PAS, k * PAS))
+            inici = None
+    return trossos
+
+
+def fi_de_la_veu(veu: np.ndarray, des_de: float, abans_de: float) -> float | None:
+    """On acaba de debò la veu que comença a «des_de»: l'inici del primer silenci abans de «abans_de».
+
+    Serveix quan la paraula següent es treu: l'alineador sovint fa acabar massa d'hora l'última
+    paraula d'una frase. Si no hi ha cap silenci entremig, no sabem de qui és el so: None."""
+    trossos = _trossos_de_silenci(veu, des_de, abans_de)
+    return trossos[0][0] if trossos else None
+
+
+def inici_de_la_veu(veu: np.ndarray, despres_de: float, fins_a: float) -> float | None:
+    """Simètric: on comença de debò la veu que acaba a «fins_a» (el final de l'últim silenci)."""
+    trossos = _trossos_de_silenci(veu, despres_de, fins_a)
+    return trossos[-1][1] if trossos else None

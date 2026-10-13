@@ -197,7 +197,7 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
 
     `veu` (opcional) és el mapa de veu del so (motor/veu.py): si hi és, un silenci entre dues
     paraules només s'escurça si al so hi ha prou silenci de debò, i es talla dins d'aquest silenci."""
-    from motor.veu import silenci_mes_llarg
+    from motor.veu import fi_de_la_veu, inici_de_la_veu, silenci_mes_llarg
     pauses_mantingudes = set(pauses_mantingudes)
 
     def silenci_real(anterior: dict, p: dict):
@@ -241,6 +241,10 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
             elif anterior["conservada"]:
                 inici = max(inici, anterior["final"])
             else:                       # no deixem entrar el final d'una paraula esborrada
+                if veu is not None:     # però sí el principi real de la nostra (l'alineador s'equivoca)
+                    real = inici_de_la_veu(veu, anterior["final"], c[0]["inici"])
+                    if real is not None and real < inici:
+                        inici = real - marge / 2
                 inici = max(inici, anterior["final"])
                 tanca_inici = True
         if seguent is not None:
@@ -250,6 +254,10 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
             elif seguent["conservada"]:
                 final = min(final, seguent["inici"])
             else:
+                if veu is not None:     # allarguem fins on acaba la veu de debò, si hi ha silenci abans de la treta
+                    real = fi_de_la_veu(veu, c[-1]["final"], seguent["inici"])
+                    if real is not None and real > final:
+                        final = real + marge / 2
                 final = min(final, seguent["inici"])
                 tanca_final = True
         brut.append((max(0.0, inici), min(durada, final), tanca_inici, tanca_final))
