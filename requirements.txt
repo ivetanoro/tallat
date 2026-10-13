@@ -1,0 +1,11 @@
+# Dependències de tallat (Python 3.11).
+# Versions fixades perquè funcioni també en Macs Intel (torch 2.2.2 és l'última amb paquets per a Intel).
+torch==2.2.2
+torchaudio==2.2.2
+numpy<2
+transformers<4.47
+whisperx==3.3.1
+
+# A Mac Intel, ctranslate2 i torch porten cadascun una còpia de libiomp5 i xoquen (segfault).
+# Cal que ctranslate2/.dylibs/libiomp5.dylib i functorch/.dylibs/libiomp5.dylib
+# siguin enllaços a torch/lib/libiomp5.dylib. L'instal·lador ho farà automàticament.
