@@ -48,8 +48,9 @@ class Feina:
             self._actualitza(fase="subtitols")
             capa = projecte.capa_subtitols(trams, qualitat)
             self._actualitza(fase="video", progres=0)
-            exporta.exporta(projecte.video, trams, sortida, qualitat,
-                            progres=lambda pct: self._actualitza(progres=pct), capa=capa)
+            exporta.exporta(projecte.font(qualitat), trams, sortida, qualitat,
+                            progres=lambda pct: self._actualitza(progres=pct), capa=capa,
+                            zooms=projecte.zooms_per_tram(trams))
             projecte.desa_talls(sortida, trams)
             self._actualitza(estat="fet", progres=100, fitxer=sortida.name)
         except Exception as e:  # el missatge arriba a la pàgina
@@ -84,6 +85,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         trams = projecte.trams()
         return {"estat": _estat_json(projecte.estat), "trams": trams,
                 "durada_final": round(sum(b - a for a, b in trams), 3),
+                "zooms": projecte.zooms_per_tram(trams), "zoom": exporta.ZOOM,
+                "instruccions": projecte.instruccions(),
                 "subtitols": projecte.linies_subtitols(trams)}
 
     class Gestor(BaseHTTPRequestHandler):
@@ -220,6 +223,17 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         for e in cos.get("events", [])[:500]:
                             f.write(json.dumps(e, ensure_ascii=False) + "\n")
                     return self._json({"ok": True})
+                if ruta == "/api/instruccio":  # accepta o descarta una instrucció de veu
+                    nou = cos.get("estat")
+                    if nou not in ("acceptada", "descartada", "pendent"):
+                        return self._json({"error": "Estat no vàlid"}, HTTPStatus.BAD_REQUEST)
+                    try:
+                        projecte.decideix_instruccio(str(cos.get("id")), nou)
+                    except KeyError:
+                        return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
+                    projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
+                    projecte.desa()
+                    return self._json(instantania())
                 if ruta == "/api/mostra":  # obre el Finder amb el fitxer seleccionat
                     path = (projecte.carpeta / EXPORTS / cos.get("nom", "")).resolve()
                     if path.parent != (projecte.carpeta / EXPORTS).resolve() or not path.exists():

@@ -42,7 +42,15 @@ def _whisperx():
 
 
 def carrega_audio(video: Path):
-    return _whisperx().load_audio(str(video))
+    """Àudio a 16 kHz per a WhisperX. Agafem sempre la primera pista d'àudio: els iPhone
+    n'hi afegeixen una d'àudio espacial que ffmpeg no sap llegir."""
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        wav = Path(tmp) / "audio.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(video), "-map", "0:a:0", "-vn",
+                        "-ac", "1", "-ar", "16000", str(wav)], check=True)
+        return _whisperx().load_audio(str(wav))
 
 
 def alinea(audio, frases: list[dict]) -> list[dict]:

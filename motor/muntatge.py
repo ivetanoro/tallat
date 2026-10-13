@@ -96,7 +96,8 @@ def crea_reel(arrel, reel: dict) -> Path:
 
     carpeta = arrel.carpeta / CARPETA_REELS / reel["id"]
     carpeta.mkdir(parents=True, exist_ok=True)
-    for nom in (TRANSCRIPCIO, PROXY):
+    from motor.instruccions import FITXER as INSTRUCCIONS
+    for nom in (TRANSCRIPCIO, PROXY, INSTRUCCIONS):
         enllac = carpeta / nom
         if not enllac.exists() and (arrel.carpeta / nom).exists():
             enllac.symlink_to(Path("..") / ".." / nom)
@@ -105,6 +106,8 @@ def crea_reel(arrel, reel: dict) -> Path:
         projecte = Projecte(carpeta)
         projecte.estat = estat_inicial(projecte.dades["paraules"], reel["paraules"])
         projecte.neteja()
+        from motor import instruccions
+        projecte.estat = instruccions.aplica_a_estat(projecte.estat, projecte.instruccions())
         projecte.desa()
     return carpeta
 

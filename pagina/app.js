@@ -73,6 +73,8 @@ const spans = new Map();   // id de paraula → <span>
 let paragrafsEl = [];      // [{el, ids}] per marcar les frases tretes senceres
 let esborrany = null;      // {nom, trams, acum, durada} de la versió que es mira
 let liniesSub = [];        // subtítols en temps del muntatge (calculats pel servidor)
+let instruccions = [];     // instruccions de veu «Claude, …»
+let zoomsTram = [];        // quins trossos porten zoom
 let notes = [];
 let darrerDesplacamentManual = 0;
 
@@ -144,6 +146,9 @@ function refes() {
 
 function aplicaTrams(r) {
   if (r.subtitols) { liniesSub = r.subtitols; liniaPintada = null; }
+  if (r.zooms) zoomsTram = r.zooms;
+  if (r.zoom) $(".pantalla").style.setProperty("--zoom", r.zoom);
+  if (r.instruccions) { instruccions = r.instruccions; if (P) pintaInstruccions(); }
   trams = r.trams;
   duradaFinal = r.durada_final;
   registre("trams", { n: trams.length, primers: trams.slice(0, 3), durada: duradaFinal });
@@ -554,6 +559,7 @@ function bucle() {
   pintaTemps();
   paraulaActual();
   pintaSubtitols();
+  R.v.classList.toggle("zoom", vista === "directe" && !!zoomsTram[Math.min(R.k, trams.length - 1)]);
 }
 
 // --- Subtítols en directe ------------------------------------------------------------------------
@@ -926,6 +932,60 @@ async function obre(reel) {
   } catch (e) { avis(e.message); }
 }
 
+// --- Instruccions de veu -------------------------------------------------------------------
+
+const TIPUS_INSTRUCCIO = {
+  talla: ["Torna a començar", "En acceptar-la, es treu el primer intent."],
+  zoom: ["Zoom", "En acceptar-la, el tros que ve s'apropa."],
+  broll: ["B-roll / imatges", "Queda apuntada: el b-roll arriba a la fase 4."],
+  sticker: ["Sticker", "Queda apuntada: els stickers arriben a la fase 4."],
+  altre: ["Altres", "Queda apuntada."],
+};
+
+function pintaInstruccions() {
+  const seccio = $("#seccio-instruccions");
+  seccio.hidden = !instruccions.length;
+  const pendents = instruccions.filter((i) => i.estat === "pendent").length;
+  $("#compte-instruccions").textContent = pendents ? `${pendents} per decidir` : "";
+  const cont = $("#instruccions");
+  cont.textContent = "";
+  for (const ins of instruccions) {
+    const [nom, ajuda] = TIPUS_INSTRUCCIO[ins.tipus] || TIPUS_INSTRUCCIO.altre;
+    const item = document.createElement("div");
+    item.className = `item instruccio ${ins.estat}`;
+    item.title = ajuda;
+    item.innerHTML = `<span class="reel-text">
+        <span class="ins-tipus"><span class="nom"></span><span class="temps-petit">${fmt(ins.inici)}</span></span>
+        <span class="ins-text"></span>
+        <span class="ins-estat"></span></span>
+      <button class="mini deixa ${ins.estat === "acceptada" ? "actiu" : ""}" title="Accepta-la" aria-label="Accepta-la">${ICONES.deixa}</button>
+      <button class="mini treu" title="Descarta-la" aria-label="Descarta-la">${ICONES.esborra}</button>`;
+    item.querySelector(".nom").textContent = nom;
+    item.querySelector(".ins-text").textContent = `«${ins.text}»`;
+    item.querySelector(".ins-estat").textContent =
+      ins.estat === "acceptada" ? `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}` : ins.estat === "descartada" ? "Descartada" : "";
+    item.addEventListener("click", (e) => {
+      if (e.target.closest(".deixa")) return decideixInstruccio(ins, ins.estat === "acceptada" ? "pendent" : "acceptada");
+      if (e.target.closest(".treu")) return decideixInstruccio(ins, ins.estat === "descartada" ? "pendent" : "descartada");
+      const ancora = ins.ancora ?? ins.paraules[1];
+      mostraParaula(ancora);
+      if (vista === "directe") vesAOriginal(P.paraules[ancora].inici - 1.5);
+    });
+    cont.append(item);
+  }
+}
+
+async function decideixInstruccio(ins, nou) {
+  try {
+    await cua;  // primer, que es desin els canvis pendents
+    const r = await api("/api/instruccio", { id: ins.id, estat: nou });
+    estat = r.estat;
+    aplicaTrams(r);
+    refresca(true);
+    if (nou === "acceptada" && ins.tipus === "talla") avis("Primer intent tret. El pots recuperar tocant-ne les paraules.");
+  } catch (e) { avis(e.message); }
+}
+
 // --- Avisos -----------------------------------------------------------------------------------
 
 let temporitzadorAvis = null;
@@ -1058,6 +1118,7 @@ async function inicia() {
   pintaNotes();
   pintaVersions(P.exports || []);
   pintaReels();
+  pintaInstruccions();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;
 }

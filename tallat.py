@@ -79,9 +79,11 @@ def ordre_transcriu(args) -> None:
     projecte = Projecte(carpeta)
     if not args.sense_neteja:
         projecte.neteja()
+    trobades = projecte.detecta_instruccions()
     projecte.desa()
     print(f"\nTranscripció feta en {minuts(time.time() - t0)}: {len(paraules)} paraules.")
     print("\n".join(projecte.resum()))
+    _mostra_instruccions(trobades)
 
     print("\nPreparant la còpia lleugera per a la pàgina de revisió…")
     exporta.fes_proxy(video, carpeta / PROXY, progres=_barra("còpia"))
@@ -132,6 +134,25 @@ def ordre_estat(args) -> None:
     print("\n".join(projecte.resum()))
 
 
+NOMS_INSTRUCCIO = {"talla": "torna a començar", "zoom": "zoom", "broll": "b-roll / imatges",
+                   "sticker": "sticker", "altre": "altres"}
+
+
+def _mostra_instruccions(llista: list[dict]) -> None:
+    if not llista:
+        return
+    print(f"\nInstruccions de veu: {len(llista)} (tretes del vídeo; decideix-les a la pàgina de revisió)")
+    for i in llista:
+        print(f"  · {minuts(i['inici'])} · {NOMS_INSTRUCCIO.get(i['tipus'], i['tipus'])}: «{i['text']}»")
+
+
+def ordre_instruccions(args) -> None:
+    projecte = _carrega(args)
+    trobades = projecte.detecta_instruccions()
+    projecte.desa()
+    _mostra_instruccions(trobades) if trobades else print("No he trobat cap instrucció «Claude, …».")
+
+
 def ordre_guio(args) -> None:
     projecte = _carrega(args)
     path = projecte.carpeta / muntatge.GUIO
@@ -172,7 +193,8 @@ def ordre_exporta(args) -> None:
     if args.sense_subtitols:
         projecte.estat["subtitols"] = False
     capa = projecte.capa_subtitols(trams, args.qualitat, avis=print)
-    exporta.exporta(projecte.video, trams, sortida, args.qualitat, progres=_barra("exportant"), capa=capa)
+    exporta.exporta(projecte.font(args.qualitat), trams, sortida, args.qualitat, progres=_barra("exportant"), capa=capa,
+                    zooms=projecte.zooms_per_tram(trams))
     projecte.desa_talls(sortida, trams)
     print(f"\nFet en {minuts(time.time() - t0)}:\n  {sortida}")
 
@@ -205,6 +227,10 @@ def main() -> None:
     e = sub.add_parser("estat", help="Mostra què s'ha tret i quant durarà")
     e.add_argument("--projecte", required=True)
     e.set_defaults(func=ordre_estat)
+
+    ins = sub.add_parser("instruccions", help="Detecta les instruccions de veu «Claude, …»")
+    ins.add_argument("--projecte", required=True)
+    ins.set_defaults(func=ordre_instruccions)
 
     g = sub.add_parser("guio", help="Escriu el guió per paràgrafs per al primer muntatge")
     g.add_argument("--projecte", required=True)

@@ -62,6 +62,16 @@ La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que 
 - **Entre 1 i 5 reels** per gravació. Millor pocs i bons.
 - Deixa el farciment («eh», «mmm») dins dels trossos: la neteja automàtica ja el treu i la persona el pot recuperar.
 
+## Instruccions de veu («Claude, …»)
+
+- `transcriu` les detecta sola; `instruccions` les torna a detectar en un projecte que ja existeix.
+- Només compten si «Claude» obre una frase (després d'un punt o d'una pausa). El transcriptor de vegades escriu «Clot», «Cloud» o «Clau»: també compten.
+- Les paraules de la instrucció es treuen del vídeo (motiu «instruccio») i queden a `instruccions.json` per decidir a la pàgina:
+  - **talla** («torno a començar», «talla des d'aquí»): la presa bona comença aquí. Si en acceptar-la es troba el primer intent de la frase que ve després, es treu.
+  - **zoom**: s'apropa el tros que comença just després de la instrucció.
+  - **broll**, **sticker**, **altre**: queden apuntades per a les fases següents.
+- En proposar reels, no hi incloguis les paraules de les instruccions ni marques com «Continuo» que només serveixen per a la gravació.
+
 ## Regles
 
 - No llegeixis ni copiïs cap carpeta de marca personal tret que la persona ho demani explícitament.

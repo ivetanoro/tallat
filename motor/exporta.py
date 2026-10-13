@@ -14,16 +14,24 @@ QUALITATS = {
     "4k": (2160, 3840, "45M"),
 }
 FOS_AUDIO = 0.01  # segons de fos a cada tall, perquè no se sentin clics
+ZOOM = 1.15       # apropament dels trossos amb zoom (instrucció de veu «Claude, zoom aquí»)
 
 
 def info_video(video: Path) -> dict:
+    """Mida tal com es veu (tenint en compte la rotació dels mòbils), fps i durada."""
     sortida = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-         "stream=width,height,r_frame_rate:format=duration", "-of", "json", str(video)],
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams", "-show_format",
+         "-of", "json", str(video)],
         capture_output=True, text=True, check=True).stdout
     d = json.loads(sortida)
     s = d["streams"][0]
-    return {"amplada": s["width"], "alcada": s["height"],
+    amplada, alcada = s["width"], s["height"]
+    # Les versions noves de ffprobe la donen a side_data_list; les antigues, a tags.rotate.
+    rotacio = next((int(float(x["rotation"])) for x in s.get("side_data_list", []) if "rotation" in x),
+                   int(float(s.get("tags", {}).get("rotate", 0) or 0)))
+    if abs(rotacio) % 180 == 90:  # l'iPhone desa el vertical com a horitzontal + «gira'l 90°»
+        amplada, alcada = alcada, amplada
+    return {"amplada": amplada, "alcada": alcada,
             "fps": str(Fraction(s["r_frame_rate"])), "durada": float(d["format"]["duration"])}
 
 
@@ -39,12 +47,18 @@ def _enquadrament(amplada: int, alcada: int, ow: int, oh: int) -> str:
     return f"{retall},{escala}" if retall else escala
 
 
-def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = False) -> str:
+def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = False,
+            zooms: list[bool] | None = None, mida: tuple[int, int] | None = None) -> str:
     """Cada tros és una entrada pròpia (ja retallada amb -ss/-t); aquí només s'uneixen."""
     parts, entrades = [], []
     for i, (a, b) in enumerate(trams):
         d = b - a
-        parts.append(f"[{i}:v]setpts=PTS-STARTPTS[v{i}];")
+        if zooms and zooms[i] and mida:
+            # Apropament: retallem el centre i el tornem a la mida original perquè tots els trossos casin.
+            parts.append(f"[{i}:v]setpts=PTS-STARTPTS,crop=trunc(iw/{ZOOM}/2)*2:trunc(ih/{ZOOM}/2)*2,"
+                         f"scale={mida[0]}:{mida[1]},setsar=1[v{i}];")
+        else:
+            parts.append(f"[{i}:v]setpts=PTS-STARTPTS,setsar=1[v{i}];")  # píxels quadrats: concat els vol iguals
         parts.append(f"[{i}:a]asetpts=PTS-STARTPTS,"
                      f"afade=t=in:st=0:d={FOS_AUDIO},afade=t=out:st={max(0, d - FOS_AUDIO):.4f}:d={FOS_AUDIO}[a{i}];")
         entrades.append(f"[v{i}][a{i}]")
@@ -76,7 +90,7 @@ def _executa(ordre: list[str], durada: float, progres) -> None:
 
 
 def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualitat: str,
-            progres=None, capa: Path | None = None) -> Path:
+            progres=None, capa: Path | None = None, zooms: list[bool] | None = None) -> Path:
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
     ow, oh, bitrate = QUALITATS[qualitat]
@@ -85,7 +99,8 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
 
     sortida.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        f.write(_filtre(trams, enquadrament, capa=capa is not None))
+        f.write(_filtre(trams, enquadrament, capa=capa is not None, zooms=zooms,
+                        mida=(info["amplada"], info["alcada"])))
         filtre = f.name
 
     # Cada tros s'obre com una entrada pròpia: ffmpeg salta directament al seu inici

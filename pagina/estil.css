@@ -177,6 +177,16 @@ kbd {
 .nota .context { color: var(--text); white-space: normal; }
 
 .tornar { display: block; margin: 0 0 var(--e3); }
+.item.instruccio { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); }
+.item.instruccio .reel-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.item.instruccio .ins-tipus { display: flex; align-items: baseline; gap: var(--e2); font-weight: 500; color: var(--text); }
+.item.instruccio .ins-tipus .temps-petit { font-weight: 400; }
+.item.instruccio .ins-text { color: var(--text-2); font-size: var(--t-petit); display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.item.instruccio .ins-estat { font-size: var(--t-peu); color: var(--text-2); }
+.item.instruccio.acceptada .ins-tipus { color: var(--accent); }
+.item.instruccio.descartada { opacity: 0.55; }
+.item.instruccio .mini.actiu { background: var(--accent); color: #fff; box-shadow: none; }
 .item.reel { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); }
 .item.reel .reel-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .item.reel .reel-titol { color: var(--text); font-weight: 500; }
@@ -354,6 +364,13 @@ body.mode-corregeix .p { cursor: text; }
   object-fit: cover; overflow: hidden;
 }
 .pantalla video.amagat { visibility: hidden; opacity: 0; }
+/* Zoom (instrucció de veu acceptada): ampliem el vídeo i en retallem les vores
+   perquè la caixa arrodonida es quedi igual. */
+.pantalla video.zoom {
+  transform: scale(var(--zoom, 1.15));
+  clip-path: inset(calc((1 - 1 / var(--zoom, 1.15)) * 50%) round calc(var(--radi-gran) / var(--zoom, 1.15)));
+  box-shadow: none;
+}
 /* Subtítols en directe: mateixa caixa que el vídeo, mides relatives a la seva amplada. */
 .capa-subtitols {
   grid-area: 1 / 1; position: relative; z-index: 1; pointer-events: none;

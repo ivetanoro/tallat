@@ -16,7 +16,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import edicio, marca, neteja, subtitols
+from motor import edicio, instruccions, marca, neteja, subtitols
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -120,6 +120,45 @@ class Projecte:
         return subtitols.renderitza(linies, self.estil_subtitols(), sum(b - a for a, b in trams),
                                     self.carpeta, qualitat, avis)
 
+    # --- Instruccions de veu ------------------------------------------------------
+
+    def instruccions(self) -> list[dict]:
+        return instruccions.llegeix(self.carpeta)
+
+    def detecta_instruccions(self) -> list[dict]:
+        """Detecta les instruccions «Claude, …», les treu del vídeo i en desa les propostes."""
+        noves = instruccions.fusiona(instruccions.detecta(self.dades["paraules"]), self.instruccions())
+        instruccions.desa(self.carpeta, noves)
+        self.estat = instruccions.aplica_a_estat(self.estat, noves)
+        return noves
+
+    def decideix_instruccio(self, iid: str, nou_estat: str) -> list[dict]:
+        """Accepta o descarta una instrucció i n'aplica l'efecte («talla» i «zoom»)."""
+        llista = self.instruccions()
+        ins = next((i for i in llista if i["id"] == iid), None)
+        if ins is None:
+            raise KeyError(iid)
+        ins["estat"] = nou_estat
+        if ins["tipus"] == "talla" and ins.get("treure"):
+            a, b = ins["treure"]
+            for pid in range(a, b + 1):
+                if nou_estat == "acceptada" and pid not in self.estat["esborrades"]:
+                    self.estat["esborrades"][pid] = "instruccio"
+                elif nou_estat != "acceptada" and self.estat["esborrades"].get(pid) == "instruccio":
+                    del self.estat["esborrades"][pid]
+        if ins["tipus"] == "zoom" and ins.get("ancora") is not None:
+            zooms = set(self.estat.get("zooms", []))
+            (zooms.add if nou_estat == "acceptada" else zooms.discard)(ins["ancora"])
+            self.estat["zooms"] = sorted(zooms)
+        instruccions.desa(self.carpeta, llista)
+        return llista
+
+    def zooms_per_tram(self, trams) -> list[bool]:
+        """Quins trossos porten zoom: el que comença amb la paraula que ve després de la instrucció."""
+        ancores = [self.dades["paraules"][i] for i in self.estat.get("zooms", [])
+                   if 0 <= i < len(self.dades["paraules"])]
+        return [any(a - 0.05 <= p["inici"] < b for p in ancores) for a, b in trams]
+
     def neteja(self) -> None:
         treure, proposar = neteja.detecta(self.dades["paraules"], neteja.carrega_llista())
         self.estat = edicio.aplica_neteja(self.estat, treure, proposar)
@@ -143,6 +182,14 @@ class Projecte:
             llista.append({"nom": f.name, "qualitat": qualitat, "mida_mb": round(f.stat().st_size / 1e6, 1),
                            "data": time.strftime("%d/%m %H:%M", time.localtime(f.stat().st_mtime))})
         return llista
+
+    def font(self, qualitat: str) -> Path:
+        """Vídeo d'on es fa l'export. L'esborrany surt de la còpia lleugera (ja és vertical i
+        petita): és molt més ràpid, sobretot amb vídeos d'iPhone (HEVC 4K)."""
+        proxy = self.carpeta / PROXY
+        if qualitat == "esborrany" and proxy.exists():
+            return proxy
+        return self.video
 
     def desa_talls(self, sortida: Path, trams: list) -> None:
         """Desa els talls de cada versió exportada, per poder situar-hi les notes."""

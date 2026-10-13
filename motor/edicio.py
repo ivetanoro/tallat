@@ -11,6 +11,7 @@ L'estat de l'edició es desa a `edicio.json`:
   revisio      n             puja a cada canvi desat (evita que dues pestanyes es trepitgin)
   subtitols    bool          si els renders porten subtítols
   ordre        [[a, b]]      (reels muntats) trossos d'ids en l'ordre en què han de sonar
+  zooms        [id]          paraules on comença un zoom (instruccions de veu acceptades)
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ PAUSA_PARAGRAF = 0.7  # segons de silenci que també obren un paràgraf nou
 def estat_buit() -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": PAUSA_MAXIMA, "pauses_mantingudes": [],
-            "subtitols": True, "ordre": None}
+            "subtitols": True, "ordre": None, "zooms": []}
 
 
 def llegeix_estat(path: Path) -> dict:
