@@ -27,6 +27,14 @@
     </section>
 
     <section class="seccio">
+      <h2>Subtítols</h2>
+      <button class="interruptor" id="subtitols" role="switch" aria-checked="true">
+        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Paraula a paraula
+      </button>
+      <p class="detall" id="fitxer-estil"></p>
+    </section>
+
+    <section class="seccio">
       <h2>Propostes <span class="compte" id="compte-propostes"></span></h2>
       <div id="propostes"><p class="buit">No hi ha propostes pendents.</p></div>
     </section>
@@ -76,6 +84,7 @@
     <div class="pantalla">
       <video id="video-a" preload="auto" playsinline></video>
       <video id="video-esborrany" preload="auto" playsinline class="amagat"></video>
+      <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><p class="sub-text" id="sub-text"></p></div>
       <button class="gran-play" id="gran-play" aria-label="Reprodueix">
         <svg viewBox="0 0 40 40"><path d="M15 11.5v17l13-8.5z"/></svg>
       </button>

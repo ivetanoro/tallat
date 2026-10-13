@@ -67,6 +67,7 @@ let mode = "talla";
 let vista = "directe";
 const spans = new Map();   // id de paraula → <span>
 let esborrany = null;      // {nom, trams, acum, durada} de la versió que es mira
+let liniesSub = [];        // subtítols en temps del muntatge (calculats pel servidor)
 let notes = [];
 let darrerDesplacamentManual = 0;
 
@@ -121,6 +122,7 @@ function desfes() {
   estat = { ...desfer.pop(), revisio: estat.revisio };
   refresca(true);
   marcaPausa();
+  marcaSubtitols();
   sincronitza();
   avis("Desfet");
 }
@@ -131,10 +133,12 @@ function refes() {
   estat = { ...refer.pop(), revisio: estat.revisio };
   refresca(true);
   marcaPausa();
+  marcaSubtitols();
   sincronitza();
 }
 
 function aplicaTrams(r) {
+  if (r.subtitols) { liniesSub = r.subtitols; liniaPintada = null; }
   trams = r.trams;
   duradaFinal = r.durada_final;
   registre("trams", { n: trams.length, primers: trams.slice(0, 3), durada: duradaFinal });
@@ -542,6 +546,54 @@ function bucle() {
   }
   pintaTemps();
   paraulaActual();
+  pintaSubtitols();
+}
+
+// --- Subtítols en directe ------------------------------------------------------------------------
+
+let liniaPintada = null;
+function pintaSubtitols() {
+  const capa = $("#capa-subtitols");
+  const visible = vista === "directe" && estat?.subtitols !== false && liniesSub.length > 0;
+  capa.hidden = !visible;
+  if (!visible) return;
+  const m = tempsMuntatge();
+  const linia = liniesSub.find((l) => m >= l.inici - 0.01 && m < l.final) || null;
+  const text = $("#sub-text");
+  if (linia !== liniaPintada) {
+    liniaPintada = linia;
+    text.textContent = "";
+    for (const w of linia?.paraules || []) {
+      const span = document.createElement("span");
+      span.textContent = w.text;
+      text.append(span, " ");
+    }
+  }
+  if (!linia) return;
+  const spans = text.querySelectorAll("span");
+  linia.paraules.forEach((w, i) => {
+    const fi = linia.paraules[i + 1]?.inici ?? linia.final;
+    spans[i].classList.toggle("vista", m >= w.inici - 0.01);
+    spans[i].classList.toggle("actiu", m >= w.inici - 0.01 && m < fi);
+  });
+}
+
+function aplicaEstilSubtitols(e) {
+  if (!e) return;
+  const capa = $("#capa-subtitols").style;
+  const posa = (k, v) => capa.setProperty(k, v);
+  const escapa = (f) => (/^[\w-]+$/.test(f) ? f : `"${f.replace(/"/g, "")}"`);
+  posa("--sub-y", `${e.posicio_y * 100}%`);
+  posa("--sub-amplada", `${e.amplada_maxima * 100}%`);
+  posa("--sub-font", e.font_fitxer ? "system-ui" : escapa(e.font));
+  posa("--sub-pes", e.pes);
+  posa("--sub-mida", `${e.mida * 100}cqw`);
+  posa("--sub-color", e.color);
+  posa("--sub-actiu", e.color_actiu);
+  posa("--sub-contorn", e.contorn);
+  posa("--sub-gruix", `${(e.gruix_contorn || 0) * 2}em`);
+  posa("--sub-majuscules", e.majuscules ? "uppercase" : "none");
+  posa("--sub-ombra", e.ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none");
 }
 
 let paraulaMarcada = null;
@@ -747,8 +799,13 @@ function seguimentFeina(feina) {
   caixa.hidden = !ocupat;
   if (ocupat) {
     const nom = feina.qualitat === "esborrany" ? "Construint l'esborrany" : `Exportant en ${QUALITATS[feina.qualitat]}`;
-    $("#feina-text").textContent = `${nom}… ${feina.progres} %`;
-    $("#feina-progres").style.width = `${feina.progres}%`;
+    if (feina.fase === "subtitols") {
+      $("#feina-text").textContent = "Dibuixant els subtítols…";
+      $("#feina-progres").style.width = "12%";
+    } else {
+      $("#feina-text").textContent = `${nom}… ${feina.progres} %`;
+      $("#feina-progres").style.width = `${feina.progres}%`;
+    }
     if (!consulta) consulta = setInterval(consultaFeina, 700);
   } else if (consulta) {
     clearInterval(consulta);
@@ -859,6 +916,12 @@ function instalaControls() {
       avis("Neteja feta. Les paraules que havies recuperat es respecten.");
     } catch (e) { avis(e.message); }
   });
+  const subtitolsBoto = $("#subtitols");
+  subtitolsBoto.addEventListener("click", () => {
+    canvia((e) => { e.subtitols = e.subtitols === false; });
+    marcaSubtitols();
+    avis(estat.subtitols ? "Els renders portaran subtítols." : "Els renders sortiran sense subtítols.");
+  });
   const interruptor = $("#escolta");
   interruptor.setAttribute("aria-checked", String(escoltaActiva));
   interruptor.addEventListener("click", () => {
@@ -898,6 +961,10 @@ function instalaControls() {
   });
 }
 
+function marcaSubtitols() {
+  $("#subtitols").setAttribute("aria-checked", String(estat.subtitols !== false));
+}
+
 function marcaPausa() {
   const actual = estat.pausa_maxima || 0;
   for (const b of $$("#pauses button")) b.setAttribute("aria-checked", String(parseFloat(b.dataset.pausa) === actual));
@@ -923,6 +990,9 @@ async function inicia() {
   pintaText();
   refresca(false);
   marcaPausa();
+  marcaSubtitols();
+  aplicaEstilSubtitols(P.estil_subtitols);
+  $("#fitxer-estil").textContent = `Estil: ${(P.fitxer_estil || "").replace(/^\/Users\/[^/]+/, "~")}`;
   pintaNotes();
   pintaVersions(P.exports || []);
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);

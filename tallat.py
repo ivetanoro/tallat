@@ -135,7 +135,10 @@ def ordre_exporta(args) -> None:
     sortida = projecte.sortida(args.qualitat)
     print(f"Exportant {len(trams)} trossos ({minuts(sum(b - a for a, b in trams))}) en qualitat «{args.qualitat}»…")
     t0 = time.time()
-    exporta.exporta(projecte.video, trams, sortida, args.qualitat, progres=_barra("exportant"))
+    if args.sense_subtitols:
+        projecte.estat["subtitols"] = False
+    capa = projecte.capa_subtitols(trams, args.qualitat, avis=print)
+    exporta.exporta(projecte.video, trams, sortida, args.qualitat, progres=_barra("exportant"), capa=capa)
     projecte.desa_talls(sortida, trams)
     print(f"\nFet en {minuts(time.time() - t0)}:\n  {sortida}")
 
@@ -172,6 +175,7 @@ def main() -> None:
     x = sub.add_parser("exporta", help="Exporta el vídeo tallat a MP4 vertical")
     x.add_argument("--projecte", required=True)
     x.add_argument("--qualitat", choices=list(exporta.QUALITATS), default="esborrany")
+    x.add_argument("--sense-subtitols", action="store_true", help="Exporta sense subtítols")
     x.set_defaults(func=ordre_exporta)
 
     args = p.parse_args()

@@ -8,6 +8,7 @@ L'estat de l'edició es desa a `edicio.json`:
   pausa_maxima segons        els silencis més llargs s'escurcen fins aquí (null = no es toquen)
   pauses_mantingudes [id]    silencis que es deixen sencers (id de la paraula que ve després)
   revisio      n             puja a cada canvi desat (evita que dues pestanyes es trepitgin)
+  subtitols    bool          si els renders porten subtítols
 """
 from __future__ import annotations
 
@@ -26,7 +27,8 @@ PAUSA_PARAGRAF = 0.7  # segons de silenci que també obren un paràgraf nou
 
 def estat_buit() -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
-            "correccions": {}, "pausa_maxima": PAUSA_MAXIMA, "pauses_mantingudes": []}
+            "correccions": {}, "pausa_maxima": PAUSA_MAXIMA, "pauses_mantingudes": [],
+            "subtitols": True}
 
 
 def llegeix_estat(path: Path) -> dict:

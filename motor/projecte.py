@@ -16,7 +16,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import edicio, neteja
+from motor import edicio, marca, neteja, subtitols
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -78,6 +78,23 @@ class Projecte:
         return edicio.trams(self.paraules(), self.fps, self.dades["durada"],
                             pausa_maxima=self.estat.get("pausa_maxima"),
                             pauses_mantingudes=self.estat.get("pauses_mantingudes", []))
+
+    def estil_subtitols(self) -> dict:
+        return marca.carrega()["subtitols"]
+
+    def linies_subtitols(self, trams=None) -> list[dict]:
+        return subtitols.grups(self.paraules(), trams if trams is not None else self.trams(),
+                               self.estil_subtitols())
+
+    def capa_subtitols(self, trams, qualitat: str, avis=None) -> Path | None:
+        """Capa transparent amb els subtítols, o None si estan desactivats o no n'hi ha."""
+        if not self.estat.get("subtitols", True):
+            return None
+        linies = self.linies_subtitols(trams)
+        if not linies:
+            return None
+        return subtitols.renderitza(linies, self.estil_subtitols(), sum(b - a for a, b in trams),
+                                    self.carpeta, qualitat, avis)
 
     def neteja(self) -> None:
         treure, proposar = neteja.detecta(self.dades["paraules"], neteja.carrega_llista())

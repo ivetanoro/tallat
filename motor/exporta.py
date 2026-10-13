@@ -39,7 +39,7 @@ def _enquadrament(amplada: int, alcada: int, ow: int, oh: int) -> str:
     return f"{retall},{escala}" if retall else escala
 
 
-def _filtre(trams: list[tuple[float, float]], enquadrament: str) -> str:
+def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = False) -> str:
     """Cada tros és una entrada pròpia (ja retallada amb -ss/-t); aquí només s'uneixen."""
     parts, entrades = [], []
     for i, (a, b) in enumerate(trams):
@@ -49,7 +49,15 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str) -> str:
                      f"afade=t=in:st=0:d={FOS_AUDIO},afade=t=out:st={max(0, d - FOS_AUDIO):.4f}:d={FOS_AUDIO}[a{i}];")
         entrades.append(f"[v{i}][a{i}]")
     parts.append(f"{''.join(entrades)}concat=n={len(trams)}:v=1:a=1[vc][ac];")
-    parts.append(f"[vc]{enquadrament}[vout]")
+    if not capa:
+        parts.append(f"[vc]{enquadrament}[vout]")
+    else:
+        # La capa de subtítols (ProRes amb transparència) és l'última entrada.
+        # Cal passar tots dos a un format amb canal alfa perquè l'overlay la respecti.
+        mida = enquadrament.split("scale=")[1].split(":flags")[0]
+        parts.append(f"[vc]{enquadrament},format=yuva444p[vb];")
+        parts.append(f"[{len(trams)}:v]scale={mida}:flags=lanczos,format=yuva444p[capa];")
+        parts.append("[vb][capa]overlay=0:0:format=yuv444:eof_action=pass,format=yuv420p[vout]")
     return "\n".join(parts)
 
 
@@ -68,7 +76,7 @@ def _executa(ordre: list[str], durada: float, progres) -> None:
 
 
 def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualitat: str,
-            progres=None) -> Path:
+            progres=None, capa: Path | None = None) -> Path:
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
     ow, oh, bitrate = QUALITATS[qualitat]
@@ -77,7 +85,7 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
 
     sortida.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        f.write(_filtre(trams, enquadrament))
+        f.write(_filtre(trams, enquadrament, capa=capa is not None))
         filtre = f.name
 
     # Cada tros s'obre com una entrada pròpia: ffmpeg salta directament al seu inici
@@ -87,6 +95,8 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
     entrades = []
     for a, b in trams:
         entrades += ["-ss", f"{a:.4f}", "-t", f"{b - a:.4f}", "-i", str(video)]
+    if capa is not None:
+        entrades += ["-i", str(capa)]
 
     ordre = [
         "ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", *entrades,

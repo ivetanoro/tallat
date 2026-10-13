@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from motor import edicio, exporta
+from motor import edicio, exporta, marca
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -32,7 +32,8 @@ class Feina:
         with self.bloqueig:
             if self.estat and self.estat["estat"] == "treballant":
                 return False
-            self.estat = {"estat": "treballant", "qualitat": qualitat, "progres": 0, "fitxer": None, "error": None}
+            self.estat = {"estat": "treballant", "qualitat": qualitat, "fase": "video", "progres": 0,
+                          "fitxer": None, "error": None}
         threading.Thread(target=self._fes, args=(projecte, qualitat), daemon=True).start()
         return True
 
@@ -44,8 +45,11 @@ class Feina:
         try:
             sortida = projecte.sortida(qualitat)
             trams = projecte.trams()
+            self._actualitza(fase="subtitols")
+            capa = projecte.capa_subtitols(trams, qualitat)
+            self._actualitza(fase="video", progres=0)
             exporta.exporta(projecte.video, trams, sortida, qualitat,
-                            progres=lambda pct: self._actualitza(progres=pct))
+                            progres=lambda pct: self._actualitza(progres=pct), capa=capa)
             projecte.desa_talls(sortida, trams)
             self._actualitza(estat="fet", progres=100, fitxer=sortida.name)
         except Exception as e:  # el missatge arriba a la pàgina
@@ -60,7 +64,8 @@ def crea_servidor(projecte: Projecte, port: int) -> ThreadingHTTPServer:
     def instantania() -> dict:
         trams = projecte.trams()
         return {"estat": _estat_json(projecte.estat), "trams": trams,
-                "durada_final": round(sum(b - a for a, b in trams), 3)}
+                "durada_final": round(sum(b - a for a, b in trams), 3),
+                "subtitols": projecte.linies_subtitols(trams)}
 
     class Gestor(BaseHTTPRequestHandler):
         def log_message(self, *args):  # silenciós: la terminal és per als missatges importants
@@ -147,6 +152,7 @@ def crea_servidor(projecte: Projecte, port: int) -> ThreadingHTTPServer:
                         "paraules": projecte.dades["paraules"],
                         "paragrafs": [[p["id"] for p in g] for g in edicio.paragrafs(projecte.dades["paraules"])],
                         "notes": projecte.notes(), "exports": projecte.exports(), "feina": feina.info(),
+                        "estil_subtitols": projecte.estil_subtitols(), "fitxer_estil": str(marca.ruta()),
                         **instantania()})
             if ruta == "/api/feina":
                 return self._json({"feina": feina.info(), "exports": projecte.exports()})

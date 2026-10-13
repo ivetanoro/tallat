@@ -1,0 +1,27 @@
+{
+  "_info": "Estil per defecte de tallat (neutre). La teva còpia és a ~/.tallat/brand.json: canvia-la allà, no aquí.",
+  "subtitols": {
+    "_font": "Família CSS. Si poses el nom d'una font teva, indica'n el fitxer a font_fitxer (.ttf, .otf o .woff2).",
+    "font": "system-ui",
+    "font_fitxer": null,
+    "pes": 800,
+    "_mida": "Alçada de la lletra en proporció a l'amplada del vídeo (0,07 = 7 %).",
+    "mida": 0.075,
+    "majuscules": false,
+    "color": "#FFFFFF",
+    "color_actiu": "#FFD60A",
+    "contorn": "#000000",
+    "_gruix_contorn": "Gruix del contorn en proporció a la mida de la lletra.",
+    "gruix_contorn": 0.06,
+    "ombra": true,
+    "_posicio_y": "On queda el centre de la línia, de 0 (dalt) a 1 (baix). 0,7 queda per sobre dels botons de les xarxes.",
+    "posicio_y": 0.7,
+    "amplada_maxima": 0.84,
+    "paraules_per_linia": 3,
+    "lletres_per_linia": 18,
+    "_animacio": "«pop» (cada paraula entra amb un petit salt) o «cap».",
+    "animacio": "pop",
+    "_puntuacio": "false treu comes i punts finals; els interrogants i exclamacions es queden.",
+    "puntuacio": false
+  }
+}
