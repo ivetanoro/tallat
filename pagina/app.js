@@ -612,6 +612,7 @@ function canviaVista(nova) {
   R.altre.classList.add("amagat");
   vE.classList.toggle("amagat", directe);
   $("#nova-nota").hidden = directe;
+  $("#escolta").hidden = !directe;
   if (directe) pintaMarques(trams, acum, duradaFinal);
   else if (esborrany) pintaMarques(esborrany.trams || [], esborrany.acum || [], esborrany.durada);
   pintaTemps();

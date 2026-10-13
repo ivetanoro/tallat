@@ -61,7 +61,9 @@ body {
   overflow: hidden;
 }
 
-button { font: inherit; color: inherit; }
+button { font: inherit; color: inherit; -webkit-user-select: none; user-select: none; }
+.barra, .eines, .reproductor, .full { -webkit-user-select: none; user-select: none; }
+.nova-nota input { -webkit-user-select: text; user-select: text; }
 svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 kbd {
   font: 12px/1 system-ui; padding: 2px 5px; border-radius: 5px;
@@ -264,21 +266,26 @@ body.mode-corregeix .p { cursor: text; }
 /* --- Reproductor ------------------------------------------------------------ */
 
 .reproductor {
-  height: 100vh; padding: 20px 28px 24px;
+  height: 100vh; padding: 20px 28px 24px; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; gap: 14px;
   border-left: 1px solid var(--linia);
 }
+/* La pantalla és un contenidor de mida: el vídeo hi cap sencer, sempre en 9:16,
+   tant si l'espai és alt i estret com baix i ample (Safari no encongeix bé un
+   vídeo amb height: 100% dins d'una graella). */
 .pantalla {
   position: relative; width: 100%; flex: 1; min-height: 0;
+  container-type: size;
   display: grid; place-items: center;
 }
 .pantalla video {
   grid-area: 1 / 1;
-  height: 100%; max-height: 100%; max-width: 100%; aspect-ratio: 9 / 16;
+  width: min(100cqw, calc(100cqh * 9 / 16));
+  height: auto; aspect-ratio: 9 / 16;
   border-radius: var(--radi-gran); background: #000; box-shadow: var(--ombra);
-  object-fit: cover;
+  object-fit: cover; overflow: hidden;
 }
-.pantalla video.amagat { visibility: hidden; }
+.pantalla video.amagat { visibility: hidden; opacity: 0; }
 .gran-play {
   grid-area: 1 / 1; z-index: 2;
   width: 68px; height: 68px; border-radius: 50%; border: 0; cursor: pointer;
