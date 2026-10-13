@@ -6,6 +6,8 @@ L'estat de l'edició es desa a `edicio.json`:
   mantingudes  [id]          paraules que la persona ha recuperat (la neteja no les torna a treure)
   correccions  {id: text}    text corregit per als subtítols (no talla res)
   pausa_maxima segons        els silencis més llargs s'escurcen fins aquí (null = no es toquen)
+  pauses_mantingudes [id]    silencis que es deixen sencers (id de la paraula que ve després)
+  revisio      n             puja a cada canvi desat (evita que dues pestanyes es trepitgin)
 """
 from __future__ import annotations
 
@@ -23,8 +25,8 @@ PAUSA_PARAGRAF = 0.7  # segons de silenci que també obren un paràgraf nou
 
 
 def estat_buit() -> dict:
-    return {"versio": 1, "esborrades": {}, "propostes": {}, "mantingudes": [],
-            "correccions": {}, "pausa_maxima": PAUSA_MAXIMA}
+    return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
+            "correccions": {}, "pausa_maxima": PAUSA_MAXIMA, "pauses_mantingudes": []}
 
 
 def llegeix_estat(path: Path) -> dict:
@@ -35,6 +37,7 @@ def llegeix_estat(path: Path) -> dict:
     for clau in ("esborrades", "propostes", "correccions"):
         estat[clau] = {int(k): v for k, v in estat[clau].items()}
     estat["mantingudes"] = [int(i) for i in estat["mantingudes"]]
+    estat["pauses_mantingudes"] = [int(i) for i in estat["pauses_mantingudes"]]
     return estat
 
 
@@ -43,6 +46,7 @@ def desa_estat(estat: dict, path: Path) -> None:
     for clau in ("esborrades", "propostes", "correccions"):
         sortida[clau] = {str(k): v for k, v in sorted(estat[clau].items())}
     sortida["mantingudes"] = sorted(set(estat["mantingudes"]))
+    sortida["pauses_mantingudes"] = sorted(set(estat["pauses_mantingudes"]))
     path.write_text(json.dumps(sortida, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
@@ -151,12 +155,14 @@ def importa_text(paraules: list[dict], text_editat: str) -> tuple[dict, list[str
 # --- Talls -------------------------------------------------------------------
 
 def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
-          pausa_maxima: float | None = None) -> list[tuple[float, float]]:
+          pausa_maxima: float | None = None, pauses_mantingudes=()) -> list[tuple[float, float]]:
     """Trossos del vídeo original que es conserven, ajustats a fotogrames sencers."""
+    pauses_mantingudes = set(pauses_mantingudes)
     corregudes, actual = [], []
     for p in paraules:
         if p["conservada"]:
-            if actual and pausa_maxima is not None and p["inici"] - actual[-1]["final"] > pausa_maxima:
+            if (actual and pausa_maxima is not None and p["id"] not in pauses_mantingudes
+                    and p["inici"] - actual[-1]["final"] > pausa_maxima):
                 corregudes.append(actual)  # silenci massa llarg: el partim
                 actual = []
             actual.append(p)

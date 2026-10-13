@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tallat · revisió</title>
+  <link rel="stylesheet" href="/pagina/estil.css">
+</head>
+<body>
+  <aside class="barra" aria-label="Projecte">
+    <header class="barra-cap">
+      <p class="marca">tallat</p>
+      <h1 id="nom-projecte">…</h1>
+      <p class="durades"><span id="durada-original">–</span><span class="fletxa" aria-hidden="true">→</span><strong id="durada-final">–</strong></p>
+      <p class="detall" id="trossos">&nbsp;</p>
+    </header>
+
+    <section class="seccio">
+      <h2>Silenci màxim</h2>
+      <div class="segmentat ample" role="radiogroup" aria-label="Silenci màxim" id="pauses">
+        <button role="radio" data-pausa="0" title="No escurcis cap silenci">Sencers</button>
+        <button role="radio" data-pausa="0.5" title="0,5 segons">0,5</button>
+        <button role="radio" data-pausa="0.35" title="0,35 segons">0,35</button>
+        <button role="radio" data-pausa="0.25" title="0,25 segons">0,25</button>
+      </div>
+      <button class="enllac" id="torna-netejar">Torna a passar la neteja</button>
+    </section>
+
+    <section class="seccio">
+      <h2>Propostes <span class="compte" id="compte-propostes"></span></h2>
+      <div id="propostes"><p class="buit">No hi ha propostes pendents.</p></div>
+    </section>
+
+    <section class="seccio">
+      <h2>Notes <span class="compte" id="compte-notes"></span></h2>
+      <div id="notes"><p class="buit">Construeix l'esborrany i deixa-hi notes en moments exactes.</p></div>
+    </section>
+
+    <section class="seccio">
+      <h2>Versions</h2>
+      <div id="versions"><p class="buit">Encara no has exportat res.</p></div>
+    </section>
+  </aside>
+
+  <main class="text" aria-label="Transcripció">
+    <div class="eines">
+      <div class="segmentat" role="radiogroup" aria-label="Mode" id="mode">
+        <button role="radio" data-mode="talla" aria-checked="true">Talla</button>
+        <button role="radio" data-mode="corregeix">Corregeix el text</button>
+      </div>
+      <div class="grup">
+        <button class="icona" id="desfes" title="Desfés (⌘Z)" aria-label="Desfés" disabled>
+          <svg viewBox="0 0 20 20"><path d="M7.5 5 3.5 9l4 4M4 9h7.5a4.5 4.5 0 0 1 0 9H9"/></svg>
+        </button>
+        <button class="icona" id="refes" title="Refés (⇧⌘Z)" aria-label="Refés" disabled>
+          <svg viewBox="0 0 20 20"><path d="m12.5 5 4 4-4 4M16 9H8.5a4.5 4.5 0 0 0 0 9H11"/></svg>
+        </button>
+      </div>
+      <div class="espai"></div>
+      <div class="feina" id="feina" hidden>
+        <span id="feina-text">Construint…</span>
+        <span class="barra-progres"><span id="feina-progres"></span></span>
+      </div>
+      <button class="boto" id="esborrany">Construeix l'esborrany</button>
+      <button class="boto principal" id="final">Final…</button>
+    </div>
+    <p class="ajuda" id="ajuda">Toca una paraula per treure-la o recuperar-la. Arrossega per triar-ne unes quantes. <kbd>⌥</kbd> + clic per escoltar des d'allà.</p>
+    <div id="transcripcio" class="transcripcio" aria-live="off"></div>
+  </main>
+
+  <section class="reproductor" aria-label="Reproductor">
+    <div class="segmentat petit" role="radiogroup" aria-label="Què veus" id="vista">
+      <button role="radio" data-vista="directe" aria-checked="true">En directe</button>
+      <button role="radio" data-vista="esborrany" disabled>Esborrany</button>
+    </div>
+    <div class="pantalla">
+      <video id="video-a" preload="auto" playsinline></video>
+      <video id="video-b" preload="auto" playsinline class="amagat"></video>
+      <video id="video-esborrany" preload="auto" playsinline class="amagat"></video>
+      <button class="gran-play" id="gran-play" aria-label="Reprodueix">
+        <svg viewBox="0 0 40 40"><path d="M15 11.5v17l13-8.5z"/></svg>
+      </button>
+    </div>
+    <div class="linia-temps" id="linia-temps" role="slider" aria-label="Posició" tabindex="0">
+      <div class="trossos" id="marques"></div>
+      <div class="ple" id="ple"></div>
+      <div class="capcal" id="capcal"></div>
+    </div>
+    <div class="controls">
+      <span class="temps" id="temps-actual">0:00</span>
+      <div class="grup">
+        <button class="icona" id="enrere" title="5 s enrere (←)" aria-label="5 segons enrere">
+          <svg viewBox="0 0 24 24"><path d="M11 6 5 12l6 6M18 6l-6 6 6 6"/></svg>
+        </button>
+        <button class="icona play" id="play" title="Reprodueix (espai)" aria-label="Reprodueix">
+          <svg class="si-pausa" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <svg class="si-play" viewBox="0 0 24 24"><path d="M8 5.5v13M16 5.5v13"/></svg>
+        </button>
+        <button class="icona" id="endavant" title="5 s endavant (→)" aria-label="5 segons endavant">
+          <svg viewBox="0 0 24 24"><path d="m13 6 6 6-6 6M6 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+      <span class="temps" id="temps-total">0:00</span>
+    </div>
+    <form class="nova-nota" id="nova-nota" hidden>
+      <input id="text-nota" type="text" placeholder="Nota en aquest moment…" autocomplete="off">
+      <button class="boto" type="submit">Afegeix</button>
+    </form>
+  </section>
+
+  <div class="velo" id="velo" hidden></div>
+  <div class="full" id="full-final" role="dialog" aria-modal="true" aria-labelledby="titol-final" hidden>
+    <h2 id="titol-final">Exportar la versió final</h2>
+    <p class="detall" id="final-durada"></p>
+    <label class="opcio"><input type="radio" name="qualitat" value="4k" checked> <span><strong>4K</strong> · 2160 × 3840</span></label>
+    <label class="opcio"><input type="radio" name="qualitat" value="1080"> <span><strong>1080</strong> · 1080 × 1920</span></label>
+    <p class="avis" id="final-avis" hidden></p>
+    <div class="botons">
+      <button class="boto" id="cancella-final">Cancel·la</button>
+      <button class="boto principal" id="confirma-final">Exporta</button>
+    </div>
+  </div>
+
+  <div class="avis-flotant" id="avis-flotant" role="status" aria-live="polite"></div>
+  <script src="/pagina/app.js"></script>
+</body>
+</html>

@@ -2,7 +2,8 @@
 
 Ús:
   python tallat.py transcriu VIDEO --projecte CARPETA [--srt FITXER.srt] [--model large-v3]
-  python tallat.py neteja --projecte CARPETA
+  python tallat.py revisa --projecte CARPETA          (obre la pàgina de revisió)
+  python tallat.py neteja --projecte CARPETA [--pausa 0.35]
   python tallat.py estat --projecte CARPETA
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
 
@@ -12,33 +13,45 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
-from fractions import Fraction
 from pathlib import Path
 
-from motor import edicio, exporta, neteja, transcripcio
-
-TRANSCRIPCIO = "transcripcio.json"
-EDICIO = "edicio.json"
-EDICIO_TEXT = "edicio.txt"  # format antic (fase 1): s'importa un cop
-ORIGINAL = "original.txt"
-REVISIO = "revisio.txt"
+from motor import edicio, exporta, transcripcio
+from motor.projecte import ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
 
 
-def _minuts(segons: float) -> str:
-    return f"{int(segons // 60)} min {int(segons % 60):02d} s"
+def _carrega(args) -> Projecte:
+    carpeta = Path(args.projecte).expanduser().resolve()
+    if not (carpeta / TRANSCRIPCIO).exists():
+        sys.exit(f"Aquesta carpeta encara no té cap transcripció: {carpeta}\n"
+                 "Primer fes: python tallat.py transcriu VIDEO --projecte CARPETA")
+    projecte = Projecte(carpeta)
+    for a in projecte.avisos:
+        print("Avís:", a)
+    return projecte
+
+
+def _barra(text: str):
+    ultim = [-10]
+
+    def progres(pct: int):
+        if pct >= ultim[0] + 10:
+            print(f"  {text}… {pct} %", flush=True)
+            ultim[0] = pct
+    return progres
 
 
 def ordre_transcriu(args) -> None:
     video = Path(args.video).expanduser().resolve()
-    projecte = Path(args.projecte).expanduser().resolve()
+    carpeta = Path(args.projecte).expanduser().resolve()
     if not video.exists():
         sys.exit(f"No trobo el vídeo: {video}")
-    if (projecte / TRANSCRIPCIO).exists() and not args.forca:
-        sys.exit(f"Aquest projecte ja té una transcripció ({projecte / TRANSCRIPCIO}).\n"
+    if (carpeta / TRANSCRIPCIO).exists() and not args.forca:
+        sys.exit(f"Aquest projecte ja té una transcripció ({carpeta / TRANSCRIPCIO}).\n"
                  "Si la vols refer i perdre els canvis, afegeix --forca.")
-    projecte.mkdir(parents=True, exist_ok=True)
+    carpeta.mkdir(parents=True, exist_ok=True)
 
     t0 = time.time()
     print("Carregant l'àudio…")
@@ -54,92 +67,81 @@ def ordre_transcriu(args) -> None:
         print("Calculant el temps de cada paraula…")
     paraules = transcripcio.a_paraules(transcripcio.alinea(audio, frases))
 
-    info = exporta.info_video(video)
-    dades = {"versio": 1, "video": str(video), "font": font, **info, "paraules": paraules}
-    (projecte / TRANSCRIPCIO).write_text(json.dumps(dades, ensure_ascii=False, indent=1), encoding="utf-8")
-    (projecte / ORIGINAL).write_text(edicio.text_editable(paraules), encoding="utf-8")
-    estat = edicio.estat_buit()
+    dades = {"versio": 1, "video": str(video), "font": font, **exporta.info_video(video), "paraules": paraules}
+    (carpeta / TRANSCRIPCIO).write_text(json.dumps(dades, ensure_ascii=False, indent=1), encoding="utf-8")
+    (carpeta / ORIGINAL).write_text(edicio.text_editable(paraules), encoding="utf-8")
+    for nom in ("edicio.json", "edicio.txt"):
+        (carpeta / nom).unlink(missing_ok=True)  # transcripció nova: l'edició anterior ja no encaixa
+
+    projecte = Projecte(carpeta)
     if not args.sense_neteja:
-        estat = edicio.aplica_neteja(estat, *neteja.detecta(paraules, neteja.carrega_llista()))
-    edicio.desa_estat(estat, projecte / EDICIO)
-    print(f"\nFet en {_minuts(time.time() - t0)}: {len(paraules)} paraules.")
-    _resum(dades, edicio.aplica(paraules, estat), estat, projecte)
+        projecte.neteja()
+    projecte.desa()
+    print(f"\nTranscripció feta en {minuts(time.time() - t0)}: {len(paraules)} paraules.")
+    print("\n".join(projecte.resum()))
+
+    print("\nPreparant la còpia lleugera per a la pàgina de revisió…")
+    exporta.fes_proxy(video, carpeta / PROXY, progres=_barra("còpia"))
+    print(f"\nTot a punt. Obre la pàgina de revisió amb:\n  python tallat.py revisa --projecte \"{carpeta}\"")
 
 
-def _carrega(projecte: Path):
-    dades = json.loads((projecte / TRANSCRIPCIO).read_text(encoding="utf-8"))
-    if (projecte / EDICIO).exists():
-        estat = edicio.llegeix_estat(projecte / EDICIO)
-    elif (projecte / EDICIO_TEXT).exists():
-        estat, avisos = edicio.importa_text(dades["paraules"], (projecte / EDICIO_TEXT).read_text(encoding="utf-8"))
-        for a in avisos:
-            print("Avís:", a)
-        edicio.desa_estat(estat, projecte / EDICIO)
-        print(f"He passat la teva edició d'{EDICIO_TEXT} a {EDICIO} (a partir d'ara es fa servir aquest).")
+def ordre_revisa(args) -> None:
+    from motor.servidor import crea_servidor
+
+    projecte = _carrega(args)
+    proxy = projecte.carpeta / PROXY
+    if not proxy.exists() or proxy.stat().st_mtime < projecte.video.stat().st_mtime:
+        print("Preparant la còpia lleugera del vídeo (només el primer cop)…")
+        exporta.fes_proxy(projecte.video, proxy, progres=_barra("còpia"))
+
+    for port in range(args.port, args.port + 20):
+        try:
+            servidor = crea_servidor(projecte, port)
+            break
+        except OSError:
+            continue
     else:
-        estat = edicio.estat_buit()
-    return dades, estat
+        sys.exit("No trobo cap port lliure per obrir la pàgina.")
 
-
-def _trams(dades: dict, paraules: list[dict], estat: dict):
-    return edicio.trams(paraules, float(Fraction(dades["fps"])), dades["durada"],
-                        pausa_maxima=estat.get("pausa_maxima"))
-
-
-MOTIUS = {"usuari": "tretes per tu", "farciment": "farciment", "tall": "paraules a mig dir"}
-PROPOSTES = {"farciment?": "possible farciment", "expressiu?": "sons repetits (potser expressius)",
-             "repeticio?": "paraules repetides"}
-
-
-def _resum(dades: dict, paraules: list[dict], estat: dict, projecte: Path) -> None:
-    from collections import Counter
-    trams = _trams(dades, paraules, estat)
-    fora = Counter(p["motiu"] for p in paraules if not p["conservada"])
-    print(f"Paraules: {sum(p['conservada'] for p in paraules)} es queden.")
-    for motiu, n in fora.items():
-        print(f"  − {n} {MOTIUS.get(motiu, motiu)}")
-    for motiu, n in Counter(estat["propostes"].values()).items():
-        print(f"  ? {n} {PROPOSTES.get(motiu, motiu)} (només proposat)")
-    pausa = estat.get("pausa_maxima")
-    print(f"Silencis: {'escurçats a ' + str(pausa) + ' s com a màxim' if pausa else 'sense tocar'}.")
-    print(f"Durada: {_minuts(dades['durada'])} → {_minuts(sum(b - a for a, b in trams))} ({len(trams)} trossos).")
-    (projecte / REVISIO).write_text(edicio.text_revisio(paraules), encoding="utf-8")
-    print(f"Text per revisar ([tret], {{proposat}}): {projecte / REVISIO}")
+    adreca = f"http://127.0.0.1:{servidor.server_port}/"
+    print(f"Pàgina de revisió de «{projecte.nom}»: {adreca}")
+    print("Deixa aquesta finestra oberta mentre revises. Per tancar: Control + C.")
+    if not args.sense_navegador:
+        subprocess.run(["open", adreca], check=False)
+    try:
+        servidor.serve_forever()
+    except KeyboardInterrupt:
+        print("\nPàgina tancada. Els canvis ja estan desats.")
 
 
 def ordre_neteja(args) -> None:
-    projecte = Path(args.projecte).expanduser().resolve()
-    dades, estat = _carrega(projecte)
-    llista = neteja.ruta_llista()
-    estat = edicio.aplica_neteja(estat, *neteja.detecta(dades["paraules"], neteja.carrega_llista(llista)))
+    projecte = _carrega(args)
+    projecte.neteja()
     if args.pausa is not None:
-        estat["pausa_maxima"] = args.pausa if args.pausa > 0 else None
-    edicio.desa_estat(estat, projecte / EDICIO)
-    print(f"Neteja feta amb la llista {llista}")
-    _resum(dades, edicio.aplica(dades["paraules"], estat), estat, projecte)
+        projecte.estat["pausa_maxima"] = args.pausa if args.pausa > 0 else None
+    projecte.desa()
+    print("\n".join(projecte.resum()))
 
 
 def ordre_estat(args) -> None:
-    projecte = Path(args.projecte).expanduser().resolve()
-    dades, estat = _carrega(projecte)
-    _resum(dades, edicio.aplica(dades["paraules"], estat), estat, projecte)
+    projecte = _carrega(args)
+    projecte.desa()  # actualitza revisio.txt
+    print("\n".join(projecte.resum()))
 
 
 def ordre_exporta(args) -> None:
-    projecte = Path(args.projecte).expanduser().resolve()
-    dades, estat = _carrega(projecte)
-    trams = _trams(dades, edicio.aplica(dades["paraules"], estat), estat)
-    nom = Path(dades["video"]).stem.replace(" ", "-")
-    sortida = projecte / "exports" / f"{nom}_{args.qualitat}_{time.strftime('%Y%m%d-%H%M%S')}.mp4"
-    (projecte / "exports").mkdir(exist_ok=True)
-    (projecte / "exports" / "talls.json").write_text(json.dumps(trams), encoding="utf-8")
-    print(f"Exportant {len(trams)} trossos ({_minuts(sum(b - a for a, b in trams))}) en qualitat «{args.qualitat}»…")
+    projecte = _carrega(args)
+    trams = projecte.trams()
+    sortida = projecte.sortida(args.qualitat)
+    print(f"Exportant {len(trams)} trossos ({minuts(sum(b - a for a, b in trams))}) en qualitat «{args.qualitat}»…")
     t0 = time.time()
-    exporta.exporta(Path(dades["video"]), trams, sortida, args.qualitat)
-    print(f"\nFet en {_minuts(time.time() - t0)}:\n  {sortida}")
+    exporta.exporta(projecte.video, trams, sortida, args.qualitat, progres=_barra("exportant"))
+    projecte.desa_talls(sortida, trams)
+    print(f"\nFet en {minuts(time.time() - t0)}:\n  {sortida}")
 
 
 def main() -> None:
+    sys.stdout.reconfigure(line_buffering=True)  # que els missatges surtin al moment
     p = argparse.ArgumentParser(prog="tallat", description="Editor de reels en català, per paraules.")
     sub = p.add_subparsers(dest="ordre", required=True)
 
@@ -152,12 +154,18 @@ def main() -> None:
     t.add_argument("--sense-neteja", action="store_true", help="No treguis el farciment automàticament")
     t.set_defaults(func=ordre_transcriu)
 
+    r = sub.add_parser("revisa", help="Obre la pàgina de revisió al navegador")
+    r.add_argument("--projecte", required=True)
+    r.add_argument("--port", type=int, default=8765)
+    r.add_argument("--sense-navegador", action="store_true", help="No obris el navegador automàticament")
+    r.set_defaults(func=ordre_revisa)
+
     n = sub.add_parser("neteja", help="Treu farciment i paraules a mig dir, i escurça silencis")
     n.add_argument("--projecte", required=True)
     n.add_argument("--pausa", type=float, help="Silenci màxim en segons (0 = no escurçar)")
     n.set_defaults(func=ordre_neteja)
 
-    e = sub.add_parser("estat", help="Mostra quantes paraules has esborrat i quant durarà")
+    e = sub.add_parser("estat", help="Mostra què s'ha tret i quant durarà")
     e.add_argument("--projecte", required=True)
     e.set_defaults(func=ordre_estat)
 

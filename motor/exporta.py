@@ -53,15 +53,27 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str) -> str:
     return "\n".join(parts)
 
 
+def _executa(ordre: list[str], durada: float, progres) -> None:
+    """Executa ffmpeg i va cridant progres(percentatge) de 0 a 100."""
+    proces = subprocess.Popen(ordre, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    for linia in proces.stdout:
+        if progres and linia.startswith("out_time_us="):
+            try:
+                progres(min(100, int(int(linia.split("=")[1]) / 1e6 / durada * 100)))
+            except ValueError:
+                continue
+    proces.wait()
+    if proces.returncode != 0:
+        raise RuntimeError("ffmpeg ha fallat:\n" + proces.stderr.read()[-2000:])
+
+
 def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualitat: str,
-            avis=print) -> Path:
+            progres=None) -> Path:
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
     ow, oh, bitrate = QUALITATS[qualitat]
     info = info_video(video)
     enquadrament = _enquadrament(info["amplada"], info["alcada"], ow, oh)
-
-    durada_final = sum(b - a for a, b in trams)
 
     sortida.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
@@ -70,9 +82,11 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
 
     # Cada tros s'obre com una entrada pròpia: ffmpeg salta directament al seu inici
     # i només descodifica el que fem servir (molt més ràpid amb gravacions llargues).
+    # Descodifiquem amb el processador: en Macs Intel, fer-ho amb la gràfica i baixar
+    # els fotogrames 4K a memòria és unes 4 vegades més lent.
     entrades = []
     for a, b in trams:
-        entrades += ["-hwaccel", "videotoolbox", "-ss", f"{a:.4f}", "-t", f"{b - a:.4f}", "-i", str(video)]
+        entrades += ["-ss", f"{a:.4f}", "-t", f"{b - a:.4f}", "-i", str(video)]
 
     ordre = [
         "ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", *entrades,
@@ -82,19 +96,27 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
         "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(sortida),
     ]
-    proces = subprocess.Popen(ordre, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    ultim = -10
-    for linia in proces.stdout:
-        if linia.startswith("out_time_us="):
-            try:
-                pct = int(int(linia.split("=")[1]) / 1e6 / durada_final * 100)
-            except ValueError:
-                continue
-            if pct >= ultim + 10:
-                avis(f"  exportant… {min(pct, 100)} %")
-                ultim = pct
-    proces.wait()
-    Path(filtre).unlink(missing_ok=True)
-    if proces.returncode != 0:
-        raise RuntimeError("ffmpeg ha fallat:\n" + proces.stderr.read()[-2000:])
+    try:
+        _executa(ordre, sum(b - a for a, b in trams), progres)
+    finally:
+        Path(filtre).unlink(missing_ok=True)
+    return sortida
+
+
+def fes_proxy(video: Path, sortida: Path, progres=None) -> Path:
+    """Còpia lleugera i vertical de tota la gravació, per al reproductor de la pàgina de revisió.
+
+    Un fotograma clau cada mig segon perquè els salts entre trossos siguin instantanis."""
+    info = info_video(video)
+    enquadrament = _enquadrament(info["amplada"], info["alcada"], 720, 1280).replace("lanczos", "fast_bilinear")
+    temporal = sortida.with_suffix(".tmp.mp4")
+    ordre = [
+        "ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", "-i", str(video),
+        "-map", "0:v:0", "-map", "0:a:0", "-vf", enquadrament,
+        "-c:v", "h264_videotoolbox", "-b:v", "3M", "-g", "15",
+        "-c:a", "aac", "-b:a", "128k", "-ac", "2",
+        "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(temporal),
+    ]
+    _executa(ordre, info["durada"], progres)
+    temporal.replace(sortida)
     return sortida
