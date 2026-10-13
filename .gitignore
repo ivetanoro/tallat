@@ -1,0 +1,60 @@
+# --- Vídeo i àudio (mai al repositori) ---
+*.mp4
+*.mov
+*.m4v
+*.mkv
+*.webm
+*.avi
+*.mxf
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.aif
+*.aiff
+*.flac
+
+# --- Exports, renders i material de treball ---
+material/
+exports/
+renders/
+export/
+render/
+tmp/
+
+# --- Transcripcions i subtítols (contenen el que diu la persona) ---
+transcripts/
+*.srt
+*.vtt
+
+# --- Marca personal (cada persona la té fora del repositori) ---
+# Es publiquen només les plantilles neutres: brand.example.md i brand.example.json
+brand.md
+brand.json
+marca/
+brand/
+fonts/
+*.otf
+*.ttf
+*.woff
+*.woff2
+*.cube
+*.3dl
+stickers/
+
+# --- Notes i configuració privades de Claude Code ---
+CLAUDE.local.md
+.claude/settings.local.json
+
+# --- Claus i secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Fitxers del sistema i dependències ---
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
