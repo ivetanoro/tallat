@@ -90,6 +90,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "subtitols": projecte.linies_subtitols(trams)}
 
     class Gestor(BaseHTTPRequestHandler):
+        # HTTP/1.1: connexions que es mantenen obertes, com esperen els reproductors de vídeo
+        # (el Safari, amb HTTP/1.0, de vegades es quedava esperant dades en saltar pel vídeo).
+        protocol_version = "HTTP/1.1"
+
         def log_message(self, *args):  # silenciós: la terminal és per als missatges importants
             pass
 
@@ -106,9 +110,13 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         def _fitxer(self, path: Path):
             if not path.is_file():
                 return self.send_error(HTTPStatus.NOT_FOUND)
-            mida = path.stat().st_size
+            info = path.stat()
+            mida = info.st_size
             tipus = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            etiqueta = f'"{int(info.st_mtime)}-{mida}"'
             rang = self.headers.get("Range")
+            if rang and self.headers.get("If-Range") not in (None, etiqueta):
+                rang = None  # el fitxer ha canviat: enviem-lo sencer
             inici, final = 0, mida - 1
             if rang and rang.startswith("bytes="):
                 a, _, b = rang[6:].partition("-")
@@ -122,7 +130,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             self.send_header("Content-Type", tipus)
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Length", str(final - inici + 1))
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("ETag", etiqueta)
+            self.send_header("Last-Modified", self.date_time_string(int(info.st_mtime)))
+            if path.suffix in (".html", ".js", ".css", ".json"):
+                self.send_header("Cache-Control", "no-cache")
             self.end_headers()
             try:
                 with path.open("rb") as f:
@@ -135,7 +146,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         self.wfile.write(tros)
                         pendent -= len(tros)
             except (BrokenPipeError, ConnectionResetError):
-                pass  # el navegador ha tallat la descàrrega (passa sovint en saltar pel vídeo)
+                self.close_connection = True  # el navegador ha tallat la descàrrega (passa en saltar)
 
         def _index(self):
             html = (PAGINA / "index.html").read_text(encoding="utf-8")

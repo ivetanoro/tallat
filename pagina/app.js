@@ -525,8 +525,30 @@ function atura() {
   document.body.classList.remove("reproduint");
 }
 
-// Vigilant: si el vídeo diu que sona però el seu temps no avança, el despertem.
+// Vigilant: si el vídeo diu que sona però el seu temps no avança, o un salt no acaba mai,
+// el despertem (el Safari, de vegades, es queda esperant).
 function vigila() {
+  if (R.v.seeking && R.reproduint) {
+    R.vigila.salt ??= { des: performance.now(), intents: 0 };
+    if (performance.now() - R.vigila.salt.des > 1500) {
+      const objectiu = R.v.currentTime;
+      R.vigila.salt.intents++;
+      registre("salt-encallat", { intents: R.vigila.salt.intents, video: ev(R.v) });
+      if (R.vigila.salt.intents >= 2) {  // segon intent: recarreguem el vídeo i hi tornem
+        R.v.load();
+        R.v.addEventListener("loadeddata", () => {
+          R.v.currentTime = objectiu;
+          if (R.reproduint) R.v.play().catch(() => {});
+        }, { once: true });
+        R.vigila.salt = { des: performance.now() + 3000, intents: 0 };
+      } else {
+        R.v.currentTime = objectiu;
+        R.vigila.salt.des = performance.now();
+      }
+    }
+    return;
+  }
+  R.vigila.salt = null;
   if (!R.reproduint || R.v.paused || R.v.seeking || R.v.readyState < 3) { R.vigila.des = performance.now(); return; }
   const t = R.v.currentTime;
   if (t !== R.vigila.t) { R.vigila = { t, des: performance.now() }; return; }
@@ -682,7 +704,8 @@ function instalaReproductor() {
   R.v.addEventListener("timeupdate", comprovaTall);
   // Si la pàgina deixa de veure's, el navegador alenteix els salts: parem perquè no soni el que s'ha tret.
   document.addEventListener("visibilitychange", () => { if (document.hidden && sona()) atura(); });
-  R.v.addEventListener("loadedmetadata", () => { vesA(0); pintaTemps(); }, { once: true });
+  // Primer salt quan ja hi ha dades (no només la informació general): el Safari ho agraeix.
+  R.v.addEventListener("loadeddata", () => { vesA(0); pintaTemps(); }, { once: true });
 
   const commutaPlay = () => { R.aturaA = null; sona() ? atura() : reprodueix(); };
   $("#play").addEventListener("click", commutaPlay);
