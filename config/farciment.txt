@@ -1,0 +1,26 @@
+# Llista de farciment de tallat.
+# Una expressió per línia (pot ser de més d'una paraula). Les majúscules, la puntuació
+# i les lletres allargades no compten: «Mmmm…» és el mateix que «mmm».
+# Pots editar la teva còpia a ~/.tallat/farciment.txt
+
+[treu]
+# Sons de dubte: tallat els treu sols (es poden recuperar)
+eh
+ehm
+em
+ahm
+mmm
+hmm
+uh
+um
+
+[proposa]
+# Paraules que de vegades són farciment i de vegades no: tallat només les proposa
+ah
+vale
+saps
+o sigui
+bueno
+pues
+a veure
+en plan

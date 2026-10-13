@@ -2,6 +2,7 @@
 
 Ús:
   python tallat.py transcriu VIDEO --projecte CARPETA [--srt FITXER.srt] [--model large-v3]
+  python tallat.py neteja --projecte CARPETA
   python tallat.py estat --projecte CARPETA
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
 
@@ -16,11 +17,13 @@ import time
 from fractions import Fraction
 from pathlib import Path
 
-from motor import edicio, exporta, transcripcio
+from motor import edicio, exporta, neteja, transcripcio
 
 TRANSCRIPCIO = "transcripcio.json"
-EDICIO = "edicio.txt"
+EDICIO = "edicio.json"
+EDICIO_TEXT = "edicio.txt"  # format antic (fase 1): s'importa un cop
 ORIGINAL = "original.txt"
+REVISIO = "revisio.txt"
 
 
 def _minuts(segons: float) -> str:
@@ -32,8 +35,8 @@ def ordre_transcriu(args) -> None:
     projecte = Path(args.projecte).expanduser().resolve()
     if not video.exists():
         sys.exit(f"No trobo el vídeo: {video}")
-    if (projecte / EDICIO).exists() and not args.forca:
-        sys.exit(f"Aquest projecte ja té una transcripció ({projecte / EDICIO}).\n"
+    if (projecte / TRANSCRIPCIO).exists() and not args.forca:
+        sys.exit(f"Aquest projecte ja té una transcripció ({projecte / TRANSCRIPCIO}).\n"
                  "Si la vols refer i perdre els canvis, afegeix --forca.")
     projecte.mkdir(parents=True, exist_ok=True)
 
@@ -54,37 +57,78 @@ def ordre_transcriu(args) -> None:
     info = exporta.info_video(video)
     dades = {"versio": 1, "video": str(video), "font": font, **info, "paraules": paraules}
     (projecte / TRANSCRIPCIO).write_text(json.dumps(dades, ensure_ascii=False, indent=1), encoding="utf-8")
-    text = edicio.text_editable(paraules)
-    (projecte / ORIGINAL).write_text(text, encoding="utf-8")
-    (projecte / EDICIO).write_text(text, encoding="utf-8")
+    (projecte / ORIGINAL).write_text(edicio.text_editable(paraules), encoding="utf-8")
+    estat = edicio.estat_buit()
+    if not args.sense_neteja:
+        estat = edicio.aplica_neteja(estat, *neteja.detecta(paraules, neteja.carrega_llista()))
+    edicio.desa_estat(estat, projecte / EDICIO)
     print(f"\nFet en {_minuts(time.time() - t0)}: {len(paraules)} paraules.")
-    print(f"Ara esborra el que no vulguis a:\n  {projecte / EDICIO}")
+    _resum(dades, edicio.aplica(paraules, estat), estat, projecte)
 
 
 def _carrega(projecte: Path):
     dades = json.loads((projecte / TRANSCRIPCIO).read_text(encoding="utf-8"))
-    text = (projecte / EDICIO).read_text(encoding="utf-8")
-    paraules, avisos = edicio.compara(dades["paraules"], text)
-    fps = float(Fraction(dades["fps"]))
-    trams = edicio.trams(paraules, fps, dades["durada"])
-    return dades, paraules, avisos, trams
+    if (projecte / EDICIO).exists():
+        estat = edicio.llegeix_estat(projecte / EDICIO)
+    elif (projecte / EDICIO_TEXT).exists():
+        estat, avisos = edicio.importa_text(dades["paraules"], (projecte / EDICIO_TEXT).read_text(encoding="utf-8"))
+        for a in avisos:
+            print("Avís:", a)
+        edicio.desa_estat(estat, projecte / EDICIO)
+        print(f"He passat la teva edició d'{EDICIO_TEXT} a {EDICIO} (a partir d'ara es fa servir aquest).")
+    else:
+        estat = edicio.estat_buit()
+    return dades, estat
+
+
+def _trams(dades: dict, paraules: list[dict], estat: dict):
+    return edicio.trams(paraules, float(Fraction(dades["fps"])), dades["durada"],
+                        pausa_maxima=estat.get("pausa_maxima"))
+
+
+MOTIUS = {"usuari": "tretes per tu", "farciment": "farciment", "tall": "paraules a mig dir"}
+PROPOSTES = {"farciment?": "possible farciment", "expressiu?": "sons repetits (potser expressius)",
+             "repeticio?": "paraules repetides"}
+
+
+def _resum(dades: dict, paraules: list[dict], estat: dict, projecte: Path) -> None:
+    from collections import Counter
+    trams = _trams(dades, paraules, estat)
+    fora = Counter(p["motiu"] for p in paraules if not p["conservada"])
+    print(f"Paraules: {sum(p['conservada'] for p in paraules)} es queden.")
+    for motiu, n in fora.items():
+        print(f"  − {n} {MOTIUS.get(motiu, motiu)}")
+    for motiu, n in Counter(estat["propostes"].values()).items():
+        print(f"  ? {n} {PROPOSTES.get(motiu, motiu)} (només proposat)")
+    pausa = estat.get("pausa_maxima")
+    print(f"Silencis: {'escurçats a ' + str(pausa) + ' s com a màxim' if pausa else 'sense tocar'}.")
+    print(f"Durada: {_minuts(dades['durada'])} → {_minuts(sum(b - a for a, b in trams))} ({len(trams)} trossos).")
+    (projecte / REVISIO).write_text(edicio.text_revisio(paraules), encoding="utf-8")
+    print(f"Text per revisar ([tret], {{proposat}}): {projecte / REVISIO}")
+
+
+def ordre_neteja(args) -> None:
+    projecte = Path(args.projecte).expanduser().resolve()
+    dades, estat = _carrega(projecte)
+    llista = neteja.ruta_llista()
+    estat = edicio.aplica_neteja(estat, *neteja.detecta(dades["paraules"], neteja.carrega_llista(llista)))
+    if args.pausa is not None:
+        estat["pausa_maxima"] = args.pausa if args.pausa > 0 else None
+    edicio.desa_estat(estat, projecte / EDICIO)
+    print(f"Neteja feta amb la llista {llista}")
+    _resum(dades, edicio.aplica(dades["paraules"], estat), estat, projecte)
 
 
 def ordre_estat(args) -> None:
     projecte = Path(args.projecte).expanduser().resolve()
-    dades, paraules, avisos, trams = _carrega(projecte)
-    fora = sum(not p["conservada"] for p in paraules)
-    print(f"Paraules: {len(paraules) - fora} es queden, {fora} esborrades.")
-    print(f"Durada: {_minuts(dades['durada'])} → {_minuts(sum(b - a for a, b in trams))} ({len(trams)} trossos).")
-    for a in avisos:
-        print("Avís:", a)
+    dades, estat = _carrega(projecte)
+    _resum(dades, edicio.aplica(dades["paraules"], estat), estat, projecte)
 
 
 def ordre_exporta(args) -> None:
     projecte = Path(args.projecte).expanduser().resolve()
-    dades, paraules, avisos, trams = _carrega(projecte)
-    for a in avisos:
-        print("Avís:", a)
+    dades, estat = _carrega(projecte)
+    trams = _trams(dades, edicio.aplica(dades["paraules"], estat), estat)
     nom = Path(dades["video"]).stem.replace(" ", "-")
     sortida = projecte / "exports" / f"{nom}_{args.qualitat}_{time.strftime('%Y%m%d-%H%M%S')}.mp4"
     (projecte / "exports").mkdir(exist_ok=True)
@@ -105,7 +149,13 @@ def main() -> None:
     t.add_argument("--srt", help="Text ja transcrit (p. ex. exportat de Descript); només se n'alinea el temps")
     t.add_argument("--model", default="large-v3", help="Model de WhisperX si no hi ha --srt")
     t.add_argument("--forca", action="store_true", help="Refés la transcripció encara que ja n'hi hagi una")
+    t.add_argument("--sense-neteja", action="store_true", help="No treguis el farciment automàticament")
     t.set_defaults(func=ordre_transcriu)
+
+    n = sub.add_parser("neteja", help="Treu farciment i paraules a mig dir, i escurça silencis")
+    n.add_argument("--projecte", required=True)
+    n.add_argument("--pausa", type=float, help="Silenci màxim en segons (0 = no escurçar)")
+    n.set_defaults(func=ordre_neteja)
 
     e = sub.add_parser("estat", help="Mostra quantes paraules has esborrat i quant durarà")
     e.add_argument("--projecte", required=True)
