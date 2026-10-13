@@ -261,15 +261,24 @@ const marcades = new Set();
 function pintaSeleccio() {
   for (const id of marcades) spans.get(id)?.classList.remove("seleccio");
   marcades.clear();
-  if (!seleccio) return;
-  const [a, b] = [Math.min(seleccio.inici, seleccio.fi), Math.max(seleccio.inici, seleccio.fi)];
-  for (let id = a; id <= b; id++) { spans.get(id)?.classList.add("seleccio"); marcades.add(id); }
+  const rang = seleccio ? [Math.min(seleccio.inici, seleccio.fi), Math.max(seleccio.inici, seleccio.fi)] : seleccioFeta;
+  if (!rang) return;
+  for (let id = rang[0]; id <= rang[1]; id++) { spans.get(id)?.classList.add("seleccio"); marcades.add(id); }
+}
+
+// Clic: anar a la paraula i reproduir des d'allà. Clic dret (o control + clic): treure-la o
+// recuperar-la. Arrossegar selecciona unes quantes paraules; després, clic dret o ⌫.
+let seleccioFeta = null;  // [primera, última] de l'última selecció arrossegada
+
+function commutaRang(a, b) {
+  const ids = Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  commuta(ids, ids.some((id) => !esFora(id)));
 }
 
 function instalaText() {
   const cont = $("#transcripcio");
   cont.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || e.ctrlKey) return;  // el clic dret i control + clic van a «contextmenu»
     const pausa = e.target.closest(".pausa");
     if (pausa) {
       const id = +pausa.dataset.pausa;
@@ -280,26 +289,48 @@ function instalaText() {
       return;
     }
     const s = e.target.closest(".p");
-    if (!s) return;
+    if (!s) { seleccioFeta = null; pintaSeleccio(); return; }
     const id = +s.dataset.id;
-    if (e.altKey) { e.preventDefault(); reprodueixDes(id); return; }
     if (mode === "corregeix") { e.preventDefault(); editaParaula(s, id); return; }
     e.preventDefault();
-    seleccio = { inici: id, fi: id };
+    seleccioFeta = null;
+    seleccio = { inici: id, fi: id, mogut: false };
     pintaSeleccio();
   });
   document.addEventListener("pointermove", (e) => {
     if (!seleccio) return;
     const s = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".p");
-    if (s && +s.dataset.id !== seleccio.fi) { seleccio.fi = +s.dataset.id; pintaSeleccio(); }
+    if (s && +s.dataset.id !== seleccio.fi) { seleccio.fi = +s.dataset.id; seleccio.mogut = true; pintaSeleccio(); }
   });
   document.addEventListener("pointerup", () => {
     if (!seleccio) return;
-    const [a, b] = [Math.min(seleccio.inici, seleccio.fi), Math.max(seleccio.inici, seleccio.fi)];
+    const { inici, fi, mogut } = seleccio;
+    if (!mogut) {  // un clic: hi anem i sona des d'allà
+      seleccio = null;
+      pintaSeleccio();
+      reprodueixDes(inici);
+      return;
+    }
+    seleccioFeta = [Math.min(inici, fi), Math.max(inici, fi)];  // queda marcada fins al clic dret o ⌫
+  });
+  cont.addEventListener("contextmenu", (e) => {
+    const s = e.target.closest(".p");
+    if (!s || mode !== "talla") return;
+    e.preventDefault();
+    const id = +s.dataset.id;
+    if (seleccioFeta && id >= seleccioFeta[0] && id <= seleccioFeta[1]) commutaRang(...seleccioFeta);
+    else commutaRang(id, id);
     seleccio = null;
+    seleccioFeta = null;
     pintaSeleccio();
-    const ids = Array.from({ length: b - a + 1 }, (_, i) => a + i);
-    commuta(ids, ids.some((id) => !esFora(id)));
+  });
+  document.addEventListener("keydown", (e) => {
+    if (!seleccioFeta || e.target.matches("input, textarea") || !["Backspace", "Delete"].includes(e.key)) return;
+    e.preventDefault();
+    commutaRang(...seleccioFeta);
+    seleccio = null;
+    seleccioFeta = null;
+    pintaSeleccio();
   });
   $(".text").addEventListener("wheel", () => { darrerDesplacamentManual = performance.now(); }, { passive: true });
 }
@@ -1029,7 +1060,7 @@ function instalaControls() {
       for (const x of $$("#mode button")) x.setAttribute("aria-checked", String(x === b));
       document.body.classList.toggle("mode-corregeix", mode === "corregeix");
       $("#ajuda").innerHTML = mode === "talla"
-        ? "Toca una paraula per treure-la o recuperar-la. Arrossega per triar-ne unes quantes. <kbd>⌥</kbd> + clic per escoltar des d'allà."
+        ? "Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la. Arrossega per triar-ne unes quantes i prem <kbd>⌫</kbd>."
         : "Toca una paraula per corregir com s'escriu als subtítols. <kbd>↩</kbd> per desar, <kbd>esc</kbd> per deixar-ho.";
     });
   }
