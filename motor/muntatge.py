@@ -118,5 +118,5 @@ def durada_estimada(arrel, reel: dict) -> float:
     from motor import neteja as net
     estat = edicio.aplica_neteja(estat, *net.detecta(arrel.dades["paraules"], net.carrega_llista()))
     trams = edicio.trams(edicio.aplica(arrel.dades["paraules"], estat), arrel.fps, arrel.dades["durada"],
-                         pausa_maxima=estat["pausa_maxima"], ordre=estat["ordre"])
+                         pausa_maxima=estat["pausa_maxima"], ordre=estat["ordre"], veu=arrel.veu())
     return round(sum(b - a for a, b in trams), 2)

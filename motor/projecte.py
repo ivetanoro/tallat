@@ -75,11 +75,22 @@ class Projecte:
     def paraules(self) -> list[dict]:
         return edicio.aplica(self.dades["paraules"], self.estat)
 
+    def veu(self):
+        """Mapa de veu del so (on hi ha silenci de debò). Es calcula un cop i el comparteixen
+        la gravació sencera i els seus reels (es desa al costat de transcripcio.json)."""
+        if not hasattr(self, "_veu"):
+            from motor import veu
+            try:
+                self._veu = veu.carrega((self.carpeta / TRANSCRIPCIO).resolve().parent, self.video)
+            except Exception:  # sense el vídeo o sense so: escurcem els silencis com abans
+                self._veu = None
+        return self._veu
+
     def trams(self) -> list[tuple[float, float]]:
         return edicio.trams(self.paraules(), self.fps, self.dades["durada"],
                             pausa_maxima=self.estat.get("pausa_maxima"),
                             pauses_mantingudes=self.estat.get("pauses_mantingudes", []),
-                            ordre=self.estat.get("ordre"))
+                            ordre=self.estat.get("ordre"), veu=self.veu())
 
     def paragrafs(self) -> list[list[int]]:
         """Paràgrafs (ids) en l'ordre en què sonen; en un reel muntat, el que queda fora va al final."""

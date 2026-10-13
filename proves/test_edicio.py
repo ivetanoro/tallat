@@ -80,3 +80,27 @@ class TestOrdre(unittest.TestCase):
     def test_sense_pausa_maxima_no_peta_entre_blocs(self):
         p = self.paraules()
         edicio.trams(p, fps=30, durada=10, pausa_maxima=None, ordre=[[3, 3], [4, 5]])
+
+
+class TestSilenciReal(unittest.TestCase):
+    """Un silenci entre paraules només s'escurça si al so hi ha silenci de debò."""
+
+    def paraules(self):
+        return [{"id": 0, "text": "tu.", "inici": 0.0, "final": 0.5, "frase": 0, "conservada": True},
+                {"id": 1, "text": "Vull", "inici": 1.5, "final": 2.0, "frase": 1, "conservada": True}]
+
+    def veu(self, fins):
+        import numpy as np
+        v = np.zeros(300, dtype=bool)
+        v[0:int(fins * 100)] = True       # veu des de 0 fins a «fins»
+        v[150:200] = True                 # «Vull»
+        return v
+
+    def test_si_la_veu_continua_no_es_talla(self):
+        t = edicio.trams(self.paraules(), fps=30, durada=3, pausa_maxima=0.35, veu=self.veu(1.25))
+        self.assertEqual(len(t), 1)  # només hi ha 0,25 s de silenci real
+
+    def test_es_talla_dins_del_silenci_real(self):
+        t = edicio.trams(self.paraules(), fps=30, durada=3, pausa_maxima=0.35, veu=self.veu(0.8))
+        self.assertEqual(len(t), 2)
+        self.assertGreaterEqual(t[0][1], 0.8)  # el primer tros arriba fins on acaba la veu

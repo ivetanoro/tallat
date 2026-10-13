@@ -58,3 +58,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Mapa de veu de cada projecte (es calcula del vídeo)
+veu.npy

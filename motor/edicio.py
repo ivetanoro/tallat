@@ -191,9 +191,21 @@ def _blocs(paraules: list[dict], ordre) -> list[list[dict]]:
 
 
 def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
-          pausa_maxima: float | None = None, pauses_mantingudes=(), ordre=None) -> list[tuple[float, float]]:
-    """Trossos del vídeo original que es conserven, en l'ordre en què sonen, ajustats a fotogrames."""
+          pausa_maxima: float | None = None, pauses_mantingudes=(), ordre=None,
+          veu=None) -> list[tuple[float, float]]:
+    """Trossos del vídeo original que es conserven, en l'ordre en què sonen, ajustats a fotogrames.
+
+    `veu` (opcional) és el mapa de veu del so (motor/veu.py): si hi és, un silenci entre dues
+    paraules només s'escurça si al so hi ha prou silenci de debò, i es talla dins d'aquest silenci."""
+    from motor.veu import silenci_mes_llarg
     pauses_mantingudes = set(pauses_mantingudes)
+
+    def silenci_real(anterior: dict, p: dict):
+        """(inici, final) del silenci on es pot tallar entre dues paraules, o None si no se'n pot treure."""
+        if veu is None:
+            return anterior["final"], p["inici"]
+        tros = silenci_mes_llarg(veu, anterior["final"], p["inici"])
+        return tros if tros and tros[1] - tros[0] > pausa_maxima else None
     corregudes = []
     for bloc in _blocs(paraules, ordre):
         actual = []
@@ -201,7 +213,8 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
             if p["conservada"]:
                 salt = actual and p["id"] != actual[-1]["id"] + 1  # hi ha paraules entremig que no hi són
                 silenci = (actual and pausa_maxima is not None and p["id"] not in pauses_mantingudes
-                           and p["inici"] - actual[-1]["final"] > pausa_maxima)
+                           and p["inici"] - actual[-1]["final"] > pausa_maxima
+                           and silenci_real(actual[-1], p) is not None)
                 if salt or silenci:  # silenci massa llarg: el partim
                     corregudes.append(actual)
                     actual = []
@@ -222,8 +235,9 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
         tanca_inici = tanca_final = False  # el costat toca una paraula esborrada
         if anterior is not None:
             if anterior["conservada"] and pausa_maxima is not None:
-                # tall per silenci: deixem mitja pausa a cada costat
-                inici = max(inici - pausa_maxima / 2 + marge, anterior["final"])
+                # tall per silenci: deixem mitja pausa a cada costat, dins del silenci de debò
+                tros = silenci_real(anterior, c[0]) or (anterior["final"], c[0]["inici"])
+                inici = max(min(inici, tros[1] - pausa_maxima / 2), anterior["final"])
             elif anterior["conservada"]:
                 inici = max(inici, anterior["final"])
             else:                       # no deixem entrar el final d'una paraula esborrada
@@ -231,7 +245,8 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
                 tanca_inici = True
         if seguent is not None:
             if seguent["conservada"] and pausa_maxima is not None:
-                final = min(final + pausa_maxima / 2 - marge, seguent["inici"])
+                tros = silenci_real(c[-1], seguent) or (c[-1]["final"], seguent["inici"])
+                final = min(max(final, tros[0] + pausa_maxima / 2), seguent["inici"])
             elif seguent["conservada"]:
                 final = min(final, seguent["inici"])
             else:
