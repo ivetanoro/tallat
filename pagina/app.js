@@ -50,7 +50,11 @@ const ICONES = {
   finder: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5h4l1.5 1.5h5.5v6.5h-11z"/></svg>',
   esborra: '<svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7"/></svg>',
 };
-const MOTIUS = { usuari: "Tret per tu", farciment: "Farciment (tret automàticament)", tall: "Paraula a mig dir (treta automàticament)" };
+const MOTIUS = {
+  usuari: "Tret per tu", farciment: "Farciment (tret automàticament)", tall: "Paraula a mig dir (treta automàticament)",
+  muntatge: "Fora del reel (primer muntatge)", instruccio: "Instrucció de veu (treta automàticament)",
+};
+const AUTOMATICS = new Set(["farciment", "tall", "instruccio"]); // es pinten en taronja
 const PROPOSTES = { "farciment?": "Possible farciment", "expressiu?": "Sons repetits", "repeticio?": "Paraules repetides" };
 const QUALITATS = { esborrany: "Esborrany", "1080": "1080", "4k": "4K" };
 
@@ -199,6 +203,8 @@ function pausaAbans(id) {
 function actualitzaPauses() {
   for (const b of $$(".pausa")) {
     const id = +b.dataset.pausa;
+    // Un silenci només sona si les dues paraules del costat es queden.
+    b.hidden = esFora(id) || esFora(id - 1);
     const sencera = estat.pauses_mantingudes.includes(id);
     b.classList.toggle("sencera", sencera);
     b.title = sencera ? "Silenci sencer. Clica per escurçar-lo." :
@@ -213,7 +219,7 @@ function actualitzaParaules() {
     const proposta = !motiu && estat.propostes[k];
     const correccio = estat.correccions[k];
     s.classList.toggle("fora", !!motiu);
-    s.classList.toggle("auto", !!motiu && motiu !== "usuari");
+    s.classList.toggle("auto", AUTOMATICS.has(motiu));
     s.classList.toggle("proposta", !!proposta);
     s.classList.toggle("corregida", correccio != null);
     const text = correccio ?? P.paraules[id].text;
@@ -415,12 +421,9 @@ function demanaEscolta(id) {
 
 // Temps del vídeo original → temps del muntatge (si cau dins d'un tall, l'inici del tros següent).
 function muntatgeDe(t) {
-  for (let k = 0; k < trams.length; k++) {
-    const [a, b] = trams[k];
-    if (t < a) return acum[k];
-    if (t <= b) return acum[k] + (t - a);
-  }
-  return duradaFinal;
+  const k = indexTram(t);
+  if (k >= trams.length) return duradaFinal;
+  return acum[k] + Math.max(0, t - trams[k][0]);
 }
 
 function escoltaTall(t) {
@@ -433,9 +436,15 @@ function escoltaTall(t) {
 }
 const vE = $("#video-esborrany");
 
+// Quin tros conté el temps original t. En un reel muntat els trossos no van en ordre
+// de gravació: si t no és dins de cap, el tros que comença just després de t.
 function indexTram(t, llista = trams) {
-  for (let i = 0; i < llista.length; i++) if (t < llista[i][1] - 0.001) return i;
-  return llista.length;
+  for (let i = 0; i < llista.length; i++) if (t >= llista[i][0] - 0.001 && t < llista[i][1] - 0.001) return i;
+  let millor = llista.length;
+  for (let i = 0; i < llista.length; i++) {
+    if (llista[i][0] > t && (millor === llista.length || llista[i][0] < llista[millor][0])) millor = i;
+  }
+  return millor;
 }
 
 function tempsMuntatge() {
@@ -541,13 +550,7 @@ function bucle() {
     registre("mostra", { k: R.k, m: +tempsMuntatge().toFixed(3), video: ev(R.v) });
   }
   vigila();
-  if (R.aturaA != null && R.reproduint && tempsMuntatge() >= R.aturaA) { atura(); }
-  if (vista === "directe" && R.reproduint && trams.length) {
-    const t = R.v.currentTime;
-    const [a, b] = trams[Math.min(R.k, trams.length - 1)];
-    if (t < a - 0.3 || t > b + 0.3) recolloca();
-    else if (t >= b - 0.03) salta();
-  }
+  comprovaTall();
   pintaTemps();
   paraulaActual();
   pintaSubtitols();
@@ -598,6 +601,18 @@ function aplicaEstilSubtitols(e) {
   posa("--sub-gruix", `${(e.gruix_contorn || 0) * 2}em`);
   posa("--sub-majuscules", e.majuscules ? "uppercase" : "none");
   posa("--sub-ombra", e.ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none");
+}
+
+// Salta el que s'ha tret. Es crida a cada fotograma i també quan el vídeo avisa que
+// ha avançat (per si el navegador alenteix el bucle de fotogrames).
+function comprovaTall() {
+  if (R.aturaA != null && R.reproduint && tempsMuntatge() >= R.aturaA) { atura(); }
+  if (vista === "directe" && R.reproduint && trams.length) {
+    const t = R.v.currentTime;
+    const [a, b] = trams[Math.min(R.k, trams.length - 1)];
+    if (t < a - 0.3 || t > b + 0.3) recolloca();
+    else if (t >= b - 0.03) salta();
+  }
 }
 
 let paraulaMarcada = null;
@@ -658,6 +673,9 @@ function instalaReproductor() {
     R.v.addEventListener(nom, () => registre("v-" + nom, ev(R.v)));
   }
   R.v.addEventListener("error", () => avis("No puc obrir la còpia lleugera del vídeo (proxy.mp4)."));
+  R.v.addEventListener("timeupdate", comprovaTall);
+  // Si la pàgina deixa de veure's, el navegador alenteix els salts: parem perquè no soni el que s'ha tret.
+  document.addEventListener("visibilitychange", () => { if (document.hidden && sona()) atura(); });
   R.v.addEventListener("loadedmetadata", () => { vesA(0); pintaTemps(); }, { once: true });
 
   const commutaPlay = () => { R.aturaA = null; sona() ? atura() : reprodueix(); };
@@ -869,6 +887,45 @@ function tancaFinal() {
   $("#full-final").hidden = true;
 }
 
+// --- Reels proposats (primer muntatge) ---------------------------------------------------------
+
+function pintaReels() {
+  const cont = $("#reels");
+  const reels = P.reels || [];
+  $("#compte-reels").textContent = reels.length || "";
+  const obert = reels.find((r) => r.id === P.reel_actual);
+  $("#tornar").hidden = !P.reel_actual;
+  if (P.reel_actual) {
+    $("#nom-projecte").textContent = obert?.titol || P.nom;
+    $("#marca").textContent = `tallat · ${P.arrel}`;
+    document.title = `${obert?.titol || P.nom} · tallat`;
+  }
+  for (const e of P.errors_reels || []) avis(`reels.json: ${e}`, 6000);
+  if (!reels.length) return;
+  cont.textContent = "";
+  for (const r of reels) {
+    const item = document.createElement("div");
+    item.className = "item reel" + (r.id === P.reel_actual ? " obert" : "");
+    item.title = r.per_que || "";
+    item.innerHTML = `<span class="reel-text"><span class="reel-titol"></span><span class="reel-detall"></span></span>
+      <span class="reel-durada">${fmt(r.durada)}</span>`;
+    item.querySelector(".reel-titol").textContent = r.titol;
+    item.querySelector(".reel-detall").textContent = r.ganxo ? `«${r.ganxo}»` : "";
+    item.addEventListener("click", () => obre(r.id));
+    cont.append(item);
+  }
+}
+
+async function obre(reel) {
+  if (reel === P.reel_actual) return;
+  atura();
+  try {
+    await cua;  // que no quedi cap canvi per desar
+    await api("/api/obre", { reel });
+    location.reload();
+  } catch (e) { avis(e.message); }
+}
+
 // --- Avisos -----------------------------------------------------------------------------------
 
 let temporitzadorAvis = null;
@@ -908,6 +965,7 @@ function instalaControls() {
     }
     canviaVista(b.dataset.vista);
   });
+  $("#tornar").addEventListener("click", () => obre(null));
   $("#torna-netejar").addEventListener("click", async () => {
     desfer.push(copia(estat));
     refer.length = 0;
@@ -999,6 +1057,7 @@ async function inicia() {
   $("#fitxer-estil").textContent = `Estil: ${(P.fitxer_estil || "").replace(/^\/Users\/[^/]+/, "~")}`;
   pintaNotes();
   pintaVersions(P.exports || []);
+  pintaReels();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;
 }

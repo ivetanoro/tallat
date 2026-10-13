@@ -1,7 +1,8 @@
 """Edició per paraules: quines paraules es queden, quines es treuen i per què.
 
 L'estat de l'edició es desa a `edicio.json`:
-  esborrades   {id: motiu}   motiu = «usuari», «farciment» o «tall»
+  esborrades   {id: motiu}   motiu = «usuari», «farciment», «tall», «muntatge» (fora del reel)
+                             o «instruccio» (instrucció de veu)
   propostes    {id: motiu}   suggeriments que encara no s'han aplicat
   mantingudes  [id]          paraules que la persona ha recuperat (la neteja no les torna a treure)
   correccions  {id: text}    text corregit per als subtítols (no talla res)
@@ -9,6 +10,7 @@ L'estat de l'edició es desa a `edicio.json`:
   pauses_mantingudes [id]    silencis que es deixen sencers (id de la paraula que ve després)
   revisio      n             puja a cada canvi desat (evita que dues pestanyes es trepitgin)
   subtitols    bool          si els renders porten subtítols
+  ordre        [[a, b]]      (reels muntats) trossos d'ids en l'ordre en què han de sonar
 """
 from __future__ import annotations
 
@@ -28,7 +30,7 @@ PAUSA_PARAGRAF = 0.7  # segons de silenci que també obren un paràgraf nou
 def estat_buit() -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": PAUSA_MAXIMA, "pauses_mantingudes": [],
-            "subtitols": True}
+            "subtitols": True, "ordre": None}
 
 
 def llegeix_estat(path: Path) -> dict:
@@ -52,10 +54,16 @@ def desa_estat(estat: dict, path: Path) -> None:
     path.write_text(json.dumps(sortida, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+MOTIUS_NETEJA = {"farciment", "tall"}  # els únics que la neteja pot treure i tornar a posar
+
+
 def aplica_neteja(estat: dict, treure: dict[int, str], proposar: dict[int, str]) -> dict:
-    """Afegeix el que ha trobat la neteja sense trepitjar decisions de la persona."""
-    respectar = set(estat["mantingudes"]) | {i for i, m in estat["esborrades"].items() if m == "usuari"}
-    estat["esborrades"] = {i: m for i, m in estat["esborrades"].items() if m == "usuari"}
+    """Afegeix el que ha trobat la neteja sense trepitjar cap altra decisió.
+
+    Es mantenen les paraules tretes per la persona, pel primer muntatge o per una
+    instrucció de veu; només es refà el que havia tret la neteja mateixa."""
+    respectar = set(estat["mantingudes"]) | {i for i, m in estat["esborrades"].items() if m not in MOTIUS_NETEJA}
+    estat["esborrades"] = {i: m for i, m in estat["esborrades"].items() if m not in MOTIUS_NETEJA}
     for i, motiu in treure.items():
         if i not in respectar:
             estat["esborrades"][i] = motiu
@@ -156,23 +164,52 @@ def importa_text(paraules: list[dict], text_editat: str) -> tuple[dict, list[str
 
 # --- Talls -------------------------------------------------------------------
 
-def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
-          pausa_maxima: float | None = None, pauses_mantingudes=()) -> list[tuple[float, float]]:
-    """Trossos del vídeo original que es conserven, ajustats a fotogrames sencers."""
-    pauses_mantingudes = set(pauses_mantingudes)
-    corregudes, actual = [], []
+def _blocs(paraules: list[dict], ordre) -> list[list[dict]]:
+    """Agrupa les paraules en blocs que sonen en l'ordre indicat (per a reels muntats).
+
+    Sense `ordre`, tot és un sol bloc en l'ordre de la gravació. Amb `ordre` (llista de
+    trossos [primera, última] d'ids), cada tros és un bloc. Si s'ha recuperat una paraula
+    de fora de tots els trossos, s'afegeix al bloc que la precedeix a la gravació."""
+    if not ordre:
+        return [paraules]
+    rangs = [(int(a), int(b)) for a, b in ordre]
+    blocs: list[list[dict]] = [[] for _ in rangs]
     for p in paraules:
-        if p["conservada"]:
-            if (actual and pausa_maxima is not None and p["id"] not in pauses_mantingudes
-                    and p["inici"] - actual[-1]["final"] > pausa_maxima):
-                corregudes.append(actual)  # silenci massa llarg: el partim
+        i = p["id"]
+        k = next((n for n, (a, b) in enumerate(rangs) if a <= i <= b), None)
+        if k is None:
+            if not p["conservada"]:
+                continue
+            anteriors = [n for n, (a, b) in enumerate(rangs) if b < i]
+            k = (max(anteriors, key=lambda n: rangs[n][1]) if anteriors
+                 else min(range(len(rangs)), key=lambda n: rangs[n][0]))
+        blocs[k].append(p)
+    for b in blocs:
+        b.sort(key=lambda p: p["id"])
+    return blocs
+
+
+def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
+          pausa_maxima: float | None = None, pauses_mantingudes=(), ordre=None) -> list[tuple[float, float]]:
+    """Trossos del vídeo original que es conserven, en l'ordre en què sonen, ajustats a fotogrames."""
+    pauses_mantingudes = set(pauses_mantingudes)
+    corregudes = []
+    for bloc in _blocs(paraules, ordre):
+        actual = []
+        for p in bloc:
+            if p["conservada"]:
+                salt = actual and p["id"] != actual[-1]["id"] + 1  # hi ha paraules entremig que no hi són
+                silenci = (actual and pausa_maxima is not None and p["id"] not in pauses_mantingudes
+                           and p["inici"] - actual[-1]["final"] > pausa_maxima)
+                if salt or silenci:  # silenci massa llarg: el partim
+                    corregudes.append(actual)
+                    actual = []
+                actual.append(p)
+            elif actual:
+                corregudes.append(actual)
                 actual = []
-            actual.append(p)
-        elif actual:
+        if actual:
             corregudes.append(actual)
-            actual = []
-    if actual:
-        corregudes.append(actual)
 
     per_id = {p["id"]: p for p in paraules}
     brut = []
@@ -183,14 +220,19 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
         seguent = per_id.get(c[-1]["id"] + 1)
         tanca_inici = tanca_final = False  # el costat toca una paraula esborrada
         if anterior is not None:
-            if anterior["conservada"]:  # tall per silenci: deixem mitja pausa a cada costat
+            if anterior["conservada"] and pausa_maxima is not None:
+                # tall per silenci: deixem mitja pausa a cada costat
                 inici = max(inici - pausa_maxima / 2 + marge, anterior["final"])
+            elif anterior["conservada"]:
+                inici = max(inici, anterior["final"])
             else:                       # no deixem entrar el final d'una paraula esborrada
                 inici = max(inici, anterior["final"])
                 tanca_inici = True
         if seguent is not None:
-            if seguent["conservada"]:
+            if seguent["conservada"] and pausa_maxima is not None:
                 final = min(final + pausa_maxima / 2 - marge, seguent["inici"])
+            elif seguent["conservada"]:
+                final = min(final, seguent["inici"])
             else:
                 final = min(final, seguent["inici"])
                 tanca_final = True
@@ -204,7 +246,7 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
         b = (math.floor(b * fps + 1e-6) if tanca_b else math.ceil(b * fps - 1e-6)) / fps
         if b - a < 1 / fps:
             continue
-        if ajustats and a <= ajustats[-1][1]:
+        if ajustats and ajustats[-1][0] <= a <= ajustats[-1][1]:  # continuació directa: un sol tros
             ajustats[-1] = (ajustats[-1][0], max(ajustats[-1][1], b))
         else:
             ajustats.append((a, b))

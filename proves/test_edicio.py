@@ -54,3 +54,29 @@ class TestEdicio(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOrdre(unittest.TestCase):
+    """Reels muntats: els trossos sonen en l'ordre indicat, no en el de la gravació."""
+
+    def paraules(self):
+        # 0..5, una per segon; totes conservades excepte la 2
+        return [{"id": i, "text": f"p{i}", "inici": float(i), "final": i + 0.5, "frase": 0,
+                 "conservada": i != 2} for i in range(6)]
+
+    def test_ordre_invertit(self):
+        p = self.paraules()
+        p[3]["conservada"] = False
+        t = edicio.trams(p, fps=30, durada=10, ordre=[[4, 5], [0, 1]])
+        self.assertEqual(len(t), 2)
+        self.assertGreater(t[0][0], t[1][0])  # primer sona el tros de més tard
+
+    def test_paraula_recuperada_fora_dels_trossos(self):
+        p = self.paraules()
+        t = edicio.trams(p, fps=30, durada=10, ordre=[[0, 1]])  # 3, 4 i 5 conservades però fora
+        self.assertEqual(len(t), 2)  # el tros [0-1] i, després, el [3-5]
+        self.assertLess(t[0][0], t[1][0])
+
+    def test_sense_pausa_maxima_no_peta_entre_blocs(self):
+        p = self.paraules()
+        edicio.trams(p, fps=30, durada=10, pausa_maxima=None, ordre=[[3, 3], [4, 5]])

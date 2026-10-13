@@ -59,5 +59,13 @@ class TestSilencis(unittest.TestCase):
         self.assertAlmostEqual(4.0 - 1.5 - pausa, 0.4, delta=2 / 30)  # queden ~0,4 s de silenci
 
 
+
+class TestPronoms(unittest.TestCase):
+    def test_em_pronom_no_es_treu(self):
+        p = paraules("si", "em", "preguntes", "a", "mi")
+        treure, proposar = neteja.detecta(p, LLISTA)
+        self.assertEqual((treure, proposar), ({}, {}))
+
+
 if __name__ == "__main__":
     unittest.main()

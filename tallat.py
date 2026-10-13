@@ -5,6 +5,9 @@
   python tallat.py revisa --projecte CARPETA          (obre la pàgina de revisió)
   python tallat.py neteja --projecte CARPETA [--pausa 0.35]
   python tallat.py estat --projecte CARPETA
+  python tallat.py guio --projecte CARPETA            (text per paràgrafs perquè Claude proposi reels)
+  python tallat.py reels --projecte CARPETA           (valida reels.json i en mostra la durada)
+  python tallat.py reel ID --projecte CARPETA         (crea el projecte d'un reel proposat)
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
 
 La carpeta del projecte ha de ser fora del repositori (els vídeos i el que dius no es publiquen).
@@ -18,7 +21,7 @@ import sys
 import time
 from pathlib import Path
 
-from motor import edicio, exporta, transcripcio
+from motor import edicio, exporta, muntatge, transcripcio
 from motor.projecte import ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
 
 
@@ -129,6 +132,37 @@ def ordre_estat(args) -> None:
     print("\n".join(projecte.resum()))
 
 
+def ordre_guio(args) -> None:
+    projecte = _carrega(args)
+    path = projecte.carpeta / muntatge.GUIO
+    path.write_text(muntatge.guio(projecte.dades["paraules"]), encoding="utf-8")
+    print(f"Guió escrit: {path}")
+
+
+def ordre_reels(args) -> None:
+    projecte = _carrega(args)
+    reels, errors = muntatge.llegeix_reels(projecte.carpeta, projecte.dades["paraules"])
+    for e in errors:
+        print("Error:", e)
+    if not reels:
+        print(f"No hi ha cap reel proposat a {projecte.carpeta / muntatge.REELS}")
+        return
+    for r in reels:
+        print(f"· {r['id']}: «{r['titol']}» · {minuts(muntatge.durada_estimada(projecte, r))}")
+        print(f"    ganxo: {r['ganxo']}")
+
+
+def ordre_reel(args) -> None:
+    projecte = _carrega(args)
+    reels, errors = muntatge.llegeix_reels(projecte.carpeta, projecte.dades["paraules"])
+    reel = next((r for r in reels if r["id"] == args.id), None)
+    if reel is None:
+        sys.exit(f"No trobo el reel «{args.id}». Reels: {', '.join(r['id'] for r in reels) or 'cap'}")
+    carpeta = muntatge.crea_reel(projecte, reel)
+    print("\n".join(Projecte(carpeta).resum()))
+    print(f"\nProjecte del reel: {carpeta}")
+
+
 def ordre_exporta(args) -> None:
     projecte = _carrega(args)
     trams = projecte.trams()
@@ -171,6 +205,19 @@ def main() -> None:
     e = sub.add_parser("estat", help="Mostra què s'ha tret i quant durarà")
     e.add_argument("--projecte", required=True)
     e.set_defaults(func=ordre_estat)
+
+    g = sub.add_parser("guio", help="Escriu el guió per paràgrafs per al primer muntatge")
+    g.add_argument("--projecte", required=True)
+    g.set_defaults(func=ordre_guio)
+
+    rl = sub.add_parser("reels", help="Valida els reels proposats i en mostra la durada")
+    rl.add_argument("--projecte", required=True)
+    rl.set_defaults(func=ordre_reels)
+
+    r1 = sub.add_parser("reel", help="Crea el projecte d'un dels reels proposats")
+    r1.add_argument("id")
+    r1.add_argument("--projecte", required=True)
+    r1.set_defaults(func=ordre_reel)
 
     x = sub.add_parser("exporta", help="Exporta el vídeo tallat a MP4 vertical")
     x.add_argument("--projecte", required=True)

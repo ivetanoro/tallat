@@ -9,11 +9,17 @@
 <body>
   <aside class="barra" aria-label="Projecte">
     <header class="barra-cap">
-      <p class="marca">tallat</p>
+      <button class="enllac tornar" id="tornar" hidden>‹ Gravació sencera</button>
+      <p class="marca" id="marca">tallat</p>
       <h1 id="nom-projecte">…</h1>
       <p class="durades"><span id="durada-original">–</span><span class="fletxa" aria-hidden="true">→</span><strong id="durada-final">–</strong></p>
       <p class="detall" id="trossos">&nbsp;</p>
     </header>
+
+    <section class="seccio" id="seccio-reels">
+      <h2>Reels proposats <span class="compte" id="compte-reels"></span></h2>
+      <div id="reels"><p class="buit">Encara no hi ha cap reel proposat. Demana a Claude el primer muntatge d'aquesta gravació.</p></div>
+    </section>
     <section class="seccio">
       <h2>Propostes <span class="compte" id="compte-propostes"></span></h2>
       <div id="propostes"><p class="buit">No hi ha propostes pendents.</p></div>

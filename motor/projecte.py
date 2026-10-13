@@ -27,7 +27,8 @@ NOTES = "notes.json"
 PROXY = "proxy.mp4"
 EXPORTS = "exports"
 
-MOTIUS = {"usuari": "tretes per tu", "farciment": "farciment", "tall": "paraules a mig dir"}
+MOTIUS = {"usuari": "tretes per tu", "farciment": "farciment", "tall": "paraules a mig dir",
+          "muntatge": "fora del reel", "instruccio": "instruccions de veu"}
 PROPOSTES = {"farciment?": "possible farciment", "expressiu?": "sons repetits (potser expressius)",
              "repeticio?": "paraules repetides"}
 
@@ -77,7 +78,30 @@ class Projecte:
     def trams(self) -> list[tuple[float, float]]:
         return edicio.trams(self.paraules(), self.fps, self.dades["durada"],
                             pausa_maxima=self.estat.get("pausa_maxima"),
-                            pauses_mantingudes=self.estat.get("pauses_mantingudes", []))
+                            pauses_mantingudes=self.estat.get("pauses_mantingudes", []),
+                            ordre=self.estat.get("ordre"))
+
+    def paragrafs(self) -> list[list[int]]:
+        """Paràgrafs (ids) en l'ordre en què sonen; en un reel muntat, el que queda fora va al final."""
+        paraules = self.dades["paraules"]
+        ordre = self.estat.get("ordre")
+        if not ordre:
+            return [[p["id"] for p in g] for g in edicio.paragrafs(paraules)]
+        resultat, dins = [], set()
+        for a, b in ordre:
+            bloc = paraules[int(a):int(b) + 1]
+            dins.update(p["id"] for p in bloc)
+            resultat += [[p["id"] for p in g] for g in edicio.paragrafs(bloc)]
+        fora = [p for p in paraules if p["id"] not in dins]
+        tros = []
+        for p in fora:  # els trossos de fora, seguits, en ordre de gravació
+            if tros and p["id"] != tros[-1]["id"] + 1:
+                resultat += [[q["id"] for q in g] for g in edicio.paragrafs(tros)]
+                tros = []
+            tros.append(p)
+        if tros:
+            resultat += [[q["id"] for q in g] for g in edicio.paragrafs(tros)]
+        return resultat
 
     def estil_subtitols(self) -> dict:
         return marca.carrega()["subtitols"]

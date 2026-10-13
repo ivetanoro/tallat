@@ -57,6 +57,7 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
             mots.append({"text": text, "inici": round(temps[0], 3), "final": round(max(temps), 3),
                          "fi_frase": bool(FI_DE_FRASE.search(p["text"]))})
 
+    mots.sort(key=lambda m: m["inici"])  # en un reel muntat, l'ordre és el del muntatge
     maxim_p = max(1, int(estil.get("paraules_per_linia", 3)))
     maxim_l = max(4, int(estil.get("lletres_per_linia", 18)))
     linies, actual = [], []

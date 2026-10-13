@@ -5,9 +5,9 @@
 
 [treu]
 # Sons de dubte: tallat els treu sols (es poden recuperar)
+# (no hi posis «em»: en català també és un pronom, com a «em satura»)
 eh
 ehm
-em
 ahm
 mmm
 hmm

@@ -176,6 +176,15 @@ kbd {
 
 .nota .context { color: var(--text); white-space: normal; }
 
+.tornar { display: block; margin: 0 0 var(--e3); }
+.item.reel { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); }
+.item.reel .reel-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.item.reel .reel-titol { color: var(--text); font-weight: 500; }
+.item.reel .reel-detall { color: var(--text-2); font-size: var(--t-petit); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item.reel .reel-durada { flex: none; color: var(--text-2); font-size: var(--t-petit); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.item.reel.obert { background: var(--accent-suau); }
+.item.reel.obert .reel-titol { color: var(--accent); }
+
 /* --- Text ------------------------------------------------------------------- */
 
 .text { height: 100vh; overflow-y: auto; position: relative; }

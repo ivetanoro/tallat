@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from motor import edicio, exporta, marca
+from motor import edicio, exporta, marca, muntatge
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -57,11 +57,30 @@ class Feina:
             self._actualitza(estat="error", error=str(e))
 
 
-def crea_servidor(projecte: Projecte, port: int) -> ThreadingHTTPServer:
+def _arrel_de(projecte: Projecte) -> Projecte:
+    """Si el projecte és un reel (reels/<id>/ dins d'una gravació), la gravació sencera."""
+    if (projecte.carpeta / "reel.json").exists() and projecte.carpeta.parent.name == muntatge.CARPETA_REELS:
+        return Projecte(projecte.carpeta.parent.parent)
+    return projecte
+
+
+def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
     feina = Feina()
     bloqueig = threading.Lock()
+    # La pàgina pot passar de la gravació sencera a qualsevol dels reels proposats.
+    obert = {"p": inicial, "arrel": _arrel_de(inicial)}
+
+    def info_reels() -> dict:
+        arrel = obert["arrel"]
+        reels, errors = muntatge.llegeix_reels(arrel.carpeta, arrel.dades["paraules"])
+        actual = None
+        if obert["p"] is not arrel:
+            actual = obert["p"].carpeta.name
+        return {"arrel": arrel.nom, "reel_actual": actual, "errors_reels": errors,
+                "reels": [dict(r, durada=muntatge.durada_estimada(arrel, r)) for r in reels]}
 
     def instantania() -> dict:
+        projecte = obert["p"]
         trams = projecte.trams()
         return {"estat": _estat_json(projecte.estat), "trams": trams,
                 "durada_final": round(sum(b - a for a, b in trams), 3),
@@ -134,6 +153,7 @@ def crea_servidor(projecte: Projecte, port: int) -> ThreadingHTTPServer:
 
         # --- rutes ---
         def do_GET(self):
+            projecte = obert["p"]
             ruta = unquote(urlparse(self.path).path)
             if ruta == "/":
                 return self._index()
@@ -150,21 +170,35 @@ def crea_servidor(projecte: Projecte, port: int) -> ThreadingHTTPServer:
                         "nom": projecte.nom, "durada": projecte.dades["durada"], "fps": projecte.fps,
                         "font": projecte.dades.get("font"), "origen": info,
                         "paraules": projecte.dades["paraules"],
-                        "paragrafs": [[p["id"] for p in g] for g in edicio.paragrafs(projecte.dades["paraules"])],
+                        "paragrafs": projecte.paragrafs(),
                         "notes": projecte.notes(), "exports": projecte.exports(), "feina": feina.info(),
                         "estil_subtitols": projecte.estil_subtitols(), "fitxer_estil": str(marca.ruta()),
+                        **info_reels(),
                         **instantania()})
             if ruta == "/api/feina":
                 return self._json({"feina": feina.info(), "exports": projecte.exports()})
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def do_POST(self):
+            projecte = obert["p"]
             ruta = urlparse(self.path).path
             try:
                 cos = self._cos()
             except json.JSONDecodeError:
                 return self._json({"error": "JSON no vàlid"}, HTTPStatus.BAD_REQUEST)
             with bloqueig:
+                if ruta == "/api/obre":  # canvia a un reel proposat o torna a la gravació sencera
+                    arrel = obert["arrel"]
+                    rid = cos.get("reel")
+                    if not rid:
+                        obert["p"] = arrel
+                        return self._json({"ok": True})
+                    reels, _ = muntatge.llegeix_reels(arrel.carpeta, arrel.dades["paraules"])
+                    reel = next((r for r in reels if r["id"] == rid), None)
+                    if reel is None:
+                        return self._json({"error": "No trobo aquest reel"}, HTTPStatus.NOT_FOUND)
+                    obert["p"] = Projecte(muntatge.crea_reel(arrel, reel))
+                    return self._json({"ok": True})
                 if ruta == "/api/estat":
                     if cos.get("revisio") != projecte.estat.get("revisio", 0):
                         # Una altra pestanya ha desat abans: no la trepitgem.
