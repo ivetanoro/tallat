@@ -272,7 +272,8 @@ function pintaSeleccio() {
 }
 
 // Clic: anar a la paraula i reproduir des d'allà. Clic dret (o control + clic): treure-la o
-// recuperar-la. Arrossegar selecciona unes quantes paraules; després, clic dret o ⌫.
+// recuperar-la; arrossegant amb el botó dret, totes les que s'hi passen. Arrossegar amb el
+// botó esquerre selecciona unes quantes paraules; després, clic dret o ⌫.
 let seleccioFeta = null;  // [primera, última] de l'última selecció arrossegada
 
 function commutaRang(a, b) {
@@ -280,10 +281,33 @@ function commutaRang(a, b) {
   commuta(ids, ids.some((id) => !esFora(id)));
 }
 
+function deixaSeleccio() {
+  seleccio = null;
+  seleccioFeta = null;
+  pintaSeleccio();
+}
+
 function instalaText() {
   const cont = $("#transcripcio");
   cont.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || e.ctrlKey) return;  // el clic dret i control + clic van a «contextmenu»
+    const dret = e.button === 2 || (e.button === 0 && e.ctrlKey);
+    if (e.button !== 0 && !dret) return;
+    if (dret) {
+      // Al Mac el menú contextual surt en prémer: l'aturem a «contextmenu» i tallem en deixar anar.
+      const s = e.target.closest(".p");
+      if (!s || mode !== "talla") return;
+      e.preventDefault();
+      const id = +s.dataset.id;
+      if (seleccioFeta && id >= seleccioFeta[0] && id <= seleccioFeta[1]) {
+        commutaRang(...seleccioFeta);  // clic dret a sobre d'una selecció feta: tota de cop
+        deixaSeleccio();
+        return;
+      }
+      seleccioFeta = null;
+      seleccio = { inici: id, fi: id, mogut: false, dret: true };
+      pintaSeleccio();
+      return;
+    }
     const pausa = e.target.closest(".pausa");
     if (pausa) {
       const id = +pausa.dataset.pausa;
@@ -309,7 +333,12 @@ function instalaText() {
   });
   document.addEventListener("pointerup", () => {
     if (!seleccio) return;
-    const { inici, fi, mogut } = seleccio;
+    const { inici, fi, mogut, dret } = seleccio;
+    if (dret) {  // botó dret: treu (o recupera) la paraula o totes les que s'hi han arrossegat
+      deixaSeleccio();
+      commutaRang(Math.min(inici, fi), Math.max(inici, fi));
+      return;
+    }
     if (!mogut) {  // un clic: hi anem i sona des d'allà
       seleccio = null;
       pintaSeleccio();
@@ -318,24 +347,16 @@ function instalaText() {
     }
     seleccioFeta = [Math.min(inici, fi), Math.max(inici, fi)];  // queda marcada fins al clic dret o ⌫
   });
+  document.addEventListener("pointercancel", () => { if (seleccio?.dret) deixaSeleccio(); });
   cont.addEventListener("contextmenu", (e) => {
-    const s = e.target.closest(".p");
-    if (!s || mode !== "talla") return;
-    e.preventDefault();
-    const id = +s.dataset.id;
-    if (seleccioFeta && id >= seleccioFeta[0] && id <= seleccioFeta[1]) commutaRang(...seleccioFeta);
-    else commutaRang(id, id);
-    seleccio = null;
-    seleccioFeta = null;
-    pintaSeleccio();
+    // El clic dret el fa servir «pointerdown» per tallar: aquí només amaguem el menú.
+    if (mode === "talla" && e.target.closest(".p")) e.preventDefault();
   });
   document.addEventListener("keydown", (e) => {
     if (!seleccioFeta || e.target.matches("input, textarea") || !["Backspace", "Delete"].includes(e.key)) return;
     e.preventDefault();
     commutaRang(...seleccioFeta);
-    seleccio = null;
-    seleccioFeta = null;
-    pintaSeleccio();
+    deixaSeleccio();
   });
   $(".text").addEventListener("wheel", () => { darrerDesplacamentManual = performance.now(); }, { passive: true });
 }
@@ -1183,7 +1204,7 @@ function instalaControls() {
       for (const x of $$("#mode button")) x.setAttribute("aria-checked", String(x === b));
       document.body.classList.toggle("mode-corregeix", mode === "corregeix");
       $("#ajuda").innerHTML = mode === "talla"
-        ? "Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la. Arrossega per triar-ne unes quantes i prem <kbd>⌫</kbd>."
+        ? "Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la; arrossega amb el clic dret per fer-ho amb unes quantes."
         : "Toca una paraula per corregir com s'escriu als subtítols. <kbd>↩</kbd> per desar, <kbd>esc</kbd> per deixar-ho.";
     });
   }
