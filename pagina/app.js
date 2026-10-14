@@ -1379,7 +1379,8 @@ function seguimentFeina(feina) {
   $("#final").disabled = ocupat;
   caixa.hidden = !ocupat;
   if (ocupat) {
-    const nom = feina.qualitat === "esborrany" ? "Construint l'esborrany" : `Exportant en ${QUALITATS[feina.qualitat]}`;
+    const nom = feina.qualitat === "esborrany" ? "Construint l'esborrany"
+      : feina.qualitat === "editors" ? "Exportant els trossos" : `Exportant en ${QUALITATS[feina.qualitat]}`;
     if (feina.fase === "editors") {
       $("#feina-text").textContent = "Preparant el projecte per a altres editors…";
       $("#feina-progres").style.width = "50%";
@@ -1406,7 +1407,7 @@ async function consultaFeina() {
       consultaFeina.darrer = feina.fitxer;
       pintaVersions(r.exports);
       if (feina.qualitat === "editors") {
-        avis("Projecte a punt. T'obro la carpeta: hi ha un LLEGEIX-ME amb els passos per a cada editor.", 6000);
+        avis("A punt. T'obro la carpeta: hi ha un LLEGEIX-ME amb els passos.", 6000);
         api("/api/mostra", { nom: feina.fitxer }).catch(() => {});
       } else if (feina.qualitat === "esborrany") {
         avis("L'esborrany és a punt. Mira'l i deixa-hi notes.");
@@ -1739,11 +1740,12 @@ function instalaControls() {
   $("#final").addEventListener("click", obreFinal);
   $("#cancella-final").addEventListener("click", tancaFinal);
   $("#velo").addEventListener("click", tancaFinal);
-  $("#exporta-editors").addEventListener("click", async () => {
-    const capa = $("#editors-capa").checked;
+  const perAEditors = async (dades) => {
     tancaFinal();
-    try { seguimentFeina((await api("/api/editors", { capa })).feina); } catch (e) { avis(e.message); }
-  });
+    try { seguimentFeina((await api("/api/editors", dades)).feina); } catch (e) { avis(e.message); }
+  };
+  $("#exporta-editors").addEventListener("click", () => perAEditors({ capa: $("#editors-capa").checked }));
+  $("#exporta-trossos").addEventListener("click", () => perAEditors({ trossos: true }));
   $("#confirma-final").addEventListener("click", () => {
     const qualitat = document.querySelector('input[name="qualitat"]:checked').value;
     tancaFinal();

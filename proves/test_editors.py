@@ -61,6 +61,13 @@ class TestEditors(unittest.TestCase):
         self.assertEqual(escales[:2], ["50.00", "57.50"])  # 2160 → 1080 (50 %), i amb zoom ×1,15
         self.assertEqual(len(dom.getElementsByTagName("track")), 4)  # vídeo, b-roll, stickers i so
 
+    def test_trossos(self):
+        self.assertEqual(editors._moment(78.12), "1m18,1s")
+        self.assertEqual(editors._on({"x": 0.28, "y": 0.3}), "a dalt a l'esquerra")
+        text = editors._llista_recursos([{"inici": 38.4, "durada": 1.5}], [{"inici": 57.0, "durada": 2.0, "x": 0.72, "y": 0.3}])
+        self.assertIn("B1 al 0m38,4s, durant 1,5 s", text)
+        self.assertIn("S1 al 0m57,0s, durant 2,0 s, a dalt a la dreta", text)
+
 
 if __name__ == "__main__":
     unittest.main()

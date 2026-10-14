@@ -7,6 +7,10 @@ Escriu una carpeta a exports/ amb:
   subtitols.mov   (opcional) els subtítols animats de tallat, amb el fons transparent
   LLEGEIX-ME.txt  com obrir-ho a cada editor, i a CapCut (que no importa projectes)
 
+Per a CapCut o iMovie, que no importen projectes d'altres editors, `exporta_trossos()` treu cada
+tros del muntatge com un clip numerat (01.mp4, 02.mp4…): arrossegats tots alhora a la línia de
+temps, queden en ordre i cada tall es pot retocar.
+
 Els talls fan referència al vídeo original (no se'n fa cap còpia): no el moguis de lloc.
 El b-roll i els stickers sí que s'hi copien (a recursos/, els stickers en PNG perquè tots els
 editors els llegeixin).
@@ -304,11 +308,8 @@ DaVinci Resolve
   2. Subtítols: importa «{nom}.srt» a la Media Pool i arrossega'l a la línia de temps.
 
 CapCut
-  CapCut no deixa importar projectes d'altres editors. Fes-ho així:
-  1. A la pàgina de revisió de tallat, desactiva «Posa subtítols al vídeo» i exporta la
-     versió final (Final… → 1080 o 4K).
-  2. A CapCut, importa aquell vídeo i, per als subtítols: Text → Subtítols → Importa
-     («{nom}.srt»). Si no t'hi surt aquesta opció, fes servir els subtítols automàtics de CapCut.
+  CapCut no deixa importar projectes d'altres editors. A la pàgina de revisió de tallat, fes
+  Final… → «Trossos per a CapCut o iMovie»: tindràs cada tros com un clip a part, en ordre.
 {capa}
 Els subtítols animats de tallat (estil, colors, animacions) no passen a cap editor amb el
 .srt: només el text i els temps.
@@ -344,4 +345,89 @@ def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
     (desti / f"{nom}.xml").write_text(xmeml(nom, projecte.video, pla, capa), encoding="utf-8")
     (desti / "LLEGEIX-ME.txt").write_text(
         LLEGEIX_ME.format(nom=nom, video=projecte.video, capa=AMB_CAPA if capa else ""), encoding="utf-8")
+    return desti
+
+
+# --- CapCut o iMovie: els trossos per separat --------------------------------------------------
+
+def _moment(segons: float) -> str:
+    """«1m18,1s»: es pot fer servir en un nom de fitxer (sense «:»)."""
+    m, s = divmod(segons, 60)
+    return f"{int(m)}m{s:04.1f}s".replace(".", ",")
+
+
+def _on(st: dict) -> str:
+    vertical = "a dalt" if st["y"] < 0.4 else ("a baix" if st["y"] > 0.6 else "al mig")
+    costat = "a la dreta" if st["x"] > 0.5 else "a l'esquerra"
+    return f"{vertical} {costat}"
+
+
+LLEGEIX_ME_TROSSOS = """El muntatge de «{nom}» en trossos (per a CapCut o iMovie)
+=========================================================
+
+CapCut no importa projectes d'altres editors. Per això aquí tens el muntatge en trossos,
+numerats en l'ordre en què sonen ({n} trossos, {durada} en total). Els zooms ja hi són aplicats.
+
+CapCut
+  1. Obre CapCut i crea un projecte nou.
+  2. Importa (⌘I) i tria tots els trossos numerats: 01.mp4, 02.mp4…
+  3. Selecciona'ls tots al panell de mitjans i arrossega'ls alhora a la línia de temps: queden
+     un darrere l'altre. Si l'ordre no és bo, ordena el panell per nom i torna-hi.
+  4. Per escurçar un tall, arrossega la vora del tros. Per allargar-lo (recuperar paraules),
+     fes-ho a tallat i torna a exportar els trossos: aquí no hi ha imatge de més.
+  5. Subtítols: Text → Subtítols locals → Importa «{nom}.srt» (o fes servir els subtítols
+     automàtics de CapCut).
+{recursos}
+iMovie
+  Importa els trossos (Fitxer → Importa contingut), selecciona'ls tots i arrossega'ls a la línia
+  de temps. iMovie fa vídeos horitzontals: per a un reel vertical, millor CapCut.
+"""
+
+
+def _llista_recursos(brolls: list[dict], stickers: list[dict]) -> str:
+    linies = []
+    if brolls:
+        linies.append("\nB-roll (carpeta «broll»): arrossega cada fitxer a la pista de sobre del vídeo, al moment")
+        linies.append("que diu el nom. Tapa la imatge i el so continua.")
+        linies += [f"  B{i} al {_moment(b['inici'])}, durant {b['durada']:.1f} s".replace(".", ",")
+                   for i, b in enumerate(brolls, 1)]
+    if stickers:
+        linies.append("\nStickers (carpeta «stickers»): igual que el b-roll, i fes-los més petits.")
+        linies += [f"  S{i} al {_moment(s['inici'])}, durant {s['durada']:.1f} s, {_on(s)}".replace(".", ",", 1)
+                   for i, s in enumerate(stickers, 1)]
+    return "\n".join(linies) + ("\n" if linies else "")
+
+
+def exporta_trossos(projecte, progres=None) -> Path:
+    """Escriu cada tros del muntatge com un clip numerat, amb el b-roll, els stickers i el .srt."""
+    trams = projecte.trams()
+    if not trams:
+        raise ValueError("No queda cap paraula: no hi ha res per exportar.")
+    nom = projecte.video.stem
+    desti = projecte.sortida("trossos").with_suffix("")
+    desti.mkdir(parents=True, exist_ok=True)
+    zooms = projecte.zooms_per_tram(trams)
+    xifres = max(2, len(str(len(trams))))
+    for i, tram in enumerate(trams, 1):
+        exporta.exporta(projecte.video, [tram], desti / f"{i:0{xifres}d}.mp4", "1080",
+                        zooms=[bool(zooms[i - 1])] if i - 1 < len(zooms) else None)
+        if progres:
+            progres(round(i / len(trams) * 100))
+    pla = _plan(projecte, trams)
+    for carpeta, llista, lletra in (("broll", pla["brolls"], "B"), ("stickers", pla["stickers"], "S")):
+        for i, r in enumerate(llista, 1):
+            (desti / carpeta).mkdir(exist_ok=True)
+            origen = Path(r["fitxer"])
+            final = ".png" if lletra == "S" else origen.suffix.lower()
+            nou = desti / carpeta / f"{lletra}{i} al {_moment(r['inici'])}{final}"
+            if final == origen.suffix.lower():
+                shutil.copy(origen, nou)
+            else:
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(origen), "-frames:v", "1", str(nou)],
+                               check=True, capture_output=True)
+    (desti / f"{nom}.srt").write_text(srt(projecte.linies_subtitols(trams)), encoding="utf-8")
+    durada = sum(b - a for a, b in trams)
+    (desti / "LLEGEIX-ME.txt").write_text(LLEGEIX_ME_TROSSOS.format(
+        nom=nom, n=len(trams), durada=_moment(durada),
+        recursos=_llista_recursos(pla["brolls"], pla["stickers"])), encoding="utf-8")
     return desti

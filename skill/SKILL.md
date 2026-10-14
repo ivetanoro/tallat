@@ -18,7 +18,7 @@ Des de la carpeta de tallat, amb l'entorn `.venv`:
 .venv/bin/python tallat.py reels --projecte CARPETA
 .venv/bin/python tallat.py reel ID --projecte CARPETA
 .venv/bin/python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k] [--sense-subtitols]
-.venv/bin/python tallat.py editors --projecte CARPETA [--amb-subtitols]
+.venv/bin/python tallat.py editors --projecte CARPETA [--amb-subtitols] [--trossos]
 .venv/bin/python tallat.py gust [afegeix SECCIO "TEXT" [--ajust clau=valor] | treu NUMERO]
 ```
 
@@ -95,7 +95,7 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 
 ## Acabar-lo en un altre editor
 
-Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o CapCut: `tallat.py editors` (o, a la pàgina, Final… → «Prepara el projecte»). Escriu a `exports/` una carpeta amb el projecte (`.fcpxml` per a Final Cut i DaVinci, `.xml` per a Premiere), els subtítols en `.srt`, el b-roll i els stickers a `recursos/`, i un `LLEGEIX-ME.txt` amb els passos de cada editor. CapCut no importa projectes: s'hi porta el vídeo final sense subtítols i el `.srt`. Amb `--amb-subtitols` hi afegeix els subtítols animats de tallat com a capa transparent (tarda uns minuts). Els talls apunten al vídeo original: que no el mogui.
+Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o CapCut: `tallat.py editors` (o, a la pàgina, Final… → «Prepara el projecte»). Escriu a `exports/` una carpeta amb el projecte (`.fcpxml` per a Final Cut i DaVinci, `.xml` per a Premiere), els subtítols en `.srt`, el b-roll i els stickers a `recursos/`, i un `LLEGEIX-ME.txt` amb els passos de cada editor. CapCut i iMovie no importen projectes: per a ells, `tallat.py editors --trossos` (a la pàgina, «Trossos per a CapCut o iMovie») treu cada tros com un clip numerat (01.mp4, 02.mp4…) amb el zoom aplicat, el b-roll i els stickers amb el moment al nom, i el `.srt`; arrossegats tots alhora a la línia de temps queden en ordre (es poden escurçar, no allargar). Amb `--amb-subtitols` hi afegeix els subtítols animats de tallat com a capa transparent (tarda uns minuts). Els talls apunten al vídeo original: que no el mogui.
 
 ## El teu gust (regles per als vídeos següents)
 

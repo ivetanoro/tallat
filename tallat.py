@@ -11,7 +11,7 @@
   python tallat.py afegeix TIPUS --paraula ID --projecte CARPETA [--text "…"]   (instrucció a mà)
   python tallat.py broll ID_INSTRUCCIO FITXER --projecte CARPETA [--durada 1.5]
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
-  python tallat.py editors --projecte CARPETA [--amb-subtitols]   (per a Premiere, Final Cut, DaVinci, CapCut)
+  python tallat.py editors --projecte CARPETA [--amb-subtitols] [--trossos]   (Premiere, Final Cut, DaVinci / CapCut)
   python tallat.py gust                                (les regles del teu gust)
   python tallat.py gust afegeix SECCIO "TEXT" [--ajust subtitols.mida=0.09]
   python tallat.py gust treu NUMERO
@@ -230,11 +230,14 @@ def ordre_exporta(args) -> None:
 def ordre_editors(args) -> None:
     projecte = _carrega(args)
     try:
-        carpeta = editors.exporta_editors(projecte, amb_capa=args.amb_subtitols, avis=print)
+        if args.trossos:
+            carpeta = editors.exporta_trossos(projecte, progres=_barra("exportant els trossos"))
+        else:
+            carpeta = editors.exporta_editors(projecte, amb_capa=args.amb_subtitols, avis=print)
     except ValueError as e:
         sys.exit(str(e))
-    print(f"Projecte per a altres editors a {carpeta}")
-    print("Hi ha un LLEGEIX-ME.txt amb els passos per a Premiere, Final Cut, DaVinci Resolve i CapCut.")
+    print(f"A punt: {carpeta}")
+    print("Hi ha un LLEGEIX-ME.txt amb els passos per obrir-ho a l'editor.")
 
 
 def ordre_gust(args) -> None:
@@ -324,6 +327,7 @@ def main() -> None:
     ed = sub.add_parser("editors", help="Prepara el muntatge per acabar-lo a Premiere, Final Cut, DaVinci o CapCut")
     ed.add_argument("--projecte", required=True)
     ed.add_argument("--amb-subtitols", action="store_true", help="Inclou-hi els subtítols animats (capa transparent)")
+    ed.add_argument("--trossos", action="store_true", help="Cada tros com un clip a part (per a CapCut o iMovie)")
     ed.set_defaults(func=ordre_editors)
 
     gu = sub.add_parser("gust", help="Les regles del teu gust (correccions que serveixen per als vídeos següents)")
