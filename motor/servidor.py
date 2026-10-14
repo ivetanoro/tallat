@@ -95,7 +95,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "stickers": [{"id": st["id"], "inici": st["inici"], "durada": st["durada"],
                               "url": "/stickers/" + st["fitxer"].name + f"?v={int(st['fitxer'].stat().st_mtime)}"}
                              for st in projecte.stickers(trams)],
-                "subtitols": projecte.linies_subtitols(trams)}
+                "subtitols": projecte.linies_subtitols(trams),
+                "paragrafs": projecte.paragrafs()}
 
     def info_marca() -> dict:
         estil = obert["p"].estil_subtitols()

@@ -49,6 +49,7 @@ La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que 
 
    - `paraules` són trossos d'ids **inclosos els extrems**, **en l'ordre en què han de sonar**. Pots canviar l'ordre de la gravació si el reel ho demana.
 4. Executa `reels` per validar-ho i veure'n la durada. Corregeix els errors que surtin.
+   - A la pàgina de revisió, la persona també pot canviar l'ordre dels paràgrafs arrossegant-los per la nansa ⠿ (es desa a `edicio.json` → `ordre`, igual que el d'un reel).
 5. La persona els veu a la pàgina de revisió («Reels proposats») i en tria un, que s'obre ja muntat. També es pot crear amb `reel ID`.
 
 ### Criteris per triar

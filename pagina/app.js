@@ -153,6 +153,10 @@ function refes() {
 
 function aplicaTrams(r) {
   if (r.subtitols) { liniesSub = r.subtitols; previaBruta = true; }
+  if (r.paragrafs && P && r !== P && JSON.stringify(r.paragrafs) !== JSON.stringify(P.paragrafs)) {
+    P.paragrafs = r.paragrafs;  // l'ordre dels paràgrafs ha canviat (moure'ls, desfer-ho, una altra pestanya)
+    pintaText();
+  }
   if (r.zooms) zoomsTram = r.zooms;
   if (r.brolls) brollsMuntatge = r.brolls;
   if (r.stickers) stickersMuntatge = r.stickers;
@@ -178,10 +182,11 @@ function pintaText() {
   cont.textContent = "";
   spans.clear();
   paragrafsEl = [];
-  for (const ids of P.paragrafs) {
+  P.paragrafs.forEach((ids, k) => {
     const par = document.createElement("p");
     par.className = "paragraf";
     paragrafsEl.push({ el: par, ids });
+    par.append(nansa(k));
     const marca = document.createElement("button");
     marca.className = "marca-temps";
     marca.textContent = fmt(P.paraules[ids[0]].inici);
@@ -198,8 +203,132 @@ function pintaText() {
       par.append(s, " ");
     }
     cont.append(par);
-  }
+  });
   actualitzaParaules();
+}
+
+// --- Canviar l'ordre dels paràgrafs ---------------------------------------------------------
+// Cada paràgraf té una nansa: arrossegant-la (o amb les fletxes) el paràgraf passa a sonar en
+// un altre lloc. L'ordre es desa a estat.ordre (trossos d'ids), com el dels reels muntats.
+
+const ICONA_NANSA = '<svg viewBox="0 0 10 16" aria-hidden="true">' +
+  [3, 8, 13].map((y) => `<circle cx="2.5" cy="${y}" r="1.4"/><circle cx="7.5" cy="${y}" r="1.4"/>`).join("") + "</svg>";
+
+function nansa(k) {
+  const b = document.createElement("button");
+  b.className = "nansa";
+  b.innerHTML = ICONA_NANSA;
+  b.title = "Arrossega per canviar l'ordre";
+  b.setAttribute("aria-label", "Mou el paràgraf (amb les fletxes amunt i avall)");
+  b.addEventListener("pointerdown", (e) => comencaMou(e, k));
+  b.addEventListener("pointermove", segueixMou);
+  b.addEventListener("pointerup", acabaMou);
+  b.addEventListener("pointercancel", () => deixaMou());
+  b.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowUp" && k > 0) { e.preventDefault(); mouParagraf(k, k - 1, true); }
+    if (e.key === "ArrowDown" && k < P.paragrafs.length - 1) { e.preventDefault(); mouParagraf(k, k + 2, true); }
+  });
+  return b;
+}
+
+let mou = null;  // {de, a, y, mogut, el, indicador, vel}
+
+function comencaMou(e, k) {
+  if (e.button !== 0 || mode !== "talla") return;
+  e.preventDefault();
+  e.currentTarget.setPointerCapture(e.pointerId);
+  mou = { de: k, a: null, y: e.clientY, mogut: false, el: paragrafsEl[k].el, indicador: null, vel: 0, darrerY: e.clientY };
+}
+
+// On aniria el paràgraf: davant del paràgraf i, o al final (i = nombre de paràgrafs).
+function llocDeMou(y) {
+  for (let i = 0; i < paragrafsEl.length; i++) {
+    const r = paragrafsEl[i].el.getBoundingClientRect();
+    if (y < r.top + r.height / 2) return i;
+  }
+  return paragrafsEl.length;
+}
+
+function pintaIndicador() {
+  const i = llocDeMou(mou.darrerY);
+  mou.a = i;
+  const util = i !== mou.de && i !== mou.de + 1;
+  mou.indicador.hidden = !util;
+  if (!util) return;
+  const ref = paragrafsEl[Math.min(i, paragrafsEl.length - 1)].el;
+  const top = i < paragrafsEl.length ? ref.offsetTop - 8 : ref.offsetTop + ref.offsetHeight + 4;
+  mou.indicador.style.top = `${top}px`;
+}
+
+function segueixMou(e) {
+  if (!mou) return;
+  mou.darrerY = e.clientY;
+  if (!mou.mogut) {
+    if (Math.abs(e.clientY - mou.y) < 4) return;
+    mou.mogut = true;
+    mou.el.classList.add("mou");
+    document.body.classList.add("movent");
+    mou.indicador = document.createElement("div");
+    mou.indicador.className = "indicador-mou";
+    $("#transcripcio").append(mou.indicador);
+    requestAnimationFrame(desplacaMou);
+  }
+  // A prop de dalt o de baix, la transcripció es desplaça sola.
+  const caixa = $(".text").getBoundingClientRect();
+  const dalt = caixa.top + $(".eines").offsetHeight + 40;
+  mou.vel = e.clientY < dalt ? -Math.min(18, (dalt - e.clientY) / 3)
+    : e.clientY > caixa.bottom - 60 ? Math.min(18, (e.clientY - caixa.bottom + 60) / 3) : 0;
+  pintaIndicador();
+}
+
+function desplacaMou() {
+  if (!mou?.mogut) return;
+  if (mou.vel) {
+    $(".text").scrollTop += mou.vel;
+    darrerDesplacamentManual = performance.now();
+    pintaIndicador();
+  }
+  requestAnimationFrame(desplacaMou);
+}
+
+function acabaMou() {
+  if (!mou) return;
+  const { mogut, de, a } = mou;
+  deixaMou();
+  if (mogut && a != null && a !== de && a !== de + 1) mouParagraf(de, a);
+}
+
+function deixaMou() {
+  if (!mou) return;
+  mou.el.classList.remove("mou");
+  mou.indicador?.remove();
+  document.body.classList.remove("movent");
+  mou = null;
+}
+
+// Mou el paràgraf «de» davant del paràgraf «a» (a = nombre de paràgrafs: al final).
+function mouParagraf(de, a, teclat = false) {
+  const llista = P.paragrafs.slice();
+  const [mogut] = llista.splice(de, 1);
+  const on = a > de ? a - 1 : a;
+  llista.splice(on, 0, mogut);
+  // Quines paraules formen part del muntatge: en un reel, les del seu ordre; si no, totes.
+  const dins = new Set(mogut);
+  if (estat.ordre) for (const [x, y] of estat.ordre) for (let i = +x; i <= +y; i++) dins.add(i);
+  else for (const ids of llista) for (const id of ids) dins.add(id);
+  const rangs = [];
+  for (const ids of llista) {
+    if (!ids.some((id) => dins.has(id))) continue;
+    const [x, y] = [ids[0], ids[ids.length - 1]];
+    const darrer = rangs[rangs.length - 1];
+    if (darrer && darrer[1] + 1 === x) darrer[1] = y; else rangs.push([x, y]);
+  }
+  const natural = !P.reel_actual && rangs.length === 1 && rangs[0][0] === 0 && rangs[0][1] === P.paraules.length - 1;
+  P.paragrafs = llista;
+  canvia((e) => { e.ordre = natural ? null : rangs; }, { repinta: true });
+  registre("mou-paragraf", { de, a, ordre: natural ? null : rangs.length });
+  if (teclat) paragrafsEl[on]?.el.querySelector(".nansa").focus();
+  else avis(natural ? "Tot torna a sonar en l'ordre de la gravació." : "Paràgraf mogut. Prem ⌘Z per desfer-ho.");
 }
 
 function pausaAbans(id) {
@@ -296,6 +425,7 @@ function instalaText() {
   cont.addEventListener("pointerdown", (e) => {
     const dret = e.button === 2 || (e.button === 0 && e.ctrlKey);
     if (e.button !== 0 && !dret) return;
+    if (e.target.closest(".nansa")) return;  // moure paràgrafs: ho fa la nansa mateixa
     if (dret) {
       // Al Mac el menú contextual surt en prémer: l'aturem a «contextmenu» i tallem en deixar anar.
       const s = e.target.closest(".p");
@@ -1449,7 +1579,7 @@ function instalaControls() {
       for (const x of $$("#mode button")) x.setAttribute("aria-checked", String(x === b));
       document.body.classList.toggle("mode-corregeix", mode === "corregeix");
       $("#ajuda").innerHTML = mode === "talla"
-        ? "Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la; arrossega amb el clic dret per fer-ho amb unes quantes."
+        ? "Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la; arrossega amb el clic dret per fer-ho amb unes quantes. Per canviar l'ordre d'un paràgraf, arrossega'l per la nansa ⠿ de l'esquerra."
         : "Toca una paraula per corregir com s'escriu als subtítols. <kbd>↩</kbd> per desar, <kbd>esc</kbd> per deixar-ho.";
     });
   }

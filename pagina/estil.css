@@ -239,13 +239,31 @@ kbd {
 .paragraf.tot-fora { font-size: var(--t-cos); line-height: 1.5; margin-bottom: var(--e2); opacity: 0.7; }
 .paragraf.tot-fora:hover { opacity: 1; }
 .marca-temps {
-  position: absolute; left: -64px; top: 0.3em; width: 52px; text-align: right;
+  position: absolute; left: -96px; top: 0.3em; width: 60px; text-align: right;
   font-size: var(--t-petit); line-height: 1.4; color: var(--text-2); font-variant-numeric: tabular-nums;
   border: 0; background: none; padding: 0; cursor: pointer; opacity: 0;
   transition: opacity 150ms ease-out, color 120ms;
 }
 .paragraf:hover .marca-temps, .marca-temps:focus-visible { opacity: 1; }
 .marca-temps:hover { color: var(--accent); }
+
+/* Moure paràgrafs: una nansa al marge esquerre */
+.transcripcio { position: relative; }
+.nansa {
+  position: absolute; left: -24px; top: 0.3em; width: 18px; height: 24px; padding: 0;
+  border: 0; border-radius: var(--radi-petit); background: none; color: var(--text-3);
+  display: grid; place-items: center; cursor: grab; opacity: 0; touch-action: none;
+  transition: opacity 150ms ease-out, background-color 120ms, color 120ms;
+}
+.nansa svg { width: 10px; height: 16px; fill: currentColor; stroke: none; }
+.paragraf:hover .nansa, .nansa:focus-visible { opacity: 1; }
+.nansa:hover { background: var(--omplir); color: var(--text); }
+.paragraf.mou { opacity: 0.35; }
+body.movent, body.movent * { cursor: grabbing !important; }
+.indicador-mou {
+  position: absolute; left: var(--e8); right: var(--e8); height: 3px; border-radius: 2px;
+  background: var(--accent); box-shadow: 0 0 0 3px var(--accent-suau); pointer-events: none;
+}
 
 .p {
   border-radius: var(--radi-petit); padding: 1px 2px; margin: 0 -2px;
