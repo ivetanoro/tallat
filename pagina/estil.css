@@ -175,6 +175,20 @@ kbd {
 .mini.deixa:hover { background: var(--accent-suau); color: var(--accent); }
 
 .nota .context { color: var(--text); white-space: normal; }
+.nota .mini.recorda:hover { background: var(--accent-suau); color: var(--accent); }
+.item.regla { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); cursor: default; }
+.item.regla:hover, .item.regla:active { background: none; }
+.regla-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.regla-cos { color: var(--text); overflow-wrap: anywhere; }
+.regla-detall { font-size: var(--t-peu); color: var(--text-2); }
+.item.regla .mini:hover { background: var(--auto-suau); color: var(--auto); }
+.nova-regla { margin-top: var(--e2); }
+.nova-regla input {
+  width: 100%; height: 28px; padding: 0 var(--e3); border: 0; border-radius: var(--radi);
+  font: inherit; font-size: var(--t-ui); color: var(--text); background: var(--omplir);
+  -webkit-user-select: text; user-select: text;
+}
+.nova-regla input::placeholder { color: var(--text-3); }
 
 .tornar { display: block; margin: 0 0 var(--e3); }
 .item.instruccio { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); }

@@ -11,6 +11,9 @@
   python tallat.py afegeix TIPUS --paraula ID --projecte CARPETA [--text "…"]   (instrucció a mà)
   python tallat.py broll ID_INSTRUCCIO FITXER --projecte CARPETA [--durada 1.5]
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
+  python tallat.py gust                                (les regles del teu gust)
+  python tallat.py gust afegeix SECCIO "TEXT" [--ajust subtitols.mida=0.09]
+  python tallat.py gust treu NUMERO
 
 La carpeta del projecte ha de ser fora del repositori (els vídeos i el que dius no es publiquen).
 """
@@ -23,7 +26,7 @@ import sys
 import time
 from pathlib import Path
 
-from motor import edicio, exporta, muntatge, transcripcio
+from motor import edicio, exporta, gust, muntatge, transcripcio
 from motor.projecte import ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
 
 
@@ -223,6 +226,23 @@ def ordre_exporta(args) -> None:
     print(f"\nFet en {minuts(time.time() - t0)}:\n  {sortida}")
 
 
+def ordre_gust(args) -> None:
+    try:
+        if args.accio == "afegeix":
+            regla = gust.afegeix(args.seccio, args.text, args.ajust)
+            ajust = regla.get("ajust")
+            print(f"Regla {regla['id']} desada." + (f" Ajust aplicat: {ajust['clau']} = {ajust['valor']}" if ajust else ""))
+        elif args.accio == "treu":
+            regla, desfet = gust.treu(args.numero)
+            print(f"Regla {regla['id']} treta." + (" L'opció ha tornat a com estava abans." if desfet else ""))
+        else:
+            print(gust.text(gust.llegeix()))
+    except KeyError:
+        sys.exit(f"No hi ha cap regla amb el número {args.numero}.")
+    except ValueError as e:
+        sys.exit(str(e))
+
+
 def main() -> None:
     sys.stdout.reconfigure(line_buffering=True)  # que els missatges surtin al moment
     p = argparse.ArgumentParser(prog="tallat", description="Editor de reels en català, per paraules.")
@@ -289,6 +309,16 @@ def main() -> None:
     x.add_argument("--qualitat", choices=list(exporta.QUALITATS), default="esborrany")
     x.add_argument("--sense-subtitols", action="store_true", help="Exporta sense subtítols")
     x.set_defaults(func=ordre_exporta)
+
+    gu = sub.add_parser("gust", help="Les regles del teu gust (correccions que serveixen per als vídeos següents)")
+    gs = gu.add_subparsers(dest="accio")
+    ga = gs.add_parser("afegeix", help="Afegeix una regla")
+    ga.add_argument("seccio", choices=list(gust.SECCIONS))
+    ga.add_argument("text", help="La regla, en paraules de la persona")
+    ga.add_argument("--ajust", help="Opció que canvia, p. ex. subtitols.mida=0.09 o farciment.deixa=vale")
+    gt = gs.add_parser("treu", help="Treu una regla (i desfà el seu ajust)")
+    gt.add_argument("numero", type=int)
+    gu.set_defaults(func=ordre_gust)
 
     args = p.parse_args()
     args.func(args)

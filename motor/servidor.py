@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from motor import broll, edicio, exporta, marca, muntatge, stickers
+from motor import broll, edicio, exporta, gust, marca, muntatge, stickers
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -213,6 +213,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         "paragrafs": projecte.paragrafs(),
                         "notes": projecte.notes(), "exports": projecte.exports(), "feina": feina.info(),
                         "estil_stickers": marca.carrega().get("stickers", {}),
+                        "gust": gust.llegeix(), "seccions_gust": gust.SECCIONS,
                         **info_marca(),
                         **info_reels(),
                         **instantania()})
@@ -304,6 +305,19 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     except ValueError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                     return self._json({**info_marca(), **instantania()})
+                if ruta == "/api/gust":  # una regla nova escrita a la pàgina (o una nota que es vol recordar)
+                    try:
+                        gust.afegeix(cos.get("seccio") or "altres", cos.get("text", ""))
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+                    return self._json({"gust": gust.llegeix()})
+                if ruta == "/api/gust/treu":
+                    try:
+                        _, desfet = gust.treu(int(cos.get("id")))
+                    except (KeyError, TypeError, ValueError):
+                        return self._json({"error": "No trobo aquesta regla"}, HTTPStatus.NOT_FOUND)
+                    # Si la regla tenia un ajust (p. ex. la mida dels subtítols), ha tornat a com estava.
+                    return self._json({"gust": gust.llegeix(), "desfet": desfet, **info_marca(), **instantania()})
                 if ruta == "/api/mostra":  # obre el Finder amb el fitxer seleccionat
                     path = (projecte.carpeta / EXPORTS / cos.get("nom", "")).resolve()
                     if path.parent != (projecte.carpeta / EXPORTS).resolve() or not path.exists():

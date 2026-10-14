@@ -49,6 +49,7 @@ const ICONES = {
   play: '<svg viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z" fill="currentColor" stroke="none"/></svg>',
   finder: '<svg viewBox="0 0 16 16"><path d="M2.5 4.5h4l1.5 1.5h5.5v6.5h-11z"/></svg>',
   esborra: '<svg viewBox="0 0 16 16"><path d="m4.5 4.5 7 7m0-7-7 7"/></svg>',
+  recorda: '<svg viewBox="0 0 16 16"><path d="M5 2.5h6v11l-3-2.2-3 2.2z"/></svg>',
 };
 const MOTIUS = {
   usuari: "Tret per tu", farciment: "Farciment (tret automàticament)", tall: "Paraula a mig dir (treta automàticament)",
@@ -83,6 +84,8 @@ let brollsMuntatge = [];   // b-rolls situats al muntatge: [{id, inici, durada, 
 let stickersMuntatge = []; // stickers situats al muntatge: [{id, inici, durada, url}]
 let biblioteca = { broll: [], sticker: [] };  // fitxers de ~/.tallat/broll/ i ~/.tallat/stickers/
 let notes = [];
+let gust = [];             // regles del teu gust (~/.tallat/gust.json)
+let seccionsGust = {};
 let darrerDesplacamentManual = 0;
 
 // --- Desar ----------------------------------------------------------------------------
@@ -1277,9 +1280,14 @@ function pintaNotes() {
     const item = document.createElement("div");
     item.className = "item nota";
     item.innerHTML = `<span class="temps-petit">${fmt(n.temps)}</span><span class="context"></span>
-      <button class="mini" title="Esborra la nota" aria-label="Esborra la nota">${ICONES.esborra}</button>`;
+      <button class="mini recorda" title="Recorda-ho per als vídeos següents" aria-label="Recorda-ho sempre">${ICONES.recorda}</button>
+      <button class="mini esborra" title="Esborra la nota" aria-label="Esborra la nota">${ICONES.esborra}</button>`;
     item.querySelector(".context").textContent = n.text;
-    item.querySelector(".mini").addEventListener("click", (e) => {
+    item.querySelector(".recorda").addEventListener("click", (e) => {
+      e.stopPropagation();
+      afegeixRegla(n.text);
+    });
+    item.querySelector(".esborra").addEventListener("click", (e) => {
       e.stopPropagation();
       notes = notes.filter((x) => x.id !== n.id);
       desaNotes();
@@ -1290,6 +1298,55 @@ function pintaNotes() {
     });
     cont.append(item);
   }
+}
+
+// --- El teu gust ---------------------------------------------------------------------------------
+// Regles que serveixen per als vídeos següents. Claude les afegeix quan li dius una correcció
+// «per sempre»; aquí es veuen, se'n poden escriure i se'n poden treure.
+
+function pintaGust() {
+  $("#compte-gust").textContent = gust.length || "";
+  const cont = $("#gust");
+  cont.textContent = "";
+  if (!gust.length) {
+    cont.innerHTML = '<p class="buit">Quan diguis a Claude una correcció «per sempre», sortirà aquí.</p>';
+    return;
+  }
+  for (const r of gust) {
+    const item = document.createElement("div");
+    item.className = "item regla";
+    item.innerHTML = `<span class="regla-text"><span class="regla-cos"></span><span class="regla-detall"></span></span>
+      <button class="mini" title="Treu la regla" aria-label="Treu la regla">${ICONES.esborra}</button>`;
+    item.querySelector(".regla-cos").textContent = r.text;
+    item.querySelector(".regla-detall").textContent = (seccionsGust[r.seccio] || r.seccio) +
+      (r.ajust ? " · s'aplica sola" : "");
+    item.querySelector(".mini").addEventListener("click", () => treuRegla(r));
+    cont.append(item);
+  }
+}
+
+async function afegeixRegla(text) {
+  try {
+    gust = (await api("/api/gust", { text })).gust;
+    pintaGust();
+    avis("Ho recordaré per als vídeos següents.");
+  } catch (e) { avis(e.message); }
+}
+
+async function treuRegla(r) {
+  try {
+    await cua;
+    const res = await api("/api/gust/treu", { id: r.id });
+    gust = res.gust;
+    pintaGust();
+    if (res.desfet) {  // l'opció que canviava ha tornat a com estava
+      fontMarca = res.font_marca;
+      aplicaEstilSubtitols(res.estil_subtitols);
+      aplicaTrams(res);
+      pintaPanellEstil();
+    }
+    avis(res.desfet ? "Regla treta. L'opció que canviava ha tornat a com estava." : "Regla treta.");
+  } catch (e) { avis(e.message); }
 }
 
 async function desaNotes() {
@@ -1690,6 +1747,13 @@ function instalaControls() {
     avis(`Nota afegida a ${fmt(vE.currentTime)}`);
   });
   $("#text-nota").addEventListener("focus", () => vE.pause());
+  $("#nova-regla").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = $("#text-regla").value.trim();
+    if (!text) return;
+    afegeixRegla(text);
+    $("#text-regla").value = "";
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea, select")) return;
@@ -1736,6 +1800,9 @@ async function inicia() {
   fontMarca = P.font_marca;
   aplicaEstilSubtitols(P.estil_subtitols);
   pintaNotes();
+  gust = P.gust || [];
+  seccionsGust = P.seccions_gust || {};
+  pintaGust();
   pintaVersions(P.exports || []);
   pintaReels();
   try { biblioteca = await api("/api/biblioteca"); } catch { biblioteca = { broll: [], sticker: [] }; }

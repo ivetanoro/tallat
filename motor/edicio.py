@@ -28,9 +28,9 @@ FI_DE_FRASE = re.compile(r"[.?!…»\"]$")
 PAUSA_PARAGRAF = 0.7  # segons de silenci que també obren un paràgraf nou
 
 
-def estat_buit() -> dict:
+def estat_buit(pausa_maxima: float | None = PAUSA_MAXIMA) -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
-            "correccions": {}, "pausa_maxima": PAUSA_MAXIMA, "pauses_mantingudes": [],
+            "correccions": {}, "pausa_maxima": pausa_maxima, "pauses_mantingudes": [],
             "subtitols": True, "ordre": None, "zooms": []}
 
 

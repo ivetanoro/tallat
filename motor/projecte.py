@@ -66,7 +66,7 @@ class Projecte:
             self.avisos.append(f"He passat la teva edició d'{EDICIO_TEXT} a {EDICIO} "
                                "(a partir d'ara es fa servir aquest).")
             return estat
-        return edicio.estat_buit()
+        return edicio.estat_buit(marca.pausa_per_defecte())
 
     def desa(self) -> None:
         edicio.desa_estat(self.estat, self.carpeta / EDICIO)

@@ -1,5 +1,9 @@
 {
   "_info": "Estil per defecte de tallat (neutre). La teva còpia és a ~/.tallat/brand.json: canvia-la allà, no aquí.",
+  "talls": {
+    "_pausa_maxima": "Segons de silenci màxim entre paraules als projectes nous (0,25 talla més ràpid; 0,5 deixa respirar).",
+    "pausa_maxima": 0.35
+  },
   "subtitols": {
     "_font": "Família CSS. Si poses el nom d'una font teva, indica'n el fitxer a font_fitxer (.ttf, .otf o .woff2).",
     "font": "system-ui",

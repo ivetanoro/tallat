@@ -91,6 +91,29 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 - La vista prèvia i el vídeo final fan servir el mateix codi d'animació (`pagina/subtitols.js`): el que es veu a la pàgina és el que surt.
 - Es desa a `~/.tallat/brand.json` (secció `subtitols`) i serveix per a tots els vídeos de la persona. Si et demana un canvi al xat, edita aquest fitxer: cada opció hi té una nota que l'explica. Els estils predefinits són a `config/estils_subtitols.json`; els emojis, a `config/emojis.json` (la persona en pot afegir a `~/.tallat/emojis.json`).
 
+## El teu gust (regles per als vídeos següents)
+
+- **Abans de decidir res** (neteja, primer muntatge i reels, instruccions, b-roll i stickers, estil), llegeix les regles amb `tallat.py gust` i segueix-les. Les que porten un ajust ja s'apliquen soles.
+- **Quan la persona reacciona a un resultat** («massa lent», «els subtítols són petits», «no em treguis els vale»):
+  1. Busca el comportament que hi ha darrere, no només el cas concret: «aquest b-roll és massa llarg» vol dir «b-roll més curt», no «treu aquest b-roll».
+  2. Pregunta-li (amb les opcions de resposta) si és **per a aquest vídeo** o **per sempre** (recomana «per sempre»). Si ja ho ha dit («sempre», «només aquí»), no ho preguntis.
+  3. Si és per sempre, desa-ho: `tallat.py gust afegeix SECCIO "la regla en paraules de la persona" [--ajust clau=valor]`. Si és només per a aquest vídeo, fes-ho al projecte i prou.
+- Seccions: `talls`, `subtitols`, `broll`, `stickers`, `reels`, `altres`.
+- Ajustos (si n'hi ha un que encaixa, posa'l; si no, la regla només amb text):
+
+| Diu | `--ajust` |
+|---|---|
+| talls massa lents / massa ràpids | `talls.pausa_maxima=0.25` (més ràpid) o `0.5` (més lent); per als projectes nous |
+| no em treguis «X» / treu sempre «X» / només proposa «X» | `farciment.deixa=X` / `farciment.treu=X` / `farciment.proposa=X` |
+| subtítols més grans / més petits | `subtitols.mida=0.09` (la mida actual és al fitxer d'estil; la normal, 0,075) |
+| més / menys paraules a la pantalla | `subtitols.paraules_per_linia=1` (una), `3`, `7` (frase) |
+| subtítols més amunt / més avall | `subtitols.posicio_y=0.6` (0 dalt, 1 baix) |
+| color de la paraula destacada | `subtitols.color_actiu="#FF375F"` |
+| b-roll més curt / més llarg | `broll.durada=1.0` |
+| stickers més petits / més grans | `stickers.mida=0.25` |
+
+- Per treure'n una: `tallat.py gust treu NUMERO` (l'opció torna a com estava). A la pàgina de revisió també es veuen, s'hi poden escriure i treure, i cada nota de l'esborrany té «Recorda-ho sempre».
+
 ## Regles
 
 - No llegeixis ni copiïs cap carpeta de marca personal tret que la persona ho demani explícitament.

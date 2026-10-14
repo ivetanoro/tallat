@@ -33,8 +33,15 @@ class TestMarca(unittest.TestCase):
                       {"font": "x; } body { display: none"}, {"font_fitxer": "/etc/passwd"}, {"mida": True}):
             with self.subTest(canvi=canvi), self.assertRaises(ValueError):
                 marca.valida("subtitols", canvi)
-        with self.assertRaises(ValueError):
-            marca.valida("broll", {"durada": 2})  # de moment, des de la pàgina només els subtítols
+        for seccio, canvi in (("secreta", {"x": 1}), ("broll", {"lut": "/etc/passwd"}), ("broll", {"durada": "llarg"}),
+                              ("stickers", {"animacio": "explota"})):
+            with self.subTest(seccio=seccio, canvi=canvi), self.assertRaises(ValueError):
+                marca.valida(seccio, canvi)
+
+    def test_altres_seccions(self):
+        self.assertEqual(marca.valida("broll", {"durada": 9}), {"durada": 4.0})
+        self.assertEqual(marca.valida("talls", {"pausa_maxima": 0.25}), {"pausa_maxima": 0.25})
+        self.assertEqual(marca.valida("stickers", {"mida": 0.3, "animacio": "cap"}), {"mida": 0.3, "animacio": "cap"})
 
     def test_restableix_torna_a_l_estil_neutre(self):
         marca.desa("subtitols", {"mida": 0.1}, self.path)

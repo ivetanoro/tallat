@@ -84,7 +84,8 @@ def llegeix_reels(carpeta: Path, paraules: list[dict]) -> tuple[list[dict], list
 def estat_inicial(paraules: list[dict], rangs: list[tuple[int, int]]) -> dict:
     """Estat d'edició d'un reel: tot el que queda fora dels trossos, tret amb motiu «muntatge»."""
     dins = {i for a, b in rangs for i in range(a, b + 1)}
-    estat = edicio.estat_buit()
+    from motor import marca
+    estat = edicio.estat_buit(marca.pausa_per_defecte())
     estat["esborrades"] = {p["id"]: "muntatge" for p in paraules if p["id"] not in dins}
     estat["ordre"] = [list(r) for r in rangs]
     return estat

@@ -18,13 +18,21 @@ USUARI = Path.home() / ".tallat" / "brand.json"
 FONTS = Path.home() / ".tallat" / "fonts"
 FORMATS_FONT = {".ttf", ".otf", ".woff", ".woff2"}
 
-# Què es pot canviar des de la pàgina, i entre quins límits.
-EDITABLES = {"subtitols"}
-RANGS = {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.08, 0.92),
-         "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60)}
-OPCIONS = {"animacio": {"pop", "fos", "cap", "impacte", "cortina", "pes"}, "apareixen": {"paraula", "linia"},
-           "destacat": {"color", "caixa", "karaoke", "gran"}, "aspecte": {"normal", "neo", "degradat"},
-           "fons": {"cap", "pindola"}}
+# Què es pot canviar (des de la pàgina o amb les regles del teu gust), i entre quins límits.
+EDITABLES = {"subtitols", "broll", "stickers", "talls"}
+RANGS = {
+    "subtitols": {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.08, 0.92),
+                  "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60)},
+    "broll": {"durada": (0.5, 4.0)},
+    "stickers": {"durada": (0.5, 6.0), "mida": (0.08, 0.8), "x": (0.0, 1.0), "y": (0.0, 1.0), "rotacio": (-30, 30)},
+    "talls": {"pausa_maxima": (0.1, 2.0)},
+}
+OPCIONS = {
+    "subtitols": {"animacio": {"pop", "fos", "cap", "impacte", "cortina", "pes"}, "apareixen": {"paraula", "linia"},
+                  "destacat": {"color", "caixa", "karaoke", "gran"}, "aspecte": {"normal", "neo", "degradat"},
+                  "fons": {"cap", "pindola"}},
+    "stickers": {"animacio": {"pop", "cap"}},
+}
 COLORS = {"color", "color_actiu", "contorn", "fons_color"}
 NOM_DE_FONT = re.compile(r"^[\w][\w .-]{0,60}$")
 
@@ -55,6 +63,11 @@ def carrega(path: Path | None = None) -> dict:
     return base
 
 
+def pausa_per_defecte() -> float:
+    """El silenci màxim dels projectes nous (secció «talls» del fitxer d'estil)."""
+    return float(carrega().get("talls", {}).get("pausa_maxima", 0.35))
+
+
 def estils() -> list[dict]:
     """Els estils de subtítols predefinits: [{id, nom, descripcio, valors}]."""
     return json.loads(ESTILS.read_text(encoding="utf-8"))["estils"]
@@ -70,17 +83,18 @@ def valida(seccio: str, canvis: dict) -> dict:
         if clau not in base:
             raise ValueError(f"Opció desconeguda: {clau}")
         defecte = base[clau]
-        if clau == "font_fitxer":
-            if valor is not None:  # la font pròpia només es posa pujant-la (desa_font)
-                raise ValueError("La font pròpia s'ha de pujar com a fitxer")
+        rangs, opcions = RANGS.get(seccio, {}), OPCIONS.get(seccio, {})
+        if defecte is None:  # camins de fitxers (font pròpia, LUT): no es posen per aquí
+            if valor is not None:
+                raise ValueError(f"{clau} no es pot canviar així")
         elif isinstance(defecte, bool):
             if not isinstance(valor, bool):
                 raise ValueError(f"{clau} ha de ser sí o no")
         elif isinstance(defecte, (int, float)):
             if isinstance(valor, bool) or not isinstance(valor, (int, float)):
                 raise ValueError(f"{clau} ha de ser un número")
-            if clau in RANGS:
-                a, b = RANGS[clau]
+            if clau in rangs:
+                a, b = rangs[clau]
                 valor = min(b, max(a, valor))
             if isinstance(defecte, int):
                 valor = int(round(valor))
@@ -91,7 +105,7 @@ def valida(seccio: str, canvis: dict) -> dict:
                 raise ValueError(f"{clau} ha de ser un text")
             if clau in COLORS and not re.fullmatch(r"#[0-9A-Fa-f]{6}", valor):
                 raise ValueError(f"{clau} ha de ser un color com #FFD60A")
-            if clau in OPCIONS and valor not in OPCIONS[clau]:
+            if clau in opcions and valor not in opcions[clau]:
                 raise ValueError(f"{clau} no pot ser «{valor}»")
             if clau == "font" and not NOM_DE_FONT.match(valor):
                 raise ValueError("Aquest nom de font no és vàlid")
