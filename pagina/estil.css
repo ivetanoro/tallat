@@ -389,6 +389,7 @@ body.mode-corregeix .p { cursor: text; }
 .panell-estil .interruptor { white-space: normal; text-align: left; }
 .panell-estil .interruptor .pista { flex: none; }
 .panell-estil #e-font { width: 100%; }
+.panell-estil .puja-font { margin: calc(-1 * var(--e1)) 0 0; align-self: flex-start; font-size: var(--t-petit); }
 .panell-estil select {
   height: 28px; padding: 0 var(--e7) 0 var(--e3); border: 0; border-radius: var(--radi);
   font: inherit; font-size: var(--t-ui); color: var(--text); cursor: pointer;

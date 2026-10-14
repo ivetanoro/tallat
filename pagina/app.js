@@ -786,7 +786,6 @@ function pintaPanellEstil() {
   if (e.font_fitxer) opcio("__propia", `${e.font} (la teva font)`);
   for (const [valor, text] of FONTS) opcio(valor, text);
   if (!e.font_fitxer && !FONTS.some(([v]) => v === e.font)) opcio(e.font, e.font);
-  opcio("__puja", "Puja una font teva…");
   font.value = e.font_fitxer ? "__propia" : e.font;
 
   const pes = $("#e-pes");
@@ -916,9 +915,10 @@ function instalaEstil() {
   $("#e-pes").addEventListener("change", (e) => canviaEstil({ pes: +e.target.value }));
   $("#e-font").addEventListener("change", (e) => {
     const v = e.target.value;
-    if (v === "__puja") { $("#fitxer-font").click(); pintaPanellEstil(); return; }
     if (v !== "__propia") canviaEstil({ font: v, font_fitxer: null });
   });
+  // El Safari només obre la finestra de triar fitxers des d'un clic en un botó (no des d'un desplegable).
+  $("#puja-font").addEventListener("click", () => $("#fitxer-font").click());
   $("#fitxer-font").addEventListener("change", (e) => {
     const fitxer = e.target.files[0];
     e.target.value = "";
