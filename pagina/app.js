@@ -598,7 +598,30 @@ function actualitzaPropostes() {
 // Un sol vídeo que salta de tros en tros. (Vam provar dos vídeos alternats per evitar la
 // micropausa dels salts, però al Safari el segon vídeo deixava de dir per on anava i
 // el muntatge sonava sencer, també el que estava tret.)
-const R = { v: $("#video-a"), k: 0, reproduint: false, aturaA: null, vigila: { t: -1, des: 0 } };
+const R = { v: $("#video-a"), k: 0, reproduint: false, aturaA: null, vigila: { t: -1, des: 0 }, salt: null, posat: false };
+
+// El Safari s'encalla si li demanem un salt mentre encara en fa un altre (passa sobretot quan els
+// paràgrafs no van en l'ordre de la gravació i cal saltar enrere o lluny). Els fem d'un en un:
+// si n'hi ha un en marxa, el nou espera que acabi i només es fa l'últim que s'ha demanat.
+// A més, un salt cap a un tros que encara no s'ha baixat es fa amb el vídeo aturat un instant:
+// el Safari els fa bé aturat i, en canvi, sonant de vegades es queda esperant.
+function posaTemps(t) {
+  R.posat = true;
+  if (R.v.seeking) { R.salt = t; return; }
+  R.salt = null;
+  if (!R.v.paused && !jaCarregat(t)) {
+    R.v.pause();
+    R.repren = true;
+  }
+  R.v.currentTime = t;
+}
+
+function jaCarregat(t) {
+  const b = R.v.buffered;
+  for (let i = 0; i < b.length; i++) if (t >= b.start(i) && t <= b.end(i) - 0.3) return true;
+  return false;
+}
+const tempsVideo = () => R.salt ?? R.v.currentTime;  // on serà el vídeo quan acabi el salt
 
 // --- Escoltar cada tall ---------------------------------------------------------------------
 // En treure o recuperar paraules amb el vídeo aturat, el reproductor fa sonar uns segons
@@ -648,7 +671,7 @@ function tempsMuntatge() {
   if (!trams.length) return 0;
   const k = Math.min(R.k, trams.length - 1);
   const [a, b] = trams[k];
-  return acum[k] + limita(R.v.currentTime - a, 0, b - a);
+  return acum[k] + limita(tempsVideo() - a, 0, b - a);
 }
 
 function durada() { return vista === "esborrany" ? (esborrany?.durada || vE.duration || 0) : duradaFinal; }
@@ -660,7 +683,7 @@ function vesA(m) {
   let k = 0;
   while (k + 1 < trams.length && acum[k + 1] <= m + 1e-6) k++;
   R.k = k;
-  R.v.currentTime = trams[k][0] + (m - acum[k]);
+  posaTemps(trams[k][0] + (m - acum[k]));
   registre("vesA", { m: +m.toFixed(3), k, video: ev(R.v) });
 }
 
@@ -673,12 +696,12 @@ function vesAOriginal(t) {
 // Si s'ha editat mentre sonava, continuem pel tros que toca.
 function recolloca() {
   if (!trams.length) { atura(); return; }
-  const t = R.v.currentTime;
+  const t = tempsVideo();
   const k = indexTram(t);
   registre("recolloca", { t: +t.toFixed(3), k, kAbans: R.k });
   if (k >= trams.length) { R.k = trams.length - 1; if (R.reproduint) atura(); return; }
   R.k = k;
-  if (t < trams[k][0] - 0.01 && R.reproduint) R.v.currentTime = trams[k][0];
+  if (t < trams[k][0] - 0.01 && R.reproduint) posaTemps(trams[k][0]);
 }
 
 function salta() {
@@ -686,17 +709,19 @@ function salta() {
   if (k >= trams.length) { atura(); return; }
   registre("salta", { k, cap: trams[k][0], video: ev(R.v) });
   R.k = k;
-  R.v.currentTime = trams[k][0];
+  posaTemps(trams[k][0]);
 }
 
 function reprodueix() {
   if (vista === "esborrany") { vE.play(); return; }
   if (!trams.length) return;
-  if (tempsMuntatge() >= duradaFinal - 0.05) vesA(0);
-  const t = R.v.currentTime;
+  // Encara no s'ha posat enlloc (o ja s'ha acabat): comença pel principi del muntatge, que si els
+  // paràgrafs s'han canviat d'ordre no és el principi de la gravació.
+  if (!R.posat || tempsMuntatge() >= duradaFinal - 0.05) vesA(0);
+  const t = tempsVideo();
   const k = indexTram(t);
   if (k >= trams.length) vesA(0);
-  else { R.k = k; if (t < trams[k][0]) R.v.currentTime = trams[k][0]; }
+  else { R.k = k; if (t < trams[k][0]) posaTemps(trams[k][0]); }
   R.reproduint = true;
   R.vigila = { t: -1, des: performance.now() };
   document.body.classList.add("reproduint");
@@ -710,6 +735,7 @@ function reprodueix() {
 
 function atura() {
   if (R.reproduint) registre("atura", { k: R.k, video: ev(R.v) });
+  R.repren = false;
   R.aturaA = null;
   R.reproduint = false;
   R.v.pause(); vE.pause();
@@ -721,8 +747,9 @@ function atura() {
 function vigila() {
   if (R.v.seeking && R.reproduint) {
     R.vigila.salt ??= { des: performance.now(), intents: 0 };
-    if (performance.now() - R.vigila.salt.des > 1500) {
-      const objectiu = R.v.currentTime;
+    if (performance.now() - R.vigila.salt.des > 800) {
+      const objectiu = tempsVideo();
+      R.salt = null;
       R.vigila.salt.intents++;
       registre("salt-encallat", { intents: R.vigila.salt.intents, video: ev(R.v) });
       if (R.vigila.salt.intents >= 2) {  // segon intent: recarreguem el vídeo i hi tornem
@@ -1069,7 +1096,7 @@ function instalaEstil() {
 // ha avançat (per si el navegador alenteix el bucle de fotogrames).
 function comprovaTall() {
   if (R.aturaA != null && R.reproduint && tempsMuntatge() >= R.aturaA) { atura(); }
-  if (vista === "directe" && R.reproduint && trams.length) {
+  if (vista === "directe" && R.reproduint && trams.length && !R.v.seeking && R.salt == null) {
     const t = R.v.currentTime;
     const [a, b] = trams[Math.min(R.k, trams.length - 1)];
     if (t < a - 0.3 || t > b + 0.3) recolloca();
@@ -1139,7 +1166,19 @@ function instalaReproductor() {
   // Si la pàgina deixa de veure's, el navegador alenteix els salts: parem perquè no soni el que s'ha tret.
   document.addEventListener("visibilitychange", () => { if (document.hidden && sona()) atura(); });
   // Primer salt quan ja hi ha dades (no només la informació general): el Safari ho agraeix.
-  R.v.addEventListener("loadeddata", () => { vesA(0); pintaTemps(); }, { once: true });
+  R.v.addEventListener("loadeddata", () => { if (!R.posat) vesA(0); pintaTemps(); }, { once: true });
+  R.v.addEventListener("seeked", () => {
+    if (R.salt != null) {  // el salt que esperava
+      const t = R.salt;
+      R.salt = null;
+      posaTemps(t);
+      return;
+    }
+    if (R.repren) {
+      R.repren = false;
+      if (R.reproduint && vista === "directe") R.v.play().catch(() => {});
+    }
+  });
 
   const commutaPlay = () => { R.aturaA = null; sona() ? atura() : reprodueix(); };
   $("#play").addEventListener("click", commutaPlay);
