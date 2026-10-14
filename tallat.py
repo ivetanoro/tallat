@@ -1,6 +1,7 @@
 """tallat: editor de reels en català, per paraules.
 
-Ús:
+Ús (la primera vegada: ./prepara.sh, que instal·la tot el que cal):
+  python tallat.py comprova                           (revisa que l'ordinador tingui tot el que cal)
   python tallat.py transcriu VIDEO --projecte CARPETA [--srt FITXER.srt] [--model large-v3]
   python tallat.py revisa --projecte CARPETA          (obre la pàgina de revisió)
   python tallat.py neteja --projecte CARPETA [--pausa 0.35]
@@ -27,7 +28,7 @@ import sys
 import time
 from pathlib import Path
 
-from motor import edicio, editors, exporta, gust, muntatge, transcripcio
+from motor import comprova, edicio, editors, entorn, exporta, gust, muntatge, transcripcio
 from motor.projecte import ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
 
 
@@ -227,6 +228,14 @@ def ordre_exporta(args) -> None:
     print(f"\nFet en {minuts(time.time() - t0)}:\n  {sortida}")
 
 
+def ordre_comprova(args) -> None:
+    print("Comprovant tallat…")
+    resultats = comprova.comprovacions()
+    print(comprova.informe(resultats))
+    if any(estat == "error" for estat, _, _ in resultats):
+        sys.exit(1)
+
+
 def ordre_editors(args) -> None:
     projecte = _carrega(args)
     try:
@@ -259,6 +268,7 @@ def ordre_gust(args) -> None:
 
 def main() -> None:
     sys.stdout.reconfigure(line_buffering=True)  # que els missatges surtin al moment
+    entorn.prepara()  # les eines que ha instal·lat prepara.sh (ffmpeg, Node), al davant del PATH
     p = argparse.ArgumentParser(prog="tallat", description="Editor de reels en català, per paraules.")
     sub = p.add_subparsers(dest="ordre", required=True)
 
@@ -323,6 +333,9 @@ def main() -> None:
     x.add_argument("--qualitat", choices=list(exporta.QUALITATS), default="esborrany")
     x.add_argument("--sense-subtitols", action="store_true", help="Exporta sense subtítols")
     x.set_defaults(func=ordre_exporta)
+
+    co = sub.add_parser("comprova", help="Revisa que l'ordinador tingui tot el que necessita tallat")
+    co.set_defaults(func=ordre_comprova)
 
     ed = sub.add_parser("editors", help="Prepara el muntatge per acabar-lo a Premiere, Final Cut, DaVinci o CapCut")
     ed.add_argument("--projecte", required=True)

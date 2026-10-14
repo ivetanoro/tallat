@@ -7,6 +7,16 @@ description: Editor de reels en català, per paraules. Fes-la servir quan algú 
 
 Tot en català, amb paraules senzilles: la majoria de persones que el fan servir no són programadores.
 
+## Instal·lació (la primera vegada)
+
+Quan la persona digui «instal·la tallat», o una ordre falli perquè falta una eina (ffmpeg, WhisperX, Node…):
+1. Explica-li en una frase què passarà: es baixen uns 2-3 GB (ffmpeg, Node, Python, WhisperX, el navegador de HyperFrames i el model de veu català), triga 10-20 minuts, tot va a la seva carpeta d'usuari (`~/.tallat` i `.venv`) i no demana mai la contrasenya.
+2. Si no fa servir Descript per transcriure, afegeix `--amb-whisper` (baixa 3 GB més, el model de transcripció).
+3. Executa `./prepara.sh` des de la carpeta de tallat. És llarg: fes-ho en una pestanya del terminal on la persona ho vegi, o en segon pla, i ves-li dient com va. Es pot tornar a executar sense por: només fa el que falta.
+4. En acabar, `prepara.sh` mateix executa `tallat.py comprova`. Si hi ha cap ✗, llegeix el missatge, torna a executar `./prepara.sh` i, si continua, explica-li què passa amb paraules senzilles.
+
+`tallat.py comprova` revisa en qualsevol moment que tot hi sigui (✓ bé, ! avís, ✗ cal arreglar). Descript és opcional: es connecta a Claude des de la configuració de connectors de claude.ai.
+
 ## Ordres
 
 Des de la carpeta de tallat, amb l'entorn `.venv`:
