@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from motor import broll, edicio, exporta, gust, marca, muntatge, stickers
+from motor import broll, edicio, editors, exporta, gust, marca, muntatge, stickers
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -30,21 +30,27 @@ class Feina:
         with self.bloqueig:
             return dict(self.estat) if self.estat else None
 
-    def comença(self, projecte: Projecte, qualitat: str) -> bool:
+    def comença(self, projecte: Projecte, qualitat: str, capa: bool = False) -> bool:
+        """`qualitat`: esborrany, 1080, 4k, o «editors» (projecte per a Premiere, Final Cut…)."""
         with self.bloqueig:
             if self.estat and self.estat["estat"] == "treballant":
                 return False
             self.estat = {"estat": "treballant", "qualitat": qualitat, "fase": "video", "progres": 0,
                           "fitxer": None, "error": None}
-        threading.Thread(target=self._fes, args=(projecte, qualitat), daemon=True).start()
+        threading.Thread(target=self._fes, args=(projecte, qualitat, capa), daemon=True).start()
         return True
 
     def _actualitza(self, **canvis):
         with self.bloqueig:
             self.estat.update(canvis)
 
-    def _fes(self, projecte: Projecte, qualitat: str) -> None:
+    def _fes(self, projecte: Projecte, qualitat: str, capa: bool = False) -> None:
         try:
+            if qualitat == "editors":
+                self._actualitza(fase="subtitols" if capa else "editors")
+                carpeta = editors.exporta_editors(projecte, amb_capa=capa)
+                self._actualitza(estat="fet", progres=100, fitxer=carpeta.name)
+                return
             sortida = projecte.sortida(qualitat)
             trams = projecte.trams()
             self._actualitza(fase="subtitols")
@@ -318,6 +324,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         return self._json({"error": "No trobo aquesta regla"}, HTTPStatus.NOT_FOUND)
                     # Si la regla tenia un ajust (p. ex. la mida dels subtítols), ha tornat a com estava.
                     return self._json({"gust": gust.llegeix(), "desfet": desfet, **info_marca(), **instantania()})
+                if ruta == "/api/editors":  # projecte per acabar-lo en un altre editor
+                    if not feina.comença(projecte, "editors", capa=bool(cos.get("capa"))):
+                        return self._json({"error": "Ja hi ha un render en marxa"}, HTTPStatus.CONFLICT)
+                    return self._json({"feina": feina.info()})
                 if ruta == "/api/mostra":  # obre el Finder amb el fitxer seleccionat
                     path = (projecte.carpeta / EXPORTS / cos.get("nom", "")).resolve()
                     if path.parent != (projecte.carpeta / EXPORTS).resolve() or not path.exists():

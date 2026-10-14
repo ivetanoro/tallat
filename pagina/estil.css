@@ -444,6 +444,11 @@ body.mode-corregeix .p { cursor: text; }
 .panell-estil > .enllac { margin: 0; align-self: flex-start; }
 .panell-estil > #fitxer-estil { margin-top: calc(-1 * var(--e4)); }
 
+.altres-editors { margin-top: var(--e5); padding-top: var(--e4); border-top: 1px solid var(--linia); display: flex; flex-direction: column; gap: var(--e2); align-items: flex-start; }
+.altres-editors h3 { margin: 0; font-size: var(--t-ui); font-weight: 600; }
+.altres-editors .detall { margin: 0; }
+.opcio-check { display: flex; align-items: center; gap: var(--e2); font-size: var(--t-ui); color: var(--text); cursor: pointer; }
+
 .feina { display: flex; align-items: center; gap: var(--e2); font-size: var(--t-ui); color: var(--text-2); font-variant-numeric: tabular-nums; }
 .barra-progres { width: 88px; height: 4px; border-radius: 2px; background: var(--omplir); overflow: hidden; }
 .barra-progres span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width 300ms ease-out; }

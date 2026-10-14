@@ -18,6 +18,8 @@ Des de la carpeta de tallat, amb l'entorn `.venv`:
 .venv/bin/python tallat.py reels --projecte CARPETA
 .venv/bin/python tallat.py reel ID --projecte CARPETA
 .venv/bin/python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k] [--sense-subtitols]
+.venv/bin/python tallat.py editors --projecte CARPETA [--amb-subtitols]
+.venv/bin/python tallat.py gust [afegeix SECCIO "TEXT" [--ajust clau=valor] | treu NUMERO]
 ```
 
 La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que diu la persona no es publiquen mai).
@@ -90,6 +92,10 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 - Es tria a la pàgina de revisió: **Subtítols → Estil**. Hi ha 13 estils predefinits (Clàssic, Net, Una paraula, Frase, Caixa, Karaoke, Impacte, Elegant, Cortina, Revista, Neó, Degradat, Emojis) i es pot ajustar tot: quantes paraules surten, si apareixen d'una en una o totes de cop, l'animació (pop, fos, impacte, cortina, gruix o cap), com es destaca la paraula que sona (color, caixa, karaoke o més gran), l'aspecte (normal, neó o degradat), una píndola de fons, les paraules clau més grans o amb emoji, la lletra (o una font pròpia), la mida, la posició i els colors.
 - La vista prèvia i el vídeo final fan servir el mateix codi d'animació (`pagina/subtitols.js`): el que es veu a la pàgina és el que surt.
 - Es desa a `~/.tallat/brand.json` (secció `subtitols`) i serveix per a tots els vídeos de la persona. Si et demana un canvi al xat, edita aquest fitxer: cada opció hi té una nota que l'explica. Els estils predefinits són a `config/estils_subtitols.json`; els emojis, a `config/emojis.json` (la persona en pot afegir a `~/.tallat/emojis.json`).
+
+## Acabar-lo en un altre editor
+
+Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o CapCut: `tallat.py editors` (o, a la pàgina, Final… → «Prepara el projecte»). Escriu a `exports/` una carpeta amb el projecte (`.fcpxml` per a Final Cut i DaVinci, `.xml` per a Premiere), els subtítols en `.srt`, el b-roll i els stickers a `recursos/`, i un `LLEGEIX-ME.txt` amb els passos de cada editor. CapCut no importa projectes: s'hi porta el vídeo final sense subtítols i el `.srt`. Amb `--amb-subtitols` hi afegeix els subtítols animats de tallat com a capa transparent (tarda uns minuts). Els talls apunten al vídeo original: que no el mogui.
 
 ## El teu gust (regles per als vídeos següents)
 
