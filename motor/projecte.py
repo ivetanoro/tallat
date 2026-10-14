@@ -16,7 +16,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import edicio, instruccions, marca, neteja, subtitols
+from motor import broll, edicio, instruccions, marca, neteja, subtitols
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -163,6 +163,78 @@ class Projecte:
             self.estat["zooms"] = sorted(zooms)
         instruccions.desa(self.carpeta, llista)
         return llista
+
+    def carpeta_instruccions(self) -> Path:
+        """On viuen instruccions.json i el b-roll: a la gravació sencera (els reels hi apunten)."""
+        path = self.carpeta / instruccions.FITXER
+        return path.resolve().parent if path.exists() else self.carpeta
+
+    def afegeix_instruccio(self, tipus: str, paraula: int, text: str = "") -> dict:
+        """Una instrucció afegida a mà en una paraula (no treu cap paraula del vídeo)."""
+        llista = self.instruccions()
+        p = self.dades["paraules"][paraula]
+        n = sum(1 for i in llista if i["id"].startswith("m"))
+        ins = {"id": f"m{paraula}-{n + 1}", "tipus": tipus, "text": text or tipus, "paraules": None,
+               "inici": p["inici"], "final": p["inici"], "ancora": paraula, "estat": "acceptada", "manual": True}
+        llista.append(ins)
+        llista.sort(key=lambda i: i["inici"])
+        instruccions.desa(self.carpeta_instruccions(), llista)
+        return ins
+
+    def assigna_broll(self, iid: str, origen: Path, durada: float | None = None) -> dict:
+        """Prepara un fitxer (vídeo o imatge) com a b-roll d'una instrucció i l'hi assigna."""
+        llista = self.instruccions()
+        ins = next((i for i in llista if i["id"] == iid), None)
+        if ins is None:
+            raise KeyError(iid)
+        base = self.carpeta_instruccions()
+        estil = marca.carrega().get("broll", {})
+        d = float(durada or ins.get("durada") or estil.get("durada", 1.5))
+        original = broll.copia_original(Path(origen), base, iid)
+        clip = broll.prepara(original, base / broll.CARPETA / f"{iid}.mp4", d, estil.get("lut"))
+        ins.update(fitxer=str(clip.relative_to(base)), original=str(original.relative_to(base)),
+                   durada=d, estat="acceptada", tipus="broll")
+        instruccions.desa(base, llista)
+        return ins
+
+    def treu_broll(self, iid: str) -> None:
+        llista = self.instruccions()
+        for ins in llista:
+            if ins["id"] == iid:
+                ins.pop("fitxer", None)
+        instruccions.desa(self.carpeta_instruccions(), llista)
+
+    def al_muntatge(self, t: float, trams) -> float | None:
+        """Temps del vídeo original → temps del muntatge (si cau en un tall, l'inici del tros següent)."""
+        acum, posicions = 0.0, []
+        for a, b in trams:
+            posicions.append(acum)
+            acum += b - a
+        for k, (a, b) in enumerate(trams):
+            if a - 0.01 <= t < b:
+                return posicions[k] + max(0.0, t - a)
+        seguents = [k for k, (a, _) in enumerate(trams) if a > t]
+        return posicions[min(seguents, key=lambda k: trams[k][0])] if seguents else None
+
+    def brolls(self, trams) -> list[dict]:
+        """B-rolls acceptats amb fitxer, situats al muntatge: [{id, fitxer, inici, durada}]."""
+        base = self.carpeta_instruccions()
+        total = sum(b - a for a, b in trams)
+        paraules = self.paraules()
+        resultat = []
+        for ins in self.instruccions():
+            if ins.get("tipus") != "broll" or ins.get("estat") != "acceptada" or not ins.get("fitxer"):
+                continue
+            if ins.get("ancora") is None or not (base / ins["fitxer"]).exists():
+                continue
+            # Comença a la primera paraula que es queda a partir de l'àncora.
+            seguent = next((p for p in paraules[ins["ancora"]:] if p["conservada"]), None)
+            m = self.al_muntatge(seguent["inici"], trams) if seguent else None
+            if m is None or m >= total - 0.1:
+                continue
+            resultat.append({"id": ins["id"], "fitxer": base / ins["fitxer"], "inici": round(m, 3),
+                             "durada": round(min(float(ins.get("durada", 1.5)), total - m), 3)})
+        return resultat
 
     def zooms_per_tram(self, trams) -> list[bool]:
         """Quins trossos porten zoom: el que comença amb la paraula que ve després de la instrucció."""

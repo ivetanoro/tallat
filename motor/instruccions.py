@@ -124,6 +124,8 @@ def desa(carpeta: Path, instruccions: list[dict]) -> None:
 def aplica_a_estat(estat: dict, instruccions: list[dict]) -> dict:
     """Treu del vídeo les paraules de cada instrucció (es poden recuperar)."""
     for ins in instruccions:
+        if not ins.get("paraules"):  # afegida a mà a la pàgina: no hi ha paraules per treure
+            continue
         a, b = ins["paraules"]
         for pid in range(a, b + 1):
             if pid not in estat["mantingudes"] and pid not in estat["esborrades"]:

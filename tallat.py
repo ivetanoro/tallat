@@ -8,6 +8,8 @@
   python tallat.py guio --projecte CARPETA            (text per paràgrafs perquè Claude proposi reels)
   python tallat.py reels --projecte CARPETA           (valida reels.json i en mostra la durada)
   python tallat.py reel ID --projecte CARPETA         (crea el projecte d'un reel proposat)
+  python tallat.py afegeix TIPUS --paraula ID --projecte CARPETA [--text "…"]   (instrucció a mà)
+  python tallat.py broll ID_INSTRUCCIO FITXER --projecte CARPETA [--durada 1.5]
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
 
 La carpeta del projecte ha de ser fora del repositori (els vídeos i el que dius no es publiquen).
@@ -153,6 +155,27 @@ def ordre_instruccions(args) -> None:
     _mostra_instruccions(trobades) if trobades else print("No he trobat cap instrucció «Claude, …».")
 
 
+def ordre_afegeix(args) -> None:
+    projecte = _carrega(args)
+    n = len(projecte.dades["paraules"])
+    if not 0 <= args.paraula < n:
+        sys.exit(f"La paraula ha de ser un número entre 0 i {n - 1} (mira'ls al guió: tallat.py guio).")
+    ins = projecte.afegeix_instruccio(args.tipus, args.paraula, args.text or "")
+    p = projecte.dades["paraules"][args.paraula]
+    print(f"Instrucció {ins['id']} ({args.tipus}) a «{p['text']}» ({minuts(p['inici'])}).")
+
+
+def ordre_broll(args) -> None:
+    projecte = _carrega(args)
+    fitxer = Path(args.fitxer).expanduser()
+    try:
+        ins = projecte.assigna_broll(args.instruccio, fitxer, args.durada)
+    except KeyError:
+        ids = ", ".join(i["id"] for i in projecte.instruccions()) or "cap"
+        sys.exit(f"No trobo la instrucció «{args.instruccio}». Instruccions: {ids}")
+    print(f"B-roll preparat per a {ins['id']} ({ins['durada']} s): {projecte.carpeta_instruccions() / ins['fitxer']}")
+
+
 def ordre_guio(args) -> None:
     projecte = _carrega(args)
     path = projecte.carpeta / muntatge.GUIO
@@ -194,7 +217,7 @@ def ordre_exporta(args) -> None:
         projecte.estat["subtitols"] = False
     capa = projecte.capa_subtitols(trams, args.qualitat, avis=print)
     exporta.exporta(projecte.font(args.qualitat), trams, sortida, args.qualitat, progres=_barra("exportant"), capa=capa,
-                    zooms=projecte.zooms_per_tram(trams))
+                    zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams))
     projecte.desa_talls(sortida, trams)
     print(f"\nFet en {minuts(time.time() - t0)}:\n  {sortida}")
 
@@ -231,6 +254,20 @@ def main() -> None:
     ins = sub.add_parser("instruccions", help="Detecta les instruccions de veu «Claude, …»")
     ins.add_argument("--projecte", required=True)
     ins.set_defaults(func=ordre_instruccions)
+
+    af = sub.add_parser("afegeix", help="Afegeix a mà una instrucció (b-roll, sticker, zoom) en una paraula")
+    af.add_argument("tipus", choices=["broll", "sticker", "zoom"])
+    af.add_argument("--paraula", type=int, required=True, help="Número de paraula (el del guió)")
+    af.add_argument("--text", help="Descripció (p. ex. «una rentadora»)")
+    af.add_argument("--projecte", required=True)
+    af.set_defaults(func=ordre_afegeix)
+
+    br = sub.add_parser("broll", help="Assigna un vídeo o una imatge a una instrucció de b-roll")
+    br.add_argument("instruccio", help="Id de la instrucció (p. ex. i133 o m290-1)")
+    br.add_argument("fitxer")
+    br.add_argument("--durada", type=float, help="Segons (per defecte, els de l'estil)")
+    br.add_argument("--projecte", required=True)
+    br.set_defaults(func=ordre_broll)
 
     g = sub.add_parser("guio", help="Escriu el guió per paràgrafs per al primer muntatge")
     g.add_argument("--projecte", required=True)

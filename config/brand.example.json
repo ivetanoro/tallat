@@ -23,5 +23,11 @@
     "animacio": "pop",
     "_puntuacio": "false treu comes i punts finals; els interrogants i exclamacions es queden.",
     "puntuacio": false
+  },
+  "broll": {
+    "_durada": "Segons que dura cada b-roll (tall sec). Entre 1 i 1,5 queda natural.",
+    "durada": 1.5,
+    "_lut": "Fitxer .cube per igualar el color del b-roll amb el del vídeo (opcional).",
+    "lut": null
   }
 }

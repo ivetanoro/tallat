@@ -48,8 +48,12 @@ def _enquadrament(amplada: int, alcada: int, ow: int, oh: int) -> str:
 
 
 def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = False,
-            zooms: list[bool] | None = None, mida: tuple[int, int] | None = None) -> str:
-    """Cada tros és una entrada pròpia (ja retallada amb -ss/-t); aquí només s'uneixen."""
+            zooms: list[bool] | None = None, mida: tuple[int, int] | None = None,
+            brolls: list[tuple[float, float]] | None = None) -> str:
+    """Cada tros és una entrada pròpia (ja retallada amb -ss/-t); aquí només s'uneixen.
+
+    Ordre de les entrades: els trossos, després els b-rolls (un per entrada, ja preparats) i,
+    al final, la capa de subtítols. Les capes s'apilen així: vídeo, b-roll i subtítols a dalt."""
     parts, entrades = [], []
     for i, (a, b) in enumerate(trams):
         d = b - a
@@ -63,15 +67,25 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = Fa
                      f"afade=t=in:st=0:d={FOS_AUDIO},afade=t=out:st={max(0, d - FOS_AUDIO):.4f}:d={FOS_AUDIO}[a{i}];")
         entrades.append(f"[v{i}][a{i}]")
     parts.append(f"{''.join(entrades)}concat=n={len(trams)}:v=1:a=1[vc][ac];")
+    mida_sortida = enquadrament.split("scale=")[1].split(":flags")[0]
+    parts.append(f"[vc]{enquadrament}[vb0];")
+    actual = "vb0"
+    for k, (inici, durada) in enumerate(brolls or []):
+        # El b-roll comença a «inici» del muntatge i tapa la imatge durant «durada» (tall sec).
+        entrada = len(trams) + k
+        parts.append(f"[{entrada}:v]scale={mida_sortida}:flags=lanczos,setsar=1,format=yuv420p,"
+                     f"setpts=PTS-STARTPTS+{inici:.4f}/TB[br{k}];")
+        parts.append(f"[{actual}][br{k}]overlay=0:0:eof_action=pass:"
+                     f"enable='between(t,{inici:.4f},{inici + durada:.4f})'[vb{k + 1}];")
+        actual = f"vb{k + 1}"
     if not capa:
-        parts.append(f"[vc]{enquadrament}[vout]")
+        parts.append(f"[{actual}]null[vout]")
     else:
         # La capa de subtítols (ProRes amb transparència) és l'última entrada.
         # Cal passar tots dos a un format amb canal alfa perquè l'overlay la respecti.
-        mida = enquadrament.split("scale=")[1].split(":flags")[0]
-        parts.append(f"[vc]{enquadrament},format=yuva444p[vb];")
-        parts.append(f"[{len(trams)}:v]scale={mida}:flags=lanczos,format=yuva444p[capa];")
-        parts.append("[vb][capa]overlay=0:0:format=yuv444:eof_action=pass,format=yuv420p[vout]")
+        parts.append(f"[{actual}]format=yuva444p[vba];")
+        parts.append(f"[{len(trams) + len(brolls or [])}:v]scale={mida_sortida}:flags=lanczos,format=yuva444p[capa];")
+        parts.append("[vba][capa]overlay=0:0:format=yuv444:eof_action=pass,format=yuv420p[vout]")
     return "\n".join(parts)
 
 
@@ -90,7 +104,9 @@ def _executa(ordre: list[str], durada: float, progres) -> None:
 
 
 def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualitat: str,
-            progres=None, capa: Path | None = None, zooms: list[bool] | None = None) -> Path:
+            progres=None, capa: Path | None = None, zooms: list[bool] | None = None,
+            brolls: list[dict] | None = None) -> Path:
+    """`brolls`: [{"fitxer": Path, "inici": segons del muntatge, "durada": segons}]."""
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
     ow, oh, bitrate = QUALITATS[qualitat]
@@ -100,7 +116,8 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
     sortida.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
         f.write(_filtre(trams, enquadrament, capa=capa is not None, zooms=zooms,
-                        mida=(info["amplada"], info["alcada"])))
+                        mida=(info["amplada"], info["alcada"]),
+                        brolls=[(b["inici"], b["durada"]) for b in brolls or []]))
         filtre = f.name
 
     # Cada tros s'obre com una entrada pròpia: ffmpeg salta directament al seu inici
@@ -110,6 +127,8 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
     entrades = []
     for a, b in trams:
         entrades += ["-ss", f"{a:.4f}", "-t", f"{b - a:.4f}", "-i", str(video)]
+    for b in brolls or []:
+        entrades += ["-i", str(b["fitxer"])]
     if capa is not None:
         entrades += ["-i", str(capa)]
 

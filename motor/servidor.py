@@ -9,9 +9,9 @@ import traceback
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
-from motor import edicio, exporta, marca, muntatge
+from motor import broll, edicio, exporta, marca, muntatge
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -50,7 +50,7 @@ class Feina:
             self._actualitza(fase="video", progres=0)
             exporta.exporta(projecte.font(qualitat), trams, sortida, qualitat,
                             progres=lambda pct: self._actualitza(progres=pct), capa=capa,
-                            zooms=projecte.zooms_per_tram(trams))
+                            zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams))
             projecte.desa_talls(sortida, trams)
             self._actualitza(estat="fet", progres=100, fitxer=sortida.name)
         except Exception as e:  # el missatge arriba a la pàgina
@@ -87,6 +87,9 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "durada_final": round(sum(b - a for a, b in trams), 3),
                 "zooms": projecte.zooms_per_tram(trams), "zoom": exporta.ZOOM,
                 "instruccions": projecte.instruccions(),
+                "brolls": [{"id": b["id"], "inici": b["inici"], "durada": b["durada"],
+                            "url": "/broll/" + b["fitxer"].name + f"?v={int(b['fitxer'].stat().st_mtime)}"}
+                           for b in projecte.brolls(trams)],
                 "subtitols": projecte.linies_subtitols(trams)}
 
     class Gestor(BaseHTTPRequestHandler):
@@ -175,6 +178,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._segur(PAGINA, ruta[len("/pagina/"):])
             if ruta == "/proxy.mp4":
                 return self._fitxer(projecte.carpeta / PROXY)
+            if ruta.startswith("/broll/"):
+                return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
+            if ruta == "/api/biblioteca":
+                return self._json({"broll": [p.name for p in broll.biblioteca()], "carpeta": str(broll.BIBLIOTECA)})
             if ruta.startswith("/exports/"):
                 return self._segur(projecte.carpeta / EXPORTS, ruta[len("/exports/"):])
             if ruta == "/api/projecte":
@@ -196,6 +203,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         def do_POST(self):
             projecte = obert["p"]
             ruta = urlparse(self.path).path
+            if ruta == "/api/broll/puja":  # el cos és el fitxer mateix, no JSON
+                return self._puja_broll(projecte)
             try:
                 cos = self._cos()
             except json.JSONDecodeError:
@@ -245,6 +254,22 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
                     projecte.desa()
                     return self._json(instantania())
+                if ruta in ("/api/broll/biblioteca", "/api/broll/treu"):
+                    iid = str(cos.get("instruccio", ""))
+                    try:
+                        if ruta.endswith("treu"):
+                            projecte.treu_broll(iid)
+                        else:
+                            nom = cos.get("nom", "")
+                            fitxer = next((p for p in broll.biblioteca() if p.name == nom), None)
+                            if fitxer is None:
+                                return self._json({"error": "No trobo aquest fitxer a la biblioteca"}, HTTPStatus.NOT_FOUND)
+                            projecte.assigna_broll(iid, fitxer)
+                    except KeyError:
+                        return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
+                    except Exception as e:  # ffmpeg no ha pogut llegir el fitxer
+                        return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
+                    return self._json(instantania())
                 if ruta == "/api/mostra":  # obre el Finder amb el fitxer seleccionat
                     path = (projecte.carpeta / EXPORTS / cos.get("nom", "")).resolve()
                     if path.parent != (projecte.carpeta / EXPORTS).resolve() or not path.exists():
@@ -259,6 +284,35 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         return self._json({"error": "Ja hi ha un render en marxa"}, HTTPStatus.CONFLICT)
                     return self._json({"feina": feina.info()})
             self.send_error(HTTPStatus.NOT_FOUND)
+
+        def _puja_broll(self, projecte):
+            """Rep un fitxer (vídeo o imatge) i el fa servir de b-roll d'una instrucció."""
+            consulta = parse_qs(urlparse(self.path).query)
+            iid = (consulta.get("instruccio") or [""])[0]
+            nom = Path((consulta.get("nom") or ["fitxer"])[0]).name
+            mida = int(self.headers.get("Content-Length") or 0)
+            if not broll.es_compatible(Path(nom)):
+                self.rfile.read(mida)
+                return self._json({"error": "Aquest tipus de fitxer no serveix com a b-roll"}, HTTPStatus.BAD_REQUEST)
+            carpeta = projecte.carpeta_instruccions() / broll.CARPETA / "pujats"
+            carpeta.mkdir(parents=True, exist_ok=True)
+            desti = carpeta / nom
+            with desti.open("wb") as f:
+                pendent = mida
+                while pendent > 0:
+                    tros = self.rfile.read(min(1 << 20, pendent))
+                    if not tros:
+                        break
+                    f.write(tros)
+                    pendent -= len(tros)
+            with bloqueig:
+                try:
+                    projecte.assigna_broll(iid, desti)
+                except KeyError:
+                    return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
+                except Exception as e:
+                    return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
+                return self._json(instantania())
 
         def _segur(self, arrel: Path, relatiu: str):
             path = (arrel / relatiu).resolve()

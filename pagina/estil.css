@@ -187,6 +187,14 @@ kbd {
 .item.instruccio.acceptada .ins-tipus { color: var(--accent); }
 .item.instruccio.descartada { opacity: 0.55; }
 .item.instruccio .mini.actiu { background: var(--accent); color: #fff; box-shadow: none; }
+.ins-accions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e1); font-size: var(--t-petit); }
+.ins-accions .enllac { margin: 0; font-size: var(--t-petit); }
+.ins-accions .fet { color: var(--accent); font-weight: 500; }
+.ins-accions select {
+  max-width: 100%; height: 24px; border: 0; border-radius: var(--radi-petit); padding: 0 var(--e2);
+  font: inherit; font-size: var(--t-petit); color: var(--text); background: var(--omplir);
+}
+.item.instruccio.arrossegant { background: var(--accent-suau); box-shadow: inset 0 0 0 2px var(--accent); }
 .item.reel { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); }
 .item.reel .reel-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .item.reel .reel-titol { color: var(--text); font-weight: 500; }

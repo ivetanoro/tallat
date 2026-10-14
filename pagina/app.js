@@ -75,6 +75,8 @@ let esborrany = null;      // {nom, trams, acum, durada} de la versió que es mi
 let liniesSub = [];        // subtítols en temps del muntatge (calculats pel servidor)
 let instruccions = [];     // instruccions de veu «Claude, …»
 let zoomsTram = [];        // quins trossos porten zoom
+let brollsMuntatge = [];   // b-rolls situats al muntatge: [{id, inici, durada, url}]
+let biblioteca = [];       // fitxers de ~/.tallat/broll/
 let notes = [];
 let darrerDesplacamentManual = 0;
 
@@ -147,6 +149,7 @@ function refes() {
 function aplicaTrams(r) {
   if (r.subtitols) { liniesSub = r.subtitols; liniaPintada = null; }
   if (r.zooms) zoomsTram = r.zooms;
+  if (r.brolls) brollsMuntatge = r.brolls;
   if (r.zoom) $(".pantalla").style.setProperty("--zoom", r.zoom);
   if (r.instruccions) { instruccions = r.instruccions; if (P) pintaInstruccions(); }
   trams = r.trams;
@@ -612,6 +615,7 @@ function bucle() {
   pintaTemps();
   paraulaActual();
   pintaSubtitols();
+  pintaBroll();
   R.v.classList.toggle("zoom", vista === "directe" && !!zoomsTram[Math.min(R.k, trams.length - 1)]);
 }
 
@@ -986,12 +990,95 @@ async function obre(reel) {
   } catch (e) { avis(e.message); }
 }
 
+// --- B-roll en directe ----------------------------------------------------------------------
+
+const vB = $("#video-broll");
+function pintaBroll() {
+  const m = tempsMuntatge();
+  const b = vista === "directe" ? brollsMuntatge.find((x) => m >= x.inici && m < x.inici + x.durada) : null;
+  vB.classList.toggle("amagat", !b);
+  if (!b) { if (!vB.paused) vB.pause(); return; }
+  if (!vB.src.endsWith(b.url)) vB.src = b.url;
+  const desitjat = m - b.inici;
+  if (vB.readyState >= 1 && Math.abs(vB.currentTime - desitjat) > 0.15) vB.currentTime = desitjat;
+  if (R.reproduint && vB.paused) vB.play().catch(() => {});
+  if (!R.reproduint && !vB.paused) vB.pause();
+}
+
+let instruccioPerPujar = null;
+async function pujaBroll(iid, fitxer) {
+  avis(`Pujant «${fitxer.name}»…`, 20000);
+  try {
+    await cua;
+    const r = await fetch(`/api/broll/puja?instruccio=${encodeURIComponent(iid)}&nom=${encodeURIComponent(fitxer.name)}`,
+                          { method: "POST", body: fitxer });
+    const json = await r.json();
+    if (!r.ok) throw new Error(json.error || r.statusText);
+    estat = json.estat;
+    aplicaTrams(json);
+    refresca(true);
+    avis("B-roll preparat. Mira'l al reproductor.");
+  } catch (e) { avis(e.message, 6000); }
+}
+
+async function accioBroll(ruta, dades, missatge) {
+  try {
+    await cua;
+    const r = await api(ruta, dades);
+    estat = r.estat;
+    aplicaTrams(r);
+    refresca(true);
+    if (missatge) avis(missatge);
+  } catch (e) { avis(e.message, 6000); }
+}
+
+function accionsBroll(ins, item) {
+  if (ins.tipus !== "broll" || ins.estat !== "acceptada") return null;
+  const fila = document.createElement("span");
+  fila.className = "ins-accions";
+  if (ins.fitxer) {
+    fila.innerHTML = `<span class="fet">B-roll a punt (${String(ins.durada).replace(".", ",")} s)</span>
+      <button class="enllac canvia">Canvia'l</button><button class="enllac treu-broll">Treu-lo</button>`;
+  } else {
+    fila.innerHTML = `<button class="enllac canvia">Puja un fitxer…</button>`;
+    if (biblioteca.length) {
+      const tria = document.createElement("select");
+      tria.innerHTML = `<option value="">o tria'n un de la biblioteca</option>` +
+        biblioteca.map((n) => `<option></option>`).join("");
+      [...tria.options].slice(1).forEach((o, i) => { o.value = biblioteca[i]; o.textContent = biblioteca[i]; });
+      tria.addEventListener("click", (e) => e.stopPropagation());
+      tria.addEventListener("change", () => tria.value && accioBroll("/api/broll/biblioteca",
+        { instruccio: ins.id, nom: tria.value }, "B-roll preparat."));
+      fila.append(tria);
+    }
+  }
+  fila.querySelector(".canvia").addEventListener("click", (e) => {
+    e.stopPropagation();
+    instruccioPerPujar = ins.id;
+    $("#fitxer-broll").click();
+  });
+  fila.querySelector(".treu-broll")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    accioBroll("/api/broll/treu", { instruccio: ins.id }, "B-roll tret.");
+  });
+  // També s'hi pot arrossegar un fitxer des del Finder.
+  item.addEventListener("dragover", (e) => { e.preventDefault(); item.classList.add("arrossegant"); });
+  item.addEventListener("dragleave", () => item.classList.remove("arrossegant"));
+  item.addEventListener("drop", (e) => {
+    e.preventDefault();
+    item.classList.remove("arrossegant");
+    const fitxer = e.dataTransfer.files[0];
+    if (fitxer) pujaBroll(ins.id, fitxer);
+  });
+  return fila;
+}
+
 // --- Instruccions de veu -------------------------------------------------------------------
 
 const TIPUS_INSTRUCCIO = {
   talla: ["Torna a començar", "En acceptar-la, es treu el primer intent."],
   zoom: ["Zoom", "En acceptar-la, el tros que ve s'apropa."],
-  broll: ["B-roll / imatges", "Queda apuntada: el b-roll arriba a la fase 4."],
+  broll: ["B-roll / imatges", "En acceptar-la, hi pots posar un vídeo o una imatge."],
   sticker: ["Sticker", "Queda apuntada: els stickers arriben a la fase 4."],
   altre: ["Altres", "Queda apuntada."],
 };
@@ -1017,7 +1104,10 @@ function pintaInstruccions() {
     item.querySelector(".nom").textContent = nom;
     item.querySelector(".ins-text").textContent = `«${ins.text}»`;
     item.querySelector(".ins-estat").textContent =
-      ins.estat === "acceptada" ? `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}` : ins.estat === "descartada" ? "Descartada" : "";
+      ins.estat === "acceptada" ? (ins.tipus === "broll" ? "" : `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}`)
+        : ins.estat === "descartada" ? "Descartada" : "";
+    const accions = accionsBroll(ins, item);
+    if (accions) item.querySelector(".reel-text").append(accions);
     item.addEventListener("click", (e) => {
       if (e.target.closest(".deixa")) return decideixInstruccio(ins, ins.estat === "acceptada" ? "pendent" : "acceptada");
       if (e.target.closest(".treu")) return decideixInstruccio(ins, ins.estat === "descartada" ? "pendent" : "descartada");
@@ -1080,6 +1170,11 @@ function instalaControls() {
     canviaVista(b.dataset.vista);
   });
   $("#tornar").addEventListener("click", () => obre(null));
+  $("#fitxer-broll").addEventListener("change", (e) => {
+    const fitxer = e.target.files[0];
+    if (fitxer && instruccioPerPujar) pujaBroll(instruccioPerPujar, fitxer);
+    e.target.value = "";
+  });
   $("#torna-netejar").addEventListener("click", async () => {
     desfer.push(copia(estat));
     refer.length = 0;
@@ -1172,6 +1267,7 @@ async function inicia() {
   pintaNotes();
   pintaVersions(P.exports || []);
   pintaReels();
+  try { biblioteca = (await api("/api/biblioteca")).broll || []; } catch { biblioteca = []; }
   pintaInstruccions();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;
