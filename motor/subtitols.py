@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import html
 import json
@@ -18,6 +19,8 @@ import subprocess
 from pathlib import Path
 
 VERSIO_HYPERFRAMES = "0.8.154"
+VERSIO_GSAP = "3.14.2"
+CODI_ANIMACIO = Path(__file__).resolve().parent.parent / "pagina" / "subtitols.js"
 AMPLADA, ALCADA = 1080, 1920
 FPS = 30
 FI_DE_FRASE = re.compile(r"[.?!…»\"]$")
@@ -35,6 +38,69 @@ def _neteja_text(text: str, puntuacio: bool) -> str:
 
 
 GENERIQUES = {"system-ui", "sans-serif", "serif", "monospace", "cursive", "fantasy"}
+CONFIG = Path(__file__).resolve().parent.parent / "config"
+EMOJIS_USUARI = Path.home() / ".tallat" / "emojis.json"
+
+# Paraules que no poden ser «clau» (les que fan de pont: articles, preposicions, pronoms, verbs comuns…).
+PARAULES_PONT = set("""
+a al als amb ara així aquí aquest aquesta aquests aquestes aquell aquella aquells aquelles allò això
+bé com con contra d de del dels des després doncs durant e el ella elles ells els em en encara entre
+era eren es és et fa fan fer fins ha han hagi hauria havia he hem heu hi i ja jo l la les li llavors
+lo m me mes més meu meva meus meves molt molta molts moltes n ne ni no nosaltres o on però per perquè
+poc pot puc què qual quan que qui s sa se seu seva seus seves si sí sigui sóc sobre som són també tan
+tant te tenen tenir tens tinc tot tota tots totes tu un una uns unes us va vam van vaig vosaltres vull
+estar estic està estan ser sé sap saps dir dic diu cal pas gens res algú alguna algun alguns algunes
+""".split())
+
+
+def _pla(paraula: str) -> str:
+    """La paraula en minúscules i sense signes (de «l'idea,» en queda «idea»)."""
+    paraula = paraula.lower().replace("’", "'")
+    paraula = paraula.rsplit("'", 1)[-1]
+    return re.sub(r"[^\w·-]+", "", paraula).strip("-·")
+
+
+@functools.lru_cache(maxsize=1)
+def _emojis() -> tuple[dict, list]:
+    """(paraula → emoji, [(prefix, emoji)]) de config/emojis.json i ~/.tallat/emojis.json."""
+    exactes, prefixos = {}, []
+    for path in (CONFIG / "emojis.json", EMOJIS_USUARI):
+        try:
+            dades = json.loads(path.read_text(encoding="utf-8")).get("emojis", {})
+        except (OSError, json.JSONDecodeError, AttributeError):
+            continue
+        for emoji, paraules in dades.items():
+            for p in paraules if isinstance(paraules, list) else []:
+                p = str(p).lower()
+                if p.endswith("*"):
+                    prefixos.append((p[:-1], emoji))
+                else:
+                    exactes[p] = emoji
+    return exactes, prefixos
+
+
+def emoji_de(paraula: str) -> str | None:
+    pla = _pla(paraula)
+    if not pla:
+        return None
+    exactes, prefixos = _emojis()
+    if pla in exactes:
+        return exactes[pla]
+    return next((e for prefix, e in prefixos if len(prefix) >= 3 and pla.startswith(prefix)), None)
+
+
+def _marca_claus(linia: list[dict]) -> None:
+    """Paraules clau d'una línia: els números i la paraula llarga més important (en sol quedar una)."""
+    candidates = [(len(_pla(m["text"])), k) for k, m in enumerate(linia)
+                  if _pla(m["text"]) not in PARAULES_PONT and len(_pla(m["text"])) >= 4]
+    millor = max(candidates)[1] if candidates else None
+    emoji_posat = False
+    for k, m in enumerate(linia):
+        m["clau"] = k == millor or bool(re.search(r"\d", m["text"]))
+        m["emoji"] = None
+        if not emoji_posat:  # com a molt un emoji per línia, perquè no n'hi hagi massa
+            m["emoji"] = emoji_de(m["text"])
+            emoji_posat = m["emoji"] is not None
 
 
 def _familia(nom: str) -> str:
@@ -83,14 +149,25 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
 
     resultat = []
     for i, linia in enumerate(linies):
+        _marca_claus(linia)
         final = linia[-1]["final"] + RETEN
         if i + 1 < len(linies):
             seguent = linies[i + 1][0]["inici"]
             final = seguent if seguent - linia[-1]["final"] < ENGANXA else min(final, seguent)
         final = min(final, acum[-1] + (trams[-1][1] - trams[-1][0]) if trams else final)
         resultat.append({"inici": linia[0]["inici"], "final": round(final, 3),
-                         "paraules": [{k: m[k] for k in ("text", "inici", "final")} for m in linia]})
+                         "paraules": [{k: m[k] for k in ("text", "inici", "final", "clau", "emoji")} for m in linia]})
     return resultat
+
+
+def familia_css(estil: dict, font_propia: bool) -> str:
+    """La família de lletra dels subtítols, a punt per al CSS."""
+    return "'SubtitolsMarca', system-ui, sans-serif" if font_propia else f"{_familia(estil['font'])}, sans-serif"
+
+
+def _js(dades) -> str:
+    """JSON que es pot posar dins d'un <script> sense trencar-lo."""
+    return json.dumps(dades, ensure_ascii=False).replace("</", "<\\/")
 
 
 def composicio(linies: list[dict], estil: dict, durada: float, font_local: str | None = None,
@@ -98,49 +175,15 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
                escala: float = 1.0) -> str:
     """HTML d'una composició HyperFrames transparent amb els subtítols i els stickers.
 
+    Els subtítols els dibuixa `subtitols.js`, el mateix codi que fa servir la vista prèvia de la
+    pàgina de revisió (s'ha de copiar al costat d'aquest index.html).
     `stickers`: [{"src": nom del fitxer dins la composició, "inici": s, "durada": s}]."""
     es = estil_stickers or {}
     amplada, alcada = round(AMPLADA * escala), round(ALCADA * escala)
-    mida = estil["mida"] * amplada
-    familia = "'SubtitolsMarca', system-ui, sans-serif" if font_local else f"{_familia(estil['font'])}, sans-serif"
     font_face = (f"@font-face {{ font-family: 'SubtitolsMarca'; src: url('{font_local}'); font-display: block; }}"
                  if font_local else "")
-    ombra = "text-shadow: 0 0.06em 0.2em rgba(0, 0, 0, 0.45);" if estil.get("ombra") else ""
-    contorn = estil.get("gruix_contorn", 0) or 0
 
-    blocs = []
-    for i, linia in enumerate(linies):
-        paraules = " ".join(f'<span id="p{i}-{j}" class="p">{html.escape(w["text"])}</span>'
-                            for j, w in enumerate(linia["paraules"]))
-        blocs.append(f'      <div id="l{i}" class="clip linia" data-start="{linia["inici"]:.3f}" '
-                     f'data-duration="{max(0.05, linia["final"] - linia["inici"]):.3f}" data-track-index="1">'
-                     f'<p class="text">{paraules}</p></div>')
-
-    passos = []
-    animacio = estil.get("animacio", "pop")
-    de_cop = estil.get("apareixen", "paraula") == "linia"
-    destaca = estil.get("destaca", True)
-
-    def entra(sel: str, t: float) -> str:
-        if animacio == "pop":
-            return (f"  tl.fromTo({sel}, {{ opacity: 0, scale: 0.82, y: {10 * escala:.1f} }}, "
-                    f"{{ opacity: 1, scale: 1, y: 0, duration: 0.14, ease: \"back.out(2.2)\" }}, {t:.3f});")
-        if animacio == "fos":
-            return f"  tl.fromTo({sel}, {{ opacity: 0 }}, {{ opacity: 1, duration: 0.18, ease: \"power1.out\" }}, {t:.3f});"
-        return f"  tl.fromTo({sel}, {{ opacity: 0 }}, {{ opacity: 1, duration: 0.01 }}, {t:.3f});"
-
-    for i, linia in enumerate(linies):
-        if de_cop:  # tota la línia surt quan comença la primera paraula
-            passos.append(entra(f'"#l{i} .p"', linia["inici"]))
-        for j, w in enumerate(linia["paraules"]):
-            sel = f'"#p{i}-{j}"'
-            fi = linia["paraules"][j + 1]["inici"] if j + 1 < len(linia["paraules"]) else linia["final"]
-            if not de_cop:
-                passos.append(entra(sel, w["inici"]))
-            if destaca:
-                passos.append(f"  tl.set({sel}, {{ color: ACTIU }}, {w['inici']:.3f});")
-                passos.append(f"  tl.set({sel}, {{ color: BASE }}, {fi:.3f});")
-
+    blocs, passos = [], []
     for k, st in enumerate(stickers or []):
         # Si n'hi ha més d'un, s'alternen a banda i banda perquè no quedin sempre al mateix lloc.
         x = es.get("x", 0.72) if k % 2 == 0 else 1 - es.get("x", 0.72)
@@ -152,13 +195,13 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
                      f'width: {es.get("mida", 0.34) * 100:.2f}%;" /></div>')
         sel = f'"#si{k}"'
         if es.get("animacio", "pop") == "pop":
-            passos.append(f"  tl.fromTo({sel}, {{ xPercent: -50, yPercent: -50, scale: 0, rotation: {rot - 18}, opacity: 0 }}, "
+            passos.append(f"      tl.fromTo({sel}, {{ xPercent: -50, yPercent: -50, scale: 0, rotation: {rot - 18}, opacity: 0 }}, "
                           f"{{ xPercent: -50, yPercent: -50, scale: 1, rotation: {rot}, opacity: 1, duration: 0.38, "
                           f"ease: \"back.out(2.4)\" }}, {st['inici']:.3f});")
-            passos.append(f"  tl.to({sel}, {{ scale: 0.7, opacity: 0, duration: 0.18, ease: \"power2.in\" }}, "
+            passos.append(f"      tl.to({sel}, {{ scale: 0.7, opacity: 0, duration: 0.18, ease: \"power2.in\" }}, "
                           f"{max(st['inici'], st['inici'] + st['durada'] - 0.18):.3f});")
         else:
-            passos.append(f"  tl.fromTo({sel}, {{ xPercent: -50, yPercent: -50, rotation: {rot}, opacity: 0 }}, "
+            passos.append(f"      tl.fromTo({sel}, {{ xPercent: -50, yPercent: -50, rotation: {rot}, opacity: 0 }}, "
                           f"{{ xPercent: -50, yPercent: -50, rotation: {rot}, opacity: 1, duration: 0.01 }}, {st['inici']:.3f});")
     ombra_sticker = (f"filter: drop-shadow(0 {18 * escala:.0f}px {28 * escala:.0f}px rgba(0, 0, 0, 0.35));"
                      if es.get("ombra", True) else "")
@@ -169,23 +212,13 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
     <meta charset="UTF-8" />
     <meta name="viewport" content="width={amplada}, height={alcada}" />
     <title>Subtítols · tallat</title>
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@{VERSIO_GSAP}/dist/gsap.min.js"></script>
+    <script src="subtitols.js"></script>
     <style>
       {font_face}
       html, body {{ margin: 0; background: transparent; }}
       #root {{ position: relative; width: 100%; height: 100%; overflow: hidden; background: transparent; }}
-      .linia {{ position: absolute; inset: 0; }}
-      .text {{
-        position: absolute; left: 50%; top: {estil['posicio_y'] * 100:.2f}%;
-        width: {estil['amplada_maxima'] * 100:.2f}%; margin: 0 0 0 -{estil['amplada_maxima'] * 50:.2f}%;
-        transform: translateY(-50%);
-        text-align: center; line-height: 1.12;
-        font-family: {familia}; font-weight: {int(estil['pes'])}; font-size: {mida:.1f}px;
-        color: {estil['color']}; {"text-transform: uppercase;" if estil.get('majuscules') else ""}
-        -webkit-text-stroke: {contorn * 2:.3f}em {estil['contorn']}; paint-order: stroke fill;
-        {ombra}
-      }}
-      .p {{ display: inline-block; }}
+      #subtitols {{ transform: scale({escala}); transform-origin: 0 0; }}
       .enganxina {{ position: absolute; inset: 0; }}
       .sticker {{ position: absolute; height: auto; {ombra_sticker} }}
     </style>
@@ -193,12 +226,13 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
   <body>
     <div id="root" data-composition-id="subtitols" data-start="0"
          data-width="{amplada}" data-height="{alcada}" data-duration="{durada:.3f}">
+      <div id="subtitols"></div>
 {chr(10).join(blocs)}
     </div>
     <script>
-      const BASE = {json.dumps(estil['color'])};
-      const ACTIU = {json.dumps(estil['color_actiu'])};
       const tl = gsap.timeline({{ paused: true }});
+      TallatSubtitols.construeix(document.getElementById("subtitols"), {_js(linies)}, {_js(estil)},
+                                 {{ tl, familia: {_js(familia_css(estil, bool(font_local)))} }});
 {chr(10).join(passos)}
       window.__timelines["subtitols"] = tl;
     </script>
@@ -217,7 +251,8 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     font = estil.get("font_fitxer")
     empremta_st = [[str(st["fitxer"]), int(Path(st["fitxer"]).stat().st_mtime), st["inici"], st["durada"]]
                    for st in stickers or []]
-    clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers],
+    codi = hashlib.sha1(CODI_ANIMACIO.read_bytes()).hexdigest()  # si canvien les animacions, cal tornar a dibuixar
+    clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers, codi],
                       sort_keys=True)
     nom = hashlib.sha1(clau.encode()).hexdigest()[:12]
     base = carpeta / "subtitols"
@@ -234,6 +269,7 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
             raise FileNotFoundError(f"No trobo la font dels subtítols: {origen}")
         font_local = "font" + origen.suffix.lower()
         shutil.copy(origen, projecte / font_local)
+    shutil.copy(CODI_ANIMACIO, projecte / "subtitols.js")
     locals_st = []
     for k, st in enumerate(stickers or []):
         nom = f"sticker{k}{Path(st['fitxer']).suffix.lower()}"

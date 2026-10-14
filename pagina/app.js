@@ -152,7 +152,7 @@ function refes() {
 }
 
 function aplicaTrams(r) {
-  if (r.subtitols) { liniesSub = r.subtitols; liniaPintada = null; }
+  if (r.subtitols) { liniesSub = r.subtitols; previaBruta = true; }
   if (r.zooms) zoomsTram = r.zooms;
   if (r.brolls) brollsMuntatge = r.brolls;
   if (r.stickers) stickersMuntatge = r.stickers;
@@ -648,61 +648,44 @@ function bucle() {
 }
 
 // --- Subtítols en directe ------------------------------------------------------------------------
+// Els dibuixa pagina/subtitols.js, el mateix codi que fa servir el vídeo final: el que es veu és el que surt.
 
-let liniaPintada = null;
+let previa = null;          // la línia de temps dels subtítols a la vista prèvia
+let previaBruta = true;     // cal tornar-la a construir (han canviat les línies o l'estil)
+let previaTemps = NaN;      // l'últim moment dibuixat
+
+function refaPrevia() {
+  previaBruta = false;
+  previaTemps = NaN;
+  previa = estilSub && window.TallatSubtitols
+    ? TallatSubtitols.construeix($("#ts-host"), liniesSub, estilSub, { familia: familiaCss(estilSub) })
+    : null;
+}
+
 function pintaSubtitols() {
   const capa = $("#capa-subtitols");
   const visible = vista === "directe" && (estat?.subtitols !== false || editantEstil) && liniesSub.length > 0;
   capa.hidden = !visible;
   if (!visible) return;
-  const m = tempsMuntatge();
-  let linia = liniesSub.find((l) => m >= l.inici - 0.01 && m < l.final) || null;
+  if (previaBruta) refaPrevia();
+  if (!previa) return;
+  let m = tempsMuntatge();
   // Mentre es tria l'estil amb el vídeo aturat, sempre hi ha una línia d'exemple a la vista.
-  const exemple = editantEstil && !sona() && !linia;
-  if (exemple) linia = liniesSub.find((l) => l.inici >= m) || liniesSub[liniesSub.length - 1];
-  const text = $("#sub-text");
-  if (linia !== liniaPintada) {
-    liniaPintada = linia;
-    text.textContent = "";
-    for (const w of linia?.paraules || []) {
-      const span = document.createElement("span");
-      span.textContent = w.text;
-      text.append(span, " ");
-    }
-    void text.offsetWidth;  // perquè l'animació d'entrada comenci des del principi
+  if (editantEstil && !sona() && !liniesSub.some((l) => m >= l.inici && m < l.final)) {
+    const l = liniesSub.find((x) => x.inici >= m) || liniesSub[liniesSub.length - 1];
+    const w = l.paraules[Math.min(1, l.paraules.length - 1)];
+    m = Math.min(l.final - 0.01, w.inici + 0.45);
   }
-  if (!linia) return;
-  const deCop = estilSub?.apareixen === "linia";
-  const destaca = estilSub?.destaca !== false;
-  const spansLinia = text.querySelectorAll("span");
-  linia.paraules.forEach((w, i) => {
-    const fi = linia.paraules[i + 1]?.inici ?? linia.final;
-    const sonant = exemple ? i === Math.min(1, linia.paraules.length - 1) : m >= w.inici - 0.01 && m < fi;
-    spansLinia[i].classList.toggle("vista", exemple || deCop || m >= w.inici - 0.01);
-    spansLinia[i].classList.toggle("actiu", destaca && sonant);
-  });
+  if (m !== previaTemps) { previa.seek(m, false); previaTemps = m; }
 }
 
 const escapaFont = (f) => (/^[\w-]+$/.test(f) ? f : `"${String(f).replace(/["\\]/g, "")}"`);
-const familiaSub = (e) => (e.font_fitxer && fontMarca ? '"SubtitolsMarca"' : escapaFont(e.font || "system-ui"));
+const familiaCss = (e) => `${e.font_fitxer && fontMarca ? '"SubtitolsMarca"' : escapaFont(e.font || "system-ui")}, system-ui, sans-serif`;
 
 function aplicaEstilSubtitols(e) {
   if (!e) return;
   estilSub = e;
-  const capa = $("#capa-subtitols");
-  const posa = (k, v) => capa.style.setProperty(k, v);
-  posa("--sub-y", `${e.posicio_y * 100}%`);
-  posa("--sub-amplada", `${e.amplada_maxima * 100}%`);
-  posa("--sub-font", familiaSub(e));
-  posa("--sub-pes", e.pes);
-  posa("--sub-mida", `${e.mida * 100}cqw`);
-  posa("--sub-color", e.color);
-  posa("--sub-actiu", e.color_actiu);
-  posa("--sub-contorn", e.contorn);
-  posa("--sub-gruix", `${(e.gruix_contorn || 0) * 2}em`);
-  posa("--sub-majuscules", e.majuscules ? "uppercase" : "none");
-  posa("--sub-ombra", e.ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none");
-  capa.dataset.animacio = e.animacio || "pop";
+  previaBruta = true;
   if (e.font_fitxer && fontMarca) carregaFontMarca(fontMarca);
   pintaResumEstil();
 }
@@ -717,7 +700,9 @@ const FONTS = [
 ];
 const AGRUPACIONS = { una: [1, 30], poques: [3, 18], frase: [7, 34] };  // [paraules, lletres] per línia
 const agrupacioDe = (e) => (e.paraules_per_linia <= 1 ? "una" : e.paraules_per_linia <= 4 ? "poques" : "frase");
-const MOSTRA = ["Hola", "com", "va", "tot?"];
+const destacatDe = (e) => (e.destaca === false ? "cap" : e.destacat || "color");
+// Frase d'exemple per als botons dels estils: «idea» és la paraula clau i porta emoji.
+const MOSTRA = [["Tinc", false, null], ["una", false, null], ["idea", true, "💡"], ["genial", false, null]];
 
 let fontCarregada = null;
 async function carregaFontMarca(url) {
@@ -737,29 +722,24 @@ function predefinitActual(e = estilSub) {
     (typeof v === "number" ? Math.abs((e[k] ?? NaN) - v) < 1e-6 : String(e[k]).toUpperCase() === String(v).toUpperCase())));
 }
 
-// Dibuixa una mostra («Hola com va») amb un estil, per als botons dels estils i el resum.
-function pintaMostra(el, e, paraules) {
-  el.textContent = "";
-  const n = paraules ?? Math.min(MOSTRA.length, e.paraules_per_linia <= 1 ? 1 : e.paraules_per_linia <= 4 ? 3 : 4);
-  MOSTRA.slice(0, n).forEach((w, i) => {
-    const s = document.createElement("span");
-    s.textContent = w;
-    if (e.destaca && i === Math.min(1, n - 1)) s.style.color = e.color_actiu;
-    el.append(s, " ");
-  });
-  Object.assign(el.style, {
-    fontFamily: `${familiaSub(e)}, system-ui, sans-serif`, fontWeight: e.pes, color: e.color,
-    textTransform: e.majuscules ? "uppercase" : "none",
-    webkitTextStroke: `${(e.gruix_contorn || 0) * 2}em ${e.contorn}`,
-    textShadow: e.ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none",
-  });
+// Dibuixa una mostra quieta d'un estil dins d'una caixa petita, amb el mateix codi que els subtítols.
+function pintaMostra(caixa, e, { paraules, alcada, mida }) {
+  const host = document.createElement("div");
+  caixa.textContent = "";
+  caixa.append(host);
+  const linia = { inici: 0, final: 9, paraules: paraules.map(([text, clau, emoji], i) =>
+    ({ text, clau, emoji, inici: i * 0.3, final: i * 0.3 + 0.28 })) };
+  const tl = TallatSubtitols.construeix(host, [linia], e,
+    { familia: familiaCss(e), alcada, y: 0.56, amplada: 0.96, mida });
+  tl.seek(linia.paraules[linia.paraules.length - 1].inici + 0.5, false);
+  host.style.transform = `scale(${caixa.clientWidth / TallatSubtitols.AMPLADA})`;
 }
 
 function pintaResumEstil() {
-  if (!estilSub) return;
+  if (!estilSub || !window.TallatSubtitols) return;
   $("#nom-estil").textContent = predefinitActual()?.nom ?? "Personalitzat";
-  pintaMostra($("#mostra-estil"), { ...estilSub, destaca: false }, 0);
-  $("#mostra-estil").textContent = "Aa";
+  pintaMostra($("#mostra-estil"), { ...estilSub, destaca: false, emojis: false, clau_grans: false, fons: "cap" },
+    { paraules: [["Aa", false, null]], alcada: 1080, mida: 0.36 });
 }
 
 function marcaSegmentat(id, valor) {
@@ -778,16 +758,25 @@ function pintaPanellEstil() {
     b.setAttribute("role", "radio");
     b.setAttribute("aria-checked", String(p === actual));
     b.title = p.descripcio;
-    b.innerHTML = `<span class="estil-mostra"><span class="estil-text"></span></span><span class="estil-nom"></span>`;
+    b.innerHTML = `<span class="estil-mostra"></span><span class="estil-nom"></span>`;
     b.querySelector(".estil-nom").textContent = p.nom;
-    pintaMostra(b.querySelector(".estil-text"), { ...e, ...p.valors });
     b.addEventListener("click", () => canviaEstil({ ...p.valors }, true));
     cont.append(b);
+    if (window.TallatSubtitols) {
+      const v = { ...e, ...p.valors };
+      const n = v.paraules_per_linia <= 1 ? 1 : v.paraules_per_linia <= 4 ? 3 : 4;
+      pintaMostra(b.querySelector(".estil-mostra"), v,
+        { paraules: n === 1 ? [MOSTRA[2]] : MOSTRA.slice(0, n), alcada: 675, mida: Math.min(0.2, v.mida * 1.6) });
+    }
   }
   marcaSegmentat("e-paraules", agrupacioDe(e));
   marcaSegmentat("e-apareixen", e.apareixen);
-  marcaSegmentat("e-animacio", e.animacio);
-  $("#e-destaca").setAttribute("aria-checked", String(!!e.destaca));
+  marcaSegmentat("e-aspecte", e.aspecte || "normal");
+  marcaSegmentat("e-fons", e.fons || "cap");
+  $("#e-animacio").value = e.animacio;
+  $("#e-destacat").value = destacatDe(e);
+  $("#e-clau").setAttribute("aria-checked", String(!!e.clau_grans));
+  $("#e-emojis").setAttribute("aria-checked", String(!!e.emojis));
   $("#e-majuscules").setAttribute("aria-checked", String(!!e.majuscules));
   $("#e-ombra").setAttribute("aria-checked", String(!!e.ombra));
 
@@ -811,7 +800,9 @@ function pintaPanellEstil() {
   $("#e-color").value = e.color.toLowerCase();
   $("#e-color-actiu").value = e.color_actiu.toLowerCase();
   $("#e-contorn").value = e.contorn.toLowerCase();
-  $("#camp-actiu").classList.toggle("apagat", !e.destaca);
+  $("#e-fons-color").value = (e.fons_color || "#000000").toLowerCase();
+  $("#camp-actiu").classList.toggle("apagat", destacatDe(e) === "cap" && !e.clau_grans && e.aspecte === "normal");
+  $("#camp-fons").hidden = e.fons !== "pindola";
   $("#fitxer-estil").textContent = `Fitxer: ${(P?.fitxer_estil || "").replace(/^\/Users\/[^/]+/, "~")}`;
 }
 
@@ -819,9 +810,7 @@ function pintaPanellEstil() {
 let estilPendent = {};
 let temporitzadorEstil = null;
 function canviaEstil(canvis, mostra = false) {
-  estilSub = { ...estilSub, ...canvis };
-  aplicaEstilSubtitols(estilSub);
-  liniaPintada = null;
+  aplicaEstilSubtitols({ ...estilSub, ...canvis });
   pintaPanellEstil();
   Object.assign(estilPendent, canvis);
   clearTimeout(temporitzadorEstil);
@@ -841,9 +830,9 @@ async function desaEstil() {
 
 function respostaEstil(r) {
   fontMarca = r.font_marca;
+  if (r.subtitols) liniesSub = r.subtitols;
   // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
   aplicaEstilSubtitols({ ...r.estil_subtitols, ...estilPendent });
-  if (r.subtitols) { liniesSub = r.subtitols; liniaPintada = null; }
   pintaPanellEstil();
 }
 
@@ -881,13 +870,20 @@ function obreEstil() {
 
 function tancaEstil() {
   editantEstil = false;
-  liniaPintada = null;
+  previaTemps = NaN;
   $(".barra").classList.remove("editant-estil");
   $("#panell-estil").hidden = true;
   $("#obre-estil").focus();
 }
 
 function instalaEstil() {
+  // La capa de subtítols treballa a 1080 px d'amplada: l'escalem a la mida del reproductor.
+  const capa = $("#capa-subtitols");
+  new ResizeObserver(() => {
+    $("#ts-host").style.transform = `scale(${capa.clientWidth / 1080})`;
+  }).observe(capa);
+  if (!window.gsap) registre("sense-gsap", {});  // sense internet: subtítols sense animacions
+
   $("#obre-estil").addEventListener("click", obreEstil);
   $("#tanca-estil").addEventListener("click", tancaEstil);
   const segmentat = (id, aplica, mostra) => {
@@ -895,10 +891,17 @@ function instalaEstil() {
   };
   segmentat("e-paraules", (v) => ({ paraules_per_linia: AGRUPACIONS[v][0], lletres_per_linia: AGRUPACIONS[v][1] }), true);
   segmentat("e-apareixen", (v) => ({ apareixen: v }), true);
-  segmentat("e-animacio", (v) => ({ animacio: v }), true);
+  segmentat("e-aspecte", (v) => ({ aspecte: v }));
+  segmentat("e-fons", (v) => ({ fons: v }), true);
+  $("#e-animacio").addEventListener("change", (e) => canviaEstil({ animacio: e.target.value }, true));
+  $("#e-destacat").addEventListener("change", (e) => {
+    const v = e.target.value;
+    canviaEstil(v === "cap" ? { destaca: false } : { destaca: true, destacat: v }, true);
+  });
   const interruptor = (id, clau, mostra = false) =>
     $(`#${id}`).addEventListener("click", () => canviaEstil({ [clau]: !estilSub[clau] }, mostra));
-  interruptor("e-destaca", "destaca", true);
+  interruptor("e-clau", "clau_grans");
+  interruptor("e-emojis", "emojis", true);
   interruptor("e-majuscules", "majuscules");
   interruptor("e-ombra", "ombra");
   const lliscador = (id, clau) => $(`#${id}`).addEventListener("input", (e) => canviaEstil({ [clau]: +e.target.value }));
@@ -909,6 +912,7 @@ function instalaEstil() {
   color("e-color", "color");
   color("e-color-actiu", "color_actiu");
   color("e-contorn", "contorn");
+  color("e-fons-color", "fons_color");
   $("#e-pes").addEventListener("change", (e) => canviaEstil({ pes: +e.target.value }));
   $("#e-font").addEventListener("change", (e) => {
     const v = e.target.value;

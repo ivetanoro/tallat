@@ -165,7 +165,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
 
         def _index(self):
             html = (PAGINA / "index.html").read_text(encoding="utf-8")
-            for nom in ("app.js", "estil.css"):
+            for nom in ("app.js", "estil.css", "subtitols.js"):
                 versio = int((PAGINA / nom).stat().st_mtime)
                 html = html.replace(f"/pagina/{nom}", f"/pagina/{nom}?v={versio}")
             cos = html.encode()

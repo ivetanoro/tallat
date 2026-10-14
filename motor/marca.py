@@ -22,8 +22,10 @@ FORMATS_FONT = {".ttf", ".otf", ".woff", ".woff2"}
 EDITABLES = {"subtitols"}
 RANGS = {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.08, 0.92),
          "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60)}
-OPCIONS = {"animacio": {"pop", "fos", "cap"}, "apareixen": {"paraula", "linia"}}
-COLORS = {"color", "color_actiu", "contorn"}
+OPCIONS = {"animacio": {"pop", "fos", "cap", "impacte", "cortina", "pes"}, "apareixen": {"paraula", "linia"},
+           "destacat": {"color", "caixa", "karaoke", "gran"}, "aspecte": {"normal", "neo", "degradat"},
+           "fons": {"cap", "pindola"}}
+COLORS = {"color", "color_actiu", "contorn", "fons_color"}
 NOM_DE_FONT = re.compile(r"^[\w][\w .-]{0,60}$")
 
 

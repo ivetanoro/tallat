@@ -86,8 +86,9 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 
 ## Estil dels subtítols
 
-- Es tria a la pàgina de revisió: **Subtítols → Estil**. Hi ha quatre estils predefinits (Clàssic, Net, Una paraula, Frase) i es pot ajustar tot: quantes paraules surten, si apareixen d'una en una o totes de cop, l'animació (pop, fos o cap), destacar la paraula que sona, la lletra (o una font pròpia), la mida, la posició i els colors. Es veu al reproductor a l'instant.
-- Es desa a `~/.tallat/brand.json` (secció `subtitols`) i serveix per a tots els vídeos de la persona. Si et demana un canvi al xat, edita aquest fitxer: cada opció hi té una nota que l'explica. Els estils predefinits són a `config/estils_subtitols.json`.
+- Es tria a la pàgina de revisió: **Subtítols → Estil**. Hi ha 13 estils predefinits (Clàssic, Net, Una paraula, Frase, Caixa, Karaoke, Impacte, Elegant, Cortina, Revista, Neó, Degradat, Emojis) i es pot ajustar tot: quantes paraules surten, si apareixen d'una en una o totes de cop, l'animació (pop, fos, impacte, cortina, gruix o cap), com es destaca la paraula que sona (color, caixa, karaoke o més gran), l'aspecte (normal, neó o degradat), una píndola de fons, les paraules clau més grans o amb emoji, la lletra (o una font pròpia), la mida, la posició i els colors.
+- La vista prèvia i el vídeo final fan servir el mateix codi d'animació (`pagina/subtitols.js`): el que es veu a la pàgina és el que surt.
+- Es desa a `~/.tallat/brand.json` (secció `subtitols`) i serveix per a tots els vídeos de la persona. Si et demana un canvi al xat, edita aquest fitxer: cada opció hi té una nota que l'explica. Els estils predefinits són a `config/estils_subtitols.json`; els emojis, a `config/emojis.json` (la persona en pot afegir a `~/.tallat/emojis.json`).
 
 ## Regles
 

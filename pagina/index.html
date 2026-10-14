@@ -87,16 +87,50 @@
         </div>
       </div>
       <div class="camp">
-        <span class="etiqueta" id="et-animacio">Animació</span>
-        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-animacio" id="e-animacio">
-          <button role="radio" data-valor="pop">Pop</button>
-          <button role="radio" data-valor="fos">Fos</button>
-          <button role="radio" data-valor="cap">Cap</button>
+        <label class="etiqueta" for="e-animacio">Animació</label>
+        <select id="e-animacio">
+          <option value="pop">Pop · fan un petit salt</option>
+          <option value="fos">Fos · s'encenen suaument</option>
+          <option value="impacte">Impacte · entren grans i de cop</option>
+          <option value="cortina">Cortina · es destapen</option>
+          <option value="pes">Gruix · de fines a gruixudes</option>
+          <option value="cap">Cap · surten i prou</option>
+        </select>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="e-destacat">La paraula que sona</label>
+        <select id="e-destacat">
+          <option value="cap">No la destaquis</option>
+          <option value="color">Canvia de color</option>
+          <option value="caixa">Caixa de color al darrere</option>
+          <option value="karaoke">Karaoke · es queden pintades</option>
+          <option value="gran">Es fa més gran</option>
+        </select>
+      </div>
+      <div class="camp">
+        <span class="etiqueta" id="et-aspecte">Aspecte</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-aspecte" id="e-aspecte">
+          <button role="radio" data-valor="normal">Normal</button>
+          <button role="radio" data-valor="neo">Neó</button>
+          <button role="radio" data-valor="degradat">Degradat</button>
         </div>
       </div>
-      <button class="interruptor" id="e-destaca" role="switch" aria-checked="true">
-        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Destaca la paraula que sona
-      </button>
+      <div class="camp">
+        <span class="etiqueta" id="et-fons">Fons</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-fons" id="e-fons">
+          <button role="radio" data-valor="cap">Sense fons</button>
+          <button role="radio" data-valor="pindola">Píndola</button>
+        </div>
+      </div>
+      <div class="camp">
+        <span class="etiqueta">Paraules clau</span>
+        <button class="interruptor" id="e-clau" role="switch" aria-checked="false">
+          <span class="pista" aria-hidden="true"><span class="bola"></span></span>Més grans i de color
+        </button>
+        <button class="interruptor" id="e-emojis" role="switch" aria-checked="false">
+          <span class="pista" aria-hidden="true"><span class="bola"></span></span>Amb un emoji
+        </button>
+      </div>
 
       <div class="camp">
         <label class="etiqueta" for="e-font">Lletra</label>
@@ -130,6 +164,7 @@
           <label class="color"><input type="color" id="e-color"><span>Text</span></label>
           <label class="color" id="camp-actiu"><input type="color" id="e-color-actiu"><span>Destacat</span></label>
           <label class="color"><input type="color" id="e-contorn"><span>Contorn</span></label>
+          <label class="color" id="camp-fons"><input type="color" id="e-fons-color"><span>Fons</span></label>
         </div>
       </div>
       <div class="camp">
@@ -181,7 +216,7 @@
       <video id="video-a" preload="auto" playsinline></video>
       <video id="video-esborrany" preload="auto" playsinline class="amagat"></video>
       <video id="video-broll" class="broll amagat" muted playsinline preload="auto"></video>
-      <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><p class="sub-text" id="sub-text"></p></div>
+      <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><div id="ts-host"></div></div>
       <div class="capa-stickers" id="capa-stickers" aria-hidden="true"></div>
       <button class="gran-play" id="gran-play" aria-label="Reprodueix">
         <svg viewBox="0 0 40 40"><path d="M15 11.5v17l13-8.5z"/></svg>
@@ -233,6 +268,8 @@
   <input type="file" id="fitxer-broll" accept="image/*,video/*" hidden>
   <input type="file" id="fitxer-font" accept=".ttf,.otf,.woff,.woff2" hidden>
   <div class="avis-flotant" id="avis-flotant" role="status" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script src="/pagina/subtitols.js"></script>
   <script src="/pagina/app.js"></script>
 </body>
 </html>
