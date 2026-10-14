@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import subprocess
+import sys
 import threading
 import traceback
 from http import HTTPStatus
@@ -15,6 +16,7 @@ from motor import broll, edicio, exporta, marca, muntatge, stickers
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
+MIDA_MAXIMA_FONT = 20 * 1024 * 1024  # una font no passa mai d'uns quants MB
 
 
 class Feina:
@@ -94,6 +96,13 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                               "url": "/stickers/" + st["fitxer"].name + f"?v={int(st['fitxer'].stat().st_mtime)}"}
                              for st in projecte.stickers(trams)],
                 "subtitols": projecte.linies_subtitols(trams)}
+
+    def info_marca() -> dict:
+        estil = obert["p"].estil_subtitols()
+        font = marca.fitxer_font(estil)
+        return {"estil_subtitols": estil, "fitxer_estil": str(marca.ruta()),
+                "estils_subtitols": marca.estils(),
+                "font_marca": f"/marca/font?v={int(font.stat().st_mtime)}" if font else None}
 
     class Gestor(BaseHTTPRequestHandler):
         # HTTP/1.1: connexions que es mantenen obertes, com esperen els reproductors de vídeo
@@ -185,6 +194,9 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
             if ruta.startswith("/stickers/"):
                 return self._segur(projecte.carpeta_instruccions() / stickers.CARPETA, ruta[len("/stickers/"):])
+            if ruta == "/marca/font":  # la font pròpia dels subtítols, per a la vista prèvia
+                font = marca.fitxer_font(projecte.estil_subtitols())
+                return self._fitxer(font) if font else self.send_error(HTTPStatus.NOT_FOUND)
             if ruta == "/api/biblioteca":
                 return self._json({"broll": [p.name for p in broll.biblioteca()],
                                    "sticker": [p.name for p in stickers.biblioteca()]})
@@ -199,8 +211,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         "paraules": projecte.dades["paraules"],
                         "paragrafs": projecte.paragrafs(),
                         "notes": projecte.notes(), "exports": projecte.exports(), "feina": feina.info(),
-                        "estil_subtitols": projecte.estil_subtitols(), "fitxer_estil": str(marca.ruta()),
                         "estil_stickers": marca.carrega().get("stickers", {}),
+                        **info_marca(),
                         **info_reels(),
                         **instantania()})
             if ruta == "/api/feina":
@@ -212,6 +224,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             ruta = urlparse(self.path).path
             if ruta == "/api/broll/puja":  # el cos és el fitxer mateix, no JSON
                 return self._puja_broll(projecte)
+            if ruta == "/api/marca/font":  # també: el cos és el fitxer de la font
+                return self._puja_font()
             try:
                 cos = self._cos()
             except json.JSONDecodeError:
@@ -280,6 +294,15 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     except Exception as e:  # ffmpeg no ha pogut llegir el fitxer
                         return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
                     return self._json(instantania())
+                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil dels subtítols (per a tots els vídeos)
+                    try:
+                        if ruta.endswith("restableix"):
+                            marca.restableix("subtitols")
+                        else:
+                            marca.desa("subtitols", cos.get("subtitols") or {})
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+                    return self._json({**info_marca(), **instantania()})
                 if ruta == "/api/mostra":  # obre el Finder amb el fitxer seleccionat
                     path = (projecte.carpeta / EXPORTS / cos.get("nom", "")).resolve()
                     if path.parent != (projecte.carpeta / EXPORTS).resolve() or not path.exists():
@@ -324,13 +347,39 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
                 return self._json(instantania())
 
+        def _puja_font(self):
+            """Rep una font (.ttf, .otf, .woff o .woff2) i la fa servir per als subtítols."""
+            nom = Path((parse_qs(urlparse(self.path).query).get("nom") or [""])[0]).name
+            mida = int(self.headers.get("Content-Length") or 0)
+            if mida > MIDA_MAXIMA_FONT:
+                self.close_connection = True
+                return self._json({"error": "La font és massa gran"}, HTTPStatus.BAD_REQUEST)
+            contingut = self.rfile.read(mida)
+            with bloqueig:
+                try:
+                    marca.desa_font(nom, contingut)
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+                return self._json({**info_marca(), **instantania()})
+
         def _segur(self, arrel: Path, relatiu: str):
             path = (arrel / relatiu).resolve()
             if arrel.resolve() not in path.parents:
                 return self.send_error(HTTPStatus.FORBIDDEN)
             return self._fitxer(path)
 
-    return ThreadingHTTPServer(("127.0.0.1", port), Gestor)
+    return _Servidor(("127.0.0.1", port), Gestor)
+
+
+class _Servidor(ThreadingHTTPServer):
+    daemon_threads = True  # en tancar la pàgina (Control + C), no esperem les connexions obertes
+
+    def handle_error(self, request, client_address):
+        # El navegador talla connexions sovint (en saltar pel vídeo): no és cap error de debò.
+        error = sys.exc_info()[1]
+        if isinstance(error, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
 
 def _estat_json(estat: dict) -> dict:

@@ -45,6 +45,28 @@ class TestGrups(unittest.TestCase):
         self.assertIn('data-composition-id="subtitols"', html)
         self.assertIn('window.__timelines["subtitols"] = tl', html)
 
+    def test_composicio_segons_l_estil(self):
+        p = paraules(("Hola", 0.0, 0.4), ("món", 0.5, 0.9))
+        linies = subtitols.grups(p, [(0, 1)], ESTIL)
+        # Per defecte: cada paraula entra amb un salt quan sona, i la que sona canvia de color.
+        html = subtitols.composicio(linies, ESTIL, 1.0)
+        self.assertIn('tl.fromTo("#p0-1"', html)
+        self.assertIn("back.out", html)
+        self.assertIn("color: ACTIU", html)
+        # Tota la línia de cop, amb fos i sense destacar.
+        estil = dict(ESTIL, apareixen="linia", animacio="fos", destaca=False)
+        html = subtitols.composicio(linies, estil, 1.0)
+        self.assertIn('tl.fromTo("#l0 .p"', html)
+        self.assertNotIn('tl.fromTo("#p0-1"', html)
+        self.assertIn("power1.out", html)
+        self.assertNotIn("color: ACTIU", html)
+
+    def test_nom_de_font_amb_espais(self):
+        html = subtitols.composicio([], dict(ESTIL, font="Avenir Next"), 1.0)
+        self.assertIn('font-family: "Avenir Next", sans-serif', html)
+        html = subtitols.composicio([], dict(ESTIL, font='x"; } body {'), 1.0)
+        self.assertNotIn("} body {", html.split("<style>")[1].split("</style>")[0].replace("html, body {", ""))
+
 
 if __name__ == "__main__":
     unittest.main()

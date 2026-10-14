@@ -73,6 +73,10 @@ const spans = new Map();   // id de paraula → <span>
 let paragrafsEl = [];      // [{el, ids}] per marcar les frases tretes senceres
 let esborrany = null;      // {nom, trams, acum, durada} de la versió que es mira
 let liniesSub = [];        // subtítols en temps del muntatge (calculats pel servidor)
+let estilSub = null;       // estil dels subtítols (de ~/.tallat/brand.json)
+let estilsPredefinits = []; // [{id, nom, descripcio, valors}] de config/estils_subtitols.json
+let fontMarca = null;      // URL de la font pròpia dels subtítols, si n'hi ha
+let editantEstil = false;  // el panell d'estil és obert: el reproductor en mostra una línia d'exemple
 let instruccions = [];     // instruccions de veu «Claude, …»
 let zoomsTram = [];        // quins trossos porten zoom
 let brollsMuntatge = [];   // b-rolls situats al muntatge: [{id, inici, durada, url}]
@@ -353,7 +357,7 @@ function instalaText() {
     if (mode === "talla" && e.target.closest(".p")) e.preventDefault();
   });
   document.addEventListener("keydown", (e) => {
-    if (!seleccioFeta || e.target.matches("input, textarea") || !["Backspace", "Delete"].includes(e.key)) return;
+    if (!seleccioFeta || e.target.matches("input, textarea, select") || !["Backspace", "Delete"].includes(e.key)) return;
     e.preventDefault();
     commutaRang(...seleccioFeta);
     deixaSeleccio();
@@ -648,11 +652,14 @@ function bucle() {
 let liniaPintada = null;
 function pintaSubtitols() {
   const capa = $("#capa-subtitols");
-  const visible = vista === "directe" && estat?.subtitols !== false && liniesSub.length > 0;
+  const visible = vista === "directe" && (estat?.subtitols !== false || editantEstil) && liniesSub.length > 0;
   capa.hidden = !visible;
   if (!visible) return;
   const m = tempsMuntatge();
-  const linia = liniesSub.find((l) => m >= l.inici - 0.01 && m < l.final) || null;
+  let linia = liniesSub.find((l) => m >= l.inici - 0.01 && m < l.final) || null;
+  // Mentre es tria l'estil amb el vídeo aturat, sempre hi ha una línia d'exemple a la vista.
+  const exemple = editantEstil && !sona() && !linia;
+  if (exemple) linia = liniesSub.find((l) => l.inici >= m) || liniesSub[liniesSub.length - 1];
   const text = $("#sub-text");
   if (linia !== liniaPintada) {
     liniaPintada = linia;
@@ -662,24 +669,31 @@ function pintaSubtitols() {
       span.textContent = w.text;
       text.append(span, " ");
     }
+    void text.offsetWidth;  // perquè l'animació d'entrada comenci des del principi
   }
   if (!linia) return;
-  const spans = text.querySelectorAll("span");
+  const deCop = estilSub?.apareixen === "linia";
+  const destaca = estilSub?.destaca !== false;
+  const spansLinia = text.querySelectorAll("span");
   linia.paraules.forEach((w, i) => {
     const fi = linia.paraules[i + 1]?.inici ?? linia.final;
-    spans[i].classList.toggle("vista", m >= w.inici - 0.01);
-    spans[i].classList.toggle("actiu", m >= w.inici - 0.01 && m < fi);
+    const sonant = exemple ? i === Math.min(1, linia.paraules.length - 1) : m >= w.inici - 0.01 && m < fi;
+    spansLinia[i].classList.toggle("vista", exemple || deCop || m >= w.inici - 0.01);
+    spansLinia[i].classList.toggle("actiu", destaca && sonant);
   });
 }
 
+const escapaFont = (f) => (/^[\w-]+$/.test(f) ? f : `"${String(f).replace(/["\\]/g, "")}"`);
+const familiaSub = (e) => (e.font_fitxer && fontMarca ? '"SubtitolsMarca"' : escapaFont(e.font || "system-ui"));
+
 function aplicaEstilSubtitols(e) {
   if (!e) return;
-  const capa = $("#capa-subtitols").style;
-  const posa = (k, v) => capa.setProperty(k, v);
-  const escapa = (f) => (/^[\w-]+$/.test(f) ? f : `"${f.replace(/"/g, "")}"`);
+  estilSub = e;
+  const capa = $("#capa-subtitols");
+  const posa = (k, v) => capa.style.setProperty(k, v);
   posa("--sub-y", `${e.posicio_y * 100}%`);
   posa("--sub-amplada", `${e.amplada_maxima * 100}%`);
-  posa("--sub-font", e.font_fitxer ? "system-ui" : escapa(e.font));
+  posa("--sub-font", familiaSub(e));
   posa("--sub-pes", e.pes);
   posa("--sub-mida", `${e.mida * 100}cqw`);
   posa("--sub-color", e.color);
@@ -688,6 +702,233 @@ function aplicaEstilSubtitols(e) {
   posa("--sub-gruix", `${(e.gruix_contorn || 0) * 2}em`);
   posa("--sub-majuscules", e.majuscules ? "uppercase" : "none");
   posa("--sub-ombra", e.ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none");
+  capa.dataset.animacio = e.animacio || "pop";
+  if (e.font_fitxer && fontMarca) carregaFontMarca(fontMarca);
+  pintaResumEstil();
+}
+
+// --- Estil dels subtítols (panell) ------------------------------------------------------------
+
+const FONTS = [
+  ["system-ui", "San Francisco (la del sistema)"], ["Avenir Next", "Avenir Next"], ["Helvetica Neue", "Helvetica Neue"],
+  ["Futura", "Futura"], ["DIN Condensed", "DIN Condensed"], ["Gill Sans", "Gill Sans"], ["Impact", "Impact"],
+  ["Arial Black", "Arial Black"], ["Rockwell", "Rockwell"], ["Georgia", "Georgia"],
+  ["American Typewriter", "American Typewriter"], ["Marker Felt", "Marker Felt"], ["Chalkboard SE", "Chalkboard SE"],
+];
+const AGRUPACIONS = { una: [1, 30], poques: [3, 18], frase: [7, 34] };  // [paraules, lletres] per línia
+const agrupacioDe = (e) => (e.paraules_per_linia <= 1 ? "una" : e.paraules_per_linia <= 4 ? "poques" : "frase");
+const MOSTRA = ["Hola", "com", "va", "tot?"];
+
+let fontCarregada = null;
+async function carregaFontMarca(url) {
+  if (!url || fontCarregada?.url === url) return;
+  try {
+    const font = new FontFace("SubtitolsMarca", `url(${url})`);
+    await font.load();
+    if (fontCarregada) document.fonts.delete(fontCarregada.font);
+    document.fonts.add(font);
+    fontCarregada = { url, font };
+  } catch { avis("No he pogut carregar la teva font. Torna-la a pujar o tria'n una altra.", 5000); }
+}
+
+function predefinitActual(e = estilSub) {
+  if (!e) return null;
+  return estilsPredefinits.find((p) => Object.entries(p.valors).every(([k, v]) =>
+    (typeof v === "number" ? Math.abs((e[k] ?? NaN) - v) < 1e-6 : String(e[k]).toUpperCase() === String(v).toUpperCase())));
+}
+
+// Dibuixa una mostra («Hola com va») amb un estil, per als botons dels estils i el resum.
+function pintaMostra(el, e, paraules) {
+  el.textContent = "";
+  const n = paraules ?? Math.min(MOSTRA.length, e.paraules_per_linia <= 1 ? 1 : e.paraules_per_linia <= 4 ? 3 : 4);
+  MOSTRA.slice(0, n).forEach((w, i) => {
+    const s = document.createElement("span");
+    s.textContent = w;
+    if (e.destaca && i === Math.min(1, n - 1)) s.style.color = e.color_actiu;
+    el.append(s, " ");
+  });
+  Object.assign(el.style, {
+    fontFamily: `${familiaSub(e)}, system-ui, sans-serif`, fontWeight: e.pes, color: e.color,
+    textTransform: e.majuscules ? "uppercase" : "none",
+    webkitTextStroke: `${(e.gruix_contorn || 0) * 2}em ${e.contorn}`,
+    textShadow: e.ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none",
+  });
+}
+
+function pintaResumEstil() {
+  if (!estilSub) return;
+  $("#nom-estil").textContent = predefinitActual()?.nom ?? "Personalitzat";
+  pintaMostra($("#mostra-estil"), { ...estilSub, destaca: false }, 0);
+  $("#mostra-estil").textContent = "Aa";
+}
+
+function marcaSegmentat(id, valor) {
+  for (const b of $$(`#${id} button`)) b.setAttribute("aria-checked", String(b.dataset.valor === valor));
+}
+
+function pintaPanellEstil() {
+  const e = estilSub;
+  if (!e || $("#panell-estil").hidden) return;
+  const actual = predefinitActual();
+  const cont = $("#estils");
+  cont.textContent = "";
+  for (const p of estilsPredefinits) {
+    const b = document.createElement("button");
+    b.className = "estil";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(p === actual));
+    b.title = p.descripcio;
+    b.innerHTML = `<span class="estil-mostra"><span class="estil-text"></span></span><span class="estil-nom"></span>`;
+    b.querySelector(".estil-nom").textContent = p.nom;
+    pintaMostra(b.querySelector(".estil-text"), { ...e, ...p.valors });
+    b.addEventListener("click", () => canviaEstil({ ...p.valors }, true));
+    cont.append(b);
+  }
+  marcaSegmentat("e-paraules", agrupacioDe(e));
+  marcaSegmentat("e-apareixen", e.apareixen);
+  marcaSegmentat("e-animacio", e.animacio);
+  $("#e-destaca").setAttribute("aria-checked", String(!!e.destaca));
+  $("#e-majuscules").setAttribute("aria-checked", String(!!e.majuscules));
+  $("#e-ombra").setAttribute("aria-checked", String(!!e.ombra));
+
+  const font = $("#e-font");
+  font.textContent = "";
+  const opcio = (valor, text) => { const o = document.createElement("option"); o.value = valor; o.textContent = text; font.append(o); };
+  if (e.font_fitxer) opcio("__propia", `${e.font} (la teva font)`);
+  for (const [valor, text] of FONTS) opcio(valor, text);
+  if (!e.font_fitxer && !FONTS.some(([v]) => v === e.font)) opcio(e.font, e.font);
+  opcio("__puja", "Puja una font teva…");
+  font.value = e.font_fitxer ? "__propia" : e.font;
+
+  const pes = $("#e-pes");
+  if (![...pes.options].some((o) => +o.value === +e.pes)) {
+    const o = document.createElement("option"); o.value = e.pes; o.textContent = `Gruix ${e.pes}`; pes.append(o);
+  }
+  pes.value = String(e.pes);
+  $("#e-mida").value = e.mida;
+  $("#e-posicio").value = e.posicio_y;
+  $("#e-gruix").value = e.gruix_contorn;
+  $("#e-color").value = e.color.toLowerCase();
+  $("#e-color-actiu").value = e.color_actiu.toLowerCase();
+  $("#e-contorn").value = e.contorn.toLowerCase();
+  $("#camp-actiu").classList.toggle("apagat", !e.destaca);
+  $("#fitxer-estil").textContent = `Fitxer: ${(P?.fitxer_estil || "").replace(/^\/Users\/[^/]+/, "~")}`;
+}
+
+// Cada canvi es veu a l'instant; es desa al cap d'un moment (els lliscadors n'envien molts).
+let estilPendent = {};
+let temporitzadorEstil = null;
+function canviaEstil(canvis, mostra = false) {
+  estilSub = { ...estilSub, ...canvis };
+  aplicaEstilSubtitols(estilSub);
+  liniaPintada = null;
+  pintaPanellEstil();
+  Object.assign(estilPendent, canvis);
+  clearTimeout(temporitzadorEstil);
+  temporitzadorEstil = setTimeout(desaEstil, 300);
+  if (mostra) mostraAnimacio();
+}
+
+async function desaEstil() {
+  const canvis = estilPendent;
+  estilPendent = {};
+  if (!Object.keys(canvis).length) return;
+  try {
+    await cua;
+    respostaEstil(await api("/api/marca", { subtitols: canvis }));
+  } catch (e) { avis(e.message, 5000); }
+}
+
+function respostaEstil(r) {
+  fontMarca = r.font_marca;
+  // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
+  aplicaEstilSubtitols({ ...r.estil_subtitols, ...estilPendent });
+  if (r.subtitols) { liniesSub = r.subtitols; liniaPintada = null; }
+  pintaPanellEstil();
+}
+
+// Fa sonar una línia de subtítols perquè es vegi com entra.
+function mostraAnimacio() {
+  if (vista !== "directe" || sona() || !liniesSub.length) return;
+  const m = tempsMuntatge();
+  const linia = liniesSub.find((l) => l.final > m + 0.05) || liniesSub[0];
+  vesA(Math.max(0, linia.inici - 0.2));
+  reprodueix();
+  R.aturaA = Math.min(duradaFinal, linia.final + 0.4);
+}
+
+async function pujaFont(fitxer) {
+  avis(`Pujant «${fitxer.name}»…`, 20000);
+  try {
+    await cua;
+    const r = await fetch(`/api/marca/font?nom=${encodeURIComponent(fitxer.name)}`, { method: "POST", body: fitxer });
+    const json = await r.json();
+    if (!r.ok) throw new Error(json.error || r.statusText);
+    respostaEstil(json);
+    avis("Font afegida. Ja la veus als subtítols.");
+  } catch (e) { avis(e.message, 6000); }
+}
+
+function obreEstil() {
+  editantEstil = true;
+  if (vista !== "directe") canviaVista("directe");
+  $(".barra").classList.add("editant-estil");
+  $("#panell-estil").hidden = false;
+  $(".barra").scrollTop = 0;
+  pintaPanellEstil();
+  $("#tanca-estil").focus();
+}
+
+function tancaEstil() {
+  editantEstil = false;
+  liniaPintada = null;
+  $(".barra").classList.remove("editant-estil");
+  $("#panell-estil").hidden = true;
+  $("#obre-estil").focus();
+}
+
+function instalaEstil() {
+  $("#obre-estil").addEventListener("click", obreEstil);
+  $("#tanca-estil").addEventListener("click", tancaEstil);
+  const segmentat = (id, aplica, mostra) => {
+    for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaEstil(aplica(b.dataset.valor), mostra));
+  };
+  segmentat("e-paraules", (v) => ({ paraules_per_linia: AGRUPACIONS[v][0], lletres_per_linia: AGRUPACIONS[v][1] }), true);
+  segmentat("e-apareixen", (v) => ({ apareixen: v }), true);
+  segmentat("e-animacio", (v) => ({ animacio: v }), true);
+  const interruptor = (id, clau, mostra = false) =>
+    $(`#${id}`).addEventListener("click", () => canviaEstil({ [clau]: !estilSub[clau] }, mostra));
+  interruptor("e-destaca", "destaca", true);
+  interruptor("e-majuscules", "majuscules");
+  interruptor("e-ombra", "ombra");
+  const lliscador = (id, clau) => $(`#${id}`).addEventListener("input", (e) => canviaEstil({ [clau]: +e.target.value }));
+  lliscador("e-mida", "mida");
+  lliscador("e-posicio", "posicio_y");
+  lliscador("e-gruix", "gruix_contorn");
+  const color = (id, clau) => $(`#${id}`).addEventListener("input", (e) => canviaEstil({ [clau]: e.target.value.toUpperCase() }));
+  color("e-color", "color");
+  color("e-color-actiu", "color_actiu");
+  color("e-contorn", "contorn");
+  $("#e-pes").addEventListener("change", (e) => canviaEstil({ pes: +e.target.value }));
+  $("#e-font").addEventListener("change", (e) => {
+    const v = e.target.value;
+    if (v === "__puja") { $("#fitxer-font").click(); pintaPanellEstil(); return; }
+    if (v !== "__propia") canviaEstil({ font: v, font_fitxer: null });
+  });
+  $("#fitxer-font").addEventListener("change", (e) => {
+    const fitxer = e.target.files[0];
+    e.target.value = "";
+    if (fitxer) pujaFont(fitxer);
+  });
+  $("#restableix-estil").addEventListener("click", async () => {
+    try {
+      clearTimeout(temporitzadorEstil);
+      estilPendent = {};
+      await cua;
+      respostaEstil(await api("/api/marca/restableix", {}));
+      avis("Has tornat a l'estil de tallat.");
+    } catch (e) { avis(e.message); }
+  });
 }
 
 // Salta el que s'ha tret. Es crida a cada fotograma i també quan el vídeo avisa que
@@ -1241,6 +1482,7 @@ function instalaControls() {
       avis("Neteja feta. Les paraules que havies recuperat es respecten.");
     } catch (e) { avis(e.message); }
   });
+  instalaEstil();
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
     canvia((e) => { e.subtitols = e.subtitols === false; });
@@ -1277,8 +1519,9 @@ function instalaControls() {
   $("#text-nota").addEventListener("focus", () => vE.pause());
 
   document.addEventListener("keydown", (e) => {
-    if (e.target.matches("input, textarea")) return;
+    if (e.target.matches("input, textarea, select")) return;
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
+    if (editantEstil && e.key === "Escape") { tancaEstil(); return; }
     if (e.key === " ") { e.preventDefault(); R.aturaA = null; sona() ? atura() : reprodueix(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); vesA(tempsMuntatge() - 5); }
     else if (e.key === "ArrowRight") { e.preventDefault(); vesA(tempsMuntatge() + 5); }
@@ -1316,8 +1559,9 @@ async function inicia() {
   refresca(false);
   marcaPausa();
   marcaSubtitols();
+  estilsPredefinits = P.estils_subtitols || [];
+  fontMarca = P.font_marca;
   aplicaEstilSubtitols(P.estil_subtitols);
-  $("#fitxer-estil").textContent = `Estil: ${(P.fitxer_estil || "").replace(/^\/Users\/[^/]+/, "~")}`;
   pintaNotes();
   pintaVersions(P.exports || []);
   pintaReels();

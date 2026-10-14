@@ -1,7 +1,7 @@
 """Subtítols animats paraula a paraula amb HyperFrames.
 
 1. `grups()` agafa les paraules que es queden, en calcula el temps dins del muntatge
-   i les agrupa en línies curtes (2-3 paraules).
+   i les agrupa en línies (d'una paraula sola a una frase, segons l'estil).
 2. `composicio()` escriu una composició HyperFrames transparent (1080 × 1920).
 3. `renderitza()` la dibuixa amb HyperFrames a un .mov amb transparència, que
    l'export superposa al vídeo. Es desa a la carpeta del projecte i es reaprofita
@@ -32,6 +32,15 @@ def _neteja_text(text: str, puntuacio: bool) -> str:
         text = re.sub(r"^[«\"'“]+|[»\"'”]+$", "", text)
         text = re.sub(r"[,.;:…-]+$", "", text)
     return text
+
+
+GENERIQUES = {"system-ui", "sans-serif", "serif", "monospace", "cursive", "fantasy"}
+
+
+def _familia(nom: str) -> str:
+    """El nom de la font tal com l'espera el CSS: «system-ui» tal qual, «Avenir Next» entre cometes."""
+    nom = re.sub(r"[\"'\\;{}<>]", "", nom).strip() or "system-ui"
+    return nom if nom in GENERIQUES else f'"{nom}"'
 
 
 def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -> list[dict]:
@@ -93,7 +102,7 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
     es = estil_stickers or {}
     amplada, alcada = round(AMPLADA * escala), round(ALCADA * escala)
     mida = estil["mida"] * amplada
-    familia = "'SubtitolsMarca', system-ui, sans-serif" if font_local else f"{estil['font']}, sans-serif"
+    familia = "'SubtitolsMarca', system-ui, sans-serif" if font_local else f"{_familia(estil['font'])}, sans-serif"
     font_face = (f"@font-face {{ font-family: 'SubtitolsMarca'; src: url('{font_local}'); font-display: block; }}"
                  if font_local else "")
     ombra = "text-shadow: 0 0.06em 0.2em rgba(0, 0, 0, 0.45);" if estil.get("ombra") else ""
@@ -108,18 +117,29 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
                      f'<p class="text">{paraules}</p></div>')
 
     passos = []
-    pop = estil.get("animacio", "pop") == "pop"
+    animacio = estil.get("animacio", "pop")
+    de_cop = estil.get("apareixen", "paraula") == "linia"
+    destaca = estil.get("destaca", True)
+
+    def entra(sel: str, t: float) -> str:
+        if animacio == "pop":
+            return (f"  tl.fromTo({sel}, {{ opacity: 0, scale: 0.82, y: {10 * escala:.1f} }}, "
+                    f"{{ opacity: 1, scale: 1, y: 0, duration: 0.14, ease: \"back.out(2.2)\" }}, {t:.3f});")
+        if animacio == "fos":
+            return f"  tl.fromTo({sel}, {{ opacity: 0 }}, {{ opacity: 1, duration: 0.18, ease: \"power1.out\" }}, {t:.3f});"
+        return f"  tl.fromTo({sel}, {{ opacity: 0 }}, {{ opacity: 1, duration: 0.01 }}, {t:.3f});"
+
     for i, linia in enumerate(linies):
+        if de_cop:  # tota la línia surt quan comença la primera paraula
+            passos.append(entra(f'"#l{i} .p"', linia["inici"]))
         for j, w in enumerate(linia["paraules"]):
             sel = f'"#p{i}-{j}"'
             fi = linia["paraules"][j + 1]["inici"] if j + 1 < len(linia["paraules"]) else linia["final"]
-            if pop:
-                passos.append(f"  tl.fromTo({sel}, {{ opacity: 0, scale: 0.82, y: {10 * escala:.1f} }}, "
-                              f"{{ opacity: 1, scale: 1, y: 0, duration: 0.14, ease: \"back.out(2.2)\" }}, {w['inici']:.3f});")
-            else:
-                passos.append(f"  tl.fromTo({sel}, {{ opacity: 0 }}, {{ opacity: 1, duration: 0.01 }}, {w['inici']:.3f});")
-            passos.append(f"  tl.set({sel}, {{ color: ACTIU }}, {w['inici']:.3f});")
-            passos.append(f"  tl.set({sel}, {{ color: BASE }}, {fi:.3f});")
+            if not de_cop:
+                passos.append(entra(sel, w["inici"]))
+            if destaca:
+                passos.append(f"  tl.set({sel}, {{ color: ACTIU }}, {w['inici']:.3f});")
+                passos.append(f"  tl.set({sel}, {{ color: BASE }}, {fi:.3f});")
 
     for k, st in enumerate(stickers or []):
         # Si n'hi ha més d'un, s'alternen a banda i banda perquè no quedin sempre al mateix lloc.

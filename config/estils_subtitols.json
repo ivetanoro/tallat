@@ -1,0 +1,49 @@
+{
+  "_info": "Estils de subtítols predefinits (neutres). A la pàgina de revisió se'n tria un i després es pot ajustar. No canvien ni la lletra ni la posició.",
+  "estils": [
+    {
+      "id": "classic",
+      "nom": "Clàssic",
+      "descripcio": "Dues o tres paraules, la que sona en groc",
+      "valors": {
+        "paraules_per_linia": 3, "lletres_per_linia": 18, "apareixen": "paraula", "animacio": "pop",
+        "destaca": true, "pes": 800, "mida": 0.075,
+        "majuscules": false, "color": "#FFFFFF", "color_actiu": "#FFD60A", "contorn": "#000000",
+        "gruix_contorn": 0.06, "ombra": true
+      }
+    },
+    {
+      "id": "net",
+      "nom": "Net",
+      "descripcio": "Blanc amb ombra, sense contorn ni color",
+      "valors": {
+        "paraules_per_linia": 4, "lletres_per_linia": 22, "apareixen": "linia", "animacio": "fos",
+        "destaca": false, "pes": 600, "mida": 0.062,
+        "majuscules": false, "color": "#FFFFFF", "color_actiu": "#FFFFFF", "contorn": "#000000",
+        "gruix_contorn": 0, "ombra": true
+      }
+    },
+    {
+      "id": "una",
+      "nom": "Una paraula",
+      "descripcio": "Una sola paraula gran, en majúscules",
+      "valors": {
+        "paraules_per_linia": 1, "lletres_per_linia": 30, "apareixen": "paraula", "animacio": "pop",
+        "destaca": false, "pes": 900, "mida": 0.1,
+        "majuscules": true, "color": "#FFFFFF", "color_actiu": "#FFFFFF", "contorn": "#000000",
+        "gruix_contorn": 0.07, "ombra": true
+      }
+    },
+    {
+      "id": "frase",
+      "nom": "Frase",
+      "descripcio": "Tota la frase en dues línies, la que sona destacada",
+      "valors": {
+        "paraules_per_linia": 7, "lletres_per_linia": 34, "apareixen": "linia", "animacio": "fos",
+        "destaca": true, "pes": 700, "mida": 0.058,
+        "majuscules": false, "color": "#FFFFFF", "color_actiu": "#FFD60A", "contorn": "#000000",
+        "gruix_contorn": 0.05, "ombra": true
+      }
+    }
+  ]
+}

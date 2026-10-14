@@ -44,9 +44,13 @@
     <section class="seccio">
       <h2>Subtítols</h2>
       <button class="interruptor" id="subtitols" role="switch" aria-checked="true">
-        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Paraula a paraula
+        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Posa subtítols al vídeo
       </button>
-      <p class="detall" id="fitxer-estil"></p>
+      <button class="fila-estil" id="obre-estil" aria-label="Canvia l'estil dels subtítols">
+        <span class="mostra-estil" id="mostra-estil" aria-hidden="true">Aa</span>
+        <span class="fila-estil-text"><strong id="nom-estil">Estil</strong><span>Lletra, colors i animació</span></span>
+        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+      </button>
     </section>
 
 
@@ -59,6 +63,87 @@
       <h2>Versions</h2>
       <div id="versions"><p class="buit">Encara no has exportat res.</p></div>
     </section>
+
+    <div class="panell-estil" id="panell-estil" hidden>
+      <button class="enllac tornar" id="tanca-estil">‹ Enrere</button>
+      <h2 class="titol-panell">Estil dels subtítols</h2>
+      <p class="detall">Es desa per a tots els teus vídeos. Mira'l al reproductor mentre el canvies.</p>
+
+      <div class="estils" id="estils" role="radiogroup" aria-label="Estils predefinits"></div>
+
+      <div class="camp">
+        <span class="etiqueta" id="et-paraules">Paraules a la pantalla</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-paraules" id="e-paraules">
+          <button role="radio" data-valor="una">Una</button>
+          <button role="radio" data-valor="poques">2 o 3</button>
+          <button role="radio" data-valor="frase">Frase</button>
+        </div>
+      </div>
+      <div class="camp">
+        <span class="etiqueta" id="et-apareixen">Apareixen</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-apareixen" id="e-apareixen">
+          <button role="radio" data-valor="paraula">D'una en una</button>
+          <button role="radio" data-valor="linia">Totes de cop</button>
+        </div>
+      </div>
+      <div class="camp">
+        <span class="etiqueta" id="et-animacio">Animació</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-animacio" id="e-animacio">
+          <button role="radio" data-valor="pop">Pop</button>
+          <button role="radio" data-valor="fos">Fos</button>
+          <button role="radio" data-valor="cap">Cap</button>
+        </div>
+      </div>
+      <button class="interruptor" id="e-destaca" role="switch" aria-checked="true">
+        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Destaca la paraula que sona
+      </button>
+
+      <div class="camp">
+        <label class="etiqueta" for="e-font">Lletra</label>
+        <select id="e-font"></select>
+        <div class="fila-camps">
+          <select id="e-pes" aria-label="Gruix de la lletra">
+            <option value="400">Normal</option>
+            <option value="600">Seminegreta</option>
+            <option value="700">Negreta</option>
+            <option value="800">Extranegreta</option>
+            <option value="900">Negra</option>
+          </select>
+          <button class="interruptor" id="e-majuscules" role="switch" aria-checked="false">
+            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Majúscules
+          </button>
+        </div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="e-mida">Mida</label>
+        <input type="range" id="e-mida" min="0.04" max="0.12" step="0.002">
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="e-posicio">Posició</label>
+        <input type="range" id="e-posicio" min="0.12" max="0.88" step="0.01">
+        <div class="extrems" aria-hidden="true"><span>Dalt</span><span>Baix</span></div>
+      </div>
+
+      <div class="camp">
+        <span class="etiqueta">Colors</span>
+        <div class="colors">
+          <label class="color"><input type="color" id="e-color"><span>Text</span></label>
+          <label class="color" id="camp-actiu"><input type="color" id="e-color-actiu"><span>Destacat</span></label>
+          <label class="color"><input type="color" id="e-contorn"><span>Contorn</span></label>
+        </div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="e-gruix">Gruix del contorn</label>
+        <input type="range" id="e-gruix" min="0" max="0.12" step="0.005">
+        <div class="extrems" aria-hidden="true"><span>Sense</span><span>Gruixut</span></div>
+      </div>
+      <button class="interruptor" id="e-ombra" role="switch" aria-checked="true">
+        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Ombra
+      </button>
+
+      <button class="enllac" id="restableix-estil">Torna a l'estil de tallat</button>
+      <p class="detall" id="fitxer-estil"></p>
+    </div>
   </aside>
 
   <main class="text" aria-label="Transcripció">
@@ -146,6 +231,7 @@
   </div>
 
   <input type="file" id="fitxer-broll" accept="image/*,video/*" hidden>
+  <input type="file" id="fitxer-font" accept=".ttf,.otf,.woff,.woff2" hidden>
   <div class="avis-flotant" id="avis-flotant" role="status" aria-live="polite"></div>
   <script src="/pagina/app.js"></script>
 </body>
