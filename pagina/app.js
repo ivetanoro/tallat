@@ -76,7 +76,8 @@ let liniesSub = [];        // subtítols en temps del muntatge (calculats pel se
 let instruccions = [];     // instruccions de veu «Claude, …»
 let zoomsTram = [];        // quins trossos porten zoom
 let brollsMuntatge = [];   // b-rolls situats al muntatge: [{id, inici, durada, url}]
-let biblioteca = [];       // fitxers de ~/.tallat/broll/
+let stickersMuntatge = []; // stickers situats al muntatge: [{id, inici, durada, url}]
+let biblioteca = { broll: [], sticker: [] };  // fitxers de ~/.tallat/broll/ i ~/.tallat/stickers/
 let notes = [];
 let darrerDesplacamentManual = 0;
 
@@ -150,6 +151,7 @@ function aplicaTrams(r) {
   if (r.subtitols) { liniesSub = r.subtitols; liniaPintada = null; }
   if (r.zooms) zoomsTram = r.zooms;
   if (r.brolls) brollsMuntatge = r.brolls;
+  if (r.stickers) stickersMuntatge = r.stickers;
   if (r.zoom) $(".pantalla").style.setProperty("--zoom", r.zoom);
   if (r.instruccions) { instruccions = r.instruccions; if (P) pintaInstruccions(); }
   trams = r.trams;
@@ -616,6 +618,7 @@ function bucle() {
   paraulaActual();
   pintaSubtitols();
   pintaBroll();
+  pintaStickers();
   R.v.classList.toggle("zoom", vista === "directe" && !!zoomsTram[Math.min(R.k, trams.length - 1)]);
 }
 
@@ -1005,6 +1008,34 @@ function pintaBroll() {
   if (!R.reproduint && !vB.paused) vB.pause();
 }
 
+// Stickers en directe: mateixa posició, mida i rotació que tindran a l'export.
+const stickersVius = new Map();
+function pintaStickers() {
+  const m = tempsMuntatge();
+  const e = P?.estil_stickers || {};
+  const actius = new Set();
+  if (vista === "directe") {
+    stickersMuntatge.forEach((st, k) => {
+      if (m < st.inici || m >= st.inici + st.durada) return;
+      actius.add(st.id);
+      if (stickersVius.has(st.id)) return;
+      const img = document.createElement("img");
+      img.className = "sticker-viu";
+      img.src = st.url;
+      const x = k % 2 === 0 ? (e.x ?? 0.72) : 1 - (e.x ?? 0.72);
+      img.style.left = `${x * 100}%`;
+      img.style.top = `${(e.y ?? 0.3) * 100}%`;
+      img.style.width = `${(e.mida ?? 0.34) * 100}%`;
+      img.style.setProperty("--rot", `${(e.rotacio ?? 8) * (k % 2 === 0 ? 1 : -1)}deg`);
+      if (e.ombra === false) img.style.setProperty("--ombra-sticker", "none");
+      if (e.animacio === "cap") img.style.animation = "none";
+      $("#capa-stickers").append(img);
+      stickersVius.set(st.id, img);
+    });
+  }
+  for (const [id, img] of stickersVius) if (!actius.has(id)) { img.remove(); stickersVius.delete(id); }
+}
+
 let instruccioPerPujar = null;
 async function pujaBroll(iid, fitxer) {
   avis(`Pujant «${fitxer.name}»…`, 20000);
@@ -1017,7 +1048,7 @@ async function pujaBroll(iid, fitxer) {
     estat = json.estat;
     aplicaTrams(json);
     refresca(true);
-    avis("B-roll preparat. Mira'l al reproductor.");
+    avis("Fet. Mira-ho al reproductor.");
   } catch (e) { avis(e.message, 6000); }
 }
 
@@ -1033,22 +1064,24 @@ async function accioBroll(ruta, dades, missatge) {
 }
 
 function accionsBroll(ins, item) {
-  if (ins.tipus !== "broll" || ins.estat !== "acceptada") return null;
+  if (!["broll", "sticker"].includes(ins.tipus) || ins.estat !== "acceptada") return null;
+  const nom = ins.tipus === "sticker" ? "Sticker" : "B-roll";
+  const llista = biblioteca[ins.tipus] || [];
   const fila = document.createElement("span");
   fila.className = "ins-accions";
   if (ins.fitxer) {
-    fila.innerHTML = `<span class="fet">B-roll a punt (${String(ins.durada).replace(".", ",")} s)</span>
+    fila.innerHTML = `<span class="fet">${nom} a punt (${String(ins.durada).replace(".", ",")} s)</span>
       <button class="enllac canvia">Canvia'l</button><button class="enllac treu-broll">Treu-lo</button>`;
   } else {
     fila.innerHTML = `<button class="enllac canvia">Puja un fitxer…</button>`;
-    if (biblioteca.length) {
+    if (llista.length) {
       const tria = document.createElement("select");
       tria.innerHTML = `<option value="">o tria'n un de la biblioteca</option>` +
-        biblioteca.map((n) => `<option></option>`).join("");
-      [...tria.options].slice(1).forEach((o, i) => { o.value = biblioteca[i]; o.textContent = biblioteca[i]; });
+        llista.map(() => `<option></option>`).join("");
+      [...tria.options].slice(1).forEach((o, i) => { o.value = llista[i]; o.textContent = llista[i]; });
       tria.addEventListener("click", (e) => e.stopPropagation());
       tria.addEventListener("change", () => tria.value && accioBroll("/api/broll/biblioteca",
-        { instruccio: ins.id, nom: tria.value }, "B-roll preparat."));
+        { instruccio: ins.id, nom: tria.value }, `${nom} preparat.`));
       fila.append(tria);
     }
   }
@@ -1059,7 +1092,7 @@ function accionsBroll(ins, item) {
   });
   fila.querySelector(".treu-broll")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    accioBroll("/api/broll/treu", { instruccio: ins.id }, "B-roll tret.");
+    accioBroll("/api/broll/treu", { instruccio: ins.id }, `${nom} tret.`);
   });
   // També s'hi pot arrossegar un fitxer des del Finder.
   item.addEventListener("dragover", (e) => { e.preventDefault(); item.classList.add("arrossegant"); });
@@ -1079,7 +1112,7 @@ const TIPUS_INSTRUCCIO = {
   talla: ["Torna a començar", "En acceptar-la, es treu el primer intent."],
   zoom: ["Zoom", "En acceptar-la, el tros que ve s'apropa."],
   broll: ["B-roll / imatges", "En acceptar-la, hi pots posar un vídeo o una imatge."],
-  sticker: ["Sticker", "Queda apuntada: els stickers arriben a la fase 4."],
+  sticker: ["Sticker", "En acceptar-la, hi pots posar una imatge (PNG amb fons transparent)."],
   altre: ["Altres", "Queda apuntada."],
 };
 
@@ -1104,7 +1137,7 @@ function pintaInstruccions() {
     item.querySelector(".nom").textContent = nom;
     item.querySelector(".ins-text").textContent = `«${ins.text}»`;
     item.querySelector(".ins-estat").textContent =
-      ins.estat === "acceptada" ? (ins.tipus === "broll" ? "" : `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}`)
+      ins.estat === "acceptada" ? (["broll", "sticker"].includes(ins.tipus) ? "" : `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}`)
         : ins.estat === "descartada" ? "Descartada" : "";
     const accions = accionsBroll(ins, item);
     if (accions) item.querySelector(".reel-text").append(accions);
@@ -1267,7 +1300,7 @@ async function inicia() {
   pintaNotes();
   pintaVersions(P.exports || []);
   pintaReels();
-  try { biblioteca = (await api("/api/biblioteca")).broll || []; } catch { biblioteca = []; }
+  try { biblioteca = await api("/api/biblioteca"); } catch { biblioteca = { broll: [], sticker: [] }; }
   pintaInstruccions();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;

@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from motor import broll, edicio, exporta, marca, muntatge
+from motor import broll, edicio, exporta, marca, muntatge, stickers
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -90,6 +90,9 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "brolls": [{"id": b["id"], "inici": b["inici"], "durada": b["durada"],
                             "url": "/broll/" + b["fitxer"].name + f"?v={int(b['fitxer'].stat().st_mtime)}"}
                            for b in projecte.brolls(trams)],
+                "stickers": [{"id": st["id"], "inici": st["inici"], "durada": st["durada"],
+                              "url": "/stickers/" + st["fitxer"].name + f"?v={int(st['fitxer'].stat().st_mtime)}"}
+                             for st in projecte.stickers(trams)],
                 "subtitols": projecte.linies_subtitols(trams)}
 
     class Gestor(BaseHTTPRequestHandler):
@@ -180,8 +183,11 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._fitxer(projecte.carpeta / PROXY)
             if ruta.startswith("/broll/"):
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
+            if ruta.startswith("/stickers/"):
+                return self._segur(projecte.carpeta_instruccions() / stickers.CARPETA, ruta[len("/stickers/"):])
             if ruta == "/api/biblioteca":
-                return self._json({"broll": [p.name for p in broll.biblioteca()], "carpeta": str(broll.BIBLIOTECA)})
+                return self._json({"broll": [p.name for p in broll.biblioteca()],
+                                   "sticker": [p.name for p in stickers.biblioteca()]})
             if ruta.startswith("/exports/"):
                 return self._segur(projecte.carpeta / EXPORTS, ruta[len("/exports/"):])
             if ruta == "/api/projecte":
@@ -194,6 +200,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         "paragrafs": projecte.paragrafs(),
                         "notes": projecte.notes(), "exports": projecte.exports(), "feina": feina.info(),
                         "estil_subtitols": projecte.estil_subtitols(), "fitxer_estil": str(marca.ruta()),
+                        "estil_stickers": marca.carrega().get("stickers", {}),
                         **info_reels(),
                         **instantania()})
             if ruta == "/api/feina":
@@ -249,6 +256,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         return self._json({"error": "Estat no vàlid"}, HTTPStatus.BAD_REQUEST)
                     try:
                         projecte.decideix_instruccio(str(cos.get("id")), nou)
+                        projecte.suggereix_stickers()  # «sticker d'un cor» → cor.png de la biblioteca
                     except KeyError:
                         return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
                     projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
@@ -261,10 +269,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                             projecte.treu_broll(iid)
                         else:
                             nom = cos.get("nom", "")
-                            fitxer = next((p for p in broll.biblioteca() if p.name == nom), None)
+                            ins = next((i for i in projecte.instruccions() if i["id"] == iid), {})
+                            llista = stickers.biblioteca() if ins.get("tipus") == "sticker" else broll.biblioteca()
+                            fitxer = next((p for p in llista if p.name == nom), None)
                             if fitxer is None:
                                 return self._json({"error": "No trobo aquest fitxer a la biblioteca"}, HTTPStatus.NOT_FOUND)
-                            projecte.assigna_broll(iid, fitxer)
+                            projecte.assigna_recurs(iid, fitxer)
                     except KeyError:
                         return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
                     except Exception as e:  # ffmpeg no ha pogut llegir el fitxer
@@ -291,9 +301,9 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             iid = (consulta.get("instruccio") or [""])[0]
             nom = Path((consulta.get("nom") or ["fitxer"])[0]).name
             mida = int(self.headers.get("Content-Length") or 0)
-            if not broll.es_compatible(Path(nom)):
+            if not (broll.es_compatible(Path(nom)) or stickers.es_compatible(Path(nom))):
                 self.rfile.read(mida)
-                return self._json({"error": "Aquest tipus de fitxer no serveix com a b-roll"}, HTTPStatus.BAD_REQUEST)
+                return self._json({"error": "Aquest tipus de fitxer no serveix"}, HTTPStatus.BAD_REQUEST)
             carpeta = projecte.carpeta_instruccions() / broll.CARPETA / "pujats"
             carpeta.mkdir(parents=True, exist_ok=True)
             desti = carpeta / nom
@@ -307,7 +317,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     pendent -= len(tros)
             with bloqueig:
                 try:
-                    projecte.assigna_broll(iid, desti)
+                    projecte.assigna_recurs(iid, desti)
                 except KeyError:
                     return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
                 except Exception as e:

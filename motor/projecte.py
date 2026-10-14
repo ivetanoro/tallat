@@ -16,7 +16,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import broll, edicio, instruccions, marca, neteja, subtitols
+from motor import broll, edicio, instruccions, marca, neteja, stickers, subtitols
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -122,14 +122,14 @@ class Projecte:
                                self.estil_subtitols())
 
     def capa_subtitols(self, trams, qualitat: str, avis=None) -> Path | None:
-        """Capa transparent amb els subtítols, o None si estan desactivats o no n'hi ha."""
-        if not self.estat.get("subtitols", True):
-            return None
-        linies = self.linies_subtitols(trams)
-        if not linies:
+        """Capa transparent amb els subtítols (si estan activats) i els stickers; None si no n'hi ha cap."""
+        linies = self.linies_subtitols(trams) if self.estat.get("subtitols", True) else []
+        enganxines = self.stickers(trams)
+        if not linies and not enganxines:
             return None
         return subtitols.renderitza(linies, self.estil_subtitols(), sum(b - a for a, b in trams),
-                                    self.carpeta, qualitat, avis)
+                                    self.carpeta, qualitat, avis, stickers=enganxines,
+                                    estil_stickers=marca.carrega().get("stickers", {}))
 
     # --- Instruccions de veu ------------------------------------------------------
 
@@ -198,11 +198,47 @@ class Projecte:
         return ins
 
     def treu_broll(self, iid: str) -> None:
+        """Treu el fitxer (b-roll o sticker) assignat a una instrucció."""
         llista = self.instruccions()
         for ins in llista:
             if ins["id"] == iid:
                 ins.pop("fitxer", None)
         instruccions.desa(self.carpeta_instruccions(), llista)
+
+    def assigna_sticker(self, iid: str, origen: Path, durada: float | None = None) -> dict:
+        llista = self.instruccions()
+        ins = next((i for i in llista if i["id"] == iid), None)
+        if ins is None:
+            raise KeyError(iid)
+        origen = Path(origen).expanduser()
+        if not stickers.es_compatible(origen):
+            raise ValueError("Els stickers han de ser PNG, WebP, GIF o SVG (millor amb el fons transparent).")
+        base = self.carpeta_instruccions()
+        d = float(durada or ins.get("durada") or marca.carrega().get("stickers", {}).get("durada", 2.0))
+        copia = stickers.copia(origen, base, iid)
+        ins.update(fitxer=str(copia.relative_to(base)), durada=d, estat="acceptada", tipus="sticker")
+        instruccions.desa(base, llista)
+        return ins
+
+    def assigna_recurs(self, iid: str, origen: Path, durada: float | None = None) -> dict:
+        """B-roll o sticker, segons el tipus de la instrucció."""
+        ins = next((i for i in self.instruccions() if i["id"] == iid), None)
+        if ins is None:
+            raise KeyError(iid)
+        if ins["tipus"] == "sticker":
+            return self.assigna_sticker(iid, origen, durada)
+        return self.assigna_broll(iid, origen, durada)
+
+    def suggereix_stickers(self) -> int:
+        """Assigna sol el sticker de la biblioteca que surt al text de cada instrucció acceptada."""
+        n = 0
+        for ins in self.instruccions():
+            if ins.get("tipus") == "sticker" and ins.get("estat") == "acceptada" and not ins.get("fitxer"):
+                trobat = stickers.suggereix(ins.get("text", ""))
+                if trobat:
+                    self.assigna_sticker(ins["id"], trobat)
+                    n += 1
+        return n
 
     def al_muntatge(self, t: float, trams) -> float | None:
         """Temps del vídeo original → temps del muntatge (si cau en un tall, l'inici del tros següent)."""
@@ -216,14 +252,20 @@ class Projecte:
         seguents = [k for k, (a, _) in enumerate(trams) if a > t]
         return posicions[min(seguents, key=lambda k: trams[k][0])] if seguents else None
 
+    def stickers(self, trams) -> list[dict]:
+        return self._recursos(trams, "sticker")
+
     def brolls(self, trams) -> list[dict]:
-        """B-rolls acceptats amb fitxer, situats al muntatge: [{id, fitxer, inici, durada}]."""
+        return self._recursos(trams, "broll")
+
+    def _recursos(self, trams, tipus: str) -> list[dict]:
+        """B-rolls o stickers acceptats amb fitxer, situats al muntatge: [{id, fitxer, inici, durada}]."""
         base = self.carpeta_instruccions()
         total = sum(b - a for a, b in trams)
         paraules = self.paraules()
         resultat = []
         for ins in self.instruccions():
-            if ins.get("tipus") != "broll" or ins.get("estat") != "acceptada" or not ins.get("fitxer"):
+            if ins.get("tipus") != tipus or ins.get("estat") != "acceptada" or not ins.get("fitxer"):
                 continue
             if ins.get("ancora") is None or not (base / ins["fitxer"]).exists():
                 continue

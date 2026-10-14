@@ -386,6 +386,19 @@ body.mode-corregeix .p { cursor: text; }
   container-type: inline-size; overflow: hidden; border-radius: var(--radi-gran);
 }
 .capa-subtitols[hidden] { display: none; }
+.capa-stickers {
+  grid-area: 1 / 1; position: relative; z-index: 1; pointer-events: none;
+  width: min(100cqw, calc(100cqh * 9 / 16)); aspect-ratio: 9 / 16;
+  overflow: hidden; border-radius: var(--radi-gran);
+}
+.sticker-viu {
+  position: absolute; height: auto; transform: translate(-50%, -50%) rotate(var(--rot, 8deg));
+  filter: var(--ombra-sticker, drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35)));
+  animation: sticker-entra 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes sticker-entra {
+  from { transform: translate(-50%, -50%) rotate(calc(var(--rot, 8deg) - 18deg)) scale(0); opacity: 0; }
+}
 .sub-text {
   position: absolute; left: 50%; top: var(--sub-y, 70%); width: var(--sub-amplada, 84%);
   margin: 0; transform: translate(-50%, -50%);

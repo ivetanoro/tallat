@@ -169,11 +169,12 @@ def ordre_broll(args) -> None:
     projecte = _carrega(args)
     fitxer = Path(args.fitxer).expanduser()
     try:
-        ins = projecte.assigna_broll(args.instruccio, fitxer, args.durada)
+        ins = projecte.assigna_recurs(args.instruccio, fitxer, args.durada)
     except KeyError:
         ids = ", ".join(i["id"] for i in projecte.instruccions()) or "cap"
         sys.exit(f"No trobo la instrucció «{args.instruccio}». Instruccions: {ids}")
-    print(f"B-roll preparat per a {ins['id']} ({ins['durada']} s): {projecte.carpeta_instruccions() / ins['fitxer']}")
+    nom = "Sticker" if ins["tipus"] == "sticker" else "B-roll"
+    print(f"{nom} preparat per a {ins['id']} ({ins['durada']} s): {projecte.carpeta_instruccions() / ins['fitxer']}")
 
 
 def ordre_guio(args) -> None:
@@ -262,7 +263,8 @@ def main() -> None:
     af.add_argument("--projecte", required=True)
     af.set_defaults(func=ordre_afegeix)
 
-    br = sub.add_parser("broll", help="Assigna un vídeo o una imatge a una instrucció de b-roll")
+    br = sub.add_parser("broll", aliases=["sticker"],
+                        help="Assigna un fitxer a una instrucció de b-roll (vídeo o imatge) o de sticker (PNG)")
     br.add_argument("instruccio", help="Id de la instrucció (p. ex. i133 o m290-1)")
     br.add_argument("fitxer")
     br.add_argument("--durada", type=float, help="Segons (per defecte, els de l'estil)")

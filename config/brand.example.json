@@ -29,5 +29,19 @@
     "durada": 1.5,
     "_lut": "Fitxer .cube per igualar el color del b-roll amb el del vídeo (opcional).",
     "lut": null
+  },
+  "stickers": {
+    "_durada": "Segons que es queda cada sticker a la pantalla.",
+    "durada": 2.0,
+    "_mida": "Amplada del sticker en proporció a l'amplada del vídeo.",
+    "mida": 0.34,
+    "_posicio": "Centre del sticker (x, y de 0 a 1). Si n'hi ha més d'un, s'alternen a banda i banda.",
+    "x": 0.72,
+    "y": 0.3,
+    "_rotacio": "Graus d'inclinació (lleu queda més natural).",
+    "rotacio": 8,
+    "ombra": true,
+    "_animacio": "«pop» (entra amb un salt) o «cap».",
+    "animacio": "pop"
   }
 }
