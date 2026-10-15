@@ -117,10 +117,18 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
         t += b - a
 
     def al_muntatge(inici: float, final: float):
+        """On cau la paraula al muntatge. Va al tros amb què se solapa més: els talls s'arrodoneixen a
+        fotogrames i una paraula pot començar uns mil·lisegons abans que el seu tros."""
+        millor, solapament = None, 0.0
         for k, (a, b) in enumerate(trams):
-            if a - 0.01 <= inici < b:
-                return acum[k] + max(0.0, inici - a), acum[k] + min(final, b) - a
-        return None
+            s = min(final, b) - max(inici, a)
+            if s > solapament or (millor is None and a - 0.01 <= inici < b):
+                millor, solapament = k, max(s, 0.0)
+        if millor is None:
+            return None
+        a, b = trams[millor]
+        principi = acum[millor] + max(0.0, inici - a)
+        return principi, max(principi, acum[millor] + min(final, b) - a)
 
     mots = []
     for p in paraules:

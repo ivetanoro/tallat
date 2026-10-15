@@ -4,7 +4,7 @@
   però només si la paraula obre una frase: «si Claude detecta…» no és una instrucció.
 - «tallat» (i «Codex») també serveixen, perquè no tothom fa servir Claude. Com que «tallat» és una
   paraula normal («un tallat, si us plau»), amb aquestes només compta si la frase és una ordre
-  coneguda (torno a començar, zoom, b-roll, sticker).
+  coneguda (torno a començar, zoom, b-roll, sticker). Igual amb «Clau», «Clot» i «Cloud».
 - Les paraules de la instrucció es treuen soles del vídeo (motiu «instruccio»).
 - Cada instrucció queda com a proposta en el moment exacte on s'ha dit, per acceptar-la o
   descartar-la a la pàgina de revisió. Es desen a `instruccions.json`.
@@ -27,8 +27,10 @@ from motor.neteja import normalitza
 
 FITXER = "instruccions.json"
 # Passades per normalitza(), com les paraules de la transcripció (que, per exemple, fa «tallat» → «talat»).
-DESPERTA = {normalitza(w) for w in ("claude", "claud", "clod", "clot", "cloud", "clau", "glod", "klaud")}
-DESPERTA_AMB_ORDRE = {normalitza(w) for w in ("tallat", "tayat", "codex", "còdex", "códex", "codecs")}  # només amb una ordre coneguda
+DESPERTA = {normalitza(w) for w in ("claude", "claud", "clod", "glod", "klaud")}
+# Aquestes també són paraules normals («Clau per entendre-ho…», «un tallat»): només amb una ordre coneguda.
+DESPERTA_AMB_ORDRE = {normalitza(w) for w in ("tallat", "tayat", "codex", "còdex", "códex", "codecs",
+                                               "clau", "clot", "cloud")}
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_INICI = 0.6      # un silenci així abans de «Claude» també compta com a inici de frase
 PAUSA_SENSE_PUNT = 1.0  # sense puntuació, la instrucció acaba en un silenci així
@@ -147,6 +149,23 @@ def aplica_a_estat(estat: dict, instruccions: list[dict]) -> dict:
         for pid in range(a, b + 1):
             if pid not in estat["mantingudes"] and pid not in estat["esborrades"]:
                 estat["esborrades"][pid] = "instruccio"
+    return estat
+
+
+def aplica_decisio(estat: dict, ins: dict) -> dict:
+    """L'efecte d'acceptar (o descartar) una instrucció: «talla» treu el primer intent i «zoom» fa el zoom."""
+    acceptada = ins.get("estat") == "acceptada"
+    if ins.get("tipus") == "talla" and ins.get("treure"):
+        a, b = ins["treure"]
+        for pid in range(a, b + 1):
+            if acceptada and pid not in estat["esborrades"]:
+                estat["esborrades"][pid] = "instruccio"
+            elif not acceptada and estat["esborrades"].get(pid) == "instruccio":
+                del estat["esborrades"][pid]
+    if ins.get("tipus") == "zoom" and ins.get("ancora") is not None:
+        zooms = set(estat.get("zooms", []))
+        (zooms.add if acceptada else zooms.discard)(ins["ancora"])
+        estat["zooms"] = sorted(zooms)
     return estat
 
 

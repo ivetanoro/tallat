@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from motor import marca, subtitols
+from motor import edicio, marca, subtitols
 
 ESTIL = marca.carrega(marca.PER_DEFECTE)["subtitols"]
 
@@ -37,6 +37,15 @@ class TestGrups(unittest.TestCase):
         p = paraules(("satura", 0.0, 0.4))
         p[0]["correccio"] = "s'atura"
         self.assertEqual(subtitols.grups(p, [(0, 1)], ESTIL)[0]["paraules"][0]["text"], "s'atura")
+
+    def test_paraula_que_comenca_abans_del_tros_arrodonit(self):
+        # Segona revisió de Codex: el tall s'arrodoneix a 0,4333 s i «Hola» (0,401 s) desapareixia dels subtítols.
+        for fps in (30, 30000 / 1001):
+            p = paraules(("eh", 0.0, 0.401, False), ("Hola", 0.401, 0.8))
+            trams = edicio.trams(p, fps=fps, durada=1.0)
+            linies = subtitols.grups(p, trams, ESTIL)
+            self.assertEqual([m["text"] for l in linies for m in l["paraules"]], ["Hola"])
+            self.assertEqual(linies[0]["inici"], 0.0)
 
     def test_cap_linia_passa_del_final(self):
         p = paraules(("final", 0.0, 0.9))

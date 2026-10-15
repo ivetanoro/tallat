@@ -39,6 +39,15 @@ class TestDeteccio(unittest.TestCase):
         p = paraules("Bon dia. Tallat amb llet, si us plau. Claude, recorda-ho.", {6: 0.8})
         self.assertEqual([t["tipus"] for t in instruccions.detecta(p)], ["altre"])
 
+    def test_una_frase_que_comenca_per_clau_no_es_instruccio(self):
+        # Segona revisió de Codex: «Clau» és una paraula normal i la frase sencera s'esborrava.
+        p = paraules("Bon dia. Clau per entendre el problema: escoltar abans de respondre.", {1: 0.8})
+        self.assertEqual(instruccions.detecta(p), [])
+
+    def test_clau_amb_una_ordre_si_que_compta(self):
+        p = paraules("Fins aquí. Clau, zoom aquí. Ara sí.", {4: 0.8})
+        self.assertEqual([t["tipus"] for t in instruccions.detecta(p)], ["zoom"])
+
     def test_torno_a_comencar_troba_el_primer_intent(self):
         text = ("Us heu fixat mai que les idees venen tard? Exemple el cotxe "
                 "Claude, torno a començar. Us heu fixat mai que les millors idees venen tard?")

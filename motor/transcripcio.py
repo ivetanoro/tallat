@@ -67,6 +67,11 @@ def transcriu(audio, model: str = "large-v3") -> list[dict]:
     return m.transcribe(audio, batch_size=8, language=IDIOMA)["segments"]
 
 
+def _primer(*valors):
+    """El primer valor que no és None."""
+    return next(v for v in valors if v is not None)
+
+
 def a_paraules(segments: list[dict]) -> list[dict]:
     """Aplana els segments en una llista de paraules amb id, text, inici, final i frase.
 
@@ -88,15 +93,24 @@ def a_paraules(segments: list[dict]) -> list[dict]:
         if paraules[i]["inici"] is not None and paraules[i]["final"] is not None:
             i += 1
             continue
+        # Només dins de la mateixa frase (segment): les veïnes d'una altra frase poden ser a 30 s,
+        # i la paraula s'empassaria el silenci que hi ha entremig.
+        frase = paraules[i]["frase"]
         j = i
-        while j < len(paraules) and (paraules[j]["inici"] is None or paraules[j]["final"] is None):
+        while (j < len(paraules) and paraules[j]["frase"] == frase
+               and (paraules[j]["inici"] is None or paraules[j]["final"] is None)):
             j += 1
         tanda = paraules[i:j]
-        ini = paraules[i - 1]["final"] if i > 0 else None
-        ini = ini if ini is not None else (tanda[0]["inici"] if tanda[0]["inici"] is not None else tanda[0]["_seg"][0])
-        fi = paraules[j]["inici"] if j < len(paraules) else None
-        fi = fi if fi is not None else (tanda[-1]["final"] if tanda[-1]["final"] is not None else tanda[-1]["_seg"][1])
-        ini, fi = (ini or 0.0), max(fi or 0.0, ini or 0.0)
+        seg_inici, seg_final = tanda[0]["_seg"]
+        anterior = paraules[i - 1] if i > 0 else None
+        seguent = paraules[j] if j < len(paraules) else None
+        ini = _primer(tanda[0]["inici"],
+                      anterior["final"] if anterior and anterior["frase"] == frase else None,
+                      seg_inici, anterior["final"] if anterior else None, 0.0)
+        fi = _primer(tanda[-1]["final"],
+                     seguent["inici"] if seguent and seguent["frase"] == frase else None,
+                     seg_final, seguent["inici"] if seguent else None, ini)
+        fi = max(fi, ini)
         pesos = [max(1, len(p["text"])) for p in tanda]
         t = ini
         for p, pes in zip(tanda, pesos):

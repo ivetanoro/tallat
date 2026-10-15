@@ -150,17 +150,7 @@ class Projecte:
         if ins is None:
             raise KeyError(iid)
         ins["estat"] = nou_estat
-        if ins["tipus"] == "talla" and ins.get("treure"):
-            a, b = ins["treure"]
-            for pid in range(a, b + 1):
-                if nou_estat == "acceptada" and pid not in self.estat["esborrades"]:
-                    self.estat["esborrades"][pid] = "instruccio"
-                elif nou_estat != "acceptada" and self.estat["esborrades"].get(pid) == "instruccio":
-                    del self.estat["esborrades"][pid]
-        if ins["tipus"] == "zoom" and ins.get("ancora") is not None:
-            zooms = set(self.estat.get("zooms", []))
-            (zooms.add if nou_estat == "acceptada" else zooms.discard)(ins["ancora"])
-            self.estat["zooms"] = sorted(zooms)
+        self.estat = instruccions.aplica_decisio(self.estat, ins)
         instruccions.desa(self.carpeta, llista)
         return llista
 
@@ -218,6 +208,7 @@ class Projecte:
         copia = stickers.copia(origen, base, iid)
         ins.update(fitxer=str(copia.relative_to(base)), durada=d, estat="acceptada", tipus="sticker")
         instruccions.desa(base, llista)
+        stickers.retira_anteriors(copia)
         return ins
 
     def assigna_recurs(self, iid: str, origen: Path, durada: float | None = None) -> dict:
@@ -286,8 +277,12 @@ class Projecte:
 
     def zooms_per_tram(self, trams) -> list[bool]:
         """Quins trossos porten zoom: el que comença amb la paraula que ve després de la instrucció."""
-        ancores = [self.dades["paraules"][i] for i in self.estat.get("zooms", [])
-                   if 0 <= i < len(self.dades["paraules"])]
+        # Els de l'estat i els de les instruccions de zoom acceptades: les instruccions són compartides
+        # entre la gravació i els seus reels, i acceptar-ne una en un lloc també val per als altres.
+        ids = set(self.estat.get("zooms", [])) | {
+            i["ancora"] for i in self.instruccions()
+            if i.get("tipus") == "zoom" and i.get("estat") == "acceptada" and i.get("ancora") is not None}
+        ancores = [self.dades["paraules"][i] for i in sorted(ids) if 0 <= i < len(self.dades["paraules"])]
         return [any(a - 0.05 <= p["inici"] < b for p in ancores) for a, b in trams]
 
     def neteja(self) -> None:

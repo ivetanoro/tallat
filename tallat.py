@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import sys
 import time
@@ -51,6 +53,39 @@ def _barra(text: str):
             print(f"  {text}… {pct} %", flush=True)
             ultim[0] = pct
     return progres
+
+
+def guarda_anteriors(carpeta: Path) -> Path | None:
+    """Abans de canviar la transcripció, guarda l'edició d'abans en una carpeta a part.
+
+    L'edició, les instruccions i els reels apunten a paraules que amb la transcripció nova poden
+    ser unes altres. No s'esborren: van a «anteriors-…», amb una còpia de la transcripció vella i
+    dels recursos, i amb la mateixa estructura, de manera que els reels hi continuen funcionant."""
+    moure = [nom for nom in ("edicio.json", "edicio.txt", instruccions.FITXER, muntatge.CARPETA_REELS)
+             if (carpeta / nom).exists() or (carpeta / nom).is_symlink()]
+    if not moure or not (carpeta / TRANSCRIPCIO).exists():
+        return None
+    desti = carpeta / f"anteriors-{time.strftime('%Y%m%d-%H%M%S')}"
+    desti.mkdir()
+    shutil.copy2(carpeta / TRANSCRIPCIO, desti / TRANSCRIPCIO)
+    if (carpeta / ORIGINAL).exists():
+        shutil.copy2(carpeta / ORIGINAL, desti / ORIGINAL)
+    for nom in ("broll", "stickers"):  # els recursos, enllaçats (no ocupen el doble)
+        if (carpeta / nom).is_dir():
+            shutil.copytree(carpeta / nom, desti / nom, copy_function=_enllaca)
+    for nom in (PROXY, "veu.npy"):  # el mateix vídeo: n'hi ha prou amb apuntar-hi
+        if (carpeta / nom).exists():
+            (desti / nom).symlink_to(Path("..") / nom)
+    for nom in moure:
+        (carpeta / nom).rename(desti / nom)
+    return desti
+
+
+def _enllaca(origen, desti) -> None:
+    try:
+        os.link(origen, desti)
+    except OSError:
+        shutil.copy2(origen, desti)
 
 
 def ordre_transcriu(args) -> None:
@@ -82,18 +117,11 @@ def ordre_transcriu(args) -> None:
     paraules = transcripcio.a_paraules(transcripcio.alinea(audio, frases))
 
     dades = {"versio": 1, "video": str(video), "font": font, **exporta.info_video(video), "paraules": paraules}
+    anteriors = guarda_anteriors(carpeta)
+    if anteriors:
+        print(f"He guardat l'edició d'abans (amb les instruccions i els reels) a {anteriors.name}.")
     (carpeta / TRANSCRIPCIO).write_text(json.dumps(dades, ensure_ascii=False, indent=1), encoding="utf-8")
     (carpeta / ORIGINAL).write_text(edicio.text_editable(paraules), encoding="utf-8")
-    for nom in ("edicio.json", "edicio.txt"):
-        (carpeta / nom).unlink(missing_ok=True)  # transcripció nova: l'edició anterior ja no encaixa
-    # Les instruccions i els reels anteriors apunten a paraules que ara poden ser unes altres:
-    # no s'esborren, es guarden a part perquè no es barregin amb les noves.
-    marca_temps = time.strftime("%Y%m%d-%H%M%S")
-    for nom in (instruccions.FITXER, muntatge.CARPETA_REELS):
-        if (carpeta / nom).exists():
-            desti = carpeta / f"{Path(nom).stem}-anteriors-{marca_temps}{Path(nom).suffix}"
-            (carpeta / nom).rename(desti)
-            print(f"He guardat {nom} d'abans a {desti.name} (era de la transcripció anterior).")
 
     projecte = Projecte(carpeta)
     if not args.sense_neteja:

@@ -116,6 +116,9 @@ def crea_reel(arrel, reel: dict) -> Path:
         projecte.neteja()
         from motor import instruccions
         projecte.estat = instruccions.aplica_a_estat(projecte.estat, projecte.instruccions())
+        for ins in projecte.instruccions():  # les que ja s'havien acceptat (zooms, represes) també hi valen
+            if ins.get("estat") == "acceptada":
+                projecte.estat = instruccions.aplica_decisio(projecte.estat, ins)
         projecte.desa()
     return carpeta
 

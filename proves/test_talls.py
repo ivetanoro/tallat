@@ -65,6 +65,14 @@ class TestParaulesSenseTemps(unittest.TestCase):
         self.assertEqual([(x["inici"], x["final"]) for x in p], [(1.0, 1.2), (1.2, 1.6), (1.6, 2.0)])
 
 
+    def test_no_s_empassen_el_silenci_fins_a_la_frase_seguent(self):
+        # Segona revisió de Codex: «25» al final d'una frase rebia de 0,3 a 30 s.
+        p = transcripcio.a_paraules([
+            {"start": 0.0, "end": 1.0, "words": [{"word": "Hola", "start": 0.0, "end": 0.3}, {"word": "25"}]},
+            {"start": 30.0, "end": 31.0, "words": [{"word": "adéu", "start": 30.0, "end": 30.5}]}])
+        self.assertEqual((p[1]["inici"], p[1]["final"]), (0.3, 1.0))
+
+
 class TestMapaDeVeu(unittest.TestCase):
     def test_parlant_sense_parar_no_tot_es_silenci(self):
         # Revisió de Codex: si la gravació gairebé no té silencis, el 10 % més fluix ja és veu i
