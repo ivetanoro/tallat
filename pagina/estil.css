@@ -196,11 +196,47 @@ kbd {
 
 .tornar { display: block; margin: 0 0 var(--e3); }
 
+/* Tres pestanyes: Edita (què queda), Estil (com es veu) i Revisa (notes, versions i el teu gust). */
+.pestanyes { margin-top: var(--e5); }
+.pestanyes [role="tab"] { position: relative; }
+.pestanyes [role="tab"][aria-selected="true"] { background: var(--superficie); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.pestanyes .punt { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--auto); vertical-align: middle; }
+.pestanyes .compte-pestanya { margin-left: 4px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pestanyes .compte-pestanya:empty { display: none; }
+.pestanya > .seccio:first-child { margin-top: var(--e5); }
+
+/* El kit: el desplegable i un menú «…» amb les accions (com els menús del Mac). */
+.fila-kit { display: flex; align-items: center; gap: var(--e1); position: relative; }
+.fila-kit .tria-kit { flex: 1; min-width: 0; }
 .tria-kit { width: 100%; }
-.accions-kit { display: flex; flex-wrap: wrap; gap: 0 var(--e3); }
-.accions-kit .enllac { font-size: var(--t-petit); }
-.enllac.perill { color: var(--auto); }
-.enllac.confirma { font-weight: 600; }
+.menu-kit {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 220px;
+  display: flex; flex-direction: column; padding: 5px; border-radius: var(--radi-mitja);
+  background: var(--superficie); box-shadow: var(--ombra-gran), 0 0 0 0.5px var(--linia);
+}
+.menu-kit button {
+  padding: 5px var(--e3); border: 0; border-radius: var(--radi-petit); background: none; text-align: left;
+  font: inherit; font-size: var(--t-ui); color: var(--text); cursor: pointer;
+}
+.menu-kit button:hover, .menu-kit button:focus-visible { background: var(--accent); color: #fff; outline: none; }
+.menu-kit button.perill { color: var(--auto); }
+.menu-kit button.perill:hover, .menu-kit button.perill:focus-visible, .menu-kit button.confirma { background: var(--auto); color: #fff; }
+.menu-kit hr { margin: 4px var(--e2); border: 0; border-top: 0.5px solid var(--linia); }
+.fila-estil + .fila-estil { margin-top: var(--e2); }
+
+/* Els panells d'estil: el bàsic a dalt; la resta, en grups que es pleguen. */
+.estils:not(.tots) > .estil:nth-child(n + 7) { display: none; }
+.mes-estils { align-self: flex-start; margin: calc(-1 * var(--e2)) 0 0; font-size: var(--t-petit); }
+.grup-estil { border-top: 0.5px solid var(--linia); padding-top: var(--e3); }
+.grup-estil > summary {
+  display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer;
+  font-size: var(--t-ui); font-weight: 600; color: var(--text);
+}
+.grup-estil > summary::-webkit-details-marker { display: none; }
+.grup-estil .xebro-grup { width: 14px; height: 14px; fill: none; stroke: var(--text-2); stroke-width: 1.8; transition: transform 160ms var(--molla); transform: rotate(-90deg); }
+.grup-estil[open] .xebro-grup { transform: none; }
+.grup-estil .cos-grup { display: flex; flex-direction: column; gap: var(--e5); margin-top: var(--e4); }
+.ajuda-camp { margin: 0; }
 .item.instruccio { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); }
 .item.instruccio .reel-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .item.instruccio .ins-tipus { display: flex; align-items: baseline; gap: var(--e2); font-weight: 500; color: var(--text); }
@@ -211,6 +247,12 @@ kbd {
 .item.instruccio.acceptada .ins-tipus { color: var(--accent); }
 .item.instruccio.descartada { opacity: 0.55; }
 .item.instruccio .mini.actiu { background: var(--accent); color: #fff; box-shadow: none; }
+/* Les instruccions, d'una línia: el detall i les accions secundàries surten en passar-hi el ratolí. */
+.item.instruccio .ins-text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item.instruccio .ins-estat { display: none; }
+.item.instruccio .ins-estat.important,
+.item.instruccio:hover .ins-estat:not(:empty), .item.instruccio:focus-within .ins-estat:not(:empty) { display: block; }
+.item.instruccio:not(:hover):not(:focus-within) .discret { display: none; }
 .ins-accions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e1); font-size: var(--t-petit); }
 .ins-accions .enllac { margin: 0; font-size: var(--t-petit); }
 .ins-accions .fet { color: var(--accent); font-weight: 500; }

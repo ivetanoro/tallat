@@ -675,6 +675,8 @@ function actualitzaPropostes() {
   for (const [k, motiu] of Object.entries(estat.propostes)) (grups[motiu] ||= []).push(+k);
   const total = Object.keys(estat.propostes).length;
   $("#compte-propostes").textContent = total || "";
+  $("#seccio-propostes").hidden = !total;
+  actualitzaPestanyes();
   const cont = $("#propostes");
   cont.textContent = "";
   if (!total) { cont.innerHTML = '<p class="buit">No hi ha propostes pendents.</p>'; return; }
@@ -698,6 +700,7 @@ function actualitzaPropostes() {
         mostraParaula(id);
         if (vista === "directe") vesAOriginal(P.paraules[id].inici - 1);
       });
+      fesClicable(item);
       grup.append(item);
     }
     cont.append(grup);
@@ -1037,7 +1040,7 @@ function pintaMostra(caixa, e, { paraules, alcada, mida }) {
 
 function pintaResumEstil() {
   if (!estilSub || !window.TallatSubtitols) return;
-  $("#nom-estil").textContent = predefinitActual()?.nom ?? "Personalitzat";
+  $("#nom-estil").textContent = estat?.subtitols === false ? "Sense subtítols" : predefinitActual()?.nom ?? "Personalitzat";
   pintaMostra($("#mostra-estil"), { ...estilSub, destaca: false, emojis: false, clau_grans: false, fons: "cap" },
     { paraules: [["Aa", false, null]], alcada: 1080, mida: 0.36 });
 }
@@ -1070,6 +1073,7 @@ function marcaSegmentat(id, valor) {
   for (const b of $$(`#${id} button`)) b.setAttribute("aria-checked", String(b.dataset.valor === valor));
 }
 
+let estilsMostrats = false;  // «Més estils» desplegat
 function pintaPanellEstil() {
   const e = estilSub;
   if (!e || $("#panell-estil").hidden) return;
@@ -1093,6 +1097,12 @@ function pintaPanellEstil() {
         { paraules: n === 1 ? [MOSTRA[2]] : MOSTRA.slice(0, n), alcada: 675, mida: Math.min(0.2, v.mida * 1.6) });
     }
   }
+  // Es veuen els 6 primers; la resta, amb «Més estils» (o si el triat és un d'aquests).
+  const tots = estilsMostrats || estilsPredefinits.indexOf(actual) >= 6;
+  cont.classList.toggle("tots", tots);
+  $("#mes-estils").hidden = estilsPredefinits.length <= 6;
+  $("#mes-estils").textContent = tots ? "Menys estils" : `Més estils (${estilsPredefinits.length - 6})`;
+  $("#mes-estils").setAttribute("aria-expanded", String(tots));
   marcaSegmentat("e-paraules", agrupacioDe(e));
   marcaSegmentat("e-apareixen", e.apareixen);
   marcaSegmentat("e-aspecte", e.aspecte || "normal");
@@ -1182,6 +1192,7 @@ function aplicaEstilTitol(e) {
 
 function pintaTitol() {
   if (!estat) return;
+  pintaResumTitol();
   const camp = $("#text-titol");
   const t = estat.titol;
   if (document.activeElement !== camp) camp.value = t?.text || "";
@@ -1261,7 +1272,8 @@ function pintaMostraTitol(caixa, e, text, alcada) {
 
 function pintaResumTitol() {
   if (!estilTitol) return;
-  $("#nom-estil-titol").textContent = predefinitTitol()?.nom ?? "Personalitzat";
+  const primera = (estat?.titol?.text || "").split("\n")[0].replaceAll("*", "").trim();
+  $("#nom-estil-titol").textContent = primera ? `«${primera}» · ${predefinitTitol()?.nom ?? "Personalitzat"}` : "Sense títol";
   pintaMostraTitol($("#mostra-titol"), { ...estilTitol, mida: 0.3, clau_mida: 1 }, "Aa", 1080);
 }
 
@@ -1367,6 +1379,61 @@ function instalaTitol() {
   });
 }
 
+// --- Pestanyes de la columna de l'esquerra ------------------------------------------------------
+// Edita (què queda al vídeo), Estil (com es veu) i Revisa (notes, versions i el teu gust). Es
+// recorda la darrera. A «Edita», un punt avisa si hi ha coses per decidir.
+
+function triaPestanya(nom, { focus = false } = {}) {
+  if (!$(`#pestanya-${nom}`)) nom = "edita";
+  for (const tab of $$("#pestanyes [role=tab]")) {
+    const triada = tab.dataset.pestanya === nom;
+    tab.setAttribute("aria-selected", String(triada));
+    tab.tabIndex = triada ? 0 : -1;
+    $(`#pestanya-${tab.dataset.pestanya}`).hidden = !triada;
+    if (triada && focus) tab.focus();
+  }
+  desa("tallat.pestanya", nom);
+}
+
+function actualitzaPestanyes() {
+  const perDecidir = instruccions.some((i) => i.estat === "pendent") || Object.keys(estat?.propostes || {}).length > 0;
+  $("#punt-edita").hidden = !perDecidir;
+  $("#compte-revisa").textContent = notes.length || "";
+}
+
+function instalaPestanyes() {
+  const tabs = $$("#pestanyes [role=tab]");
+  for (const tab of tabs) tab.addEventListener("click", () => triaPestanya(tab.dataset.pestanya));
+  $("#pestanyes").addEventListener("keydown", (e) => {  // fletxes, com qualsevol grup de pestanyes
+    const i = tabs.findIndex((t) => t.getAttribute("aria-selected") === "true");
+    const j = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : null;
+    if (j == null) return;
+    e.preventDefault();
+    triaPestanya(tabs[(j + tabs.length) % tabs.length].dataset.pestanya, { focus: true });
+  });
+  triaPestanya(llegeix("tallat.pestanya", "edita"));
+  // Els grups plegables dels panells d'estil recorden si estaven oberts.
+  const oberts = new Set(llegeix("tallat.grups-oberts", []));
+  for (const d of $$("details.grup-estil")) {
+    d.open = oberts.has(d.id);
+    d.addEventListener("toggle", () => {
+      if (d.open) oberts.add(d.id); else oberts.delete(d.id);
+      desa("tallat.grups-oberts", [...oberts]);
+    });
+  }
+}
+
+// Les files que es poden clicar (reels, instruccions, propostes, notes…) també es poden fer servir
+// amb el teclat: es poden enfocar amb ⇥ i ↩ o l'espai fan el mateix que el clic.
+function fesClicable(item) {
+  item.tabIndex = 0;
+}
+document.addEventListener("keydown", (e) => {
+  if (!e.target.classList?.contains("item") || !["Enter", " "].includes(e.key)) return;
+  e.preventDefault();
+  e.target.click();
+});
+
 // --- Kits d'estil -----------------------------------------------------------------------------
 // Un kit és un estil amb nom (subtítols, b-roll, stickers i talls). Cada vídeo en fa servir un, i
 // el panell d'estil canvia el d'aquest vídeo. Es poden crear, duplicar, exportar (un .zip) i importar.
@@ -1392,6 +1459,7 @@ function pintaKits() {
     : `Els vídeos nous fan servir «${defecte?.nom || ""}».`;
   $("#kit-defecte").hidden = !!actual?.per_defecte;
   $("#kit-esborra").hidden = !!actual?.per_defecte;
+  $("#sep-treu-kit").hidden = !!actual?.per_defecte;
   $("#nom-kit-panell").textContent = actual?.nom || "";
   $("#nom-kit-titol").textContent = actual?.nom || "";
 }
@@ -1435,7 +1503,38 @@ async function importaKit(fitxer) {
   } catch (e) { avis(e.message, 6000); }
 }
 
+function instalaMenuKit() {
+  const boto = $("#menu-kit-boto");
+  const menu = $("#menu-kit");
+  const items = () => [...menu.querySelectorAll("button")].filter((b) => !b.hidden);
+  const tanca = ({ focus = false } = {}) => {
+    menu.hidden = true;
+    boto.setAttribute("aria-expanded", "false");
+    if (focus) boto.focus();
+  };
+  boto.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const obrir = menu.hidden;
+    menu.hidden = !obrir;
+    boto.setAttribute("aria-expanded", String(obrir));
+    if (obrir) items()[0]?.focus();
+  });
+  document.addEventListener("click", (e) => { if (!menu.hidden && !menu.contains(e.target)) tanca(); });
+  menu.addEventListener("keydown", (e) => {
+    const llista = items();
+    const i = llista.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); tanca({ focus: true }); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); llista[(i + 1) % llista.length]?.focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); llista[(i - 1 + llista.length) % llista.length]?.focus(); }
+  });
+  // Després de fer una acció, el menú es tanca (llevat del primer clic de «Treu-lo», que demana confirmació).
+  for (const b of menu.querySelectorAll("button")) {
+    b.addEventListener("click", () => setTimeout(() => { if (!b.classList.contains("confirma")) tanca(); }));
+  }
+}
+
 function instalaKits() {
+  instalaMenuKit();
   $("#kit").addEventListener("change", (e) => {
     const nom = kits.find((k) => k.id === e.target.value)?.nom || "";
     accioKit("/api/kit/tria", { kit: e.target.value }, `Aquest vídeo fa servir el kit «${nom}».`);
@@ -1664,6 +1763,7 @@ function instalaEstil() {
   if (!window.gsap) registre("sense-gsap", {});  // sense internet: subtítols sense animacions
 
   $("#obre-estil").addEventListener("click", obreEstil);
+  $("#mes-estils").addEventListener("click", () => { estilsMostrats = !$("#estils").classList.contains("tots"); pintaPanellEstil(); });
   $("#tanca-estil").addEventListener("click", tancaEstil);
   const segmentat = (id, aplica, mostra) => {
     for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaEstil(aplica(b.dataset.valor), mostra));
@@ -1892,6 +1992,7 @@ function pintaVersions(exports) {
     mira.addEventListener("click", (e) => { e.stopPropagation(); carregaVersio(x.nom); });
     finder.addEventListener("click", (e) => { e.stopPropagation(); api("/api/mostra", { nom: x.nom }).catch((err) => avis(err.message)); });
     item.addEventListener("click", () => carregaVersio(x.nom));
+    fesClicable(item);
     cont.append(item);
   }
   const darrer = exports.find((x) => x.qualitat === "esborrany");
@@ -1900,10 +2001,11 @@ function pintaVersions(exports) {
 
 function pintaNotes() {
   $("#compte-notes").textContent = notes.length || "";
+  actualitzaPestanyes();
   const cont = $("#notes");
   cont.textContent = "";
   if (!notes.length) {
-    cont.innerHTML = '<p class="buit">Construeix l\'esborrany i deixa-hi notes en moments exactes.</p>';
+    cont.innerHTML = '<p class="buit">Fes un esborrany (a dalt, a la dreta) i deixa-hi notes en moments exactes.</p>';
     return;
   }
   for (const n of notes) {
@@ -1926,6 +2028,7 @@ function pintaNotes() {
       if (esborrany?.nom === n.versio) { canviaVista("esborrany"); vE.currentTime = n.temps; }
       else carregaVersio(n.versio, n.temps);
     });
+    fesClicable(item);
     cont.append(item);
   }
 }
@@ -2103,6 +2206,7 @@ function pintaReels() {
     document.title = `${obert?.titol || P.nom} · tallat`;
   }
   for (const e of P.errors_reels || []) avis(`reels.json: ${e}`, 6000);
+  $("#seccio-reels").hidden = !reels.length;  // si encara no n'hi ha, no ocupa lloc
   if (!reels.length) return;
   cont.textContent = "";
   for (const r of reels) {
@@ -2114,6 +2218,7 @@ function pintaReels() {
     item.querySelector(".reel-titol").textContent = r.titol;
     item.querySelector(".reel-detall").textContent = r.ganxo ? `«${r.ganxo}»` : "";
     item.addEventListener("click", () => obre(r.id));
+    fesClicable(item);
     cont.append(item);
   }
 }
@@ -2205,7 +2310,7 @@ function accionsBroll(ins, item) {
   fila.className = "ins-accions";
   if (ins.fitxer) {
     fila.innerHTML = `<span class="fet">${nom} a punt (${String(ins.durada).replace(".", ",")} s)</span>
-      <button class="enllac canvia">Canvia'l</button><button class="enllac treu-broll">Treu-lo</button>`;
+      <button class="enllac canvia discret">Canvia'l</button><button class="enllac treu-broll discret">Treu-lo</button>`;
   } else {
     fila.innerHTML = `<button class="enllac canvia">Puja un fitxer…</button>`;
     if (llista.length) {
@@ -2270,6 +2375,7 @@ function pintaInstruccions() {
       <button class="mini treu" title="Descarta-la" aria-label="Descarta-la">${ICONES.esborra}</button>`;
     item.querySelector(".nom").textContent = nom;
     item.querySelector(".ins-text").textContent = `«${ins.text}»`;
+    item.querySelector(".ins-estat").classList.toggle("important", !!ins.dubtosa && ins.estat === "pendent");
     item.querySelector(".ins-estat").textContent =
       ins.estat === "acceptada" ? (["broll", "sticker"].includes(ins.tipus) ? "" : `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}`)
         : ins.estat === "descartada" ? "Descartada"
@@ -2283,8 +2389,10 @@ function pintaInstruccions() {
       mostraParaula(ancora);
       if (vista === "directe") vesAOriginal(P.paraules[ancora].inici - 1.5);
     });
+    fesClicable(item);
     cont.append(item);
   }
+  actualitzaPestanyes();
 }
 
 async function decideixInstruccio(ins, nou) {
@@ -2366,6 +2474,7 @@ function instalaControls() {
   instalaEstil();
   instalaKits();
   instalaTitol();
+  instalaPestanyes();
   setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
@@ -2442,6 +2551,7 @@ function instalaControls() {
 
 function marcaSubtitols() {
   $("#subtitols").setAttribute("aria-checked", String(estat.subtitols !== false));
+  pintaResumEstil();
 }
 
 function marcaPausa() {

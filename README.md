@@ -75,8 +75,8 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | reproduir o aturar | espai |
    | amagar la columna de l'esquerra o la del vídeo | ⌃⌘S / ⌥⌘V |
 
-3. Tria l'estil dels subtítols a **Subtítols → Estil**.
-4. Clica **Construeix l'esborrany**, mira'l i deixa-hi notes en els moments que vulguis canviar.
+3. A la pestanya **Estil** de l'esquerra, tria el kit, l'estil dels subtítols i, si vols, escriu el títol del ganxo.
+4. Clica **Esborrany** (a dalt), mira'l i deixa-hi notes en els moments que vulguis canviar (les trobaràs a la pestanya **Revisa**).
 5. Quan t'agradi, **Final…** → 4K o 1080. O, si el vols acabar en un altre editor, **Projecte per a Premiere, Final Cut o DaVinci** o **Trossos per a CapCut o iMovie**.
 
 En qualsevol moment pots demanar canvis a Claude amb paraules: «treu la primera frase», «fes-me tres reels d'aquesta gravació», «posa-hi un sticker d'una estrella quan dic *genial*».
