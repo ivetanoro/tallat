@@ -39,6 +39,10 @@ class TestDisposicio(unittest.TestCase):
         self.assertEqual(fins, [5.1, 5.1, 5.1, 6.9, 13.5])  # el 4t comença un grup nou (màxim tres)
         self.assertEqual([b["caixa"]["rotacio"] for b in llista], [-6, 0, 6, 0, 0])
 
+    def test_les_cantonades_mai_passen_de_mig_costat(self):
+        c = targetes.disposa(brolls(0), {"disposicio": "targeta", "proporcio": "16:9", "radi": 0.5, "mida": 0.8})[0]["caixa"]
+        self.assertEqual(c["radi"], c["h"] / 2)  # com el border-radius del navegador
+
     def test_pantalla_partida(self):
         b = targetes.disposa(brolls(0), {"disposicio": "partida"})[0]
         self.assertTrue(b["partida"])
@@ -106,6 +110,22 @@ class TestExport(unittest.TestCase):
                                        capture_output=True, check=True).stdout
                 self.assertGreater(pixel[0], 200)  # al mig de la targeta (o a dalt, en partida): el b-roll vermell
                 self.assertLess(pixel[2], 60)
+
+    def test_un_clip_mes_curt_es_queda_quiet_fins_al_final(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=1080x1920:r=30:d=3",
+                            "-f", "lavfi", "-i", "sine=d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                            str(d / "v.mp4")], check=True)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=1080x1920:r=30:d=0.5",
+                            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(d / "b.mp4")], check=True)
+            llista = targetes.disposa([{"id": "b", "fitxer": d / "b.mp4", "inici": 0.5, "durada": 1.5}],
+                                      {"disposicio": "targeta", "posicio_y": 0.5, "radi": 0.1})
+            exporta.exporta(d / "v.mp4", [(0.0, 3.0)], d / "s.mp4", "esborrany", brolls=llista)
+            pixel = subprocess.run(["ffmpeg", "-v", "error", "-ss", "1.7", "-i", str(d / "s.mp4"), "-frames:v", "1",
+                                    "-vf", "crop=2:2:360:640", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                                   capture_output=True, check=True).stdout
+            self.assertGreater(pixel[0], 200)  # el clip (0,5 s) ja s'ha acabat, però la targeta encara hi és
 
 
 if __name__ == "__main__":

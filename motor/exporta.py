@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import collections
 import json
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -166,6 +167,8 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
     brolls = [b if "caixa" in b else targetes.disposa([b], {})[0] for b in brolls or []]
     sortida.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as temporal:
+        if efectes is not None:  # una còpia pròpia: la pàgina pot refer la pista mentre s'exporta
+            efectes = Path(shutil.copy(efectes, Path(temporal) / "efectes.wav"))
         # Les targetes arrodonides, amb vora o amb ombra necessiten unes imatges fixes (forma i marc).
         peces = targetes.prepara_peces(brolls, ow / targetes.AMPLADA, Path(temporal))
         veu = so.filtre_veu(neteja, _mesura_veu(video, trams, info, neteja)) if neteja else None

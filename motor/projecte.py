@@ -205,20 +205,28 @@ class Projecte:
         e = self.estil_so()
         return (e.get("soroll") or "suau") if e.get("neteja", True) else None
 
-    def efectes(self, trams) -> list[dict]:
-        """Els efectes de so d'aquest vídeo (motor/so.py), amb «actiu» false els que s'han apagat."""
-        e = self.estil_so()
-        titol = self.titol(trams)
-        linies = self.linies_subtitols(trams) if self.estat.get("subtitols", True) else []
-        llista = so.esdeveniments(self.brolls(trams), self.stickers(trams), titol,
-                                  self.estil().get("titol", {}).get("animacio", "puja"), linies,
-                                  e.get("efectes", "pocs"))
+    def efectes(self, trams, brolls=None, stickers=None, titol=False, linies=None) -> list[dict]:
+        """Els efectes de so d'aquest vídeo (motor/so.py), amb «actiu» false els que s'han apagat.
+        Qui ja té calculats els b-rolls, els stickers, el títol o les línies els pot passar."""
+        estil = self.estil()
+        quants = estil.get("so", {}).get("efectes", "pocs")
+        if quants == "cap":
+            return []
+        if titol is False:
+            titol = self.titol(trams)
+        if not self.estat.get("subtitols", True) or quants != "molts":
+            linies = []  # les línies només compten per als «molts»
+        elif linies is None:
+            linies = self.linies_subtitols(trams)
+        llista = so.esdeveniments(self.brolls(trams) if brolls is None else brolls,
+                                  self.stickers(trams) if stickers is None else stickers, titol,
+                                  estil.get("titol", {}).get("animacio", "puja"), linies, quants)
         apagats = set(self.estat.get("sons_apagats") or [])
         return [dict(x, actiu=x["clau"] not in apagats) for x in llista]
 
-    def pista_efectes(self, trams) -> Path | None:
+    def pista_efectes(self, trams, efectes=None) -> Path | None:
         """La pista amb els efectes actius (es refà només si canvia), o None si no n'hi ha cap."""
-        actius = [x for x in self.efectes(trams) if x["actiu"]]
+        actius = [x for x in (self.efectes(trams) if efectes is None else efectes) if x["actiu"]]
         if not actius:
             return None
         durada = sum(b - a for a, b in trams)
@@ -226,9 +234,11 @@ class Projecte:
         carpeta = self.carpeta / "so"
         desti = carpeta / f"efectes-{so.empremta(actius, durada, volum)}.wav"
         if not desti.exists():
-            for vell in carpeta.glob("efectes-*.wav") if carpeta.is_dir() else []:
-                vell.unlink(missing_ok=True)
             so.pista(actius, durada, volum, desti)
+            # Es guarden les tres més noves: un export que ja ha començat pot estar fent servir l'anterior.
+            velles = sorted(carpeta.glob("efectes-*.wav"), key=lambda f: f.stat().st_mtime, reverse=True)[3:]
+            for vell in velles:
+                vell.unlink(missing_ok=True)
         return desti
 
     def mostres_veu(self) -> dict:

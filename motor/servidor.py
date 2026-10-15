@@ -124,26 +124,28 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
     def instantania() -> dict:
         projecte = obert["p"]
         trams = projecte.trams()
+        brolls, enganxines = projecte.brolls(trams), projecte.stickers(trams)
+        linies, titol = projecte.linies_subtitols(trams), projecte.titol(trams)
         return {"estat": _estat_json(projecte.estat), "trams": trams,
                 "durada_final": round(sum(b - a for a, b in trams), 3),
                 "zooms": projecte.zooms_per_tram(trams), "zoom": exporta.ZOOM,
                 "instruccions": projecte.instruccions(),
                 "brolls": [{**{k: v for k, v in b.items() if k != "fitxer"},
                             "url": "/broll/" + b["fitxer"].name + f"?v={int(b['fitxer'].stat().st_mtime)}"}
-                           for b in projecte.brolls(trams)],
+                           for b in brolls],
                 "stickers": [{"id": st["id"], "inici": st["inici"], "durada": st["durada"],
                               "url": "/stickers/" + st["fitxer"].name + f"?v={int(st['fitxer'].stat().st_mtime)}"}
-                             for st in projecte.stickers(trams)],
-                "subtitols": projecte.linies_subtitols(trams),
-                "titol": projecte.titol(trams),
-                **info_efectes(projecte, trams),
+                             for st in enganxines],
+                "subtitols": linies,
+                "titol": titol,
+                **info_efectes(projecte, trams, brolls, enganxines, titol, linies),
                 "paragrafs": projecte.paragrafs()}
 
-    def info_efectes(projecte, trams) -> dict:
+    def info_efectes(projecte, trams, brolls, enganxines, titol, linies) -> dict:
         """Els efectes de so (per a la llista de la pestanya So) i la pista que sona a la vista prèvia."""
         try:
-            efectes = projecte.efectes(trams)
-            pista = projecte.pista_efectes(trams)
+            efectes = projecte.efectes(trams, brolls, enganxines, titol, linies)
+            pista = projecte.pista_efectes(trams, efectes)
         except Exception:  # un so propi que no es pot llegir, per exemple: la pàgina ha de funcionar igual
             traceback.print_exc()
             return {"efectes": [], "pista_efectes": None}

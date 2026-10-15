@@ -34,18 +34,19 @@ NOMS = {"whoosh": "Whoosh", "pop": "Pop", "tecla": "Teclat", "brill": "Brillanto
 # --- La neteja de la veu -------------------------------------------------------------------------
 
 def cadena(nivell: str = "suau") -> str:
-    """Els filtres de la neteja (sense igualar el volum)."""
+    """Els filtres de la neteja (sense igualar el volum). Valors triats per a veu parlada a un mòbil:
+    suaus, perquè la veu no soni «processada»."""
     nr = NIVELLS_SOROLL.get(nivell, NIVELLS_SOROLL["suau"])
-    return ("highpass=f=80,"                                   # el brunzit i els cops greus
+    return ("highpass=f=75,"                                   # cops i brunzit: per sota de qualsevol veu
             f"afftdn=nr={nr}:nf=-40:tn=1,"                     # el soroll de fons (seguint com canvia)
-            "equalizer=f=250:t=q:w=1:g=-2,"                    # menys «caixa»
-            "equalizer=f=3500:t=q:w=1.2:g=2,"                  # més claredat
-            "deesser=i=0.35:m=0.5:f=0.5,"                      # les «s» més suaus
-            "acompressor=threshold=-20dB:ratio=2.5:attack=10:release=150:makeup=1.5")
+            "equalizer=f=300:t=q:w=1.4:g=-1.5,"                # la zona que fa sonar la veu «tapada»
+            "equalizer=f=4500:t=q:w=1.4:g=1.5,"                # la zona on s'entenen les consonants
+            "deesser=i=0.3:m=0.35:f=0.6,"                      # les «s» més suaus, sense fer-les ceceig
+            "acompressor=threshold=-22dB:ratio=2:attack=15:release=200:knee=4:makeup=1.2")  # suau
 
 
 def _volum(mesura: dict | None) -> str:
-    base = f"loudnorm=I={VOLUM_OBJECTIU}:TP=-1.5:LRA=11"
+    base = f"loudnorm=I={VOLUM_OBJECTIU}:TP=-1:LRA=10"  # -1 dBTP: el marge que demanen les xarxes
     if not mesura:
         return base + ":print_format=json"
     return (base + f":measured_I={mesura['input_i']}:measured_TP={mesura['input_tp']}"
@@ -248,28 +249,67 @@ def esdeveniments(brolls: list[dict], stickers: list[dict], titol: dict | None, 
     return sorted(llista, key=lambda e: e["t"])
 
 
+def _a_bytes(mostres) -> bytes:
+    return array.array("h", (int(max(-1.0, min(1.0, m)) * 32767) for m in mostres)).tobytes()
+
+
 def pista(efectes: list[dict], durada: float, volum: float, desti: Path) -> Path:
-    """Escriu la pista amb tots els efectes al seu moment (WAV mono de 48 kHz, del llarg del muntatge)."""
+    """Escriu la pista amb tots els efectes al seu moment (WAV mono de 48 kHz, del llarg del muntatge).
+    S'escriu a trossos: el silenci no passa mai per la memòria sencer, cada so es prepara un sol cop
+    i només es barreja on dos efectes es trepitgen."""
     n = max(1, int(durada * MOSTREIG))
-    barreja = [0.0] * n
     sons: dict[tuple, list[float]] = {}
+    preparats: dict[tuple, bytes] = {}
+    peces = []
     for e in efectes:
         for k, t in enumerate(e["moments"]):
             clau = (e["so"], k % 5 if e["so"] == "tecla" else 0)
             if clau not in sons:
-                sons[clau] = so(*clau)
-            mostres, inici = sons[clau], int(t * MOSTREIG)
-            for i, m in enumerate(mostres[: max(0, n - inici)]):
-                if inici + i >= 0:
-                    barreja[inici + i] += m * volum
-    sortida = array.array("h", (int(max(-1.0, min(1.0, m)) * 32767) for m in barreja))
+                sons[clau] = [m * volum for m in so(*clau)]
+            inici = max(0, int(t * MOSTREIG))
+            if inici < n:
+                peces.append((inici, clau))
+    peces.sort()
+    # Grups de peces que es trepitgen (la majoria van soles).
+    grups: list[list[tuple[int, tuple]]] = []
+    for inici, clau in peces:
+        if grups and inici < max(a + len(sons[c]) for a, c in grups[-1]):
+            grups[-1].append((inici, clau))
+        else:
+            grups.append([(inici, clau)])
+
     desti.parent.mkdir(parents=True, exist_ok=True)
     temporal = desti.with_suffix(".tmp.wav")
+    silenci = bytes(2 * MOSTREIG)  # un segon
     with wave.open(str(temporal), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(MOSTREIG)
-        w.writeframes(sortida.tobytes())
+        escrites = 0
+        for grup in grups:
+            inici = grup[0][0]
+            while escrites < inici:  # el silenci fins al grup
+                quantes = min(MOSTREIG, inici - escrites)
+                w.writeframesraw(silenci[: 2 * quantes])
+                escrites += quantes
+            final = min(n, max(a + len(sons[c]) for a, c in grup))
+            if len(grup) == 1:
+                clau = grup[0][1]
+                if clau not in preparats:
+                    preparats[clau] = _a_bytes(sons[clau])
+                dades = preparats[clau][: 2 * (final - inici)]
+            else:
+                barreja = [0.0] * (final - inici)
+                for a, c in grup:
+                    for i, m in enumerate(sons[c][: final - a]):
+                        barreja[a - inici + i] += m
+                dades = _a_bytes(barreja)
+            w.writeframesraw(dades)
+            escrites = final
+        while escrites < n:
+            quantes = min(MOSTREIG, n - escrites)
+            w.writeframesraw(silenci[: 2 * quantes])
+            escrites += quantes
     temporal.replace(desti)
     return desti
 

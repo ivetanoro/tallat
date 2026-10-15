@@ -2732,19 +2732,31 @@ function sonaEfectes() {
   if (aEfectes.paused) aEfectes.play().catch(() => {});
 }
 
-async function carregaMostresSo() {
+// Les mostres es demanen d'una en una (cada una fa treballar ffmpeg) i, si s'està canviant el
+// nivell de la neteja, quan el canvi ja és al kit: si no, el servidor faria la del nivell d'abans.
+let mostresEnCurs = null;
+function carregaMostresSo() {
   const nivell = estilSo?.soroll || "suau";
+  if (mostresEnCurs || Object.keys(soPendent).length) return;
   if (mostresSo && mostraNivell === nivell) return;
   $("#s-preparant").hidden = false;
-  try {
-    await cua;
-    mostresSo = await api("/api/so/mostres", {});
-    mostraNivell = nivell;
-    $("#s-abans").src = mostresSo.abans;
-    $("#s-despres").src = mostresSo.despres;
-    pintaSo();
-  } catch (e) { avis(e.message, 6000); }
-  $("#s-preparant").hidden = true;
+  mostresEnCurs = (async () => {
+    try {
+      await cua;
+      const r = await api("/api/so/mostres", {});
+      mostresSo = r;
+      mostraNivell = nivell;
+      $("#s-abans").src = r.abans;
+      $("#s-despres").src = r.despres;
+    } catch (e) {
+      avis(e.message, 6000);
+      mostresSo = mostresSo || { sons: {} };  // no ho tornem a provar sense parar
+      mostraNivell = nivell;
+    }
+    $("#s-preparant").hidden = true;
+    mostresEnCurs = null;
+    pintaSo();  // si mentrestant ha canviat el nivell, ara es demana la bona
+  })();
 }
 
 function pintaSo() {
@@ -2758,8 +2770,7 @@ function pintaSo() {
   marcaSegmentat("s-efectes", e.efectes || "pocs");
   $("#s-volum").value = e.volum_efectes ?? 0.5;
   $("#camp-s-volum").hidden = e.efectes === "cap";
-  if (neteja && mostraNivell !== (e.soroll || "suau")) carregaMostresSo();
-  if (!mostresSo) carregaMostresSo();
+  carregaMostresSo();
 
   const actius = efectesMuntatge.filter((x) => x.actiu).length;
   $("#compte-efectes").textContent = efectesMuntatge.length ? `${actius} de ${efectesMuntatge.length}` : "";

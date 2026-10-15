@@ -31,6 +31,7 @@ SALT_POP = 1.70158       # quant «salta» l'animació pop (corba «back»)
 
 def _caixa(x: float, y: float, w: float, h: float, radi=0.0, vora=0.0, color="#FFFFFF",
            ombra=False, rotacio=0.0) -> dict:
+    radi = min(radi, w / 2, h / 2)  # com fa el navegador: mai més de mig costat curt
     return {"x": round(x, 2), "y": round(y, 2), "w": round(w, 2), "h": round(h, 2), "radi": round(radi, 2),
             "vora": round(vora, 2), "vora_color": color, "ombra": bool(ombra), "rotacio": rotacio}
 
@@ -245,13 +246,13 @@ def filtre(brolls: list[dict], peces: list[dict], entrada_broll: int, entrada_pe
     for k, b in enumerate(brolls):
         caixa, m, peca = b["caixa"], mides(b["caixa"], factor), peces[k]
         visible = b["fins"] - b["inici"]
-        congela = max(0.0, visible - b["durada"])
+        # Si el clip s'acaba abans (al carrusel, o un vídeo més curt que la durada), es queda quiet a
+        # l'últim fotograma fins que la targeta se'n va: com a la vista prèvia.
         cadena = (f"[{entrada_broll + k}:v]setpts=PTS-STARTPTS,"
                   f"scale={m['dins_w']}:{m['dins_h']}:force_original_aspect_ratio=increase:flags=lanczos,"
-                  f"crop={m['dins_w']}:{m['dins_h']},setsar=1,")
-        if congela > 0:  # al carrusel es queda quieta (l'últim fotograma) fins que s'acaba el grup
-            cadena += f"tpad=stop_mode=clone:stop_duration={congela:.4f},"
-        cadena += f"format=yuva444p[bc{k}];"
+                  f"crop={m['dins_w']}:{m['dins_h']},setsar=1,"
+                  f"tpad=stop_mode=clone:stop_duration={visible:.4f},trim=duration={visible:.4f},"
+                  f"format=yuva444p[bc{k}];")
         parts.append(cadena)
         ara = f"bc{k}"
         if peca["mascara"]:

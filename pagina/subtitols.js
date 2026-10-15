@@ -431,6 +431,20 @@
     svg.append(defs, text);
     p.append(svg);
     bloc.append(p);
+    // SVG no dibuixa el text que no cap a l'arc: si és massa llarg, el fem més petit fins que hi cap.
+    // Es mira ara i quan acaben d'arribar les lletres (el vídeo final dibuixa abans de tenir-les).
+    const arc = 2 * radi * Math.asin(Math.min(1, ample / 2 / radi));
+    const ajusta = () => {
+      text.style.fontSize = "";
+      const abans = lletres.map((l) => l.style.display);  // a màquina d'escriure, potser encara amagades
+      for (const l of lletres) l.style.display = "inline";
+      let llarg = 0;
+      try { llarg = text.getComputedTextLength(); } catch { llarg = 0; }
+      lletres.forEach((l, k) => { l.style.display = abans[k]; });
+      if (llarg > arc * 0.96) text.style.fontSize = `${((arc * 0.96) / llarg).toFixed(4)}em`;
+    };
+    ajusta();
+    if (doc.fonts && doc.fonts.status !== "loaded") doc.fonts.ready.then(ajusta);
     return { p, lletres, cursor };
   }
 

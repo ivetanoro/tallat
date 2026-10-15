@@ -169,7 +169,9 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         recursos.append(f'<asset id="{rid}" name="{nom_br}" start="0s" duration="{t.fcp(durada)}" hasVideo="1" '
                         f'format="r4"><media-rep kind="original-media" src="{_url(br["fitxer"])}"/></asset>')
         lloc, ajust = _lloc_broll(br), ""
-        if lloc:  # en targeta: retallat, més petit i al seu lloc (posicions en % de l'alçada, y amunt)
+        # En targeta: retallat, més petit i al seu lloc. A FCPXML, tant les posicions com el retall
+        # (trim-rect, també l'esquerra i la dreta) van en % de l'alçada del fotograma; y amunt.
+        if lloc:
             rh, rv = lloc["retall"]
             ajust = (f'<adjust-crop mode="trim"><trim-rect left="{rh * AMPLADA / ALCADA * 100:.3f}" '
                      f'right="{rh * AMPLADA / ALCADA * 100:.3f}" top="{rv * 100:.3f}" bottom="{rv * 100:.3f}"/>'
