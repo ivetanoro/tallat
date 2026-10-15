@@ -82,6 +82,7 @@ La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que 
 - `transcriu` les detecta sola; `instruccions` les torna a detectar en un projecte que ja existeix.
 - Només compten si la paraula obre una frase (després d'un punt o d'una pausa). El transcriptor de vegades escriu «Clot», «Cloud» o «Clau»: també compten.
 - «tallat, …» i «Codex, …» també serveixen (no tothom fa servir Claude), però només si el que ve després és una ordre coneguda (torno a començar, zoom, b-roll, sticker): «un tallat amb llet» no és cap instrucció.
+- La instrucció acaba al primer final de frase o en un silenci d'un segon. Si no se'n troba el final (més de 25 paraules), queda marcada com a `dubtosa` i no se'n treu res del vídeo: mira-la amb la persona.
 - Les paraules de la instrucció es treuen del vídeo (motiu «instruccio») i queden a `instruccions.json` per decidir a la pàgina:
   - **talla** («torno a començar», «talla des d'aquí»): la presa bona comença aquí. Si en acceptar-la es troba el primer intent de la frase que ve després, es treu.
   - **zoom**: s'apropa el tros que comença just després de la instrucció.

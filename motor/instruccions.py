@@ -31,8 +31,8 @@ DESPERTA = {normalitza(w) for w in ("claude", "claud", "clod", "clot", "cloud", 
 DESPERTA_AMB_ORDRE = {normalitza(w) for w in ("tallat", "tayat", "codex", "còdex", "códex", "codecs")}  # només amb una ordre coneguda
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_INICI = 0.6      # un silenci així abans de «Claude» també compta com a inici de frase
-PAUSA_FINAL = 0.45     # la instrucció acaba en un final de frase seguit d'una pausa així
-MAX_PARAULES = 45
+PAUSA_SENSE_PUNT = 1.0  # sense puntuació, la instrucció acaba en un silenci així
+MAX_PARAULES = 25       # les instruccions són curtes: si no se'n troba el final abans, és dubtosa
 FINESTRA_REPRESA = 180  # segons enrere on es busca el primer intent d'una frase repetida
 
 TIPUS = [
@@ -93,12 +93,18 @@ def detecta(paraules: list[dict]) -> list[dict]:
     while i < len(paraules):
         paraula = normalitza(paraules[i]["text"])
         if (paraula in DESPERTA or paraula in DESPERTA_AMB_ORDRE) and _obre_frase(paraules, i):
-            fi = i
+            # La instrucció acaba al primer final de frase («Claude, zoom aquí.») o, si el transcriptor
+            # no hi ha posat puntuació, en un silenci llarg. Una pausa just després de «Claude» no compta.
+            fi, clara = i, False
             while fi + 1 < len(paraules) and fi - i < MAX_PARAULES:
                 actual, seguent = paraules[fi], paraules[fi + 1]
-                if FI_DE_FRASE.search(actual["text"]) and seguent["inici"] - actual["final"] >= PAUSA_FINAL:
+                if fi > i and (FI_DE_FRASE.search(actual["text"])
+                               or seguent["inici"] - actual["final"] >= PAUSA_SENSE_PUNT):
+                    clara = True
                     break
                 fi += 1
+            else:
+                clara = fi + 1 >= len(paraules)  # s'ha acabat la gravació: també és un final clar
             text = " ".join(p["text"] for p in paraules[i + 1:fi + 1]).strip(" ,")
             tipus = tipus_de(text)
             if paraula in DESPERTA_AMB_ORDRE and tipus == "altre":  # «Tallat amb llet, si us plau»
@@ -110,6 +116,8 @@ def detecta(paraules: list[dict]) -> list[dict]:
                    "inici": paraules[i]["inici"], "final": paraules[fi]["final"],
                    "ancora": paraules[ancora]["id"] if ancora is not None else None,
                    "estat": "pendent"}
+            if not clara:  # no se sap on acaba: no se'n treu res del vídeo sense que la persona ho vegi
+                ins["dubtosa"] = True
             if tipus == "talla":
                 tros = _represa(paraules, fi)
                 if tros:  # treiem des del primer intent fins just abans de «Claude» (o «tallat»)
@@ -133,7 +141,7 @@ def desa(carpeta: Path, instruccions: list[dict]) -> None:
 def aplica_a_estat(estat: dict, instruccions: list[dict]) -> dict:
     """Treu del vídeo les paraules de cada instrucció (es poden recuperar)."""
     for ins in instruccions:
-        if not ins.get("paraules"):  # afegida a mà a la pàgina: no hi ha paraules per treure
+        if not ins.get("paraules") or ins.get("dubtosa"):  # afegida a mà, o sense un final clar
             continue
         a, b = ins["paraules"]
         for pid in range(a, b + 1):
@@ -142,10 +150,21 @@ def aplica_a_estat(estat: dict, instruccions: list[dict]) -> dict:
     return estat
 
 
+CAMPS_DETECCIO = {"id", "tipus", "text", "paraules", "inici", "final", "ancora", "treure", "dubtosa"}
+
+
 def fusiona(noves: list[dict], velles: list[dict]) -> list[dict]:
-    """En tornar a detectar, conserva les decisions ja preses (acceptada/descartada)."""
+    """En tornar a detectar, no es perd res del que ja s'havia fet.
+
+    - De les que es tornen a trobar, es conserva tot el que no surt de la detecció: la decisió
+      (acceptada/descartada) i el recurs assignat (fitxer, original, durada…).
+    - Les afegides a mà es queden tal qual.
+    - Les que ja no es troben però tenien un fitxer assignat, també (no es llença feina)."""
     per_id = {v["id"]: v for v in velles}
     for n in noves:
-        if n["id"] in per_id:
-            n["estat"] = per_id[n["id"]].get("estat", "pendent")
-    return noves
+        for clau, valor in per_id.get(n["id"], {}).items():
+            if clau not in CAMPS_DETECCIO:
+                n[clau] = valor
+    trobades = {n["id"] for n in noves}
+    conservades = [v for v in velles if v["id"] not in trobades and (v.get("manual") or v.get("fitxer"))]
+    return sorted(noves + conservades, key=lambda x: x.get("inici", 0))

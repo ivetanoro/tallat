@@ -1743,7 +1743,8 @@ function pintaInstruccions() {
     item.querySelector(".ins-text").textContent = `«${ins.text}»`;
     item.querySelector(".ins-estat").textContent =
       ins.estat === "acceptada" ? (["broll", "sticker"].includes(ins.tipus) ? "" : `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}`)
-        : ins.estat === "descartada" ? "Descartada" : "";
+        : ins.estat === "descartada" ? "Descartada"
+        : ins.dubtosa ? "No he sabut on acaba: no he tret res del vídeo. Treu-ne tu les paraules." : "";
     const accions = accionsBroll(ins, item);
     if (accions) item.querySelector(".reel-text").append(accions);
     item.addEventListener("click", (e) => {

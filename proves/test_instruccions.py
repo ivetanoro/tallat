@@ -53,6 +53,44 @@ class TestDeteccio(unittest.TestCase):
         self.assertEqual(sorted(estat["esborrades"]), [1, 2, 3])
         self.assertEqual(set(estat["esborrades"].values()), {"instruccio"})
 
+    def test_una_instruccio_curta_no_s_empassa_la_frase_seguent(self):
+        # Revisió de Codex: amb puntuació i pauses curtes, la frase de després quedava dins de la instrucció.
+        p = paraules("Claude, zoom aquí. Aquesta frase ha de quedar al vídeo.")
+        ins = instruccions.detecta(p)
+        self.assertEqual([(i["tipus"], i["paraules"]) for i in ins], [("zoom", [0, 2])])
+        self.assertEqual(ins[0]["ancora"], 3)
+        estat = instruccions.aplica_a_estat(edicio.estat_buit(), ins)
+        self.assertEqual(sorted(estat["esborrades"]), [0, 1, 2])
+
+    def test_sense_puntuacio_acaba_en_un_silenci_llarg(self):
+        p = paraules("Claude posa un b-roll d'una rentadora i ara continuo parlant", {5: 1.2})
+        self.assertEqual(instruccions.detecta(p)[0]["paraules"], [0, 5])
+
+    def test_una_pausa_curta_dins_la_instruccio_no_la_talla(self):
+        p = paraules("Claude, posa un b-roll d'una rentadora. Seguim.", {3: 0.5})
+        self.assertEqual(instruccions.detecta(p)[0]["text"], "posa un b-roll d'una rentadora.")
+
+    def test_sense_final_clar_no_es_treu_res(self):
+        p = paraules("Claude " + " ".join(f"paraula{i}" for i in range(40)))
+        ins = instruccions.detecta(p)
+        self.assertTrue(ins[0]["dubtosa"])
+        self.assertEqual(instruccions.aplica_a_estat(edicio.estat_buit(), ins)["esborrades"], {})
+
+    def test_tornar_a_detectar_no_perd_feina(self):
+        p = paraules("Hola. Claude, b-roll d'un vinil. Adéu.", {5: 0.8})
+        velles = instruccions.detecta(p)
+        velles[0].update(estat="acceptada", fitxer="broll/i1.mp4", durada=1.5)
+        manual = {"id": "m3-1", "tipus": "sticker", "text": "un cor", "paraules": None, "inici": 2.0,
+                  "final": 2.0, "ancora": 6, "estat": "acceptada", "manual": True, "fitxer": "stickers/m3-1.png"}
+        perduda = {"id": "i99", "tipus": "broll", "text": "una dutxa", "paraules": [99, 100], "inici": 9.0,
+                   "final": 9.5, "ancora": 101, "estat": "acceptada", "fitxer": "broll/i99.mp4"}
+        noves = instruccions.fusiona(instruccions.detecta(p), velles + [manual, perduda])
+        per_id = {n["id"]: n for n in noves}
+        self.assertEqual((per_id["i1"]["estat"], per_id["i1"]["fitxer"], per_id["i1"]["durada"]),
+                         ("acceptada", "broll/i1.mp4", 1.5))
+        self.assertIn("m3-1", per_id)  # la manual es queda
+        self.assertIn("i99", per_id)   # ja no es troba, però tenia un fitxer: es queda
+
     def test_la_neteja_no_les_torna_a_posar(self):
         estat = edicio.estat_buit()
         estat["esborrades"] = {1: "instruccio", 2: "farciment"}

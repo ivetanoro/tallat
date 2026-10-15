@@ -72,7 +72,7 @@ class Feina:
 
 def _arrel_de(projecte: Projecte) -> Projecte:
     """Si el projecte és un reel (reels/<id>/ dins d'una gravació), la gravació sencera."""
-    if (projecte.carpeta / "reel.json").exists() and projecte.carpeta.parent.name == muntatge.CARPETA_REELS:
+    if (projecte.carpeta / muntatge.REEL).exists() and projecte.carpeta.parent.name == muntatge.CARPETA_REELS:
         return Projecte(projecte.carpeta.parent.parent)
     return projecte
 

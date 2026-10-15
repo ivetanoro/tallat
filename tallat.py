@@ -28,7 +28,7 @@ import sys
 import time
 from pathlib import Path
 
-from motor import comprova, edicio, editors, entorn, exporta, gust, muntatge, transcripcio
+from motor import comprova, edicio, editors, entorn, exporta, gust, instruccions, muntatge, transcripcio
 from motor.projecte import ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
 
 
@@ -58,6 +58,10 @@ def ordre_transcriu(args) -> None:
     carpeta = Path(args.projecte).expanduser().resolve()
     if not video.exists():
         sys.exit(f"No trobo el vídeo: {video}")
+    if (carpeta / TRANSCRIPCIO).is_symlink() or (carpeta / muntatge.REEL).exists():
+        # Un reel comparteix la transcripció amb la gravació sencera: refer-la aquí la canviaria per a tots.
+        sys.exit("Aquest projecte és un reel: comparteix la transcripció amb la gravació sencera.\n"
+                 "Si l'has de refer, fes-ho a la carpeta de la gravació (i torna a crear els reels).")
     if (carpeta / TRANSCRIPCIO).exists() and not args.forca:
         sys.exit(f"Aquest projecte ja té una transcripció ({carpeta / TRANSCRIPCIO}).\n"
                  "Si la vols refer i perdre els canvis, afegeix --forca.")
@@ -82,6 +86,14 @@ def ordre_transcriu(args) -> None:
     (carpeta / ORIGINAL).write_text(edicio.text_editable(paraules), encoding="utf-8")
     for nom in ("edicio.json", "edicio.txt"):
         (carpeta / nom).unlink(missing_ok=True)  # transcripció nova: l'edició anterior ja no encaixa
+    # Les instruccions i els reels anteriors apunten a paraules que ara poden ser unes altres:
+    # no s'esborren, es guarden a part perquè no es barregin amb les noves.
+    marca_temps = time.strftime("%Y%m%d-%H%M%S")
+    for nom in (instruccions.FITXER, muntatge.CARPETA_REELS):
+        if (carpeta / nom).exists():
+            desti = carpeta / f"{Path(nom).stem}-anteriors-{marca_temps}{Path(nom).suffix}"
+            (carpeta / nom).rename(desti)
+            print(f"He guardat {nom} d'abans a {desti.name} (era de la transcripció anterior).")
 
     projecte = Projecte(carpeta)
     if not args.sense_neteja:

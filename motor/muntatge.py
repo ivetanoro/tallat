@@ -26,6 +26,7 @@ from motor import edicio
 REELS = "reels.json"
 GUIO = "guio.txt"
 CARPETA_REELS = "reels"
+REEL = "reel.json"  # marca la carpeta d'un reel (reels/<id>/)
 
 
 def _temps(s: float) -> str:
@@ -62,7 +63,7 @@ def llegeix_reels(carpeta: Path, paraules: list[dict]) -> tuple[list[dict], list
         if rid in vistos:
             rid = f"{rid}-{i + 1}"
         vistos.add(rid)
-        rangs = []
+        rangs, fets = [], set()
         for rang in r.get("paraules", []):
             try:
                 a, b = int(rang[0]), int(rang[1])
@@ -72,6 +73,12 @@ def llegeix_reels(carpeta: Path, paraules: list[dict]) -> tuple[list[dict], list
             if not (0 <= a <= b < n):
                 errors.append(f"{rid}: el tros {a}–{b} surt de la transcripció (0–{n - 1})")
                 continue
+            repetides = fets.intersection(range(a, b + 1))
+            if repetides:
+                errors.append(f"{rid}: el tros {a}–{b} repeteix paraules d'un altre tros "
+                              f"({min(repetides)}–{max(repetides)}); cada paraula només pot sonar una vegada")
+                continue
+            fets.update(range(a, b + 1))
             rangs.append((a, b))
         if not rangs:
             errors.append(f"{rid}: no té cap tros de paraules")
@@ -102,7 +109,7 @@ def crea_reel(arrel, reel: dict) -> Path:
         enllac = carpeta / nom
         if not enllac.exists() and (arrel.carpeta / nom).exists():
             enllac.symlink_to(Path("..") / ".." / nom)
-    (carpeta / "reel.json").write_text(json.dumps(reel, ensure_ascii=False, indent=1), encoding="utf-8")
+    (carpeta / REEL).write_text(json.dumps(reel, ensure_ascii=False, indent=1), encoding="utf-8")
     if not (carpeta / EDICIO).exists():
         projecte = Projecte(carpeta)
         projecte.estat = estat_inicial(projecte.dades["paraules"], reel["paraules"])
