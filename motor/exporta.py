@@ -1,9 +1,11 @@
 """Export del muntatge a MP4 vertical 9:16 amb ffmpeg."""
 from __future__ import annotations
 
+import collections
 import json
 import subprocess
 import tempfile
+import threading
 from fractions import Fraction
 from pathlib import Path
 
@@ -104,7 +106,13 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = Fa
 
 def _executa(ordre: list[str], durada: float, progres) -> None:
     """Executa ffmpeg i va cridant progres(percentatge) de 0 a 100."""
-    proces = subprocess.Popen(ordre, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    proces = subprocess.Popen(ordre, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                              errors="replace")
+    # Els errors es llegeixen alhora, en un altre fil: si ffmpeg n'escriu molts (un vídeo malmès)
+    # i ningú no els llegeix, el canal s'omple, ffmpeg s'espera i l'export no acaba mai.
+    errors = collections.deque(maxlen=200)
+    fil = threading.Thread(target=lambda: errors.extend(proces.stderr), daemon=True)
+    fil.start()
     for linia in proces.stdout:
         if progres and linia.startswith("out_time_us="):
             try:
@@ -112,8 +120,9 @@ def _executa(ordre: list[str], durada: float, progres) -> None:
             except ValueError:
                 continue
     proces.wait()
+    fil.join()
     if proces.returncode != 0:
-        raise RuntimeError("ffmpeg ha fallat:\n" + proces.stderr.read()[-2000:])
+        raise RuntimeError("ffmpeg ha fallat:\n" + "".join(errors)[-2000:])
 
 
 def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualitat: str,

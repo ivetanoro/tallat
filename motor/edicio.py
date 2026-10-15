@@ -23,6 +23,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 MARGE = 0.04          # segons d'aire abans i després de cada tros conservat
+MAXIM_ALLARGA = 1.5   # com a molt, l'última paraula s'allarga això si la veu continua
 PAUSA_MAXIMA = 0.35   # segons: els silencis entre paraules no duraran més que això
 FI_DE_FRASE = re.compile(r"[.?!…»\"]$")
 PAUSA_PARAGRAF = 0.7  # segons de silenci que també obren un paràgraf nou
@@ -260,6 +261,10 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
                         final = real + marge / 2
                 final = min(final, seguent["inici"])
                 tanca_final = True
+        elif veu is not None:  # l'última paraula de la gravació: també pot acabar més tard del que diu l'alineador
+            real = fi_de_la_veu(veu, c[-1]["final"], min(durada, c[-1]["final"] + MAXIM_ALLARGA))
+            if real is not None and real > final:
+                final = real + marge / 2
         brut.append((max(0.0, inici), min(durada, final), tanca_inici, tanca_final))
 
     # Ajustem a fotogrames sencers. Al costat d'una paraula esborrada arrodonim cap endins,
@@ -270,6 +275,8 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
     for a, b, tanca_a, tanca_b in brut:
         fa = math.ceil(a * fps - 1e-6) if tanca_a else math.floor(a * fps + 1e-6)
         fb = math.floor(b * fps + 1e-6) if tanca_b else math.ceil(b * fps - 1e-6)
+        if fb - fa < 1:  # una paraula més curta que un fotograma: millor un bocí de més que perdre-la
+            fa, fb = math.floor(a * fps + 1e-6), math.ceil(b * fps - 1e-6)
         if fb - fa < 1:
             continue
         if ajustats and ajustats[-1][0] <= fa <= ajustats[-1][1]:  # continuació directa: un sol tros

@@ -1,6 +1,8 @@
 import shutil
 import subprocess
+import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -17,6 +19,30 @@ class TestTrams(unittest.TestCase):
              {"id": 1, "text": "sí", "inici": 0.4, "final": 0.45, "frase": 0, "conservada": True},
              {"id": 2, "text": "eh", "inici": 0.45, "final": 1.0, "frase": 0, "conservada": False}]
         self.assertEqual(edicio.trams(p, fps=30, durada=1.0), [(0.4, 0.4333)])
+
+    def test_una_paraula_mes_curta_que_un_fotograma_tampoc(self):
+        # Segona revisió de Codex: de 0,41 a 0,46 s no hi cap cap fotograma sencer i es perdia.
+        p = [{"id": 0, "text": "eh", "inici": 0.0, "final": 0.41, "frase": 0, "conservada": False},
+             {"id": 1, "text": "sí", "inici": 0.41, "final": 0.46, "frase": 0, "conservada": True},
+             {"id": 2, "text": "eh", "inici": 0.46, "final": 1.0, "frase": 0, "conservada": False}]
+        (a, b), = edicio.trams(p, fps=30, durada=1.0)
+        self.assertLessEqual(a, 0.41)
+        self.assertGreaterEqual(b, 0.46)
+
+    def test_l_ultima_paraula_acaba_on_acaba_la_veu(self):
+        # L'alineador diu que acaba a 0,4 s, però la veu continua fins a 0,85 s.
+        veu_ = np.zeros(200, dtype=bool)
+        veu_[:85] = True
+        p = [{"id": 0, "text": "adéu", "inici": 0.05, "final": 0.4, "frase": 0, "conservada": True}]
+        (a, b), = edicio.trams(p, fps=30, durada=2.0, veu=veu_)
+        self.assertGreaterEqual(b, 0.85)
+        self.assertLess(b, 1.0)
+
+    def test_l_ultima_paraula_no_s_allarga_sense_silenci_a_prop(self):
+        veu_ = np.ones(1000, dtype=bool)  # soroll fins al final: no sabem de qui és, no s'allarga
+        p = [{"id": 0, "text": "adéu", "inici": 0.05, "final": 0.4, "frase": 0, "conservada": True}]
+        (a, b), = edicio.trams(p, fps=30, durada=10.0, veu=veu_)
+        self.assertLess(b, 0.5)
 
 
 class TestParaulesSenseTemps(unittest.TestCase):
@@ -61,6 +87,24 @@ class TestMapaDeVeu(unittest.TestCase):
                 veu.llegeix_audio = original
             self.assertTrue(m.all())
             self.assertTrue(np.load(Path(d) / "veu.npy").all())
+
+
+class TestExecutaFfmpeg(unittest.TestCase):
+    def test_molts_errors_no_encallen_l_export(self):
+        # Revisió de Codex: si el programa escrivia molts errors, el canal s'omplia i l'export no acabava mai.
+        ordre = [sys.executable, "-c", "import sys; sys.stderr.write('x' * 2_000_000 + 'final'); sys.exit(1)"]
+        resultat = {}
+
+        def prova():
+            try:
+                exporta._executa(ordre, 1.0, None)
+            except RuntimeError as e:
+                resultat["error"] = str(e)
+        fil = threading.Thread(target=prova, daemon=True)
+        fil.start()
+        fil.join(timeout=30)
+        self.assertFalse(fil.is_alive(), "l'export s'ha quedat encallat")
+        self.assertTrue(resultat["error"].endswith("final"))
 
 
 class TestTempsExactes(unittest.TestCase):
