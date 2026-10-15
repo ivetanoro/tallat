@@ -15,6 +15,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 - **Subtítols animats.** Tretze estils per començar (Clàssic, Karaoke, Impacte, Neó…), amb la teva lletra i els teus colors. El que veus a la pàgina és el que surt al vídeo.
 - **B-roll i stickers.** Fitxers teus, o generats amb la intel·ligència artificial d'imatge o vídeo que tinguis connectada a Claude.
 - **Canvies l'ordre** dels paràgrafs arrossegant-los.
+- **Kits d'estil.** Desa el teu estil (lletra, colors, animacions, durada del b-roll…) amb un nom, fes-ne uns quants per a tipus de vídeo diferents, tria'n un per a cada vídeo i passa'l a qui vulguis en un `.zip`.
 - **Recorda el teu gust.** Si dius «els subtítols, més grans» o «no em treguis mai els *vale*», ho aplica a tots els vídeos següents.
 - **Exporta** un esborrany ràpid, la versió final en 1080 o 4K vertical, o un projecte per acabar-lo a Premiere, Final Cut, DaVinci Resolve o CapCut.
 
@@ -94,7 +95,7 @@ Les instruccions es treuen soles del vídeo, i a la pàgina decideixes si les ac
 ## On es guarda cada cosa
 
 - **Els teus vídeos i projectes**, on tu diguis, mai dins de la carpeta de tallat.
-- **`~/.tallat/`**, la teva configuració: l'estil dels subtítols (`brand.json`), les regles del teu gust (`gust.json`), la llista de farciment (`farciment.txt`), les teves lletres (`fonts/`), les biblioteques de b-roll i stickers (`broll/`, `stickers/`) i les eines que s'han instal·lat.
+- **`~/.tallat/`**, la teva configuració: els teus kits d'estil, amb les seves lletres (`kits/`), les regles del teu gust (`gust.json`), la llista de farciment (`farciment.txt`), les biblioteques de b-roll i stickers (`broll/`, `stickers/`) i les eines que s'han instal·lat.
 
 ## Privacitat
 

@@ -11,6 +11,7 @@ Ajustos possibles:
   farciment.treu=EXPRESSIO, farciment.proposa=EXPRESSIO, farciment.deixa=EXPRESSIO
 
 Quan es treu una regla amb ajust, l'opció torna a com estava abans (si ningú no l'ha tornada a canviar).
+Els ajustos d'estil es fan al kit per defecte (el dels vídeos nous).
 """
 from __future__ import annotations
 

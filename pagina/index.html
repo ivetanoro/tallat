@@ -41,6 +41,25 @@
       <button class="enllac" id="torna-netejar">Torna a passar la neteja</button>
     </section>
 
+    <section class="seccio" data-seccio="kit">
+      <h2>Kit d'estil</h2>
+      <select id="kit" class="tria-kit" aria-label="Kit d'estil d'aquest vídeo"></select>
+      <p class="detall" id="kit-detall"></p>
+      <div class="accions-kit">
+        <button class="enllac" id="kit-duplica" title="Un kit nou, còpia d'aquest, per a aquest vídeo">Duplica</button>
+        <button class="enllac" id="kit-nou" title="Un kit nou amb l'estil de tallat, per a aquest vídeo">Nou</button>
+        <button class="enllac" id="kit-nom">Canvia el nom</button>
+        <button class="enllac" id="kit-defecte" title="Els vídeos nous faran servir aquest kit">Fes-lo per defecte</button>
+        <button class="enllac" id="kit-exporta" title="Desa el kit en un .zip per passar-lo a algú">Exporta</button>
+        <button class="enllac" id="kit-importa" title="Afegeix un kit d'un .zip">Importa…</button>
+        <button class="enllac perill" id="kit-esborra">Treu-lo</button>
+      </div>
+      <form class="nova-regla" id="form-kit" hidden>
+        <input id="nom-kit" type="text" autocomplete="off" maxlength="60" aria-label="Nom del kit">
+      </form>
+      <input type="file" id="fitxer-kit" accept=".zip,application/zip" hidden>
+    </section>
+
     <section class="seccio" data-seccio="subtitols">
       <h2>Subtítols</h2>
       <button class="interruptor" id="subtitols" role="switch" aria-checked="true">
@@ -76,7 +95,7 @@
     <div class="panell-estil" id="panell-estil" hidden>
       <button class="enllac tornar" id="tanca-estil">‹ Enrere</button>
       <h2 class="titol-panell">Estil dels subtítols</h2>
-      <p class="detall">Es desa per a tots els teus vídeos. Mira'l al reproductor mentre el canvies.</p>
+      <p class="detall">Es desa al kit «<span id="nom-kit-panell"></span>»: canvia tots els vídeos que el fan servir. Mira'l al reproductor mentre el canvies.</p>
 
       <div class="estils" id="estils" role="radiogroup" aria-label="Estils predefinits"></div>
 

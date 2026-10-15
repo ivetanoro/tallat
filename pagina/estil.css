@@ -195,6 +195,12 @@ kbd {
 .nova-regla input::placeholder { color: var(--text-3); }
 
 .tornar { display: block; margin: 0 0 var(--e3); }
+
+.tria-kit { width: 100%; }
+.accions-kit { display: flex; flex-wrap: wrap; gap: 0 var(--e3); }
+.accions-kit .enllac { font-size: var(--t-petit); }
+.enllac.perill { color: var(--auto); }
+.enllac.confirma { font-weight: 600; }
 .item.instruccio { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); }
 .item.instruccio .reel-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .item.instruccio .ins-tipus { display: flex; align-items: baseline; gap: var(--e2); font-weight: 500; color: var(--text); }
@@ -470,14 +476,14 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
 .panell-estil .interruptor .pista { flex: none; }
 .panell-estil #e-font { width: 100%; }
 .panell-estil .puja-font { margin: calc(-1 * var(--e1)) 0 0; align-self: flex-start; font-size: var(--t-petit); }
-.panell-estil select {
+.panell-estil select, select.tria-kit {
   height: 28px; padding: 0 var(--e7) 0 var(--e3); border: 0; border-radius: var(--radi);
   font: inherit; font-size: var(--t-ui); color: var(--text); cursor: pointer;
   background: var(--superficie) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3-3 3 3M3 7.5l3 3 3-3' fill='none' stroke='%2386868b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 10px;
   box-shadow: 0 0 0 1px var(--linia), 0 1px 1px rgba(0, 0, 0, 0.04);
   -webkit-appearance: none; appearance: none;
 }
-.panell-estil select:hover { box-shadow: 0 0 0 1px var(--omplir-fort), 0 1px 1px rgba(0, 0, 0, 0.04); }
+.panell-estil select:hover, select.tria-kit:hover { box-shadow: 0 0 0 1px var(--omplir-fort), 0 1px 1px rgba(0, 0, 0, 0.04); }
 .panell-estil input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .extrems { display: flex; justify-content: space-between; margin-top: calc(-1 * var(--e1)); font-size: var(--t-peu); color: var(--text-3); }
 .colors { display: flex; gap: var(--e4); }

@@ -25,7 +25,10 @@ MIDA_MAXIMA_JSON = 10 * 1024 * 1024  # l'estat d'un projecte llarg no arriba ni 
 MIDA_MAXIMA_PUJADA = 2 * 1024 ** 3   # un b-roll o un sticker
 # Les peticions que canvien el projecte obert: han de dir a quin projecte van (dues pestanyes).
 RUTES_DEL_PROJECTE = {"/api/estat", "/api/neteja", "/api/notes", "/api/instruccio", "/api/broll/biblioteca",
-                      "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors"}
+                      "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors",
+                      "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/kit/tria", "/api/kit/nou",
+                      "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa"}
+RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa"}  # el cos és el fitxer mateix
 
 
 def clau_de(projecte: Projecte) -> str:
@@ -130,9 +133,11 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "paragrafs": projecte.paragrafs()}
 
     def info_marca() -> dict:
+        kit = obert["p"].kit()
         estil = obert["p"].estil_subtitols()
         font = marca.fitxer_font(estil)
-        return {"estil_subtitols": estil, "fitxer_estil": str(marca.ruta()),
+        return {"estil_subtitols": estil, "fitxer_estil": str(marca.ruta(kit)),
+                "kit": kit, "kits": marca.kits(),
                 "estils_subtitols": marca.estils(),
                 "font_marca": f"/marca/font?v={int(font.stat().st_mtime)}" if font else None}
 
@@ -277,18 +282,32 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         "paraules": projecte.dades["paraules"],
                         "paragrafs": projecte.paragrafs(),
                         "notes": projecte.notes(), "exports": projecte.exports(), "feina": feina.info(),
-                        "estil_stickers": marca.carrega().get("stickers", {}),
+                        "estil_stickers": projecte.estil().get("stickers", {}),
                         "gust": gust.llegeix(), "seccions_gust": gust.SECCIONS,
                         **info_marca(),
                         **info_reels(),
                         **instantania()})
             if ruta == "/api/feina":
                 return self._json({"feina": feina.info(), "exports": projecte.exports()})
+            if ruta == "/api/kit/exporta":  # el kit en un .zip, per passar-lo a algú (es baixa)
+                kit = (parse_qs(urlparse(self.path).query).get("kit") or [""])[0]
+                try:
+                    nom, cos = marca.empaqueta_kit(kit)
+                except KeyError:
+                    return self.send_error(HTTPStatus.NOT_FOUND)
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Disposition", f'attachment; filename="{nom}"')
+                self.send_header("Content-Length", str(len(cos)))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(cos)
+                return
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def do_POST(self):
             ruta = urlparse(self.path).path
-            fitxer = ruta in ("/api/broll/puja", "/api/marca/font")  # el cos és el fitxer mateix
+            fitxer = ruta in RUTES_DE_FITXER
             if not self._amfitrio_valid() or not self._peticio_valida(json_esperat=not fitxer):
                 return
             projecte = obert["p"]
@@ -300,6 +319,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._puja_broll(projecte)
             if ruta == "/api/marca/font":
                 return self._puja_font()
+            if ruta == "/api/kit/importa":
+                return self._importa_kit()
             try:
                 cos = self._cos()
             except ValueError:
@@ -379,12 +400,33 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     except Exception as e:  # ffmpeg no ha pogut llegir el fitxer
                         return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
                     return self._json(instantania())
-                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil dels subtítols (per a tots els vídeos)
+                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil dels subtítols, al kit d'aquest vídeo
                     try:
                         if ruta.endswith("restableix"):
-                            marca.restableix("subtitols")
+                            marca.restableix("subtitols", kit=projecte.kit())
                         else:
-                            marca.desa("subtitols", cos.get("subtitols") or {})
+                            marca.desa("subtitols", cos.get("subtitols") or {}, kit=projecte.kit())
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+                    return self._json({**info_marca(), **instantania()})
+                if ruta.startswith("/api/kit/"):  # triar, crear, canviar el nom, per defecte o treure un kit
+                    kit = str(cos.get("kit") or "")
+                    try:
+                        if ruta == "/api/kit/tria":
+                            projecte.tria_kit(kit)
+                        elif ruta == "/api/kit/nou":  # un kit nou (còpia d'un altre o neutre) per a aquest vídeo
+                            copia = cos.get("copia_de")
+                            projecte.tria_kit(marca.crea_kit(cos.get("nom", ""), str(copia) if copia else None))
+                        elif ruta == "/api/kit/nom":
+                            marca.canvia_nom(kit, cos.get("nom", ""))
+                        elif ruta == "/api/kit/per-defecte":
+                            marca.fes_per_defecte(kit)
+                        elif ruta == "/api/kit/esborra":
+                            marca.esborra_kit(kit)
+                        else:
+                            return self.send_error(HTTPStatus.NOT_FOUND)
+                    except KeyError:
+                        return self._json({"error": "No trobo aquest kit"}, HTTPStatus.NOT_FOUND)
                     except ValueError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                     return self._json({**info_marca(), **instantania()})
@@ -477,8 +519,25 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "La font és buida o massa gran")
             contingut = self.rfile.read(mida)
             with bloqueig:
+                if self.headers.get("X-Tallat-Projecte") != clau_de(obert["p"]):
+                    return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
                 try:
-                    marca.desa_font(nom, contingut)
+                    marca.desa_font(nom, contingut, kit=obert["p"].kit())
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+                return self._json({**info_marca(), **instantania()})
+
+        def _importa_kit(self):
+            """Rep un kit (el .zip que fa «Exporta»), l'afegeix i el fa servir per a aquest vídeo."""
+            mida = int(self.headers.get("Content-Length") or 0)
+            if not 0 < mida <= marca.MIDA_MAXIMA_KIT:
+                return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "El kit és buit o massa gran")
+            contingut = self.rfile.read(mida)
+            with bloqueig:
+                if self.headers.get("X-Tallat-Projecte") != clau_de(obert["p"]):
+                    return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
+                try:
+                    obert["p"].tria_kit(marca.importa_kit(contingut))
                 except ValueError as e:
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                 return self._json({**info_marca(), **instantania()})

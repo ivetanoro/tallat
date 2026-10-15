@@ -29,7 +29,7 @@ from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape
 
-from motor import exporta, marca, subtitols
+from motor import exporta, subtitols
 
 AMPLADA, ALCADA = 1080, 1920
 FPS_RECURSOS = 30  # el b-roll (motor/broll.py) i la capa de subtítols (motor/subtitols.py) es fan a 30 fps
@@ -93,7 +93,7 @@ def _plan(projecte, trams) -> dict:
             continue
         trossos.append({"a": fa, "b": fb, "offset": offset, "zoom": bool(zooms[k]) if k < len(zooms) else False})
         offset += fb - fa
-    est_st = marca.carrega().get("stickers", {})
+    est_st = projecte.estil().get("stickers", {})
     stickers = []
     for k, st in enumerate(projecte.stickers(trams)):
         x = est_st.get("x", 0.72) if k % 2 == 0 else 1 - est_st.get("x", 0.72)

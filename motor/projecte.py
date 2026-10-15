@@ -6,6 +6,7 @@
   original.txt        el text sencer, per consultar
   revisio.txt         el text amb [tret] i {proposat}
   proxy.mp4           còpia lleugera per a la pàgina de revisió
+  kit-triat.json      el kit d'estil d'aquest vídeo, si no és el per defecte
   exports/            vídeos exportats
 """
 from __future__ import annotations
@@ -26,6 +27,7 @@ REVISIO = "revisio.txt"
 NOTES = "notes.json"
 PROXY = "proxy.mp4"
 EXPORTS = "exports"
+KIT_TRIAT = "kit-triat.json"
 
 MOTIUS = {"usuari": "tretes per tu", "farciment": "farciment", "tall": "paraules a mig dir",
           "muntatge": "fora del reel", "instruccio": "instruccions de veu"}
@@ -114,8 +116,32 @@ class Projecte:
             resultat += [[q["id"] for q in g] for g in edicio.paragrafs(tros)]
         return resultat
 
+    # --- Kit d'estil --------------------------------------------------------------
+
+    def kit(self) -> str:
+        """El kit d'estil d'aquest vídeo: el triat aquí; en un reel que no en té cap de triat, el de la
+        gravació sencera; i si no, el kit per defecte (també si el triat ja no existeix)."""
+        arrel = (self.carpeta / TRANSCRIPCIO).resolve().parent  # en un reel, la gravació sencera
+        for carpeta in (self.carpeta, arrel):
+            try:
+                triat = json.loads((carpeta / KIT_TRIAT).read_text(encoding="utf-8")).get("kit")
+            except (OSError, json.JSONDecodeError, AttributeError):
+                continue
+            if triat:
+                return marca.resol(triat)
+        return marca.kit_per_defecte()
+
+    def tria_kit(self, kit: str) -> None:
+        if marca.resol(kit) != kit:
+            raise KeyError(kit)
+        (self.carpeta / KIT_TRIAT).write_text(json.dumps({"kit": kit}) + "\n", encoding="utf-8")
+
+    def estil(self) -> dict:
+        """L'estil sencer del kit d'aquest vídeo (subtítols, b-roll, stickers i talls)."""
+        return marca.carrega(kit=self.kit())
+
     def estil_subtitols(self) -> dict:
-        return marca.carrega()["subtitols"]
+        return self.estil()["subtitols"]
 
     def linies_subtitols(self, trams=None) -> list[dict]:
         return subtitols.grups(self.paraules(), trams if trams is not None else self.trams(),
@@ -129,7 +155,7 @@ class Projecte:
             return None
         return subtitols.renderitza(linies, self.estil_subtitols(), sum(b - a for a, b in trams),
                                     self.carpeta, qualitat, avis, stickers=enganxines,
-                                    estil_stickers=marca.carrega().get("stickers", {}))
+                                    estil_stickers=self.estil().get("stickers", {}))
 
     # --- Instruccions de veu ------------------------------------------------------
 
@@ -178,7 +204,7 @@ class Projecte:
         if ins is None:
             raise KeyError(iid)
         base = self.carpeta_instruccions()
-        estil = marca.carrega().get("broll", {})
+        estil = self.estil().get("broll", {})
         d = float(durada or ins.get("durada") or estil.get("durada", 1.5))
         original = broll.copia_original(Path(origen), base, iid)
         clip = broll.prepara(original, base / broll.CARPETA / f"{iid}.mp4", d, estil.get("lut"))
@@ -204,7 +230,7 @@ class Projecte:
         if not stickers.es_compatible(origen):
             raise ValueError("Els stickers han de ser PNG, WebP, GIF o SVG (millor amb el fons transparent).")
         base = self.carpeta_instruccions()
-        d = float(durada or ins.get("durada") or marca.carrega().get("stickers", {}).get("durada", 2.0))
+        d = float(durada or ins.get("durada") or self.estil().get("stickers", {}).get("durada", 2.0))
         copia = stickers.copia(origen, base, iid)
         ins.update(fitxer=str(copia.relative_to(base)), durada=d, estat="acceptada", tipus="sticker")
         instruccions.desa(base, llista)

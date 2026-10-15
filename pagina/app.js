@@ -1040,11 +1040,138 @@ async function desaEstil() {
 }
 
 function respostaEstil(r) {
+  if (r.kits) { kits = r.kits; kitActual = r.kit; pintaKits(); }
   fontMarca = r.font_marca;
   if (r.subtitols) liniesSub = r.subtitols;
   // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
   aplicaEstilSubtitols({ ...r.estil_subtitols, ...estilPendent });
   pintaPanellEstil();
+}
+
+// --- Kits d'estil -----------------------------------------------------------------------------
+// Un kit és un estil amb nom (subtítols, b-roll, stickers i talls). Cada vídeo en fa servir un, i
+// el panell d'estil canvia el d'aquest vídeo. Es poden crear, duplicar, exportar (un .zip) i importar.
+
+let kits = [];           // [{id, nom, per_defecte}]
+let kitActual = null;    // el kit d'aquest vídeo
+let accioNomKit = null;  // «nou», «duplica» o «nom» mentre s'escriu un nom
+
+function pintaKits() {
+  const tria = $("#kit");
+  tria.textContent = "";
+  for (const k of kits) {
+    const o = document.createElement("option");
+    o.value = k.id;
+    o.textContent = k.per_defecte ? `${k.nom} · per defecte` : k.nom;
+    tria.append(o);
+  }
+  tria.value = kitActual;
+  const actual = kits.find((k) => k.id === kitActual);
+  const defecte = kits.find((k) => k.per_defecte);
+  $("#kit-detall").textContent = actual?.per_defecte
+    ? "És el kit per defecte: el fan servir els vídeos nous."
+    : `Els vídeos nous fan servir «${defecte?.nom || ""}».`;
+  $("#kit-defecte").hidden = !!actual?.per_defecte;
+  $("#kit-esborra").hidden = !!actual?.per_defecte;
+  $("#nom-kit-panell").textContent = actual?.nom || "";
+}
+
+function respostaKit(r, missatge) {
+  estat = r.estat;
+  aplicaTrams(r);
+  refresca(true);
+  respostaEstil(r);  // l'estil del kit, la lletra i la llista de kits
+  if (missatge) avis(missatge, 4000);
+}
+
+async function accioKit(ruta, dades, missatge) {
+  try {
+    await cua;
+    respostaKit(await api(ruta, dades), missatge);
+  } catch (e) {
+    avis(e.message, 5000);
+    pintaKits();
+  }
+}
+
+function demanaNomKit(accio) {
+  accioNomKit = accio;
+  const actual = kits.find((k) => k.id === kitActual)?.nom || "";
+  const camp = $("#nom-kit");
+  camp.value = accio === "nom" ? actual : accio === "duplica" ? `${actual} (còpia)` : "";
+  camp.placeholder = accio === "nou" ? "Nom del kit nou" : "Nom del kit";
+  $("#form-kit").hidden = false;
+  camp.focus();
+  camp.select();
+}
+
+async function importaKit(fitxer) {
+  avis(`Important «${fitxer.name}»…`, 20000);
+  try {
+    await cua;
+    const json = await resposta(await fetch(`/api/kit/importa?nom=${encodeURIComponent(fitxer.name)}`,
+      { method: "POST", headers: capcaleres({ "Content-Type": "application/zip" }), body: fitxer }));
+    respostaKit(json, "Kit importat. Aquest vídeo ja el fa servir.");
+  } catch (e) { avis(e.message, 6000); }
+}
+
+function instalaKits() {
+  $("#kit").addEventListener("change", (e) => {
+    const nom = kits.find((k) => k.id === e.target.value)?.nom || "";
+    accioKit("/api/kit/tria", { kit: e.target.value }, `Aquest vídeo fa servir el kit «${nom}».`);
+  });
+  $("#kit-duplica").addEventListener("click", () => demanaNomKit("duplica"));
+  $("#kit-nou").addEventListener("click", () => demanaNomKit("nou"));
+  $("#kit-nom").addEventListener("click", () => demanaNomKit("nom"));
+  const form = $("#form-kit");
+  const camp = $("#nom-kit");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const nom = camp.value.trim();
+    form.hidden = true;
+    if (!nom) return;
+    if (accioNomKit === "nom") accioKit("/api/kit/nom", { kit: kitActual, nom }, "Nom canviat.");
+    else {
+      const duplica = accioNomKit === "duplica";
+      accioKit("/api/kit/nou", { nom, copia_de: duplica ? kitActual : null },
+        `Kit «${nom}» creat${duplica ? "" : " amb l'estil de tallat"}. Aquest vídeo ja el fa servir.`);
+    }
+  });
+  camp.addEventListener("keydown", (e) => { if (e.key === "Escape") { form.hidden = true; e.stopPropagation(); } });
+  camp.addEventListener("blur", () => setTimeout(() => { form.hidden = true; }, 150));
+  $("#kit-defecte").addEventListener("click", () =>
+    accioKit("/api/kit/per-defecte", { kit: kitActual }, "Els vídeos nous faran servir aquest kit."));
+  $("#kit-exporta").addEventListener("click", () => {
+    const enllac = document.createElement("a");
+    enllac.href = `/api/kit/exporta?kit=${encodeURIComponent(kitActual)}`;
+    enllac.download = "";
+    document.body.append(enllac);
+    enllac.click();
+    enllac.remove();
+    avis("El kit es baixa en un .zip. Si porta una font teva, comprova que la pots compartir.", 5000);
+  });
+  $("#kit-importa").addEventListener("click", () => $("#fitxer-kit").click());
+  $("#fitxer-kit").addEventListener("change", (e) => {
+    const fitxer = e.target.files[0];
+    e.target.value = "";
+    if (fitxer) importaKit(fitxer);
+  });
+  // Treure un kit demana un segon clic (es guarda a ~/.tallat/kits-esborrats, per si de cas).
+  const treu = $("#kit-esborra");
+  let confirma = null;
+  treu.addEventListener("click", () => {
+    if (!confirma) {
+      treu.textContent = "Clica un altre cop per treure'l";
+      treu.classList.add("confirma");
+      confirma = setTimeout(() => { confirma = null; treu.textContent = "Treu-lo"; treu.classList.remove("confirma"); }, 4000);
+      return;
+    }
+    clearTimeout(confirma);
+    confirma = null;
+    treu.textContent = "Treu-lo";
+    treu.classList.remove("confirma");
+    accioKit("/api/kit/esborra", { kit: kitActual }, "Kit tret. Aquest vídeo torna a fer servir el per defecte.");
+  });
 }
 
 // Fa sonar una línia de subtítols perquè es vegi com entra.
@@ -1887,6 +2014,7 @@ function instalaControls() {
   instalaColumnes();
   instalaSeccions();
   instalaEstil();
+  instalaKits();
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
     canvia((e) => { e.subtitols = e.subtitols === false; });
@@ -1990,6 +2118,9 @@ async function inicia() {
   marcaPausa();
   marcaSubtitols();
   estilsPredefinits = P.estils_subtitols || [];
+  kits = P.kits || [];
+  kitActual = P.kit;
+  pintaKits();
   fontMarca = P.font_marca;
   aplicaEstilSubtitols(P.estil_subtitols);
   pintaNotes();

@@ -2,7 +2,6 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from motor import marca
 
@@ -50,15 +49,18 @@ class TestMarca(unittest.TestCase):
         self.assertEqual(estil, neutre)
 
     def test_font_propia(self):
-        with mock.patch.object(marca, "FONTS", Path(self.dir.name) / "fonts"):
-            estil = marca.desa_font("La Meva Lletra.otf", b"OTTO-falsa", self.path)
-            self.assertEqual(estil["font"], "La Meva Lletra")
-            self.assertEqual(marca.fitxer_font(estil), Path(self.dir.name) / "fonts" / "La Meva Lletra.otf")
+        # La font va a la carpeta fonts/ del costat del fitxer d'estil (en un kit, dins del kit).
+        estil = marca.desa_font("La Meva Lletra.otf", b"OTTO-falsa", self.path)
+        self.assertEqual(estil["font"], "La Meva Lletra")
+        self.assertEqual(marca.fitxer_font(estil), Path(self.dir.name) / "fonts" / "La Meva Lletra.otf")
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["subtitols"]["font_fitxer"],
+                         "fonts/La Meva Lletra.otf")  # desat relatiu: el kit es pot moure o passar a algú
+        for dolent in ("virus.exe", ".amagada.otf"):
             with self.assertRaises(ValueError):
-                marca.desa_font("virus.exe", b"x", self.path)
-            # Tornar a una font del sistema deixa de fer servir el fitxer.
-            estil = marca.desa("subtitols", {"font": "Avenir Next", "font_fitxer": None}, self.path)
-            self.assertIsNone(marca.fitxer_font(estil))
+                marca.desa_font(dolent, b"x", self.path)
+        # Tornar a una font del sistema deixa de fer servir el fitxer.
+        estil = marca.desa("subtitols", {"font": "Avenir Next", "font_fitxer": None}, self.path)
+        self.assertIsNone(marca.fitxer_font(estil))
 
     def test_estils_predefinits_son_valids(self):
         for estil in marca.estils():

@@ -30,7 +30,7 @@ import sys
 import time
 from pathlib import Path
 
-from motor import comprova, edicio, editors, entorn, exporta, gust, instruccions, muntatge, transcripcio
+from motor import comprova, edicio, editors, entorn, exporta, gust, instruccions, marca, muntatge, transcripcio
 from motor.projecte import ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
 
 
@@ -306,6 +306,42 @@ def ordre_gust(args) -> None:
         sys.exit(str(e))
 
 
+def ordre_kit(args) -> None:
+    try:
+        if args.accio == "nou":
+            kit = marca.crea_kit(args.nom, args.copia_de)
+            print(f"Kit «{args.nom}» creat (id: {kit}).")
+        elif args.accio == "nom":
+            marca.canvia_nom(args.kit, args.nom)
+            print(f"El kit {args.kit} ara es diu «{args.nom}».")
+        elif args.accio == "per-defecte":
+            marca.fes_per_defecte(args.kit)
+            print(f"Els vídeos nous faran servir el kit {args.kit}.")
+        elif args.accio == "tria":
+            projecte = _carrega(args)
+            projecte.tria_kit(args.kit)
+            print(f"«{projecte.nom}» fa servir el kit {args.kit}.")
+        elif args.accio == "exporta":
+            nom, contingut = marca.empaqueta_kit(args.kit)
+            desti = Path(args.a).expanduser() / nom
+            desti.write_bytes(contingut)
+            print(f"Kit desat a {desti}. Si porta una font teva, comprova que la pots compartir.")
+        elif args.accio == "importa":
+            kit = marca.importa_kit(Path(args.fitxer).expanduser().read_bytes())
+            print(f"Kit importat (id: {kit}). Tria'l per a un vídeo a la pàgina o amb «tallat.py kit tria».")
+        elif args.accio == "esborra":
+            desti = marca.esborra_kit(args.kit)
+            print(f"Kit tret de la llista. Si el vols recuperar, és a {desti}.")
+        else:
+            for k in marca.kits():
+                print(f"{'★' if k['per_defecte'] else ' '} {k['id']}: {k['nom']}")
+            print(f"\n★ = el kit per defecte (el dels vídeos nous). Els kits són a {marca.KITS}.")
+    except KeyError as e:
+        sys.exit(f"No trobo el kit «{e.args[0]}». Mira quins n'hi ha amb: tallat.py kit")
+    except (ValueError, OSError) as e:
+        sys.exit(str(e))
+
+
 def main() -> None:
     sys.stdout.reconfigure(line_buffering=True)  # que els missatges surtin al moment
     entorn.prepara()  # les eines que ha instal·lat prepara.sh (ffmpeg, Node), al davant del PATH
@@ -392,6 +428,28 @@ def main() -> None:
     gt = gs.add_parser("treu", help="Treu una regla (i desfà el seu ajust)")
     gt.add_argument("numero", type=int)
     gu.set_defaults(func=ordre_gust)
+
+    ki = sub.add_parser("kit", help="Els kits d'estil: llista'ls, crea'n, tria'n un per a un vídeo, exporta'ls o importa'ls")
+    ks = ki.add_subparsers(dest="accio")
+    kn = ks.add_parser("nou", help="Crea un kit (còpia d'un altre amb --copia-de; si no, l'estil neutre)")
+    kn.add_argument("nom")
+    kn.add_argument("--copia-de", help="L'id del kit que es copia")
+    km = ks.add_parser("nom", help="Canvia el nom d'un kit")
+    km.add_argument("kit")
+    km.add_argument("nom")
+    kd = ks.add_parser("per-defecte", help="El kit dels vídeos nous (i el que canvien les regles del gust)")
+    kd.add_argument("kit")
+    kt = ks.add_parser("tria", help="Tria el kit d'un vídeo (o d'un reel)")
+    kt.add_argument("kit")
+    kt.add_argument("--projecte", required=True)
+    ke = ks.add_parser("exporta", help="Desa el kit en un .zip per passar-lo a algú")
+    ke.add_argument("kit")
+    ke.add_argument("--a", default=".", help="Carpeta on es desa (per defecte, l'actual)")
+    kim = ks.add_parser("importa", help="Afegeix un kit d'un .zip")
+    kim.add_argument("fitxer")
+    kb = ks.add_parser("esborra", help="Treu un kit de la llista (es guarda a ~/.tallat/kits-esborrats)")
+    kb.add_argument("kit")
+    ki.set_defaults(func=ordre_kit)
 
     args = p.parse_args()
     args.func(args)

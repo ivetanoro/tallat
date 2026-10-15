@@ -32,6 +32,7 @@ Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre 
 .venv/bin/python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k] [--sense-subtitols]
 .venv/bin/python tallat.py editors --projecte CARPETA [--amb-subtitols] [--trossos]
 .venv/bin/python tallat.py gust [afegeix SECCIO "TEXT" [--ajust clau=valor] | treu NUMERO]
+.venv/bin/python tallat.py kit [nou NOM [--copia-de ID] | nom ID NOM | per-defecte ID | tria ID --projecte CARPETA | exporta ID [--a CARPETA] | importa FITXER.zip | esborra ID]
 ```
 
 La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que diu la persona no es publiquen mai).
@@ -105,7 +106,16 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 
 - Es tria a la pàgina de revisió: **Subtítols → Estil**. Hi ha 13 estils predefinits (Clàssic, Net, Una paraula, Frase, Caixa, Karaoke, Impacte, Elegant, Cortina, Revista, Neó, Degradat, Emojis) i es pot ajustar tot: quantes paraules surten, si apareixen d'una en una o totes de cop, l'animació (pop, fos, impacte, cortina, gruix o cap), com es destaca la paraula que sona (color, caixa, karaoke o més gran), l'aspecte (normal, neó o degradat), una píndola de fons, les paraules clau més grans o amb emoji, la lletra (o una font pròpia), la mida, la posició i els colors.
 - La vista prèvia i el vídeo final fan servir el mateix codi d'animació (`pagina/subtitols.js`): el que es veu a la pàgina és el que surt.
-- Es desa a `~/.tallat/brand.json` (secció `subtitols`) i serveix per a tots els vídeos de la persona. Si et demana un canvi al xat, edita aquest fitxer: cada opció hi té una nota que l'explica. Els estils predefinits són a `config/estils_subtitols.json`; els emojis, a `config/emojis.json` (la persona en pot afegir a `~/.tallat/emojis.json`).
+- Es desa al **kit d'estil** del vídeo (vegeu més avall), a la secció `subtitols`. Si la persona et demana un canvi al xat, edita el `kit.json` d'aquell kit: cada opció hi té una nota que l'explica. Els estils predefinits són a `config/estils_subtitols.json`; els emojis, a `config/emojis.json` (la persona en pot afegir a `~/.tallat/emojis.json`).
+
+## Kits d'estil
+
+- Un kit és un estil amb nom: els subtítols (amb la lletra pròpia, si en té), el b-roll, els stickers i els talls. La persona en pot tenir uns quants («Reels ràpids», «Vídeos tranquils»…) i cada vídeo en fa servir un. Un reel fa servir el de la seva gravació, si no se n'hi tria un altre.
+- Són a `~/.tallat/kits/<id>/kit.json`, amb les fonts a `fonts/`, fora del repositori. `~/.tallat/kits/kits.json` diu quin és el **per defecte**: el dels vídeos nous, i el que canvien les regles del gust. Els valors que falten a un kit es prenen de l'estil neutre (`config/brand.example.json`).
+- La primera vegada, l'estil que la persona ja tenia (`~/.tallat/brand.json`) es converteix en el kit «El meu estil». brand.json no es toca, però ja no es fa servir.
+- A la pàgina de revisió, secció **Kit d'estil**: triar el kit del vídeo, duplicar-lo, fer-ne un de nou amb l'estil de tallat, canviar-li el nom, fer-lo per defecte, exportar-lo (un `.zip` per passar-lo a algú) i importar-ne. Al xat: `tallat.py kit` i les seves ordres. L'id d'un kit (el nom de la carpeta) no canvia encara que se li canviï el nom.
+- Quan la persona vulgui un estil «per a un tipus de vídeo» o «per passar-lo a algú», proposa-li un kit. Si un kit porta una font pròpia i el vol passar a algú, recorda-li que comprovi que la font es pot compartir.
+- «Treure» un kit no l'esborra: va a `~/.tallat/kits-esborrats/`. El kit per defecte no es pot treure.
 
 ## Acabar-lo en un altre editor
 
@@ -119,13 +129,14 @@ Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o Cap
   2. Pregunta-li (amb opcions de resposta si en pots fer; si no, amb una pregunta curta) si és **per a aquest vídeo** o **per sempre** (recomana «per sempre»). Si ja ho ha dit («sempre», «només aquí»), no ho preguntis.
   3. Si és per sempre, desa-ho: `tallat.py gust afegeix SECCIO "la regla en paraules de la persona" [--ajust clau=valor]`. Si és només per a aquest vídeo, fes-ho al projecte i prou.
 - Seccions: `talls`, `subtitols`, `broll`, `stickers`, `reels`, `altres`.
+- Els ajustos d'estil es fan al **kit per defecte**. Si el vídeo fa servir un altre kit i la persona vol el canvi també allà, fes-lo al seu `kit.json` (o a la pàgina, amb aquell kit triat).
 - Ajustos (si n'hi ha un que encaixa, posa'l; si no, la regla només amb text):
 
 | Diu | `--ajust` |
 |---|---|
 | talls massa lents / massa ràpids | `talls.pausa_maxima=0.25` (més ràpid) o `0.5` (més lent); per als projectes nous |
 | no em treguis «X» / treu sempre «X» / només proposa «X» | `farciment.deixa=X` / `farciment.treu=X` / `farciment.proposa=X` |
-| subtítols més grans / més petits | `subtitols.mida=0.09` (la mida actual és al fitxer d'estil; la normal, 0,075) |
+| subtítols més grans / més petits | `subtitols.mida=0.09` (la mida actual és al kit; la normal, 0,075) |
 | més / menys paraules a la pantalla | `subtitols.paraules_per_linia=1` (una), `3`, `7` (frase) |
 | subtítols més amunt / més avall | `subtitols.posicio_y=0.6` (0 dalt, 1 baix) |
 | color de la paraula destacada | `subtitols.color_actiu="#FF375F"` |

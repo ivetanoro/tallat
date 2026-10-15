@@ -1,21 +1,40 @@
-"""Estil de marca de cada persona.
+"""Kits d'estil de cada persona.
 
-tallat porta un estil neutre (config/brand.example.json). La còpia personal és a
-~/.tallat/brand.json, fora del repositori: es crea el primer cop i es pot editar a mà
-o des de la pàgina de revisió. Els valors que hi faltin es prenen de l'estil neutre.
+Un kit és un estil amb nom: com són els subtítols, el b-roll, els stickers i els talls (i, amb
+les fonts pròpies, la lletra). Cada persona en pot tenir uns quants a ~/.tallat/kits/, fora del
+repositori, triar-ne un per a cada vídeo i passar-ne un a una altra persona (un .zip).
+
+  ~/.tallat/kits/<kit>/kit.json   l'estil (els valors que hi falten es prenen de l'estil neutre,
+                                  config/brand.example.json)
+  ~/.tallat/kits/<kit>/fonts/     les fonts pròpies del kit
+  ~/.tallat/kits/kits.json        quin és el kit per defecte (el dels vídeos nous)
+
+El primer cop, l'estil que la persona ja tenia (~/.tallat/brand.json, d'abans dels kits) es
+converteix en el kit «El meu estil». brand.json no es toca, però ja no es fa servir.
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import shutil
+import time
+import unicodedata
+import zipfile
 from pathlib import Path
 
 CONFIG = Path(__file__).resolve().parent.parent / "config"
 PER_DEFECTE = CONFIG / "brand.example.json"
 ESTILS = CONFIG / "estils_subtitols.json"
-USUARI = Path.home() / ".tallat" / "brand.json"
-FONTS = Path.home() / ".tallat" / "fonts"
+USUARI = Path.home() / ".tallat" / "brand.json"  # l'estil d'abans dels kits: amb ell es fa el primer kit
+KITS = Path.home() / ".tallat" / "kits"
+FITXER_KIT = "kit.json"
+INDEX = "kits.json"
+PRIMER_KIT = ("el-meu-estil", "El meu estil")
+INFO_KIT = ("Kit d'estil de tallat. Es canvia des de la pàgina de revisió (o a mà, aquí). "
+            "Els valors que hi falten es prenen de l'estil neutre de tallat.")
+ID_KIT = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
+MIDA_MAXIMA_KIT = 60 * 1024 * 1024  # un kit importat (amb les seves fonts), com a màxim
 FORMATS_FONT = {".ttf", ".otf", ".woff", ".woff2"}
 
 # Què es pot canviar (des de la pàgina o amb les regles del teu gust), i entre quins límits.
@@ -42,24 +61,218 @@ def _sense_notes(d: dict) -> dict:
     return {k: (_sense_notes(v) if isinstance(v, dict) else v) for k, v in d.items() if not k.startswith("_")}
 
 
-def ruta() -> Path:
-    if not USUARI.exists():
-        USUARI.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(PER_DEFECTE, USUARI)
-    return USUARI
-
-
-def carrega(path: Path | None = None) -> dict:
-    base = _sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8")))
+def _llegeix_json(path: Path) -> dict:
     try:
-        propi = _sense_notes(json.loads((path or ruta()).read_text(encoding="utf-8")))
+        dades = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        propi = {}
-    for seccio, valors in propi.items():
+        return {}
+    return dades if isinstance(dades, dict) else {}
+
+
+# --- Kits --------------------------------------------------------------------------------------
+
+def _existeix(kit) -> bool:
+    return isinstance(kit, str) and bool(ID_KIT.match(kit)) and (KITS / kit / FITXER_KIT).is_file()
+
+
+def _inicialitza() -> None:
+    """El primer cop: l'estil que la persona ja tenia es converteix en el kit «El meu estil»."""
+    if KITS.is_dir() and any(_existeix(c.name) for c in KITS.iterdir() if c.is_dir()):
+        return
+    id_, nom = PRIMER_KIT
+    carpeta = KITS / id_
+    carpeta.mkdir(parents=True, exist_ok=True)
+    dades = _llegeix_json(USUARI) or json.loads(PER_DEFECTE.read_text(encoding="utf-8"))
+    subtitols = dades.get("subtitols") if isinstance(dades.get("subtitols"), dict) else {}
+    font = subtitols.get("font_fitxer")
+    if font:  # la font pròpia passa a viure dins del kit (així el kit es pot passar a una altra persona)
+        origen = Path(str(font)).expanduser()
+        if origen.is_file() and origen.suffix.lower() in FORMATS_FONT:
+            (carpeta / "fonts").mkdir(exist_ok=True)
+            shutil.copy2(origen, carpeta / "fonts" / origen.name)
+            subtitols["font_fitxer"] = f"fonts/{origen.name}"
+        else:
+            subtitols["font_fitxer"] = None
+    dades.update(_info=INFO_KIT, nom=nom)
+    _escriu(dades, carpeta / FITXER_KIT)
+    _escriu({"per_defecte": id_}, KITS / INDEX)
+
+
+def kit_per_defecte() -> str:
+    _inicialitza()
+    triat = _llegeix_json(KITS / INDEX).get("per_defecte")
+    if _existeix(triat):
+        return triat
+    return next(c.name for c in sorted(KITS.iterdir()) if c.is_dir() and _existeix(c.name))
+
+
+def resol(kit: str | None) -> str:
+    """El kit demanat, si existeix; si no (o si no se'n demana cap), el kit per defecte."""
+    return kit if _existeix(kit) else kit_per_defecte()
+
+
+def kits() -> list[dict]:
+    """[{id, nom, per_defecte}], amb el kit per defecte primer i els altres per ordre alfabètic."""
+    defecte = kit_per_defecte()
+    llista = []
+    for carpeta in KITS.iterdir():
+        if carpeta.is_dir() and _existeix(carpeta.name):
+            nom = _llegeix_json(carpeta / FITXER_KIT).get("nom")
+            llista.append({"id": carpeta.name, "nom": nom.strip() if isinstance(nom, str) and nom.strip() else carpeta.name,
+                           "per_defecte": carpeta.name == defecte})
+    return sorted(llista, key=lambda k: (not k["per_defecte"], k["nom"].lower()))
+
+
+def _slug(text: str) -> str:
+    t = unicodedata.normalize("NFD", str(text).lower())
+    t = re.sub(r"[^a-z0-9]+", "-", "".join(c for c in t if unicodedata.category(c) != "Mn")).strip("-")
+    return t[:36].strip("-") or "kit"
+
+
+def _nom_valid(nom) -> str:
+    nom = " ".join(str(nom or "").split())[:60]
+    if not nom:
+        raise ValueError("El kit necessita un nom")
+    return nom
+
+
+def _id_nou(nom: str) -> str:
+    base = _slug(nom)
+    id_, n = base, 2
+    while (KITS / id_).exists():
+        id_, n = f"{base}-{n}", n + 1
+    return id_
+
+
+def crea_kit(nom: str, copia_de: str | None = None) -> str:
+    """Un kit nou: una còpia d'un altre (amb les seves fonts) o, si no se'n diu cap, l'estil neutre."""
+    nom = _nom_valid(nom)
+    _inicialitza()
+    if copia_de is not None and not _existeix(copia_de):
+        raise KeyError(copia_de)
+    id_ = _id_nou(nom)
+    if copia_de is not None:
+        shutil.copytree(KITS / copia_de, KITS / id_)
+        dades = _llegeix_json(KITS / id_ / FITXER_KIT)
+    else:
+        (KITS / id_).mkdir(parents=True)
+        dades = {**json.loads(PER_DEFECTE.read_text(encoding="utf-8")), "_info": INFO_KIT}
+    dades["nom"] = nom
+    _escriu(dades, KITS / id_ / FITXER_KIT)
+    return id_
+
+
+def canvia_nom(kit: str, nom: str) -> None:
+    if not _existeix(kit):
+        raise KeyError(kit)
+    path = KITS / kit / FITXER_KIT
+    dades = _llegeix_json(path)
+    dades["nom"] = _nom_valid(nom)
+    _escriu(dades, path)
+
+
+def fes_per_defecte(kit: str) -> None:
+    if not _existeix(kit):
+        raise KeyError(kit)
+    _escriu({"per_defecte": kit}, KITS / INDEX)
+
+
+def esborra_kit(kit: str) -> Path:
+    """Treu un kit de la llista. No s'esborra de debò: va a ~/.tallat/kits-esborrats, per si de cas."""
+    if not _existeix(kit):
+        raise KeyError(kit)
+    if kit == kit_per_defecte():
+        raise ValueError("És el kit per defecte. Abans de treure'l, tria'n un altre per defecte.")
+    desti = KITS.parent / "kits-esborrats" / f"{kit}-{time.strftime('%Y%m%d-%H%M%S')}"
+    desti.parent.mkdir(parents=True, exist_ok=True)
+    (KITS / kit).rename(desti)
+    return desti
+
+
+def empaqueta_kit(kit: str) -> tuple[str, bytes]:
+    """El kit en un .zip, per passar-lo a una altra persona o a un altre Mac: (nom del fitxer, contingut)."""
+    if not _existeix(kit):
+        raise KeyError(kit)
+    carpeta = KITS / kit
+    memoria = io.BytesIO()
+    with zipfile.ZipFile(memoria, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(carpeta / FITXER_KIT, FITXER_KIT)
+        fonts = carpeta / "fonts"
+        for font in sorted(fonts.iterdir()) if fonts.is_dir() else []:
+            if font.is_file() and font.suffix.lower() in FORMATS_FONT:
+                z.write(font, f"fonts/{font.name}")
+    nom = _llegeix_json(carpeta / FITXER_KIT).get("nom") or kit
+    return f"{_slug(nom)}.tallat-kit.zip", memoria.getvalue()
+
+
+def importa_kit(contingut: bytes) -> str:
+    """Afegeix un kit d'un .zip (fet amb «Exporta»). Només se'n agafa el que tallat entén: les opcions
+    vàlides de l'estil i les fonts. La resta (camins de fitxers, opcions estranyes) es deixa estar."""
+    try:
+        z = zipfile.ZipFile(io.BytesIO(contingut))
+    except zipfile.BadZipFile:
+        raise ValueError("Aquest fitxer no és un kit de tallat (ha de ser el .zip que fa «Exporta»).") from None
+    with z:
+        fitxers = {i.filename: i for i in z.infolist() if not i.is_dir()}
+        if FITXER_KIT not in fitxers:
+            raise ValueError("Aquest .zip no té cap kit.json: no és un kit de tallat.")
+        if sum(i.file_size for i in fitxers.values()) > MIDA_MAXIMA_KIT:
+            raise ValueError("Aquest kit és massa gran.")
+        try:
+            dades = json.loads(z.read(FITXER_KIT).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise ValueError("El kit.json d'aquest kit no es pot llegir.") from None
+        if not isinstance(dades, dict):
+            raise ValueError("El kit.json d'aquest kit no es pot llegir.")
+        fonts = {nom[len("fonts/"):]: info for nom, info in fitxers.items()
+                 if re.fullmatch(r"fonts/[^/\\:]+", nom) and not nom[len("fonts/"):].startswith(".")
+                 and Path(nom).suffix.lower() in FORMATS_FONT}
+        net = {"_info": INFO_KIT, "nom": _nom_valid(dades.get("nom") or "Kit importat")}
+        if any(k["nom"] == net["nom"] for k in kits()):
+            net["nom"] = _nom_valid(f"{net['nom']} (importat)")
+        for seccio in sorted(EDITABLES):
+            valors = dades.get(seccio)
+            if not isinstance(valors, dict):
+                continue
+            net[seccio] = {}
+            for clau, valor in valors.items():
+                if clau.startswith("_") or clau in ("font_fitxer", "lut"):
+                    continue
+                try:
+                    net[seccio].update(valida(seccio, {clau: valor}))
+                except ValueError:
+                    continue  # el que no s'entén es deixa: es farà servir el valor neutre
+        font = (dades.get("subtitols") or {}).get("font_fitxer") if isinstance(dades.get("subtitols"), dict) else None
+        if isinstance(font, str) and font.startswith("fonts/") and font[len("fonts/"):] in fonts:
+            net.setdefault("subtitols", {})["font_fitxer"] = font
+        id_ = _id_nou(net["nom"])
+        carpeta = KITS / id_
+        (carpeta / "fonts").mkdir(parents=True)
+        for nom, info in fonts.items():
+            (carpeta / "fonts" / nom).write_bytes(z.read(info))
+        _escriu(net, carpeta / FITXER_KIT)
+    return id_
+
+
+def ruta(kit: str | None = None) -> Path:
+    """El fitxer d'estil d'un kit (sense dir-ne cap, el del kit per defecte)."""
+    return KITS / resol(kit) / FITXER_KIT
+
+
+def carrega(path: Path | None = None, kit: str | None = None) -> dict:
+    """L'estil sencer d'un kit (o d'un fitxer), amb els valors que hi falten presos de l'estil neutre."""
+    path = path or ruta(kit)
+    base = _sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8")))
+    for seccio, valors in _sense_notes(_llegeix_json(path)).items():
+        if seccio == "nom":  # el nom del kit no és part de l'estil
+            continue
         if isinstance(valors, dict) and isinstance(base.get(seccio), dict):
             base[seccio].update(valors)
         else:
             base[seccio] = valors
+    font = base.get("subtitols", {}).get("font_fitxer")
+    if font and not Path(str(font)).expanduser().is_absolute():  # les fonts del kit: «fonts/…», dins del kit
+        base["subtitols"]["font_fitxer"] = str(path.parent / font)
     return base
 
 
@@ -119,50 +332,40 @@ def _escriu(dades: dict, path: Path) -> None:
     temporal.replace(path)
 
 
-def desa(seccio: str, canvis: dict, path: Path | None = None) -> dict:
-    """Desa els canvis al fitxer de la persona (conservant-ne les notes) i en torna la secció sencera."""
+def desa(seccio: str, canvis: dict, path: Path | None = None, kit: str | None = None) -> dict:
+    """Desa els canvis al kit (conservant-ne les notes) i en torna la secció sencera."""
     net = valida(seccio, canvis)
-    path = path or ruta()
-    try:
-        dades = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        dades = {}
+    path = path or ruta(kit)
+    dades = _llegeix_json(path)
     dades.setdefault(seccio, {}).update(net)
     _escriu(dades, path)
     return carrega(path)[seccio]
 
 
-def restableix(seccio: str, path: Path | None = None) -> dict:
+def restableix(seccio: str, path: Path | None = None, kit: str | None = None) -> dict:
     """Torna una secció a l'estil neutre de tallat (amb les notes que expliquen cada opció)."""
     if seccio not in EDITABLES:
         raise ValueError(f"No es pot canviar la secció «{seccio}»")
-    path = path or ruta()
-    try:
-        dades = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        dades = {}
+    path = path or ruta(kit)
+    dades = _llegeix_json(path)
     dades[seccio] = json.loads(PER_DEFECTE.read_text(encoding="utf-8"))[seccio]
     _escriu(dades, path)
     return carrega(path)[seccio]
 
 
-def desa_font(nom: str, contingut: bytes, path: Path | None = None) -> dict:
-    """Guarda una font pròpia a ~/.tallat/fonts i la fa servir per als subtítols."""
+def desa_font(nom: str, contingut: bytes, path: Path | None = None, kit: str | None = None) -> dict:
+    """Guarda una font pròpia dins del kit (a la seva carpeta fonts/) i la fa servir per als subtítols."""
     origen = Path(nom).name
-    if Path(origen).suffix.lower() not in FORMATS_FONT:
+    if Path(origen).suffix.lower() not in FORMATS_FONT or origen.startswith("."):
         raise ValueError("La font ha de ser un fitxer .ttf, .otf, .woff o .woff2")
     if not contingut:
         raise ValueError("El fitxer de la font és buit")
-    FONTS.mkdir(parents=True, exist_ok=True)
-    desti = FONTS / origen
-    desti.write_bytes(contingut)
+    path = path or ruta(kit)
+    (path.parent / "fonts").mkdir(parents=True, exist_ok=True)
+    (path.parent / "fonts" / origen).write_bytes(contingut)
     familia = re.sub(r"[^\w .-]", "", Path(origen).stem)[:60] or "La meva font"
-    path = path or ruta()
-    try:
-        dades = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        dades = {}
-    dades.setdefault("subtitols", {}).update({"font": familia, "font_fitxer": str(desti)})
+    dades = _llegeix_json(path)
+    dades.setdefault("subtitols", {}).update({"font": familia, "font_fitxer": f"fonts/{origen}"})
     _escriu(dades, path)
     return carrega(path)["subtitols"]
 

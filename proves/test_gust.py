@@ -16,6 +16,7 @@ class TestGust(unittest.TestCase):
         shutil.copy(marca.PER_DEFECTE, d / "brand.json")
         shutil.copy(neteja.LLISTA_PER_DEFECTE, d / "farciment.txt")
         self.pegats = [mock.patch.object(marca, "USUARI", d / "brand.json"),
+                       mock.patch.object(marca, "KITS", d / "kits"),
                        mock.patch.object(neteja, "LLISTA_USUARI", d / "farciment.txt"),
                        mock.patch.object(gust, "FITXER", d / "gust.json")]
         for p in self.pegats:

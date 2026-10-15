@@ -1,4 +1,5 @@
 import http.client
+import io
 import json
 import re
 import socket
@@ -6,9 +7,11 @@ import tempfile
 import threading
 import time
 import unittest
+import zipfile
 from pathlib import Path
+from unittest import mock
 
-from motor import servidor
+from motor import marca, servidor
 from motor.projecte import Projecte
 
 
@@ -23,6 +26,11 @@ class TestServidor(unittest.TestCase):
 
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
+        self.casa = tempfile.TemporaryDirectory()  # els kits d'aquesta prova
+        self.pegats = [mock.patch.object(marca, "KITS", Path(self.casa.name) / "kits"),
+                       mock.patch.object(marca, "USUARI", Path(self.casa.name) / "brand.json")]
+        for pegat in self.pegats:
+            pegat.start()
         self.carpeta = Path(self.dir.name)
         paraules = [{"id": i, "text": t, "inici": i * 0.5, "final": i * 0.5 + 0.4, "frase": 0}
                     for i, t in enumerate("Hola. Això és una prova.".split())]
@@ -42,7 +50,10 @@ class TestServidor(unittest.TestCase):
     def tearDown(self):
         self.servidor.shutdown()
         self.servidor.server_close()
+        for pegat in self.pegats:
+            pegat.stop()
         self.dir.cleanup()
+        self.casa.cleanup()
 
     def peticio(self, metode, ruta, cos=None, capcaleres=None, host=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
@@ -164,6 +175,36 @@ class TestServidor(unittest.TestCase):
         final = (self.carpeta / "stickers" / "i2.png").read_bytes()
         self.assertEqual(len(set(final)), 1)  # sencer d'una sola pujada, no barrejat
         self.assertEqual([f.name for f in (self.carpeta / "broll" / "pujats").iterdir()], [])
+
+    def test_kits_triar_crear_exportar_i_importar(self):
+        dades = json.loads(self.peticio("GET", "/api/projecte")[1])
+        self.assertEqual((dades["kit"], [k["id"] for k in dades["kits"]]), ("el-meu-estil", ["el-meu-estil"]))
+        # Un kit nou, còpia del d'ara, per a aquest vídeo; el panell d'estil hi desa.
+        estat, cos = self.peticio("POST", "/api/kit/nou", {"nom": "Per a reels", "copia_de": "el-meu-estil"}, self.bones())
+        self.assertEqual((estat, json.loads(cos)["kit"]), (200, "per-a-reels"))
+        self.peticio("POST", "/api/marca", {"subtitols": {"color": "#123456"}}, self.bones())
+        self.assertEqual(marca.carrega(kit="per-a-reels")["subtitols"]["color"], "#123456")
+        self.assertEqual(marca.carrega(kit="el-meu-estil")["subtitols"]["color"], "#FFFFFF")  # l'altre no canvia
+        # Es baixa en un .zip i es pot tornar a importar.
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("GET", "/api/kit/exporta?kit=per-a-reels")
+        r = c.getresponse()
+        zip_ = r.read()
+        c.close()
+        self.assertIn("per-a-reels.tallat-kit.zip", r.getheader("Content-Disposition"))
+        self.assertIn("kit.json", zipfile.ZipFile(io.BytesIO(zip_)).namelist())
+        estat, cos = self.peticio("POST", "/api/kit/importa?nom=kit.zip", zip_,
+                                  self.bones(**{"Content-Type": "application/zip"}))
+        importat = json.loads(cos)
+        self.assertEqual(estat, 200)
+        self.assertEqual(marca.carrega(kit=importat["kit"])["subtitols"]["color"], "#123456")
+        # Triar-ne un altre, i errors.
+        self.assertEqual(json.loads(self.peticio("POST", "/api/kit/tria", {"kit": "el-meu-estil"}, self.bones())[1])["kit"],
+                         "el-meu-estil")
+        self.assertEqual(self.peticio("POST", "/api/kit/tria", {"kit": "no-hi-es"}, self.bones())[0], 404)
+        self.assertEqual(self.peticio("POST", "/api/kit/esborra", {"kit": "el-meu-estil"}, self.bones())[0], 400)
+        self.assertEqual(self.peticio("POST", "/api/kit/importa?nom=x.zip", b"no soc un zip",
+                                      self.bones(**{"Content-Type": "application/zip"}))[0], 400)
 
 
 if __name__ == "__main__":
