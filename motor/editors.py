@@ -100,8 +100,38 @@ def _plan(projecte, trams) -> dict:
         rot = est_st.get("rotacio", 8) * (1 if k % 2 == 0 else -1)
         stickers.append(dict(st, x=x, y=est_st.get("y", 0.3), rot=rot, mida=est_st.get("mida", 0.34),
                              px=_mida_imatge(st["fitxer"])))
+    brolls = projecte.brolls(trams)
     return {"t": t, "info": info, "trossos": trossos, "total": offset,
-            "brolls": projecte.brolls(trams), "stickers": stickers}
+            "brolls": brolls, "carrils": _carrils(brolls), "stickers": stickers}
+
+
+def _carrils(brolls: list[dict]) -> int:
+    """Posa cada b-roll en un carril (una pista) on no en trepitgi cap altre: al carrusel, les
+    targetes es queden totes alhora. Torna quants carrils calen."""
+    finals: list[float] = []
+    for br in sorted(brolls, key=lambda b: b["inici"]):
+        lliure = next((i for i, f in enumerate(finals) if f <= br["inici"] + 1e-6), None)
+        if lliure is None:
+            finals.append(0.0)
+            lliure = len(finals) - 1
+        finals[lliure] = br.get("fins", br["inici"] + br["durada"])
+        br["carril"] = lliure
+    return max(1, len(finals))
+
+
+def _copia_clip(br: dict, desti: Path) -> None:
+    """Copia el clip d'un b-roll. Si la targeta es queda més estona que el clip (al carrusel, o un
+    vídeo més curt), l'allarga amb l'últim fotograma, com fan la vista prèvia i el vídeo final."""
+    visible = br.get("fins", br["inici"] + br["durada"]) - br["inici"]
+    if visible <= br["durada"] + 0.02:
+        shutil.copy(br["fitxer"], desti)
+    else:
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(br["fitxer"]), "-an", "-vf",
+                        f"tpad=stop_mode=clone:stop_duration={visible:.3f},trim=duration={visible:.3f}",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", str(desti)],
+                       check=True, capture_output=True)
+        br["durada"] = round(visible, 3)
+    br["fitxer"] = desti
 
 
 def _copia_recursos(pla: dict, desti: Path) -> None:
@@ -109,9 +139,7 @@ def _copia_recursos(pla: dict, desti: Path) -> None:
     carpeta = desti / "recursos"
     carpeta.mkdir(exist_ok=True)
     for br in pla["brolls"]:
-        nou = carpeta / Path(br["fitxer"]).name
-        shutil.copy(br["fitxer"], nou)
-        br["fitxer"] = nou
+        _copia_clip(br, carpeta / Path(br["fitxer"]).name)
     for st in pla["stickers"]:
         nou = carpeta / (Path(st["fitxer"]).stem + ".png")
         if Path(st["fitxer"]).suffix.lower() == ".png":
@@ -178,11 +206,13 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
                      f'</adjust-crop><adjust-transform position="{lloc["centre"][0] * AMPLADA / ALCADA * 100:.2f} '
                      f'{-lloc["centre"][1] * 100:.2f}" scale="{lloc["escala"]:.4f} {lloc["escala"]:.4f}" '
                      f'rotation="{-lloc["rotacio"]:g}"/>')
-        connecta(t.fotogrames(br["inici"]), lambda off, rid=rid, nom_br=nom_br, durada=durada, ajust=ajust:
-                 f'<asset-clip ref="{rid}" lane="1" offset="{t.fcp(off)}" name="{nom_br}" start="0s" '
+        carril = 1 + br.get("carril", 0)  # les targetes que coincideixen, cadascuna al seu
+        connecta(t.fotogrames(br["inici"]), lambda off, rid=rid, nom_br=nom_br, durada=durada, ajust=ajust, carril=carril:
+                 f'<asset-clip ref="{rid}" lane="{carril}" offset="{t.fcp(off)}" name="{nom_br}" start="0s" '
                  f'duration="{t.fcp(durada)}">{ajust}</asset-clip>' if ajust else
-                 f'<asset-clip ref="{rid}" lane="1" offset="{t.fcp(off)}" name="{nom_br}" start="0s" '
+                 f'<asset-clip ref="{rid}" lane="{carril}" offset="{t.fcp(off)}" name="{nom_br}" start="0s" '
                  f'duration="{t.fcp(durada)}"/>')
+    carril_stickers = pla.get("carrils", 1) + 1
     for st in pla["stickers"]:
         rid, nom_st = f"r{n}", _attr(Path(st["fitxer"]).stem)
         fid = f"r{n + 1}"
@@ -199,13 +229,13 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         durada = t.fotogrames(st["durada"])
         connecta(t.fotogrames(st["inici"]), lambda off, rid=rid, nom_st=nom_st, durada=durada, escala=escala,
                  pos_x=pos_x, pos_y=pos_y, rot=st["rot"]:
-                 f'<video ref="{rid}" lane="2" offset="{t.fcp(off)}" name="{nom_st}" start="0s" duration="{t.fcp(durada)}">'
+                 f'<video ref="{rid}" lane="{carril_stickers}" offset="{t.fcp(off)}" name="{nom_st}" start="0s" duration="{t.fcp(durada)}">'
                  f'<adjust-transform position="{pos_x:.2f} {pos_y:.2f}" scale="{escala:.4f} {escala:.4f}" '
                  f'rotation="{-rot:g}"/></video>')
     if capa is not None:
         recursos.append(f'<asset id="r{n}" name="subtitols" start="0s" duration="{t.fcp(pla["total"])}" hasVideo="1" '
                         f'format="r4"><media-rep kind="original-media" src="{_url(capa)}"/></asset>')
-        connectats[0].append(f'<asset-clip ref="r{n}" lane="3" offset="{t.fcp(trossos[0]["a"])}" name="subtitols" '
+        connectats[0].append(f'<asset-clip ref="r{n}" lane="{carril_stickers + 1}" offset="{t.fcp(trossos[0]["a"])}" name="subtitols" '
                              f'start="0s" duration="{t.fcp(pla["total"])}"/>')
 
     espina = []
@@ -291,7 +321,7 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         v1.append(clip(video.stem, ini, fi, x["a"], x["b"], f_xml, moviment(escala), total_font))
         a1.append(clip(video.stem, ini, fi, x["a"], x["b"], '<file id="file-1"/>', "", total_font, "audio"))
 
-    v2 = []
+    v2 = [[] for _ in range(pla.get("carrils", 1))]  # una pista per carril (les targetes que coincideixen)
     for k, br in enumerate(pla["brolls"]):
         ini, d = t.fotogrames(br["inici"]), t.fotogrames(br["durada"])
         d30 = t30.fotogrames(br["durada"])
@@ -307,7 +337,8 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
                     f"<valuemax>100</valuemax><value>{valor * 100:.3f}</value></parameter>"
                     for costat, valor in (("left", rh), ("right", rh), ("top", rv), ("bottom", rv)))
                 + "</effect></filter>")
-        v2.append(clip(Path(br["fitxer"]).stem, ini, ini + d, 0, d30, f_xml, filtre, rate_font=rate30))
+        v2[br.get("carril", 0)].append(clip(Path(br["fitxer"]).stem, ini, ini + d, 0, d30, f_xml, filtre,
+                                            rate_font=rate30))
     v3 = []
     for k, st in enumerate(pla["stickers"]):
         ini, d = t.fotogrames(st["inici"]), t.fotogrames(st["durada"])
@@ -322,7 +353,7 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         f_xml = fitxer("file-capa", capa, d30, AMPLADA, ALCADA, False, True, rate30)
         v4.append(clip("subtitols", 0, pla["total"], 0, d30, f_xml, moviment(100), rate_font=rate30))
 
-    pistes = "".join(f"<track>{''.join(p)}</track>" for p in (v1, v2, v3, v4) if p)
+    pistes = "".join(f"<track>{''.join(p)}</track>" for p in (v1, *v2, v3, v4) if p)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">'
             f'<sequence id="sequence-1"><name>{escape(nom)}</name><duration>{pla["total"]}</duration>{rate}'
             f"<media><video><format><samplecharacteristics>{rate}<width>{AMPLADA}</width><height>{ALCADA}</height>"
@@ -495,7 +526,9 @@ def exporta_trossos(projecte, progres=None) -> Path:
             origen = Path(r["fitxer"])
             final = ".png" if lletra == "S" else origen.suffix.lower()
             nou = desti / carpeta / f"{lletra}{i} al {_moment(r['inici'])}{final}"
-            if final == origen.suffix.lower():
+            if lletra == "B":
+                _copia_clip(r, nou)
+            elif final == origen.suffix.lower():
                 shutil.copy(origen, nou)
             else:
                 subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(origen), "-frames:v", "1", str(nou)],

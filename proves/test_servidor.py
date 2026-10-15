@@ -206,5 +206,19 @@ class TestServidor(unittest.TestCase):
                                       self.bones(**{"Content-Type": "application/zip"}))[0], 400)
 
 
+    def test_un_canvi_per_a_un_kit_que_ja_no_es_el_del_video_no_es_desa(self):
+        # La pàgina ha tocat el so al kit d'abans i, abans de desar-ho, el vídeo ha canviat de kit.
+        self.peticio("POST", "/api/kit/nou", {"nom": "B", "copia_de": "el-meu-estil"}, self.bones())
+        estat, cos = self.peticio("POST", "/api/marca", {"so": {"neteja": False}, "kit": "el-meu-estil"}, self.bones())
+        self.assertEqual(estat, 409)
+        self.assertEqual(json.loads(cos)["kit"], "b")  # la resposta porta el kit d'ara
+        self.assertTrue(marca.carrega(kit="b")["so"]["neteja"])
+        self.assertTrue(marca.carrega(kit="el-meu-estil")["so"]["neteja"])
+        self.assertEqual(self.peticio("POST", "/api/marca/restableix", {"seccio": "so", "kit": "el-meu-estil"},
+                                      self.bones())[0], 409)
+        # Amb el kit bo (o sense dir-ne cap, com abans), sí.
+        self.assertEqual(self.peticio("POST", "/api/marca", {"so": {"neteja": False}, "kit": "b"}, self.bones())[0], 200)
+        self.assertFalse(marca.carrega(kit="b")["so"]["neteja"])
+
 if __name__ == "__main__":
     unittest.main()

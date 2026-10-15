@@ -217,7 +217,7 @@ function refes() {
 
 function aplicaTrams(r) {
   if (r.subtitols) { liniesSub = r.subtitols; previaBruta = true; marcaClaus(); }
-  if ("titol" in r) { titolMuntatge = r.titol; previaBruta = true; }
+  if ("titol" in r && !titolEsborrany) { titolMuntatge = r.titol; previaBruta = true; }  // no el que s'escriu
   if (r.paragrafs && P && r !== P && JSON.stringify(r.paragrafs) !== JSON.stringify(P.paragrafs)) {
     P.paragrafs = r.paragrafs;  // l'ordre dels paràgrafs ha canviat (moure'ls, desfer-ho, una altra pestanya)
     pintaText();
@@ -1144,54 +1144,82 @@ function pintaPanellEstil() {
   $("#fitxer-estil").textContent = `Fitxer: ${(P?.fitxer_estil || "").replace(/^\/Users\/[^/]+/, "~")}`;
 }
 
-// Cada canvi es veu a l'instant; es desa al cap d'un moment (els lliscadors n'envien molts).
-let estilPendent = {};
-let temporitzadorEstil = null;
+// --- Desar l'estil ------------------------------------------------------------------------------
+// Cada canvi d'estil (subtítols, títol, b-roll o so) es veu a l'instant i es desa al cap d'un moment,
+// tots junts (els lliscadors n'envien molts), a la cua de peticions. Cada petició diu a quin kit va:
+// si mentrestant el vídeo ha canviat de kit, el servidor no la desa en un altre.
+const pendents = { subtitols: {}, titol: {}, broll: {}, so: {} };
+let temporitzadorDesa = null;
+
+function apunta(seccio, canvis) {
+  Object.assign(pendents[seccio], canvis);
+  clearTimeout(temporitzadorDesa);
+  temporitzadorDesa = setTimeout(desaEstils, 300);
+}
+
+// Envia el que hi hagi pendent; torna la cua (qui ha d'esperar que estigui desat, l'espera).
+function desaEstils() {
+  clearTimeout(temporitzadorDesa);
+  const canvis = {};
+  for (const [seccio, valors] of Object.entries(pendents)) {
+    if (Object.keys(valors).length) { canvis[seccio] = valors; pendents[seccio] = {}; }
+  }
+  if (!Object.keys(canvis).length) return cua.catch(() => {});
+  const kit = kitActual;
+  cua = cua.catch(() => {}).then(async () => {
+    try {
+      respostaEstil(await api("/api/marca", { ...canvis, kit }));
+    } catch (e) {
+      avis(e.message, 6000);
+      if (e.dades?.kits) respostaEstil(e.dades);  // el kit nou, tal com és
+    }
+  });
+  return cua;
+}
+
+// Torna una secció a l'estil de tallat (el que hi hagués pendent d'aquella secció, fora).
+async function restableix(seccio, missatge) {
+  pendents[seccio] = {};
+  await desaEstils();
+  try {
+    respostaEstil(await api("/api/marca/restableix", { seccio, kit: kitActual }));
+    avis(missatge);
+  } catch (e) { avis(e.message); }
+}
+
 function canviaEstil(canvis, mostra = false) {
   aplicaEstilSubtitols({ ...estilSub, ...canvis });
   pintaPanellEstil();
-  Object.assign(estilPendent, canvis);
-  clearTimeout(temporitzadorEstil);
-  temporitzadorEstil = setTimeout(desaEstil, 300);
+  apunta("subtitols", canvis);
   if (mostra) mostraAnimacio();
 }
 
-async function desaEstil() {
-  const canvis = estilPendent;
-  estilPendent = {};
-  if (!Object.keys(canvis).length) return;
-  try {
-    await cua;
-    respostaEstil(await api("/api/marca", { subtitols: canvis }));
-  } catch (e) { avis(e.message, 5000); }
-}
-
+// La resposta de qualsevol canvi d'estil o de kit: l'estil i, com que pot canviar el que es veu
+// (subtítols, b-roll, efectes de so…), també el muntatge.
 function respostaEstil(r) {
   if (r.kits) { kits = r.kits; kitActual = r.kit; pintaKits(); }
   if (r.versio_estil) versioEstil = r.versio_estil;
   if (r.biblioteca_lletres) bibliotecaLletres = r.biblioteca_lletres;
   if (r.fonts_kit) carregaFontsKit(r.fonts_kit);
-  if (r.subtitols) liniesSub = r.subtitols;
   if (r.estils_titol) estilsTitol = r.estils_titol;
-  if ("titol" in r) titolMuntatge = r.titol;
+  if (r.trams) aplicaTrams(r);
   // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
-  aplicaEstilSubtitols({ ...r.estil_subtitols, ...estilPendent });
-  if (r.estil_titol) aplicaEstilTitol({ ...r.estil_titol, ...titolPendent });
+  aplicaEstilSubtitols({ ...r.estil_subtitols, ...pendents.subtitols });
+  if (r.estil_titol) aplicaEstilTitol({ ...r.estil_titol, ...pendents.titol });
   aplicaBroll(r);
   pintaPanellEstil();
   pintaPanellTitol();
 }
 
 function aplicaBroll(r) {
-  if (r.estil_so) { estilSo = { ...r.estil_so, ...soPendent }; pintaSo(); }
+  if (r.estil_so) { estilSo = { ...r.estil_so, ...pendents.so }; pintaSo(); }
   if (r.sons_propis) $("#s-carpeta").textContent = r.sons_propis.replace(/^\/Users\/[^/]+/, "~");
-  if (r.estil_broll) estilBroll = { ...r.estil_broll, ...brollPendent };
+  if (r.estil_broll) estilBroll = { ...r.estil_broll, ...pendents.broll };
   if (r.estils_broll) estilsBroll = r.estils_broll;
   if (r.mostra_broll) mostraBroll = r.mostra_broll;
-  if (r.brolls) brollsMuntatge = r.brolls;
   pintaResumBroll();
   pintaPanellBroll();
-  if (mostraBrollDespres && !Object.keys(brollPendent).length) mostraBrollViu();
+  if (mostraBrollDespres && !Object.keys(pendents.broll).length) mostraBrollViu();
 }
 
 // --- El títol del ganxo -------------------------------------------------------------------------
@@ -1209,7 +1237,7 @@ function pintaTitol() {
   if (!estat) return;
   pintaResumTitol();
   const camp = $("#text-titol");
-  const t = estat.titol;
+  const t = titolEsborrany ? { ...estat.titol, ...titolEsborrany } : estat.titol;
   if (document.activeElement !== camp) camp.value = t?.text || "";
   const durada = t?.durada ?? estilTitol?.durada ?? 3;
   $("#durada-titol").value = durada;
@@ -1217,45 +1245,44 @@ function pintaTitol() {
   $("#camp-durada-titol").hidden = !t;
 }
 
-// El text: a la vista, de seguida; a l'estat (i a desfer), quan s'acaba d'escriure.
+// El text i la durada: a la vista, de seguida; a l'estat (i a desfer), quan s'acaba d'escriure o de
+// moure la barra. Es desen sempre junts, perquè un no trepitgi l'altre si es canvien seguits.
 let temporitzadorTitol = null;
-function canviaTextTitol() {
-  const text = $("#text-titol").value;
-  const durada = estat.titol?.durada ?? null;
+let titolEsborrany = null;  // {text, durada} encara per desar
+
+function canviaTitolDelVideo(canvi, espera) {
+  titolEsborrany = { text: estat.titol?.text ?? "", durada: estat.titol?.durada ?? null, ...titolEsborrany, ...canvi };
+  const { text, durada } = titolEsborrany;
   titolMuntatge = text.trim()
     ? { text, inici: 0, final: Math.min(duradaFinal || 99, durada ?? estilTitol?.durada ?? 3) } : null;
   previaBruta = true;
   $("#camp-durada-titol").hidden = !text.trim();
   clearTimeout(temporitzadorTitol);
-  temporitzadorTitol = setTimeout(() => canvia((e) => { e.titol = text.trim() ? { text, durada } : null; }), 700);
+  temporitzadorTitol = setTimeout(desaTitolDelVideo, espera);
+}
+
+function desaTitolDelVideo() {
+  clearTimeout(temporitzadorTitol);
+  if (!titolEsborrany) return;
+  const { text, durada } = titolEsborrany;
+  titolEsborrany = null;
+  canvia((e) => { e.titol = text.trim() ? { text, durada } : null; });
+}
+
+function canviaTextTitol() {
+  canviaTitolDelVideo({ text: $("#text-titol").value }, 700);
 }
 
 function canviaDuradaTitol(durada) {
   $("#durada-titol-text").textContent = fmtSegons(durada);
-  if (titolMuntatge) { titolMuntatge = { ...titolMuntatge, final: Math.min(duradaFinal || 99, durada) }; previaBruta = true; }
-  clearTimeout(temporitzadorTitol);
-  temporitzadorTitol = setTimeout(() => canvia((e) => { if (e.titol) e.titol = { ...e.titol, durada }; }), 400);
+  canviaTitolDelVideo({ durada }, 400);
 }
 
-let titolPendent = {};
-let temporitzadorEstilTitol = null;
 function canviaTitol(canvis, mostra = false) {
   aplicaEstilTitol({ ...estilTitol, ...canvis });
   pintaPanellTitol();
-  Object.assign(titolPendent, canvis);
-  clearTimeout(temporitzadorEstilTitol);
-  temporitzadorEstilTitol = setTimeout(desaEstilTitol, 300);
+  apunta("titol", canvis);
   if (mostra) mostraTitol();
-}
-
-async function desaEstilTitol() {
-  const canvis = titolPendent;
-  titolPendent = {};
-  if (!Object.keys(canvis).length) return;
-  try {
-    await cua;
-    respostaEstil(await api("/api/marca", { titol: canvis }));
-  } catch (e) { avis(e.message, 5000); }
 }
 
 // Fa sonar el títol des del principi perquè es vegi com entra.
@@ -1386,15 +1413,7 @@ function instalaTitol() {
     ["t-fons-color", "fons_color"]]) {
     $(`#${id}`).addEventListener("input", (e) => canviaTitol({ [clau]: e.target.value.toUpperCase() }));
   }
-  $("#restableix-titol").addEventListener("click", async () => {
-    try {
-      clearTimeout(temporitzadorEstilTitol);
-      titolPendent = {};
-      await cua;
-      respostaEstil(await api("/api/marca/restableix", { seccio: "titol" }));
-      avis("El títol ha tornat a l'estil de tallat.");
-    } catch (e) { avis(e.message); }
-  });
+  $("#restableix-titol").addEventListener("click", () => restableix("titol", "El títol ha tornat a l'estil de tallat."));
 }
 
 // --- Pestanyes de la columna de l'esquerra ------------------------------------------------------
@@ -1497,15 +1516,14 @@ function pintaKits() {
 
 function respostaKit(r, missatge) {
   estat = r.estat;
-  aplicaTrams(r);
+  respostaEstil(r);  // l'estil del kit, la lletra, la llista de kits i el muntatge
   refresca(true);
-  respostaEstil(r);  // l'estil del kit, la lletra i la llista de kits
   if (missatge) avis(missatge, 4000);
 }
 
 async function accioKit(ruta, dades, missatge) {
   try {
-    await cua;
+    await desaEstils();  // el que hi hagi pendent va al kit d'abans
     respostaKit(await api(ruta, dades), missatge);
   } catch (e) {
     avis(e.message, 5000);
@@ -1527,7 +1545,7 @@ function demanaNomKit(accio) {
 async function importaKit(fitxer) {
   avis(`Important «${fitxer.name}»…`, 20000);
   try {
-    await cua;
+    await desaEstils();
     const json = await resposta(await fetch(`/api/kit/importa?nom=${encodeURIComponent(fitxer.name)}`,
       { method: "POST", headers: capcaleres({ "Content-Type": "application/zip" }), body: fitxer }));
     respostaKit(json, "Kit importat. Aquest vídeo ja el fa servir.");
@@ -1639,9 +1657,8 @@ async function baixaLletra(id, seccio = "subtitols") {
   const nom = bibliotecaLletres.lletres.find((l) => l.id === id)?.nom || id;
   avis(`Baixant la lletra «${nom}»…`, 20000);
   try {
-    clearTimeout(temporitzadorEstil);
-    await desaEstil();
-    respostaEstil(await api("/api/marca/lletra", { id, seccio }));
+    await desaEstils();
+    respostaEstil(await api("/api/marca/lletra", { id, seccio, kit: kitActual }));
     avis(`Lletra «${nom}» afegida al kit.`);
   } catch (e) {
     avis(e.message, 6000);
@@ -1653,7 +1670,7 @@ async function baixaLletra(id, seccio = "subtitols") {
 async function pujaFont(fitxer) {
   avis(`Pujant «${fitxer.name}»…`, 20000);
   try {
-    await cua;
+    await desaEstils();
     const json = await resposta(await fetch(`/api/marca/font?nom=${encodeURIComponent(fitxer.name)}`,
       { method: "POST", headers: capcaleres(), body: fitxer }));
     respostaEstil(json);
@@ -1828,15 +1845,7 @@ function instalaEstil() {
     e.target.value = "";
     if (fitxer) pujaFont(fitxer);
   });
-  $("#restableix-estil").addEventListener("click", async () => {
-    try {
-      clearTimeout(temporitzadorEstil);
-      estilPendent = {};
-      await cua;
-      respostaEstil(await api("/api/marca/restableix", {}));
-      avis("Has tornat a l'estil de tallat.");
-    } catch (e) { avis(e.message); }
-  });
+  $("#restableix-estil").addEventListener("click", () => restableix("subtitols", "Has tornat a l'estil de tallat."));
 }
 
 // Salta el que s'ha tret. Es crida a cada fotograma i també quan el vídeo avisa que
@@ -2237,8 +2246,6 @@ let estilBroll = null;   // la secció «broll» del kit
 let estilsBroll = [];    // les maneres predefinides, cada una amb la seva miniatura
 let mostraBroll = [];    // la miniatura de l'estil d'ara
 let editantBroll = false;
-let brollPendent = {};
-let temporitzadorBroll = null;
 let mostraBrollDespres = false;  // fer sonar el primer b-roll quan arribi la disposició nova
 
 function predefinitBroll(e = estilBroll) {
@@ -2297,20 +2304,8 @@ function pintaPanellBroll() {
 function canviaBroll(canvis, mostra = false) {
   estilBroll = { ...estilBroll, ...canvis };
   pintaPanellBroll();
-  Object.assign(brollPendent, canvis);
   if (mostra) mostraBrollDespres = true;
-  clearTimeout(temporitzadorBroll);
-  temporitzadorBroll = setTimeout(desaEstilBroll, 300);
-}
-
-async function desaEstilBroll() {
-  const canvis = brollPendent;
-  brollPendent = {};
-  if (!Object.keys(canvis).length) return;
-  try {
-    await cua;
-    respostaEstil(await api("/api/marca", { broll: canvis }));
-  } catch (e) { avis(e.message, 5000); }
+  apunta("broll", canvis);
 }
 
 // Fa sonar el primer b-roll del vídeo perquè es vegi com entra.
@@ -2357,15 +2352,7 @@ function instalaBroll() {
   $("#b-vora-kit").addEventListener("click", () =>
     canviaBroll({ vora_color: estilBroll.vora_color ? null : $("#b-vora-color").value.toUpperCase() }));
   $("#b-vora-color").addEventListener("input", (e) => canviaBroll({ vora_color: e.target.value.toUpperCase() }));
-  $("#restableix-broll").addEventListener("click", async () => {
-    try {
-      clearTimeout(temporitzadorBroll);
-      brollPendent = {};
-      await cua;
-      respostaEstil(await api("/api/marca/restableix", { seccio: "broll" }));
-      avis("El b-roll ha tornat a l'estil de tallat.");
-    } catch (e) { avis(e.message); }
-  });
+  $("#restableix-broll").addEventListener("click", () => restableix("broll", "El b-roll ha tornat a l'estil de tallat."));
 }
 
 // Stickers en directe: mateixa posició, mida i rotació que tindran a l'export.
@@ -2713,8 +2700,6 @@ async function inicia() {
 
 let estilSo = null;        // la secció «so» del kit
 let efectesMuntatge = [];  // [{clau, nom, so, t, actiu}]
-let soPendent = {};
-let temporitzadorSo = null;
 let mostresSo = null;      // {abans, despres, sons: {nom: url}}
 let mostraNivell = null;   // de quin nivell de neteja és la mostra «neta»
 const aEfectes = $("#audio-efectes");
@@ -2737,7 +2722,7 @@ function sonaEfectes() {
 let mostresEnCurs = null;
 function carregaMostresSo() {
   const nivell = estilSo?.soroll || "suau";
-  if (mostresEnCurs || Object.keys(soPendent).length) return;
+  if (mostresEnCurs || Object.keys(pendents.so).length) return;
   if (mostresSo && mostraNivell === nivell) return;
   $("#s-preparant").hidden = false;
   mostresEnCurs = (async () => {
@@ -2820,19 +2805,7 @@ function pintaSo() {
 function canviaSo(canvis) {
   estilSo = { ...estilSo, ...canvis };
   pintaSo();
-  Object.assign(soPendent, canvis);
-  clearTimeout(temporitzadorSo);
-  temporitzadorSo = setTimeout(desaSo, 300);
-}
-
-async function desaSo() {
-  const canvis = soPendent;
-  soPendent = {};
-  if (!Object.keys(canvis).length) return;
-  try {
-    await cua;
-    respostaEstil(await api("/api/marca", { so: canvis }));
-  } catch (e) { avis(e.message, 5000); }
+  apunta("so", canvis);
 }
 
 function instalaSo() {

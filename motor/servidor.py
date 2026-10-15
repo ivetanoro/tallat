@@ -444,7 +444,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     except Exception as e:  # ffmpeg no ha pogut llegir el fitxer
                         return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
                     return self._json(instantania())
-                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil (subtítols, títol o b-roll), al kit del vídeo
+                if ruta in ("/api/marca", "/api/marca/restableix", "/api/marca/lletra") and cos.get("kit") not in (None, projecte.kit()):
+                    # La pàgina ho demanava per a un altre kit (el vídeo n'ha canviat mentrestant): no en toquem cap.
+                    return self._json({"error": "Aquest vídeo ha canviat de kit i aquest canvi no s'ha desat. "
+                                                "Torna'l a fer si el vols al kit nou.", **info_marca(), **instantania()},
+                                      HTTPStatus.CONFLICT)
+                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil (subtítols, títol, b-roll o so), al kit del vídeo
                     try:
                         if ruta.endswith("restableix"):
                             seccio = cos.get("seccio") or "subtitols"

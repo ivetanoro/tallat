@@ -1,3 +1,4 @@
+import shutil
 import unittest
 import xml.dom.minidom
 from pathlib import Path
@@ -118,3 +119,40 @@ class TestBrollEnTargeta(unittest.TestCase):
         self.assertIsNone(editors._lloc_broll({"inici": 0, "durada": 1}))
         from motor import targetes
         self.assertIsNone(editors._lloc_broll(targetes.disposa([{"id": "b", "inici": 0, "durada": 1}], {})[0]))
+
+
+class TestCarruselAlsEditors(unittest.TestCase):
+    """Les tres targetes es queden fins que s'acaba l'última, també a Premiere i Final Cut."""
+
+    def pla(self):
+        from motor import targetes
+        p = pla()
+        p["brolls"] = targetes.disposa([{"id": f"b{k}", "fitxer": Path(f"/tmp/b{k}.mp4"), "inici": t, "durada": 0.5}
+                                        for k, t in enumerate((0.0, 0.6, 1.2))], {"disposicio": "carrusel"})
+        p["carrils"] = editors._carrils(p["brolls"])
+        return p
+
+    def test_cada_targeta_al_seu_carril(self):
+        p = self.pla()
+        self.assertEqual((p["carrils"], [b["carril"] for b in p["brolls"]]), (3, [0, 1, 2]))
+        fcp = xml.dom.minidom.parseString(editors.fcpxml("Prova", Path("/tmp/v.mov"), p))
+        lanes = sorted(c.getAttribute("lane") for c in fcp.getElementsByTagName("asset-clip") if c.getAttribute("lane"))
+        self.assertEqual(lanes, ["1", "2", "3"])
+        self.assertEqual(fcp.getElementsByTagName("video")[0].getAttribute("lane"), "4")  # el sticker, a sobre
+        premiere = xml.dom.minidom.parseString(editors.xmeml("Prova", Path("/tmp/v.mov"), p))
+        self.assertEqual(len(premiere.getElementsByTagName("video")[0].getElementsByTagName("track")), 5)
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_el_clip_s_allarga_fins_al_final_del_grup(self):
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=108x192:r=30:d=0.5",
+                            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(d / "b.mp4")], check=True)
+            br = dict(self.pla()["brolls"][0], fitxer=d / "b.mp4")
+            editors._copia_clip(br, d / "copia.mp4")
+            self.assertAlmostEqual(br["durada"], 1.7)
+            durada = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                           str(d / "copia.mp4")], capture_output=True, text=True).stdout)
+            self.assertAlmostEqual(durada, 1.7, delta=0.05)
