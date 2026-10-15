@@ -19,7 +19,7 @@ Quan la persona digui «instal·la tallat», o una ordre falli perquè falta una
 
 ## Ordres
 
-Des de la carpeta de tallat, amb l'entorn `.venv`:
+Des de la carpeta de tallat (si s'ha instal·lat com a connector de Claude, és `${CLAUDE_PLUGIN_ROOT}`), amb l'entorn `.venv`. Si `.venv` no hi és (la primera vegada, o després d'actualitzar el connector), executa `./prepara.sh`: si ja està tot instal·lat, només refà l'enllaç i triga uns segons.
 
 ```bash
 .venv/bin/python tallat.py transcriu VIDEO --projecte CARPETA [--srt FITXER.srt]

@@ -4,11 +4,11 @@
 #   ./prepara.sh                 instal·la el que falti (es pot tornar a executar: només fa el que cal)
 #   ./prepara.sh --amb-whisper   també baixa el model de transcripció (3 GB), per si no fas servir Descript
 #
-# Tot va a dins de la teva carpeta d'usuari (~/.tallat i .venv) i no demana mai la contrasenya:
+# Tot va a dins de la teva carpeta d'usuari (~/.tallat) i no demana mai la contrasenya:
 #   ~/.tallat/bin      micromamba i uv (els instal·ladors)
 #   ~/.tallat/eines    ffmpeg i Node.js (de conda-forge)
 #   ~/.tallat/python   Python 3.11
-#   .venv              l'entorn de Python de tallat (WhisperX i companyia)
+#   ~/.tallat/venv     l'entorn de Python de tallat (WhisperX i companyia); .venv n'és un enllaç
 # A més, HyperFrames hi baixa el navegador amb què dibuixa els subtítols, i WhisperX el model de veu català.
 set -euo pipefail
 
@@ -71,11 +71,19 @@ if [ ! -x "$BIN/uv" ]; then
   tar -xzf "$BIN/uv.tar.gz" -C "$BIN" --strip-components 1
   rm -f "$BIN/uv.tar.gz"
 fi
-if [ ! -x "$PY" ] || ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 11) else 1)' 2>/dev/null; then
-  UV_PYTHON_INSTALL_DIR="$TALLAT/python" "$BIN/uv" venv --quiet --python 3.11 "$CARPETA/.venv" \
+# L'entorn va a ~/.tallat/venv i .venv n'és un enllaç: si tallat s'actualitza (o és un connector de
+# Claude, que es reinstal·la a cada versió), només cal refer l'enllaç. Si ja hi havia un .venv de
+# debò (instal·lacions d'abans), es queda on és.
+VENV="$TALLAT/venv"
+if [ -d "$CARPETA/.venv" ] && [ ! -L "$CARPETA/.venv" ]; then
+  VENV="$CARPETA/.venv"
+fi
+if [ ! -x "$VENV/bin/python" ] || ! "$VENV/bin/python" -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 11) else 1)' 2>/dev/null; then
+  UV_PYTHON_INSTALL_DIR="$TALLAT/python" "$BIN/uv" venv --quiet --python 3.11 "$VENV" \
     || falla "No he pogut crear l'entorn de Python."
 fi
-fet "$("$PY" --version) a .venv"
+[ "$VENV" = "$CARPETA/.venv" ] || ln -sfn "$VENV" "$CARPETA/.venv"
+fet "$("$PY" --version) a $VENV"
 
 pas "4/6 · WhisperX i la resta de paquets de Python (la part més llarga)"
 "$BIN/uv" pip install --quiet --python "$PY" -r "$CARPETA/requirements.txt" || falla "No he pogut instal·lar els paquets de Python."

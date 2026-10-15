@@ -1,0 +1,16 @@
+{
+  "name": "tallat",
+  "displayName": "tallat",
+  "description": "Editor de reels en català, per paraules: transcriu, treu el farciment, proposa reels, hi posa subtítols, b-roll i stickers, i exporta en vertical. Tot en aquest ordinador.",
+  "version": "0.5.0",
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "vídeo",
+    "reels",
+    "català",
+    "subtítols",
+    "edició",
+    "whisperx",
+    "hyperframes"
+  ]
+}

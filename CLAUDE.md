@@ -1,6 +1,6 @@
 # tallat
 
-Editor de reels en català que funciona dins de Claude Code. Codi obert (MIT).
+Editor de reels en català que funciona dins de Claude Code. Codi obert amb llicència AGPL v3 (fitxer LICENSE).
 
 ## Regles del projecte
 - Tota la interfície, els missatges i la documentació, en català.
