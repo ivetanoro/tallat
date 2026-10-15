@@ -236,9 +236,7 @@ class Projecte:
         if not desti.exists():
             so.pista(actius, durada, volum, desti)
             # Es guarden les tres més noves: un export que ja ha començat pot estar fent servir l'anterior.
-            velles = sorted(carpeta.glob("efectes-*.wav"), key=lambda f: f.stat().st_mtime, reverse=True)[3:]
-            for vell in velles:
-                vell.unlink(missing_ok=True)
+            _poda(carpeta, "efectes-*.wav", guarda=3)
         return desti
 
     def mostres_veu(self) -> dict:
@@ -250,12 +248,10 @@ class Projecte:
         abans = carpeta / f"veu-abans-{inici:.1f}.m4a"
         despres = carpeta / f"veu-neta-{nivell}-{inici:.1f}.m4a"
         if not abans.exists():
-            for vell in carpeta.glob("veu-abans-*.m4a") if carpeta.is_dir() else []:
-                vell.unlink(missing_ok=True)
+            _poda(carpeta, "veu-abans-*.m4a")
             so.mostra(self.video, inici, abans, None)
         if not despres.exists():
-            for vell in carpeta.glob("veu-neta-*.m4a") if carpeta.is_dir() else []:
-                vell.unlink(missing_ok=True)
+            _poda(carpeta, "veu-neta-*.m4a")
             so.mostra(self.video, inici, despres, nivell)
         return {"abans": abans, "despres": despres}
 
@@ -469,3 +465,11 @@ class Projecte:
         linies.append(f"Durada: {minuts(self.dades['durada'])} → {minuts(sum(b - a for a, b in trams))} "
                       f"({len(trams)} trossos).")
         return linies
+
+
+def _poda(carpeta: Path, patro: str, guarda: int = 0) -> None:
+    """Esborra els fitxers fets per tallat que ja no calen (en guarda els `guarda` més nous)."""
+    if not carpeta.is_dir():
+        return
+    for vell in sorted(carpeta.glob(patro), key=lambda f: f.stat().st_mtime, reverse=True)[guarda:]:
+        vell.unlink(missing_ok=True)

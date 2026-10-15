@@ -97,7 +97,7 @@ let titolMuntatge = null;   // el títol d'aquest vídeo en temps del muntatge: 
 let editantTitol = false;   // el panell de l'estil del títol és obert
 let previaTitol = null;
 const MOSTRA_TITOL = { text: "El teu\n*títol*\naquí", inici: 0, final: 3 };  // mentre es tria l'estil sense títol
-let editantEstil = false;  // el panell d'estil és obert: el reproductor en mostra una línia d'exemple
+let editantEstil = false;  // la pestanya Subtítols és oberta: el reproductor en mostra una línia d'exemple
 let instruccions = [];     // instruccions de veu «Claude, …»
 let zoomsTram = [];        // quins trossos porten zoom
 let brollsMuntatge = [];   // b-rolls situats al muntatge: [{id, inici, durada, url}]
@@ -977,7 +977,6 @@ function aplicaEstilSubtitols(e) {
   if (!e) return;
   estilSub = e;
   previaBruta = true;
-  pintaResumEstil();
 }
 
 // --- Estil dels subtítols (panell) ------------------------------------------------------------
@@ -1011,7 +1010,6 @@ async function carregaFontsKit(fonts) {
       await font.load();
       document.fonts.add(font);
       previaBruta = true;
-      pintaResumEstil();
     } catch {
       fontsCarregades.delete(f.url);
       avis(`No he pogut carregar la lletra «${f.familia}». Torna-la a pujar o tria'n una altra.`, 5000);
@@ -1019,10 +1017,28 @@ async function carregaFontsKit(fonts) {
   }
 }
 
-function predefinitActual(e = estilSub) {
+// L'estil fet que té tots els valors d'un estil (o null: és «Personalitzat»).
+function predefinitDe(llista, e) {
   if (!e) return null;
-  return estilsPredefinits.find((p) => Object.entries(p.valors).every(([k, v]) =>
+  return llista.find((p) => Object.entries(p.valors).every(([k, v]) =>
     (typeof v === "number" ? Math.abs((e[k] ?? NaN) - v) < 1e-6 : String(e[k]).toUpperCase() === String(v).toUpperCase())));
+}
+const predefinitActual = (e = estilSub) => predefinitDe(estilsPredefinits, e);
+const predefinitTitol = (e = estilTitol) => predefinitDe(estilsTitol, e);
+const predefinitBroll = (e = estilBroll) => predefinitDe(estilsBroll, e);
+
+// Un botó de les galeries d'estils fets (subtítols, títol i b-roll). Torna la caixa de la mostra.
+function botoEstil(cont, p, actiu, tria) {
+  const b = document.createElement("button");
+  b.className = "estil";
+  b.setAttribute("role", "radio");
+  b.setAttribute("aria-checked", String(actiu));
+  b.title = p.descripcio;
+  b.innerHTML = `<span class="estil-mostra"></span><span class="estil-nom"></span>`;
+  b.querySelector(".estil-nom").textContent = p.nom;
+  b.addEventListener("click", tria);
+  cont.append(b);
+  return b.querySelector(".estil-mostra");
 }
 
 // Dibuixa una mostra quieta d'un estil dins d'una caixa petita, amb el mateix codi que els subtítols.
@@ -1038,13 +1054,6 @@ function pintaMostra(caixa, e, { paraules, alcada, mida }) {
   host.style.transform = `scale(${caixa.clientWidth / TallatSubtitols.AMPLADA})`;
 }
 
-function pintaResumEstil() {
-  if (!$("#nom-estil")) return;  // els subtítols ja no tenen fila: tenen la seva pestanya
-  if (!estilSub || !window.TallatSubtitols) return;
-  $("#nom-estil").textContent = estat?.subtitols === false ? "Sense subtítols" : predefinitActual()?.nom ?? "Personalitzat";
-  pintaMostra($("#mostra-estil"), { ...estilSub, destaca: false, emojis: false, clau_grans: false, fons: "cap" },
-    { paraules: [["Aa", false, null]], alcada: 1080, mida: 0.36 });
-}
 
 // El desplegable de lletres: les del kit que ha pujat la persona, les del Mac i les gratuïtes (les que
 // encara no són al kit porten «bib:»: triar-les les baixa). Amb `laDelsSubtitols`, també «la dels subtítols».
@@ -1082,19 +1091,11 @@ function pintaPanellEstil() {
   const cont = $("#estils");
   cont.textContent = "";
   for (const p of estilsPredefinits) {
-    const b = document.createElement("button");
-    b.className = "estil";
-    b.setAttribute("role", "radio");
-    b.setAttribute("aria-checked", String(p === actual));
-    b.title = p.descripcio;
-    b.innerHTML = `<span class="estil-mostra"></span><span class="estil-nom"></span>`;
-    b.querySelector(".estil-nom").textContent = p.nom;
-    b.addEventListener("click", () => canviaEstil({ ...p.valors }, true));
-    cont.append(b);
+    const mostra = botoEstil(cont, p, p === actual, () => canviaEstil({ ...p.valors }, true));
     if (window.TallatSubtitols) {
       const v = { ...e, ...p.valors };
       const n = v.paraules_per_linia <= 1 ? 1 : v.paraules_per_linia <= 4 ? 3 : 4;
-      pintaMostra(b.querySelector(".estil-mostra"), v,
+      pintaMostra(mostra, v,
         { paraules: n === 1 ? [MOSTRA[2]] : MOSTRA.slice(0, n), alcada: 675, mida: Math.min(0.2, v.mida * 1.6) });
     }
   }
@@ -1207,13 +1208,17 @@ function respostaEstil(r) {
   aplicaEstilSubtitols({ ...r.estil_subtitols, ...pendents.subtitols });
   if (r.estil_titol) aplicaEstilTitol({ ...r.estil_titol, ...pendents.titol });
   aplicaBroll(r);
+  aplicaSo(r);
   pintaPanellEstil();
   pintaPanellTitol();
 }
 
-function aplicaBroll(r) {
+function aplicaSo(r) {
   if (r.estil_so) { estilSo = { ...r.estil_so, ...pendents.so }; pintaSo(); }
   if (r.sons_propis) $("#s-carpeta").textContent = r.sons_propis.replace(/^\/Users\/[^/]+/, "~");
+}
+
+function aplicaBroll(r) {
   if (r.estil_broll) estilBroll = { ...r.estil_broll, ...pendents.broll };
   if (r.estils_broll) estilsBroll = r.estils_broll;
   if (r.mostra_broll) mostraBroll = r.mostra_broll;
@@ -1293,11 +1298,6 @@ function mostraTitol() {
   R.aturaA = Math.min(duradaFinal, titolMuntatge.final + 0.2);
 }
 
-function predefinitTitol(e = estilTitol) {
-  if (!e) return null;
-  return estilsTitol.find((p) => Object.entries(p.valors).every(([k, v]) =>
-    (typeof v === "number" ? Math.abs((e[k] ?? NaN) - v) < 1e-6 : String(e[k]).toUpperCase() === String(v).toUpperCase())));
-}
 
 // Una mostra quieta d'un estil de títol, amb el mateix codi que el títol de debò.
 function pintaMostraTitol(caixa, e, text, alcada) {
@@ -1326,16 +1326,8 @@ function pintaPanellTitol() {
   const cont = $("#estils-titol");
   cont.textContent = "";
   for (const p of estilsTitol) {
-    const b = document.createElement("button");
-    b.className = "estil";
-    b.setAttribute("role", "radio");
-    b.setAttribute("aria-checked", String(p === actual));
-    b.title = p.descripcio;
-    b.innerHTML = `<span class="estil-mostra"></span><span class="estil-nom"></span>`;
-    b.querySelector(".estil-nom").textContent = p.nom;
-    b.addEventListener("click", () => canviaTitol({ ...p.valors }, true));
-    cont.append(b);
-    pintaMostraTitol(b.querySelector(".estil-mostra"), { ...e, ...p.valors, mida: Math.min(0.11, (p.valors.mida || e.mida) * 1.5) },
+    const mostra = botoEstil(cont, p, p === actual, () => canviaTitol({ ...p.valors }, true));
+    pintaMostraTitol(mostra, { ...e, ...p.valors, mida: Math.min(0.11, (p.valors.mida || e.mida) * 1.5) },
       "El meu\n*títol*", 675);
   }
   $("#t-animacio").value = e.animacio;
@@ -1676,11 +1668,6 @@ async function pujaFont(fitxer) {
     respostaEstil(json);
     avis("Font afegida. Ja la veus als subtítols.");
   } catch (e) { avis(e.message, 6000); }
-}
-
-// Els subtítols tenen la seva pestanya: mentre és oberta, el reproductor en mostra sempre una línia.
-function obreEstil() {
-  triaPestanya("subtitols");
 }
 
 // --- Columnes i seccions -----------------------------------------------------------------------
@@ -2248,11 +2235,6 @@ let mostraBroll = [];    // la miniatura de l'estil d'ara
 let editantBroll = false;
 let mostraBrollDespres = false;  // fer sonar el primer b-roll quan arribi la disposició nova
 
-function predefinitBroll(e = estilBroll) {
-  if (!e) return null;
-  return estilsBroll.find((p) => Object.entries(p.valors).every(([k, v]) =>
-    (typeof v === "number" ? Math.abs((e[k] ?? NaN) - v) < 1e-6 : String(e[k]).toUpperCase() === String(v).toUpperCase())));
-}
 
 function pintaResumBroll() {
   if (!estilBroll) return;
@@ -2269,16 +2251,7 @@ function pintaPanellBroll() {
   const cont = $("#estils-broll");
   cont.textContent = "";
   for (const p of estilsBroll) {
-    const b = document.createElement("button");
-    b.className = "estil";
-    b.setAttribute("role", "radio");
-    b.setAttribute("aria-checked", String(p === actual));
-    b.title = p.descripcio;
-    b.innerHTML = `<span class="estil-mostra"></span><span class="estil-nom"></span>`;
-    b.querySelector(".estil-nom").textContent = p.nom;
-    b.addEventListener("click", () => canviaBroll({ ...p.valors }, true));
-    cont.append(b);
-    miniBroll(b.querySelector(".estil-mostra"), p.mostra);
+    miniBroll(botoEstil(cont, p, p === actual, () => canviaBroll({ ...p.valors }, true)), p.mostra);
   }
   const disposicio = e.disposicio || "pantalla";
   const ambForma = disposicio === "targeta" || disposicio === "carrusel";
@@ -2644,7 +2617,6 @@ function instalaControls() {
 
 function marcaSubtitols() {
   $("#subtitols").setAttribute("aria-checked", String(estat.subtitols !== false));
-  pintaResumEstil();
 }
 
 function marcaPausa() {
@@ -2676,6 +2648,7 @@ async function inicia() {
   estilsTitol = P.estils_titol || [];
   aplicaEstilTitol(P.estil_titol);
   aplicaBroll(P);
+  aplicaSo(P);
   kits = P.kits || [];
   kitActual = P.kit;
   pintaKits();

@@ -300,24 +300,27 @@ def pausa_per_defecte() -> float:
     return float(carrega().get("talls", {}).get("pausa_maxima", 0.35))
 
 
-def estils_titol() -> list[dict]:
-    """Els estils de títol predefinits: [{id, nom, descripcio, valors}] (cada un parteix de «comu»)."""
-    dades = json.loads(ESTILS_TITOL.read_text(encoding="utf-8"))
-    return [{**e, "valors": {**dades.get("comu", {}), **e["valors"]}} for e in dades["estils"]]
-
-
-def estils_broll() -> list[dict]:
-    """Les maneres de posar el b-roll predefinides: [{id, nom, descripcio, valors}]."""
-    dades = json.loads(ESTILS_BROLL.read_text(encoding="utf-8"))
-    return [{**e, "valors": {**dades.get("comu", {}), **e["valors"]}} for e in dades["estils"]]
+def _estils(path: Path) -> list[dict]:
+    """Uns estils fets: [{id, nom, descripcio, valors}]. Cada un parteix de «comu», perquè triar-ne un
+    no deixi a mitges el que havia posat un altre."""
+    dades = json.loads(path.read_text(encoding="utf-8"))
+    comu = dades.get("comu", {})
+    return [{**e, "valors": {**comu, **e["valors"]}} for e in dades["estils"]]
 
 
 def estils() -> list[dict]:
-    """Els estils de subtítols predefinits: [{id, nom, descripcio, valors}]. Cada un parteix de «comu»
-    (la disposició de sempre), perquè triar-ne un no deixi a mitges el que havia posat un altre."""
-    dades = json.loads(ESTILS.read_text(encoding="utf-8"))
-    comu = dades.get("comu", {})
-    return [{**e, "valors": {**comu, **e["valors"]}} for e in dades["estils"]]
+    """Els estils de subtítols fets."""
+    return _estils(ESTILS)
+
+
+def estils_titol() -> list[dict]:
+    """Els estils de títol fets."""
+    return _estils(ESTILS_TITOL)
+
+
+def estils_broll() -> list[dict]:
+    """Les maneres de posar el b-roll fetes."""
+    return _estils(ESTILS_BROLL)
 
 
 def valida(seccio: str, canvis: dict) -> dict:
