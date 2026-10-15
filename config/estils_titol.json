@@ -9,6 +9,8 @@
     "ombra": true,
     "fons": "cap",
     "amaga_subtitols": false,
+    "corba": 0.0,
+    "corba_linies": "primera",
     "contorn": "#000000",
     "fons_color": "#000000"
   },
@@ -102,6 +104,25 @@
         "interlineat": 1.25,
         "animacio": "cortina",
         "posicio_y": 0.3
+      }
+    },
+    {
+      "id": "arc",
+      "nom": "Arc",
+      "descripcio": "La primera línia es corba en arc per sobre de les altres",
+      "valors": {
+        "pes": 800,
+        "mida": 0.06,
+        "clau_mida": 2.0,
+        "color": "#FFFFFF",
+        "clau_color": "#FFD60A",
+        "espaiat": 0.02,
+        "interlineat": 0.95,
+        "animacio": "pop",
+        "posicio_y": 0.2,
+        "corba": 0.55,
+        "corba_linies": "primera",
+        "majuscules": true
       }
     }
   ]

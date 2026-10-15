@@ -154,6 +154,13 @@ class TestDisseny(unittest.TestCase):
         linies = subtitols.grups(frase("a1 b2 c3 d4 e5"), [(0, 5)], estil)
         self.assertEqual([l["bloc"] for l in linies], [0, 0, 0, 1, 1])
 
+    def test_escampades_tambe_van_per_frases(self):
+        estil = dict(ESTIL, disposicio="escampat", paraules_per_linia=2, linies_max=4)
+        linies = subtitols.grups(frase("una dues tres quatre cinc."), [(0, 4)], estil)
+        self.assertEqual([l["bloc"] for l in linies], [0, 0, 0])
+        self.assertEqual(len({l["final"] for l in linies}), 1)
+        self.assertEqual(marca.valida("subtitols", {"disposicio": "escampat"}), {"disposicio": "escampat"})
+
     def test_sense_apilar_cada_linia_acaba_quan_comenca_la_seguent(self):
         linies = subtitols.grups(frase("una dues tres quatre"), [(0, 5)], dict(ESTIL, paraules_per_linia=2))
         self.assertEqual(linies[0]["final"], linies[1]["inici"])
@@ -179,7 +186,7 @@ class TestDisseny(unittest.TestCase):
 
     def test_estils_nous_valids(self):
         ids = {e["id"] for e in marca.estils()}
-        self.assertTrue({"apilat", "esglao", "titular", "retol"} <= ids)
+        self.assertTrue({"apilat", "esglao", "titular", "retol", "escampat"} <= ids)
         for e in marca.estils():  # tots porten la base comuna
             self.assertIn("disposicio", e["valors"])
 
@@ -208,7 +215,8 @@ class TestTitol(unittest.TestCase):
             with self.subTest(estil=e["id"]):
                 self.assertEqual(marca.valida("titol", e["valors"]), e["valors"])
         self.assertEqual(marca.valida("titol", {"font": None, "animacio": "maquina"}), {"font": None, "animacio": "maquina"})
-        for dolent in ({"animacio": "explota"}, {"fons": "neó"}, {"font": "x; }"}):
+        self.assertEqual(marca.valida("titol", {"corba": 3, "corba_linies": "totes"}), {"corba": 1.0, "corba_linies": "totes"})
+        for dolent in ({"animacio": "explota"}, {"fons": "neó"}, {"font": "x; }"}, {"corba_linies": "la tercera"}):
             with self.assertRaises(ValueError):
                 marca.valida("titol", dolent)
 

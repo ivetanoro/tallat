@@ -28,7 +28,7 @@
     "_paraules_per_linia": "Quantes paraules hi ha com a màxim a la pantalla (1 = una sola paraula; 7 = una frase en dues línies).",
     "paraules_per_linia": 3,
     "lletres_per_linia": 18,
-    "_disposicio": "«linia»: una línia que canvia. «apilat»: les línies d'una frase s'apilen una sota l'altra fins que la frase acaba.",
+    "_disposicio": "«linia»: una línia que canvia. «apilat»: les línies d'una frase s'apilen una sota l'altra fins que la frase acaba. «escampat»: les paraules d'una frase surten en llocs i mides diferents, com un collage.",
     "disposicio": "linia",
     "_alineacio": "«centre», «esquerra», «dreta» o «esglao» (una línia a l'esquerra i la següent a la dreta).",
     "alineacio": "centre",
@@ -130,6 +130,10 @@
     "_durada": "Segons que dura el títol (si al vídeo no se n'hi posa una altra).",
     "durada": 3.0,
     "_amaga_subtitols": "true: mentre surt el títol, no surten subtítols.",
-    "amaga_subtitols": false
+    "amaga_subtitols": false,
+    "_corba": "Corba algunes línies en arc: 0 recta, positiu com un arc de Sant Martí, negatiu com un somriure.",
+    "corba": 0.0,
+    "_corba_linies": "Quines línies es corben: «primera», «totes» o «darrera».",
+    "corba_linies": "primera"
   }
 }

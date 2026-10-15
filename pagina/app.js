@@ -1123,6 +1123,7 @@ function pintaPanellEstil() {
   $("#e-espaiat").value = e.espaiat ?? 0;
   $("#e-interlineat").value = e.interlineat ?? 1.12;
   marcaSegmentat("e-disposicio", e.disposicio || "linia");
+  $("#e-alineacio").closest(".camp").hidden = e.disposicio === "escampat";  // escampades: cada fila al seu lloc
   marcaSegmentat("e-alineacio", e.alineacio || "centre");
   $("#camps-clau").hidden = !e.clau_grans;
   $("#e-clau-mida").value = e.clau_mida ?? 1.4;
@@ -1307,6 +1308,9 @@ function pintaPanellTitol() {
   $("#t-animacio").value = e.animacio;
   marcaSegmentat("t-fons", e.fons || "cap");
   marcaSegmentat("t-alineacio", e.alineacio || "centre");
+  marcaSegmentat("t-corba-linies", e.corba_linies || "primera");
+  $("#t-corba").value = e.corba ?? 0;
+  $("#t-corba-linies").hidden = !e.corba;
   ompleLletres($("#t-font"), e.font, { laDelsSubtitols: true });
   const pes = $("#t-pes");
   if (![...pes.options].some((o) => +o.value === +e.pes)) {
@@ -1355,7 +1359,7 @@ function instalaTitol() {
   $("#obre-estil-titol").addEventListener("click", obreTitol);
   $("#tanca-titol").addEventListener("click", tancaTitol);
   $("#t-animacio").addEventListener("change", (e) => canviaTitol({ animacio: e.target.value }, true));
-  for (const [id, clau] of [["t-fons", "fons"], ["t-alineacio", "alineacio"]]) {
+  for (const [id, clau] of [["t-fons", "fons"], ["t-alineacio", "alineacio"], ["t-corba-linies", "corba_linies"]]) {
     for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaTitol({ [clau]: b.dataset.valor }, true));
   }
   $("#t-font").addEventListener("change", (e) => {
@@ -1369,7 +1373,7 @@ function instalaTitol() {
     $(`#${id}`).addEventListener("click", () => canviaTitol({ [clau]: !(estilTitol[clau] ?? perDefecte) }));
   }
   for (const [id, clau] of [["t-mida", "mida"], ["t-clau-mida", "clau_mida"], ["t-espaiat", "espaiat"],
-    ["t-interlineat", "interlineat"], ["t-posicio", "posicio_y"], ["t-gruix", "gruix_contorn"]]) {
+    ["t-interlineat", "interlineat"], ["t-posicio", "posicio_y"], ["t-gruix", "gruix_contorn"], ["t-corba", "corba"]]) {
     $(`#${id}`).addEventListener("input", (e) => canviaTitol({ [clau]: +e.target.value }));
   }
   for (const [id, clau] of [["t-color", "color"], ["t-clau-color", "clau_color"], ["t-contorn", "contorn"],

@@ -168,7 +168,7 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
 
     # Apilades: les línies d'una frase s'acumulen (un «bloc») fins que la frase acaba, hi ha una pausa
     # o ja no n'hi caben més; totes les del bloc es queden a la pantalla fins al final del bloc.
-    apilat = estil.get("disposicio") == "apilat"
+    apilat = estil.get("disposicio") in ("apilat", "escampat")  # escampades: també per frases
     maxim_b = max(1, int(estil.get("linies_max", 4)))
     blocs = []
     for linia in linies:

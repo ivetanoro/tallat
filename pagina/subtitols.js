@@ -12,8 +12,10 @@
  *
  * `linies`: [{inici, final, bloc, paraules: [{text, inici, final, clau, emoji}]}] en temps del muntatge.
  * Amb `disposicio: "apilat"`, les línies d'un mateix `bloc` s'apilen una sota l'altra (la posició
- * marca on queda el bloc: a dalt creix cap avall, a baix creix cap amunt). Si no, cada línia
- * substitueix l'anterior.
+ * marca on queda el bloc: a dalt creix cap avall, a baix creix cap amunt). Amb `"escampat"`, les
+ * paraules del bloc surten en files curtes a llocs, mides i inclinacions diferents (com un collage;
+ * sempre igual per a una mateixa frase). Si no, cada línia substitueix l'anterior.
+ * Al títol, `corba` (de -1 a 1) corba en arc les línies que diu `corba_linies`.
  * Fa servir GSAP si hi és; si no (sense internet), en dona una versió sense animacions.
  */
 (function (global) {
@@ -86,6 +88,12 @@
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
 .tt-c, .tt-cursor { display: none; }
+.tt-corba { display: block; overflow: visible; filter: drop-shadow(var(--tt-ombra)); }
+.tt-corba text {
+  fill: var(--tt-color); stroke: var(--tt-contorn); stroke-width: var(--tt-gruix); stroke-linejoin: round;
+  paint-order: stroke fill;
+}
+.tt-corba .tt-clau { fill: var(--tt-clau-color); }
 .tt-cursor { font-weight: 300; margin-left: 0.03em; -webkit-text-stroke: 0; }`;
 
   function posaCss(doc) {
@@ -139,6 +147,31 @@
     }
   }
 
+  // Un número entre 0 i 1 que sembla a l'atzar però que sempre és el mateix per a cada n.
+  function atzar(n) {
+    const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  // Escampades: les paraules de cada línia, en files curtes. Les destacades van soles.
+  function filesEscampades(linies, estil) {
+    const files = [];
+    for (const linia of linies) {
+      let grup = [];
+      const tanca = () => {
+        if (grup.length) files.push({ ...linia, inici: grup[0].inici, paraules: grup });
+        grup = [];
+      };
+      for (const w of linia.paraules) {
+        if (estil.clau_grans && w.clau) { tanca(); grup.push(w); tanca(); continue; }
+        grup.push(w);
+        if (grup.length >= 2 || grup.map((x) => x.text).join(" ").length > 12) tanca();
+      }
+      tanca();
+    }
+    return files;
+  }
+
   function construeix(arrel, linies, estil, op) {
     op = op || {};
     const doc = arrel.ownerDocument;
@@ -152,7 +185,8 @@
     const deCop = estil.apareixen === "linia";
     const pes = Number(estil.pes) || 800;
     const ombra = estil.ombra !== false;
-    const apilat = estil.disposicio === "apilat";
+    const escampat = estil.disposicio === "escampat";
+    const apilat = estil.disposicio === "apilat" || escampat;  // escampades: també per blocs
     const alineacio = ["esquerra", "dreta", "esglao"].includes(estil.alineacio) ? estil.alineacio : "centre";
     // Esglaó: les línies van a l'esquerra i a la dreta per torns; les que només són paraules destacades,
     // al mig (com un títol: «#3 canvis» a l'esquerra, «SER CREADORA» al mig, «nivell fàcil» a la dreta).
@@ -220,7 +254,27 @@
     const construides = blocs.map((b, i) => {
       const el = element(doc, "div", "ts-linia");
       let files;
-      if (apilat) {
+      if (escampat) {
+        const cos = element(doc, "div", "ts-bloc ts-tipus");
+        el.append(cos);
+        // Cada fila a una banda (esquerra, dreta i, de tant en tant, al mig), amb un marge, una mida
+        // i una inclinació diferents. Depèn de les paraules: la mateixa frase fa sempre el mateix collage.
+        const llavor = Math.floor(atzar((b.linies[0].paraules[0]?.id ?? i) + 0.3) * 2);
+        files = filesEscampades(b.linies, estil).map((linia, k) => {
+          const g = (linia.paraules[0].id ?? i * 31 + k) * 1.7 + k;
+          const gran = linia.paraules.every((w) => estil.clau_grans && w.clau);
+          const petita = !gran && linia.paraules.every((w) => w.text.replace(/[^\p{L}\p{N}]/gu, "").length <= 3);
+          const costat = k % 3 === 2 ? "centre" : (k + llavor) % 2 ? "dreta" : "esquerra";
+          const p = element(doc, "p", `ts-fila ts-al-${costat}`);
+          const marge = `${Math.round(2 + atzar(g) * (gran ? 14 : 22))}%`;
+          if (costat === "esquerra") p.style.paddingLeft = marge;
+          if (costat === "dreta") p.style.paddingRight = marge;
+          p.style.fontSize = gran ? `${(0.82 + atzar(g + 0.2) * 0.36).toFixed(3)}em` : petita ? "0.8em" : "1em";
+          p.style.transform = `rotate(${((atzar(g + 0.5) - 0.5) * (gran ? 6 : 9)).toFixed(2)}deg)`;
+          cos.append(p);
+          return fila(p, linia);
+        });
+      } else if (apilat) {
         const cos = element(doc, "div", "ts-bloc ts-tipus");
         el.append(cos);
         torn = 0;  // cada bloc comença a l'esquerra
@@ -324,6 +378,62 @@
       l.split("*").map((tros, k) => ({ text: tros, clau: k % 2 === 1 })).filter((x) => x.text));
   }
 
+  // Una línia del títol en arc: el text segueix un camí (SVG), amb la mateixa lletra i colors.
+  // `corba` > 0 fa un arc com el de Sant Martí; < 0, com un somriure.
+  let arcs = 0;
+  function liniaCorba(doc, p, trossos, costat, corba, estil, maquina, bloc) {
+    const NS = "http://www.w3.org/2000/svg";
+    const ample = (estil.amplada_maxima ?? 0.86) * AMPLADA;
+    const lletra = (estil.mida ?? 0.07) * AMPLADA * (trossos.some((x) => x.clau) ? (Number(estil.clau_mida) || 1) : 1);
+    const sageta = Math.abs(corba) * 0.2 * ample;
+    const alcada = lletra * 1.3 + sageta;
+    const base = corba > 0 ? lletra * 1.05 + sageta : lletra * 1.05;  // on comença i acaba l'arc
+    const radi = (ample * ample / 4 + sageta * sageta) / (2 * sageta);
+    const id = `tt-arc-${++arcs}`;
+    const svg = doc.createElementNS(NS, "svg");
+    svg.setAttribute("class", "tt-corba");
+    svg.setAttribute("width", ample);
+    svg.setAttribute("height", alcada);
+    svg.setAttribute("viewBox", `0 0 ${ample} ${alcada}`);
+    const cami = doc.createElementNS(NS, "path");
+    cami.setAttribute("id", id);
+    cami.setAttribute("d", `M 0 ${base} A ${radi} ${radi} 0 0 ${corba > 0 ? 1 : 0} ${ample} ${base}`);
+    const text = doc.createElementNS(NS, "text");
+    const sobre = doc.createElementNS(NS, "textPath");
+    sobre.setAttribute("href", `#${id}`);
+    sobre.setAttribute("startOffset", costat === "esquerra" ? "0%" : costat === "dreta" ? "100%" : "50%");
+    text.setAttribute("text-anchor", costat === "esquerra" ? "start" : costat === "dreta" ? "end" : "middle");
+    const lletres = [];
+    for (const tros of trossos) {
+      const t = doc.createElementNS(NS, "tspan");
+      if (tros.clau) t.setAttribute("class", "tt-clau");
+      if (maquina) {
+        for (const c of tros.text) {
+          const l = doc.createElementNS(NS, "tspan");
+          l.setAttribute("class", "tt-c");
+          l.textContent = c;
+          t.append(l);
+          lletres.push(l);
+        }
+      } else t.textContent = tros.text;
+      sobre.append(t);
+    }
+    let cursor = null;
+    if (maquina) {
+      cursor = doc.createElementNS(NS, "tspan");
+      cursor.setAttribute("class", "tt-cursor");
+      cursor.textContent = "|";
+      sobre.append(cursor);
+    }
+    text.append(sobre);
+    const defs = doc.createElementNS(NS, "defs");  // el camí no es dibuixa: només el segueix el text
+    defs.append(cami);
+    svg.append(defs, text);
+    p.append(svg);
+    bloc.append(p);
+    return { p, lletres, cursor };
+  }
+
   function titol(arrel, t, estil, op) {
     op = op || {};
     const doc = arrel.ownerDocument;
@@ -367,8 +477,14 @@
       if (trossos.every((x) => x.clau)) return "centre";
       return torn++ % 2 ? "dreta" : "esquerra";
     };
-    const files = linies.map((trossos) => {
-      const p = element(doc, "p", `tt-fila ts-al-${alinea(trossos)}${trossos.some((x) => x.clau) ? " tt-te-clau" : ""}`);
+    const corba = Math.max(-1, Math.min(1, Number(estil.corba) || 0));
+    const quines = estil.corba_linies || "primera";
+    const esCorba = (k) => corba !== 0 &&
+      (quines === "totes" || (quines === "darrera" ? k === linies.length - 1 : k === 0));
+    const files = linies.map((trossos, k) => {
+      const costat = alinea(trossos);
+      const p = element(doc, "p", `tt-fila ts-al-${costat}${trossos.some((x) => x.clau) ? " tt-te-clau" : ""}`);
+      if (esCorba(k)) return liniaCorba(doc, p, trossos, costat, corba, estil, maquina, bloc);
       const dins = element(doc, "span", "tt-dins");
       p.append(dins);
       const lletres = [];
