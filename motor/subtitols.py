@@ -226,8 +226,9 @@ def _font_face(fonts: list[dict]) -> str:
     regles = []
     for f in fonts:
         pes = str(f["pes"]) if re.fullmatch(r"\d+( \d+)?", str(f["pes"])) else "100 1000"
+        estil = "italic" if f.get("estil") == "italic" else "normal"
         regles.append(f"@font-face {{ font-family: {_familia(f['familia'])}; src: url('{html.escape(f['src'])}'); "
-                      f"font-weight: {pes}; font-display: block; }}")
+                      f"font-weight: {pes}; font-style: {estil}; font-display: block; }}")
     return "\n      ".join(regles)
 
 
@@ -332,7 +333,7 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     fonts = fonts or []
     empremta_st = [[str(st["fitxer"]), _empremta(st["fitxer"]), st["inici"], st["durada"]] for st in stickers or []]
     codi = _empremta(CODI_ANIMACIO)  # si canvien les animacions, cal tornar a dibuixar
-    empremta_fonts = [[f["familia"], f["pes"], _empremta(f["fitxer"])] for f in fonts]
+    empremta_fonts = [[f["familia"], f["pes"], f.get("estil", "normal"), _empremta(f["fitxer"])] for f in fonts]
     clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers, codi,
                        empremta_fonts, titol, estil_titol if titol else None], sort_keys=True)
     nom = hashlib.sha1(clau.encode()).hexdigest()[:12]
@@ -347,7 +348,7 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     for k, f in enumerate(fonts):
         src = f"font{k}{Path(f['fitxer']).suffix.lower()}"
         shutil.copy(f["fitxer"], projecte / src)
-        fonts_locals.append({"familia": f["familia"], "pes": f["pes"], "src": src})
+        fonts_locals.append({"familia": f["familia"], "pes": f["pes"], "estil": f.get("estil", "normal"), "src": src})
     shutil.copy(CODI_ANIMACIO, projecte / "subtitols.js")
     locals_st = []
     for k, st in enumerate(stickers or []):

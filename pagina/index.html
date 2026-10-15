@@ -39,6 +39,11 @@
         <input id="nom-kit" type="text" autocomplete="off" maxlength="60" aria-label="Nom del kit">
       </form>
       <input type="file" id="fitxer-kit" accept=".zip,application/zip" hidden>
+      <button class="fila-estil" id="obre-marca" aria-label="La teva marca: colors, lletres i com són els teus vídeos">
+        <span class="mostra-estil mostra-marca" id="mostra-marca" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="fila-estil-text"><strong>La teva marca</strong><span id="nom-marca"></span></span>
+        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+      </button>
     </section>
 
     <div class="segmentat ample pestanyes" role="tablist" aria-label="Què vols fer" id="pestanyes">
@@ -146,6 +151,11 @@
                 <span class="pista" aria-hidden="true"><span class="bola"></span></span>Soles a la seva línia
               </button>
             </div>
+            <label class="etiqueta" for="e-clau-font">Lletra</label>
+            <select id="e-clau-font"></select>
+            <button class="interruptor" id="e-clau-cursiva" role="switch" aria-checked="false">
+              <span class="pista" aria-hidden="true"><span class="bola"></span></span>En cursiva
+            </button>
             <p class="detall">Tria quines són amb «Destaca», a dalt del text. Les que no triïs, les tria tallat.</p>
           </div>
           <button class="interruptor" id="e-emojis" role="switch" aria-checked="false">
@@ -313,6 +323,74 @@
     </section>
     </div>
 
+    <div class="panell-estil" id="panell-marca" hidden>
+      <button class="enllac tornar" id="tanca-marca">‹ Enrere</button>
+      <h2 class="titol-panell">La teva marca</h2>
+      <p class="detall">La fa l'entrevista de marca: digues a Claude «fem la meva marca». Aquí la pots retocar.
+        Es desa al kit «<span id="nom-kit-marca"></span>» i els colors i les lletres s'apliquen sols.</p>
+      <div class="camp">
+        <span class="etiqueta">Colors</span>
+        <div class="colors">
+          <label class="color" title="Blocs de color i vores del b-roll"><input type="color" id="m-color-principal"><span>Principal</span></label>
+          <label class="color" title="Les paraules destacades i la que sona"><input type="color" id="m-color-destacat"><span>Destacat</span></label>
+          <label class="color" title="Fons i targetes"><input type="color" id="m-color-clar"><span>Clar</span></label>
+        </div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="m-prohibits">Colors o estils que no vols mai</label>
+        <input type="text" class="camp-text" id="m-prohibits" maxlength="600" placeholder="Per exemple: negre, neó">
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="m-lletra-titols">Lletra dels títols</label>
+        <select id="m-lletra-titols"></select>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="m-lletra-text">Lletra del text (subtítols)</label>
+        <select id="m-lletra-text"></select>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="m-lletra-accent">Lletra d'accent (la paraula destacada)</label>
+        <select id="m-lletra-accent"></select>
+      </div>
+      <div class="camp">
+        <span class="etiqueta" id="et-m-energia">Estil dels gràfics</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-m-energia" id="m-energia">
+          <button role="radio" data-valor="net" title="Net i minimalista">Net</button>
+          <button role="radio" data-valor="scrapbook" title="Juganer, amb stickers i retalls">Scrapbook</button>
+          <button role="radio" data-valor="editorial" title="Titulars grans, com una revista">Editorial</button>
+        </div>
+      </div>
+      <div class="camp">
+        <span class="etiqueta" id="et-m-grafics">Quants gràfics</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-m-grafics" id="m-grafics">
+          <button role="radio" data-valor="pocs" title="Un cada 8-12 segons">Pocs</button>
+          <button role="radio" data-valor="normal" title="Un cada 4-6 segons">Normal</button>
+          <button role="radio" data-valor="molts" title="Un cada 2-4 segons">Molts</button>
+        </div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="m-crida">La teva crida a l'acció</label>
+        <input type="text" class="camp-text" id="m-crida" maxlength="600" placeholder="Per exemple: comenta GUIA i te l'envio">
+      </div>
+      <details class="grup-estil" id="grup-m-compte">
+        <summary>El teu compte<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+        <div class="cos-grup">
+          <div class="camp">
+            <label class="etiqueta" for="m-compte">De què va</label>
+            <textarea class="camp-text" id="m-compte" rows="2" maxlength="600"></textarea>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="m-public">Qui el mira</label>
+            <textarea class="camp-text" id="m-public" rows="2" maxlength="600"></textarea>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="m-referencia">Un reel que t'hauria agradat fer (i per què)</label>
+            <textarea class="camp-text" id="m-referencia" rows="3" maxlength="600"></textarea>
+          </div>
+        </div>
+      </details>
+    </div>
+
     <div class="panell-estil" id="panell-titol" hidden>
       <button class="enllac tornar" id="tanca-titol">‹ Enrere</button>
       <h2 class="titol-panell">Títol del ganxo</h2>
@@ -403,6 +481,13 @@
       <details class="grup-estil" id="grup-t-detalls">
         <summary>Detalls de la lletra<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
         <div class="cos-grup">
+          <div class="camp">
+            <label class="etiqueta" for="t-clau-font">Lletra del que va *entre asteriscs*</label>
+            <select id="t-clau-font"></select>
+          </div>
+          <button class="interruptor" id="t-clau-cursiva" role="switch" aria-checked="false">
+            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Destacat en cursiva
+          </button>
           <div class="fila-camps">
             <select id="t-pes" aria-label="Gruix de la lletra">
               <option value="400">Normal</option>

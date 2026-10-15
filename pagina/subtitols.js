@@ -57,7 +57,10 @@
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   filter: var(--ts-ombra-filtre);
 }
-.ts-clau .ts-t { font-size: calc(var(--ts-clau-mida) * 1em); line-height: 1; }
+.ts-clau .ts-t {
+  font-size: calc(var(--ts-clau-mida) * 1em); line-height: 1;
+  font-family: var(--ts-clau-font, inherit); font-style: var(--ts-clau-estil, normal); font-weight: var(--ts-clau-pes, inherit);
+}
 .ts-normal .ts-clau .ts-t, .ts-neo .ts-clau .ts-t { color: var(--ts-clau-color); }
 .ts-d-caixa .ts-p, .ts-d-gran .ts-p { margin: 0 0.07em; }
 .ts-caixa-p {
@@ -82,7 +85,10 @@
 .tt-fila.ts-al-esquerra { text-align: left; }
 .tt-fila.ts-al-dreta { text-align: right; }
 .tt-text { -webkit-text-stroke: var(--tt-gruix) var(--tt-contorn); paint-order: stroke fill; text-shadow: var(--tt-ombra); }
-.tt-clau { font-size: calc(var(--tt-clau-mida) * 1em); color: var(--tt-clau-color); line-height: 1; }
+.tt-clau {
+  font-size: calc(var(--tt-clau-mida) * 1em); color: var(--tt-clau-color); line-height: 1;
+  font-family: var(--tt-clau-font, inherit); font-style: var(--tt-clau-estil, normal); font-weight: var(--tt-clau-pes, inherit);
+}
 .tt-pindola .tt-dins {
   padding: 0.04em 0.28em 0.08em; border-radius: 0.22em; background: var(--tt-fons);
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
@@ -114,6 +120,25 @@
     const n = parseInt(String(hex || "#000000").slice(1), 16) || 0;
     const llum = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
     return llum > 160 ? "#000000" : "#FFFFFF";
+  }
+
+  // La família d'una lletra per al CSS: «system-ui» tal qual, «Fraunces» entre cometes (com fa el Python).
+  const GENERIQUES = new Set(["system-ui", "serif", "sans-serif", "monospace", "cursive", "fantasy"]);
+  function familiaDe(nom) {
+    const net = String(nom || "").replace(/["'\\;{}<>]/g, "").trim();
+    if (!net) return null;
+    return GENERIQUES.has(net) ? net : `"${net}", system-ui, sans-serif`;
+  }
+
+  // Les paraules destacades amb una lletra pròpia (la d'accent de la marca): la família, la cursiva i
+  // un gruix normal (les lletres d'accent no solen tenir negreta). Torna les variables CSS que toquen.
+  function lletraClau(estil, prefix) {
+    const familia = familiaDe(estil.clau_font);
+    return {
+      [`--${prefix}-clau-font`]: familia,
+      [`--${prefix}-clau-estil`]: estil.clau_cursiva ? "italic" : null,
+      [`--${prefix}-clau-pes`]: familia ? "400" : null,
+    };
   }
 
   function element(doc, etiqueta, classe, text) {
@@ -220,8 +245,11 @@
       "--ts-ombra": ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none",
       "--ts-ombra-filtre": ombra ? "drop-shadow(0 0.04em 0.1em rgba(0, 0, 0, 0.5))" : "none",
       "--ts-fons": rgba(estil.fons_color, 0.62),
+      ...lletraClau(estil, "ts"),
     };
-    for (const [k, valor] of Object.entries(v)) arrel.style.setProperty(k, valor);
+    for (const [k, valor] of Object.entries(v)) {
+      if (valor == null) arrel.style.removeProperty(k); else arrel.style.setProperty(k, valor);
+    }
     arrel.textContent = "";
 
     // Una línia: el fons (si n'hi ha) i les paraules.
@@ -477,8 +505,11 @@
       "--tt-espaiat": `${Number(estil.espaiat) || 0}em`, "--tt-interlineat": Number(estil.interlineat) || 1,
       "--tt-ombra": estil.ombra !== false ? "0 0.05em 0.18em rgba(0, 0, 0, 0.45)" : "none",
       "--tt-fons": estil.fons === "enfosquit" ? rgba(estil.fons_color, 0.5) : (estil.fons_color || "#000000"),
+      ...lletraClau(estil, "tt"),
     };
-    for (const [k, valor] of Object.entries(v)) arrel.style.setProperty(k, valor);
+    for (const [k, valor] of Object.entries(v)) {
+      if (valor == null) arrel.style.removeProperty(k); else arrel.style.setProperty(k, valor);
+    }
 
     const enfosquit = estil.fons === "enfosquit" ? element(doc, "div", "tt-enfosquit") : null;
     if (enfosquit) arrel.append(enfosquit);

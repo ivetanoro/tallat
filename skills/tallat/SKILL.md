@@ -36,9 +36,37 @@ Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre 
 .venv/bin/python tallat.py kit [nou NOM [--copia-de ID] | nom ID NOM | per-defecte ID | tria ID --projecte CARPETA | exporta ID [--a CARPETA] | importa FITXER.zip | esborra ID | lletres | lletra ID [--kit KIT]]
 .venv/bin/python tallat.py destaca --projecte CARPETA [--si ID…] [--no ID…] [--automatic]
 .venv/bin/python tallat.py titol --projecte CARPETA ["LÍNIA | *DESTACAT* | LÍNIA"] [--durada S] [--treu]
+.venv/bin/python tallat.py marca [--projecte CARPETA | --kit ID] [CLAU=VALOR …]
 ```
 
 La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que diu la persona no es publiquen mai).
+
+## La teva marca (entrevista)
+
+La marca diu com són els vídeos de la persona: els seus colors i lletres (cadascun amb una feina), l'estil i la quantitat de gràfics, i la seva crida a l'acció. Viu al kit (secció `marca`), i en desar-la els colors i les lletres s'escampen sols: el **destacat** va a la paraula que sona i a les destacades (subtítols i títol), el **principal** a les vores del b-roll (i als gràfics que vindran), la lletra de **text** als subtítols, la de **títols** al títol del ganxo, i la d'**accent** a les paraules destacades, en cursiva. Els estils fets de la pàgina en respecten els colors.
+
+**Quan:** si `tallat.py marca` diu que el kit no té marca, ofereix l'entrevista abans del primer muntatge (no l'imposis). També quan la persona digui «fem la meva marca», «vull el meu estil» o similar.
+
+**Com:** al xat, **una pregunta cada cop**, amb paraules senzilles i 2-4 opcions concretes quan es pugui (més «una altra cosa»). Si diu «no ho sé», proposa-li tu una opció a partir del que ja t'ha dit i segueix. Les preguntes:
+1. De què va el teu compte, i qui el mira? (una frase cada cosa)
+2. **Ensenya'm un reel que t'hauria agradat fer** (un enllaç o una captura). És la pregunta més important: mira'l (si és un enllaç, obre'l al navegador; si no el pots veure, demana una captura) i treu-ne els colors, com són els subtítols, els gràfics i el ritme. Pregunta-li què li agrada.
+3. Els teus colors (codis com #FF7DB8 o en paraules: «rosa suau i negre»). Quin és el que destaca (paraules clau)? I un de clar per a fons?
+4. Colors o estils que no vols mai.
+5. Lletres: per als títols, per al text i una d'accent per a la paraula emotiva (una amb cursiva queda molt bé). Si no en té, proposa-li 2-3 combinacions de la biblioteca gratuïta (`tallat.py kit lletres`; les que tenen cursiva: Inter, Inter Tight, Archivo, Montserrat, Poppins, DM Sans, Fraunces, Playfair Display, DM Serif Display, Instrument Serif). Per exemple: DM Sans + Fraunces + Instrument Serif (editorial), Poppins + Poppins + Playfair Display (net i càlid), Archivo + Anton + Instrument Serif (impacte).
+6. Els subtítols: d'una paraula, frases curtes o la frase sencera? Amb les paraules clau més grans? En minúscules? (Tria'n l'estil fet que hi encaixi i posa'l amb la pàgina o al `kit.json`.)
+7. L'estil dels gràfics: net i minimalista, juganer (scrapbook: stickers, retalls) o editorial (titulars grans, com una revista).
+8. Quants gràfics: pocs (un cada 8-12 s, sobretot tu a càmera), normal (cada 4-6 s) o molts (cada 2-4 s).
+9. Efectes de so: cap, pocs o molts.
+10. El ritme dels talls: natural, àgil o ràpid (`talls.pausa_maxima` 0,5 / 0,35 / 0,25).
+11. La teva crida a l'acció habitual («comenta GUIA i te l'envio», «segueix-me per a la part 2»…).
+
+**En acabar:** ensenya-li un resum curt i pregunta «hi canviaries res?». Després:
+- Desa-ho: `tallat.py marca --projecte X compte="…" public="…" referencia="…" color_principal=#… color_destacat=#… color_clar=#… colors_prohibits="…" lletra_titols=… lletra_text=… lletra_accent=… energia=net|scrapbook|editorial grafics=pocs|normal|molts crida="…"`. Les lletres de la biblioteca es poden dir pel nom o per l'id i es baixen soles (amb la cursiva).
+- Si vol un kit nou per a la marca, crea'l abans (`tallat.py kit nou "La meva marca"` i `kit tria`).
+- La resta (subtítols, so, ritme), als seus apartats del kit. Cada «no vull mai…» que digui, com a regla del gust (`tallat.py gust afegeix`).
+- Obre-li la pàgina (`tallat.py revisa`) perquè ho vegi: a dalt de la columna, «La teva marca» ho ensenya i ho deixa retocar.
+
+**Després:** quan facis el muntatge o proposis títols i gràfics, llegeix la marca (`tallat.py marca --projecte X`) i fes-la servir: el compte i el públic per al to, l'energia i la quantitat per als gràfics, i la crida a l'acció al final. Si la marca i el teu gust no coincideixen, mana la marca.
 
 ## Transcriure
 
@@ -116,7 +144,7 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 
 - Es tria a la pàgina de revisió: pestanya **Subtítols** (la columna de l'esquerra té el kit a dalt i cinc pestanyes: **Edita** —reels, instruccions de veu, propostes i silencis—, **Subtítols**, **Gràfics** —el títol del ganxo i el b-roll—, **So** —la neteja de la veu i els efectes— i **Vídeos** —els exportats). Hi ha 18 estils predefinits (Clàssic, Net, Una paraula, Frase, Caixa, Karaoke, Impacte, Elegant, Cortina, Revista, Neó, Degradat, Emojis, i els dissenyats: Apilat, Escampat, Esglaó, Titular, Rètol) i es pot ajustar tot: quantes paraules surten, si apareixen d'una en una o totes de cop, l'animació (pop, fos, impacte, cortina, gruix o cap), com es destaca la paraula que sona (color, caixa, karaoke o més gran), l'aspecte (normal, neó o degradat), una píndola de fons, emojis, la lletra, la mida, la posició i els colors.
 - **Disposició** (`disposicio`): `linia` (cada línia substitueix l'anterior), `apilat` (les línies d'una frase s'apilen una sota l'altra fins que la frase acaba o n'hi ha `linies_max`) o `escampat` (com un collage: les paraules de la frase surten en files curtes a llocs, mides i inclinacions diferents; les destacades, soles i grans; les curtes, més petites. La mateixa frase fa sempre el mateix collage, i l'alineació no hi compta). **Alineació** (`alineacio`): `centre`, `esquerra`, `dreta` o `esglao` (per torns a l'esquerra i a la dreta; les línies que només tenen paraules destacades, al mig, com un títol). `espaiat` (entre lletres; negatiu = juntes, com als títols de revista) i `interlineat` (entre línies).
-- **Paraules destacades** (`clau_grans`): surten `clau_mida` vegades més grans i amb `clau_color` (null: el color del destacat); amb `clau_sola`, cada una va sola a la seva línia (amb `apilat` fa el look de títol: «és tan / AMBICIÓS / o / EMPRENEDOR»). tallat en tria soles (els números i la paraula llarga més important de cada línia). La persona les pot canviar al mode **Destaca** de la pàgina, i tu amb `tallat.py destaca --projecte X --si ID… --no ID…` (sense opcions, et diu quines surten ara, amb el seu número). Quan la persona vulgui subtítols dissenyats, revisa-les: una per idea, les que porten el pes del missatge (substantius, xifres, adjectius forts), mai paraules pont. La pàgina oberta es posa al dia sola en uns segons.
+- **Paraules destacades** (`clau_grans`): surten `clau_mida` vegades més grans i amb `clau_color` (null: el color del destacat), amb la lletra `clau_font` (null: la mateixa; la marca hi posa la d'accent) i en cursiva amb `clau_cursiva`; amb `clau_sola`, cada una va sola a la seva línia (amb `apilat` fa el look de títol: «és tan / AMBICIÓS / o / EMPRENEDOR»). tallat en tria soles (els números i la paraula llarga més important de cada línia). La persona les pot canviar al mode **Destaca** de la pàgina, i tu amb `tallat.py destaca --projecte X --si ID… --no ID…` (sense opcions, et diu quines surten ara, amb el seu número). Quan la persona vulgui subtítols dissenyats, revisa-les: una per idea, les que porten el pes del missatge (substantius, xifres, adjectius forts), mai paraules pont. La pàgina oberta es posa al dia sola en uns segons.
 - **Lletres**: les del Mac, 18 de gratuïtes (Inter, Inter Tight, Archivo, Anton, Bebas Neue, Montserrat, Poppins, Fraunces, Playfair Display, Caveat…; `tallat.py kit lletres`) que es baixen dins del kit el primer cop que es trien (`tallat.py kit lletra ID`, o a la pàgina), i les que puja la persona. Totes les lletres que no són del Mac viuen a la carpeta `fonts/` del kit i viatgen amb ell.
 - La vista prèvia i el vídeo final fan servir el mateix codi d'animació (`pagina/subtitols.js`): el que es veu a la pàgina és el que surt.
 - Es desa al **kit d'estil** del vídeo (vegeu més avall), a la secció `subtitols`. Si la persona et demana un canvi al xat, edita el `kit.json` d'aquell kit: cada opció hi té una nota que l'explica. Els estils predefinits són a `config/estils_subtitols.json`; els emojis, a `config/emojis.json` (la persona en pot afegir a `~/.tallat/emojis.json`).

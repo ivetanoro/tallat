@@ -164,11 +164,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         estil = obert["p"].estil_subtitols()
         broll_estil = obert["p"].estil().get("broll", {})
         accent = estil.get("clau_color") or estil.get("color_actiu") or "#FFFFFF"
-        fonts = [{"familia": f["familia"], "pes": f["pes"],
+        fonts = [{"familia": f["familia"], "pes": f["pes"], "estil": f.get("estil", "normal"),
                   "url": f"/marca/fonts/{quote(f['fitxer'].name)}?v={int(f['fitxer'].stat().st_mtime)}"}
                  for f in marca.fonts_del_kit(kit) if f["fitxer"].parent == marca.ruta(kit).parent / "fonts"]
         return {"estil_subtitols": estil, "estil_titol": obert["p"].estil().get("titol", {}),
                 "estil_so": obert["p"].estil_so(), "sons_propis": str(so.SONS_PROPIS),
+                "estil_marca": obert["p"].estil().get("marca", {}),
                 "estils_titol": marca.estils_titol(), "estil_broll": broll_estil,
                 "mostra_broll": targetes.mostra(broll_estil, accent),
                 "estils_broll": [{**e, "mostra": targetes.mostra({**broll_estil, **e["valors"]}, accent)}
@@ -457,7 +458,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                                 raise ValueError("Secció desconeguda")
                             marca.restableix(seccio, kit=projecte.kit())
                         else:
-                            for seccio in ("subtitols", "titol", "broll", "so"):
+                            for seccio in ("subtitols", "titol", "broll", "so", "marca"):
                                 if isinstance(cos.get(seccio), dict):
                                     marca.desa(seccio, cos[seccio], kit=projecte.kit())
                     except ValueError as e:
@@ -476,9 +477,11 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 if ruta == "/api/marca/lletra":  # una lletra de la biblioteca (es baixa al kit el primer cop)
                     try:
                         marca.baixa_lletra(str(cos.get("id", "")), kit=projecte.kit(),
-                                           seccio="titol" if cos.get("seccio") == "titol" else "subtitols")
+                                           seccio=str(cos.get("seccio") or "subtitols"), clau=str(cos.get("clau") or "font"))
                     except KeyError:
                         return self._json({"error": "No conec aquesta lletra"}, HTTPStatus.NOT_FOUND)
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                     except ConnectionError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_GATEWAY)
                     return self._json({**info_marca(), **instantania()})

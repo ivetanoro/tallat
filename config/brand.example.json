@@ -57,7 +57,10 @@
     "_emojis": "Posa un emoji damunt d'algunes paraules (llista a config/emojis.json; pots afegir-ne a ~/.tallat/emojis.json).",
     "emojis": false,
     "_puntuacio": "false treu comes i punts finals; els interrogants i exclamacions es queden.",
-    "puntuacio": false
+    "puntuacio": false,
+    "_clau_font": "Lletra de les paraules destacades (null: la mateixa). La marca hi posa la lletra d'accent.",
+    "clau_font": null,
+    "clau_cursiva": false
   },
   "broll": {
     "_durada": "Segons que dura cada b-roll (tall sec). Entre 1 i 1,5 queda natural.",
@@ -131,6 +134,9 @@
     "durada": 3.0,
     "_amaga_subtitols": "true: mentre surt el títol, no surten subtítols.",
     "amaga_subtitols": false,
+    "_clau_font": "Lletra del que va *entre asteriscs* (null: la mateixa). La marca hi posa la lletra d'accent.",
+    "clau_font": null,
+    "clau_cursiva": false,
     "_corba": "Corba algunes línies en arc: 0 recta, positiu com un arc de Sant Martí, negatiu com un somriure.",
     "corba": 0.0,
     "_corba_linies": "Quines línies es corben: «primera», «totes» o «darrera».",
@@ -145,5 +151,31 @@
     "efectes": "pocs",
     "_volum_efectes": "Volum dels efectes, de 0 a 1.",
     "volum_efectes": 0.5
+  },
+  "marca": {
+    "_info": "La teva marca. La fa l'entrevista de marca amb Claude (al xat) i es retoca a la pàgina («La teva marca»). Cada color i cada lletra té una feina i s'aplica sol als subtítols, al títol i al b-roll.",
+    "_compte": "De què va el compte i qui el mira (per a Claude: així proposa títols, gràfics i talls que hi encaixin).",
+    "compte": "",
+    "public": "",
+    "_referencia": "Un reel que t'hauria agradat fer i què t'agrada d'ell.",
+    "referencia": "",
+    "_color_principal": "El teu color (blocs de color, vores del b-roll). null: sense marca.",
+    "color_principal": null,
+    "_color_destacat": "El color de les paraules destacades i de la paraula que sona.",
+    "color_destacat": null,
+    "_color_clar": "Un color clar per a fons i targetes.",
+    "color_clar": null,
+    "_colors_prohibits": "Colors o estils que no vols mai (en paraules).",
+    "colors_prohibits": "",
+    "_lletres": "La de títols (títol del ganxo), la de text (subtítols) i la d'accent (les paraules destacades, en cursiva).",
+    "lletra_titols": null,
+    "lletra_text": null,
+    "lletra_accent": null,
+    "_energia": "L'estil dels gràfics: «net», «scrapbook» o «editorial».",
+    "energia": "net",
+    "_grafics": "Quants gràfics: «pocs» (un cada 8-12 s), «normal» (cada 4-6 s) o «molts» (cada 2-4 s).",
+    "grafics": "normal",
+    "_crida": "La teva crida a l'acció habitual (p. ex. «comenta GUIA i te l'envio»).",
+    "crida": ""
   }
 }

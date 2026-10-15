@@ -43,7 +43,7 @@ MIDA_MAXIMA_KIT = 60 * 1024 * 1024  # un kit importat (amb les seves fonts), com
 FORMATS_FONT = {".ttf", ".otf", ".woff", ".woff2"}
 
 # Què es pot canviar (des de la pàgina o amb les regles del teu gust), i entre quins límits.
-EDITABLES = {"subtitols", "titol", "broll", "stickers", "talls", "so"}
+EDITABLES = {"subtitols", "titol", "broll", "stickers", "talls", "so", "marca"}
 RANGS = {
     "subtitols": {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.05, 0.95),
                   "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60),
@@ -64,6 +64,7 @@ OPCIONS = {
                   "alineacio": {"centre", "esquerra", "dreta", "esglao"}},
     "stickers": {"animacio": {"pop", "cap"}},
     "so": {"soroll": {"suau", "mitja", "fort"}, "efectes": {"cap", "pocs", "molts"}},
+    "marca": {"energia": {"net", "scrapbook", "editorial"}, "grafics": {"pocs", "normal", "molts"}},
     "broll": {"disposicio": {"pantalla", "targeta", "partida", "carrusel"},
               "proporcio": {"9:16", "3:4", "4:5", "1:1", "16:9"},
               "animacio": {"pop", "puja", "llisca", "fos", "cap"}},
@@ -71,7 +72,17 @@ OPCIONS = {
               "animacio": {"puja", "pop", "fos", "cortina", "maquina", "cap"}, "fons": {"cap", "enfosquit", "pindola"},
               "corba_linies": {"primera", "totes", "darrera"}},
 }
-COLORS = {"color", "color_actiu", "contorn", "fons_color", "clau_color", "vora_color"}
+COLORS = {"color", "color_actiu", "contorn", "fons_color", "clau_color", "vora_color",
+          "color_principal", "color_destacat", "color_clar"}
+MIDA_TEXT = 600  # els textos de la marca (el compte, la referència…), com a molt
+# La marca s'escampa: cada color i cada lletra fa la seva feina a la resta del kit.
+ENLLACOS_MARCA = {
+    "color_destacat": [("subtitols", "color_actiu"), ("subtitols", "clau_color"), ("titol", "clau_color")],
+    "color_principal": [("broll", "vora_color")],
+    "lletra_text": [("subtitols", "font")],
+    "lletra_titols": [("titol", "font")],
+    "lletra_accent": [("subtitols", "clau_font"), ("titol", "clau_font")],
+}
 NOM_DE_FONT = re.compile(r"^[\w][\w .-]{0,60}$")
 
 
@@ -337,7 +348,7 @@ def valida(seccio: str, canvis: dict) -> dict:
         if defecte is None and clau in COLORS:  # un color que també pot ser «el de sempre» (null)
             if valor is not None and not (isinstance(valor, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", valor)):
                 raise ValueError(f"{clau} ha de ser un color com #FFD60A")
-        elif defecte is None and clau == "font":  # una lletra que també pot ser «la dels subtítols» (null)
+        elif defecte is None and (clau in ("font", "clau_font") or clau.startswith("lletra_")):  # null: la de sempre
             if valor is not None and not (isinstance(valor, str) and NOM_DE_FONT.match(valor)):
                 raise ValueError("Aquest nom de font no és vàlid")
         elif defecte is None:  # camins de fitxers (font pròpia, LUT): no es posen per aquí
@@ -365,6 +376,7 @@ def valida(seccio: str, canvis: dict) -> dict:
                 raise ValueError(f"{clau} no pot ser «{valor}»")
             if clau == "font" and not NOM_DE_FONT.match(valor):
                 raise ValueError("Aquest nom de font no és vàlid")
+            valor = valor.strip()[:MIDA_TEXT] if not opcions.get(clau) and clau not in COLORS else valor
         net[clau] = valor
     return net
 
@@ -381,8 +393,24 @@ def desa(seccio: str, canvis: dict, path: Path | None = None, kit: str | None = 
     path = path or ruta(kit)
     dades = _llegeix_json(path)
     dades.setdefault(seccio, {}).update(net)
+    if seccio == "marca":
+        _escampa_marca(dades, net)
     _escriu(dades, path)
     return carrega(path)[seccio]
+
+
+def _escampa_marca(dades: dict, canvis: dict) -> None:
+    """Posa els colors i les lletres de la marca allà on fan la seva feina (si se'n treu un, hi torna
+    el de l'estil neutre). Després cada opció es pot retocar a part."""
+    base = _sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8")))
+    for clau, valor in canvis.items():
+        for seccio, desti in ENLLACOS_MARCA.get(clau, []):
+            dades.setdefault(seccio, {})[desti] = valor if valor is not None else base[seccio][desti]
+            if (seccio, desti) == ("subtitols", "font"):
+                dades["subtitols"]["font_fitxer"] = None
+        if clau == "lletra_accent":  # la paraula emotiva, en cursiva
+            for seccio in ("subtitols", "titol"):
+                dades.setdefault(seccio, {})["clau_cursiva"] = valor is not None
 
 
 def restableix(seccio: str, path: Path | None = None, kit: str | None = None) -> dict:
@@ -422,7 +450,9 @@ def fonts_del_kit(kit: str | None = None, path: Path | None = None) -> list[dict
         if not f.is_file() or f.suffix.lower() not in FORMATS_FONT or f.name.startswith("."):
             continue
         familia, _, pes = f.stem.partition("__")
-        llista.append({"familia": familia, "pes": pes if pes.isdigit() else "100 1000", "fitxer": f})
+        estil = "italic" if pes.endswith("-cursiva") else "normal"  # «Fraunces__var-cursiva»: la cursiva
+        pes = pes.removesuffix("-cursiva")
+        llista.append({"familia": familia, "pes": pes if pes.isdigit() else "100 1000", "estil": estil, "fitxer": f})
     # Els kits d'abans: la font pròpia era un fitxer qualsevol, i la família, la de «font».
     subtitols = _llegeix_json(path).get("subtitols")
     if isinstance(subtitols, dict) and subtitols.get("font_fitxer") and subtitols.get("font"):
@@ -430,20 +460,29 @@ def fonts_del_kit(kit: str | None = None, path: Path | None = None) -> list[dict
         fitxer = fitxer if fitxer.is_absolute() else path.parent / fitxer
         if fitxer.is_file() and fitxer.suffix.lower() in FORMATS_FONT and not any(
                 f["fitxer"] == fitxer and f["familia"] == subtitols["font"] for f in llista):
-            llista.append({"familia": str(subtitols["font"]), "pes": "100 1000", "fitxer": fitxer})
+            llista.append({"familia": str(subtitols["font"]), "pes": "100 1000", "estil": "normal", "fitxer": fitxer})
     return llista
 
 
 def fonts_de(estil: dict, kit: str | None = None, path: Path | None = None, titol: dict | None = None) -> list[dict]:
-    """Les lletres del kit que fa servir un estil de subtítols (i, si se'n passa, el del títol)."""
-    families = {estil.get("font"), (titol or {}).get("font") or estil.get("font")}
+    """Les lletres del kit que fa servir un estil de subtítols (i, si se'n passa, el del títol), també
+    la de les paraules destacades."""
+    titol = titol or {}
+    families = {estil.get("font"), titol.get("font") or estil.get("font"), estil.get("clau_font"), titol.get("clau_font")}
     return [f for f in fonts_del_kit(kit, path) if f["familia"] in families]
 
 
-def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = None, seccio: str = "subtitols") -> dict:
-    """Posa una lletra de la biblioteca al kit (la baixa el primer cop) i la fa servir per als subtítols
-    (o per al títol, amb seccio="titol"). Torna l'estil d'aquella secció."""
-    if seccio not in ("subtitols", "titol"):
+# On es pot posar una lletra de la biblioteca: (secció del kit, clau).
+LLOCS_LLETRA = {("subtitols", "font"), ("titol", "font"), ("subtitols", "clau_font"), ("titol", "clau_font"),
+                ("marca", "lletra_titols"), ("marca", "lletra_text"), ("marca", "lletra_accent")}
+
+
+def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = None, seccio: str = "subtitols",
+                 clau: str = "font") -> dict:
+    """Posa una lletra de la biblioteca al kit (la baixa el primer cop, amb la cursiva si en té) i la fa
+    servir on diu `seccio` i `clau`: els subtítols, el títol, les paraules destacades o la marca (que
+    l'escampa on toca). Torna l'estil d'aquella secció."""
+    if (seccio, clau) not in LLOCS_LLETRA:
         raise ValueError("Secció desconeguda")
     biblioteca = biblioteca_lletres()
     lletra = next((l for l in biblioteca["lletres"] if l["id"] == id_lletra), None)
@@ -453,12 +492,14 @@ def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = Non
     carpeta = path.parent / "fonts"
     carpeta.mkdir(parents=True, exist_ok=True)
     nom, id_ = lletra["nom"], lletra["id"]
+    estils = ["normal", "italic"] if lletra.get("cursiva") else ["normal"]
     if lletra.get("variable"):
-        fitxers = [(f"@fontsource-variable/{id_}", f"{id_}-latin-wght-normal", "var")]
+        fitxers = [(f"@fontsource-variable/{id_}", f"{id_}-latin-wght-{e}", "var") for e in estils]
     else:
-        fitxers = [(f"@fontsource/{id_}", f"{id_}-latin-{p}-normal", str(p)) for p in lletra["pesos"]]
+        fitxers = [(f"@fontsource/{id_}", f"{id_}-latin-{p}-{e}", str(p)) for p in lletra["pesos"] for e in estils]
     for paquet, fitxer, pes in fitxers:
-        desti = carpeta / f"{nom}__{pes}.woff2"
+        cursiva = "-cursiva" if fitxer.endswith("-italic") else ""
+        desti = carpeta / f"{nom}__{pes}{cursiva}.woff2"
         if desti.is_file():
             continue
         url = f"{biblioteca['cdn']}/{paquet}@{biblioteca['versio']}/files/{fitxer}.woff2"
@@ -472,8 +513,12 @@ def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = Non
         temporal = desti.with_name(f".{desti.name}.baixant")
         temporal.write_bytes(contingut)
         temporal.replace(desti)
+    if seccio == "marca":
+        return desa("marca", {clau: nom}, path)
     dades = _llegeix_json(path)
-    dades.setdefault(seccio, {}).update({"font": nom, **({"font_fitxer": None} if seccio == "subtitols" else {})})
+    dades.setdefault(seccio, {})[clau] = nom
+    if (seccio, clau) == ("subtitols", "font"):
+        dades["subtitols"]["font_fitxer"] = None
     _escriu(dades, path)
     return carrega(path)[seccio]
 

@@ -85,12 +85,15 @@ class TestMarca(unittest.TestCase):
             marca.baixa_lletra("poppins", path=self.path)  # el segon cop ja hi és: no es baixa
             marca.baixa_lletra("inter", path=self.path)
         self.assertEqual(estil["font"], "Poppins")
-        self.assertEqual(len(cridades), 6)  # 5 gruixos de Poppins + Inter (variable, un sol fitxer)
+        # 5 gruixos de Poppins + Inter (variable, un sol fitxer), cadascun amb la seva cursiva.
+        self.assertEqual(len(cridades), 12)
         self.assertTrue(cridades[0].startswith("https://cdn.jsdelivr.net/npm/@fontsource/poppins@"))
+        self.assertTrue(any(c.endswith("poppins-latin-700-italic.woff2") for c in cridades))
         self.assertIn("@fontsource-variable/inter@", cridades[-1])
-        self.assertEqual(sorted(f["pes"] for f in marca.fonts_de(estil, path=self.path)),
-                         ["400", "600", "700", "800", "900"])
-        self.assertEqual([f["pes"] for f in marca.fonts_de({"font": "Inter"}, path=self.path)], ["100 1000"])
+        self.assertEqual(sorted((f["pes"], f["estil"]) for f in marca.fonts_de(estil, path=self.path)),
+                         sorted((p, e) for p in ("400", "600", "700", "800", "900") for e in ("normal", "italic")))
+        self.assertEqual(sorted(f["estil"] for f in marca.fonts_de({"font": "Inter"}, path=self.path)),
+                         ["italic", "normal"])
         with self.assertRaises(KeyError):
             marca.baixa_lletra("no-existeix", path=self.path)
 

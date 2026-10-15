@@ -16,6 +16,7 @@
   python tallat.py gust                                (les regles del teu gust)
   python tallat.py gust afegeix SECCIO "TEXT" [--ajust subtitols.mida=0.09]
   python tallat.py gust treu NUMERO
+  python tallat.py marca [--projecte CARPETA] [CLAU=VALOR …]   (la teva marca: colors, lletres, crida a l'acció)
 
 La carpeta del projecte ha de ser fora del repositori (els vídeos i el que dius no es publiquen).
 """
@@ -369,6 +370,48 @@ def ordre_titol(args) -> None:
           + (" · amaga els subtítols mentre surt" if estil.get("amaga_subtitols") else ""))
 
 
+NOMS_MARCA = {"compte": "El compte", "public": "Qui el mira", "referencia": "Reel de referència",
+              "color_principal": "Color principal", "color_destacat": "Color destacat", "color_clar": "Color clar",
+              "colors_prohibits": "Mai", "lletra_titols": "Lletra dels títols", "lletra_text": "Lletra del text",
+              "lletra_accent": "Lletra d'accent", "energia": "Estil dels gràfics", "grafics": "Quants gràfics",
+              "crida": "Crida a l'acció"}
+
+
+def ordre_marca(args) -> None:
+    """La marca d'un kit: la mostra i, amb CLAU=VALOR, la desa (i l'escampa pel kit)."""
+    kit = Projecte(Path(args.projecte).expanduser().resolve()).kit() if args.projecte else marca.resol(args.kit)
+    canvis, biblioteca = {}, marca.biblioteca_lletres()["lletres"]
+    for parell in args.valors:
+        clau, igual, valor = parell.partition("=")
+        if not igual or clau not in NOMS_MARCA:
+            sys.exit(f"No entenc «{parell}». Fes servir CLAU=VALOR amb una d'aquestes claus: {', '.join(NOMS_MARCA)}")
+        valor = valor.strip()
+        if clau.startswith("lletra_") and valor:
+            # Una lletra gratuïta (pel nom o per l'id): es baixa al kit, amb la cursiva si en té.
+            lletra = next((l for l in biblioteca if valor.lower() in (l["id"], l["nom"].lower())), None)
+            if lletra:
+                try:
+                    marca.baixa_lletra(lletra["id"], kit=kit, seccio="marca", clau=clau)
+                except ConnectionError as e:
+                    sys.exit(str(e))
+                continue
+        canvis[clau] = None if valor.lower() in ("", "null", "cap") and (clau.startswith(("color_", "lletra_"))) else valor
+    if canvis:
+        try:
+            marca.desa("marca", canvis, kit=kit)
+        except ValueError as e:
+            sys.exit(str(e))
+    m = marca.carrega(kit=kit)["marca"]
+    nom = next((k["nom"] for k in marca.kits() if k["id"] == kit), kit)
+    if not any(m.get(c) for c in ("compte", "color_principal", "color_destacat", "lletra_text", "lletra_titols")):
+        print(f"El kit «{nom}» encara no té marca. Fes l'entrevista de marca (vegeu SKILL.md).")
+    else:
+        print(f"La marca del kit «{nom}» (els colors i les lletres ja s'han posat als subtítols, al títol i al b-roll):")
+    for clau, etiqueta in NOMS_MARCA.items():
+        if m.get(clau) not in (None, ""):
+            print(f"  {etiqueta}: {m[clau]}")
+
+
 def ordre_destaca(args) -> None:
     projecte = _carrega(args)
     destacades = projecte.estat.setdefault("destacades", {})
@@ -566,6 +609,14 @@ def main() -> None:
     ti.add_argument("--durada", type=float, help="Segons (si no, els del kit)")
     ti.add_argument("--treu", action="store_true", help="Treu el títol")
     ti.set_defaults(func=ordre_titol)
+
+    ma = sub.add_parser("marca", help="La marca d'un kit: colors, lletres i com són els teus vídeos (CLAU=VALOR la desa)")
+    on = ma.add_mutually_exclusive_group()
+    on.add_argument("--projecte", help="El kit d'aquest vídeo")
+    on.add_argument("--kit", help="Un kit pel seu id (si no, el per defecte)")
+    ma.add_argument("valors", nargs="*", metavar="CLAU=VALOR",
+                    help="p. ex. color_destacat=#FF7DB8 lletra_accent=Fraunces crida=\"comenta GUIA\"")
+    ma.set_defaults(func=ordre_marca)
 
     de = sub.add_parser("destaca", help="Les paraules destacades dels subtítols (més grans i d'un altre color)")
     de.add_argument("--projecte", required=True)

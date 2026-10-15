@@ -1005,7 +1005,7 @@ async function carregaFontsKit(fonts) {
   for (const f of fontsKit) {
     if (fontsCarregades.has(f.url)) continue;
     try {
-      const font = new FontFace(f.familia, `url(${f.url})`, { weight: String(f.pes) });
+      const font = new FontFace(f.familia, `url(${f.url})`, { weight: String(f.pes), style: f.estil || "normal" });
       fontsCarregades.set(f.url, font);
       await font.load();
       document.fonts.add(font);
@@ -1017,15 +1017,27 @@ async function carregaFontsKit(fonts) {
   }
 }
 
+// Els valors d'un estil fet amb els colors de la marca, si n'hi ha: la marca mana.
+function ambMarca(seccio, valors) {
+  const m = estilMarca || {};
+  const v = { ...valors };
+  if (m.color_destacat) {
+    if (seccio === "subtitols") for (const k of ["color_actiu", "clau_color"]) if (k in v) v[k] = m.color_destacat;
+    if (seccio === "titol" && "clau_color" in v) v.clau_color = m.color_destacat;
+  }
+  if (m.color_principal && seccio === "broll" && "vora_color" in v && v.vora_color == null) v.vora_color = m.color_principal;
+  return v;
+}
+
 // L'estil fet que té tots els valors d'un estil (o null: és «Personalitzat»).
-function predefinitDe(llista, e) {
+function predefinitDe(llista, e, seccio) {
   if (!e) return null;
-  return llista.find((p) => Object.entries(p.valors).every(([k, v]) =>
+  return llista.find((p) => Object.entries(ambMarca(seccio, p.valors)).every(([k, v]) =>
     (typeof v === "number" ? Math.abs((e[k] ?? NaN) - v) < 1e-6 : String(e[k]).toUpperCase() === String(v).toUpperCase())));
 }
-const predefinitActual = (e = estilSub) => predefinitDe(estilsPredefinits, e);
-const predefinitTitol = (e = estilTitol) => predefinitDe(estilsTitol, e);
-const predefinitBroll = (e = estilBroll) => predefinitDe(estilsBroll, e);
+const predefinitActual = (e = estilSub) => predefinitDe(estilsPredefinits, e, "subtitols");
+const predefinitTitol = (e = estilTitol) => predefinitDe(estilsTitol, e, "titol");
+const predefinitBroll = (e = estilBroll) => predefinitDe(estilsBroll, e, "broll");
 
 // Un botó de les galeries d'estils fets (subtítols, títol i b-roll). Torna la caixa de la mostra.
 function botoEstil(cont, p, actiu, tria) {
@@ -1057,10 +1069,11 @@ function pintaMostra(caixa, e, { paraules, alcada, mida }) {
 
 // El desplegable de lletres: les del kit que ha pujat la persona, les del Mac i les gratuïtes (les que
 // encara no són al kit porten «bib:»: triar-les les baixa). Amb `laDelsSubtitols`, també «la dels subtítols».
-function ompleLletres(select, valor, { laDelsSubtitols = false } = {}) {
+function ompleLletres(select, valor, { laDelsSubtitols = false, buit = null } = {}) {
   select.textContent = "";
   const grup = (nom) => { const g = document.createElement("optgroup"); g.label = nom; select.append(g); return g; };
   const opcio = (on, v, text) => { const o = document.createElement("option"); o.value = v; o.textContent = text; on.append(o); };
+  if (buit) opcio(select, "", buit);
   if (laDelsSubtitols) opcio(select, "", `La dels subtítols (${estilSub?.font === "system-ui" ? "San Francisco" : estilSub?.font || ""})`);
   const alKit = new Set(fontsKit.map((f) => f.familia));
   const deLaBiblioteca = new Set(bibliotecaLletres.lletres.map((l) => l.nom));
@@ -1091,9 +1104,10 @@ function pintaPanellEstil() {
   const cont = $("#estils");
   cont.textContent = "";
   for (const p of estilsPredefinits) {
-    const mostra = botoEstil(cont, p, p === actual, () => canviaEstil({ ...p.valors }, true));
+    const valors = ambMarca("subtitols", p.valors);
+    const mostra = botoEstil(cont, p, p === actual, () => canviaEstil(valors, true));
     if (window.TallatSubtitols) {
-      const v = { ...e, ...p.valors };
+      const v = { ...e, ...valors };
       const n = v.paraules_per_linia <= 1 ? 1 : v.paraules_per_linia <= 4 ? 3 : 4;
       pintaMostra(mostra, v,
         { paraules: n === 1 ? [MOSTRA[2]] : MOSTRA.slice(0, n), alcada: 675, mida: Math.min(0.2, v.mida * 1.6) });
@@ -1133,6 +1147,8 @@ function pintaPanellEstil() {
   $("#camps-clau").hidden = !e.clau_grans;
   $("#e-clau-mida").value = e.clau_mida ?? 1.4;
   $("#e-clau-color").value = (e.clau_color || e.color_actiu).toLowerCase();
+  ompleLletres($("#e-clau-font"), e.clau_font, { buit: "La mateixa" });
+  $("#e-clau-cursiva").setAttribute("aria-checked", String(!!e.clau_cursiva));
   $("#e-clau-sola").setAttribute("aria-checked", String(!!e.clau_sola));
   $("#e-posicio").value = e.posicio_y;
   $("#e-gruix").value = e.gruix_contorn;
@@ -1149,7 +1165,7 @@ function pintaPanellEstil() {
 // Cada canvi d'estil (subtítols, títol, b-roll o so) es veu a l'instant i es desa al cap d'un moment,
 // tots junts (els lliscadors n'envien molts), a la cua de peticions. Cada petició diu a quin kit va:
 // si mentrestant el vídeo ha canviat de kit, el servidor no la desa en un altre.
-const pendents = { subtitols: {}, titol: {}, broll: {}, so: {} };
+const pendents = { subtitols: {}, titol: {}, broll: {}, so: {}, marca: {} };
 let temporitzadorDesa = null;
 
 function apunta(seccio, canvis) {
@@ -1207,6 +1223,7 @@ function respostaEstil(r) {
   // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
   aplicaEstilSubtitols({ ...r.estil_subtitols, ...pendents.subtitols });
   if (r.estil_titol) aplicaEstilTitol({ ...r.estil_titol, ...pendents.titol });
+  aplicaMarca(r);
   aplicaBroll(r);
   aplicaSo(r);
   pintaPanellEstil();
@@ -1326,8 +1343,9 @@ function pintaPanellTitol() {
   const cont = $("#estils-titol");
   cont.textContent = "";
   for (const p of estilsTitol) {
-    const mostra = botoEstil(cont, p, p === actual, () => canviaTitol({ ...p.valors }, true));
-    pintaMostraTitol(mostra, { ...e, ...p.valors, mida: Math.min(0.11, (p.valors.mida || e.mida) * 1.5) },
+    const valors = ambMarca("titol", p.valors);
+    const mostra = botoEstil(cont, p, p === actual, () => canviaTitol(valors, true));
+    pintaMostraTitol(mostra, { ...e, ...valors, mida: Math.min(0.11, (valors.mida || e.mida) * 1.5) },
       "El meu\n*títol*", 675);
   }
   $("#t-animacio").value = e.animacio;
@@ -1343,6 +1361,8 @@ function pintaPanellTitol() {
   }
   pes.value = String(e.pes);
   $("#t-majuscules").setAttribute("aria-checked", String(!!e.majuscules));
+  ompleLletres($("#t-clau-font"), e.clau_font, { buit: "La mateixa" });
+  $("#t-clau-cursiva").setAttribute("aria-checked", String(!!e.clau_cursiva));
   $("#t-ombra").setAttribute("aria-checked", String(e.ombra !== false));
   $("#t-amaga").setAttribute("aria-checked", String(!!e.amaga_subtitols));
   $("#t-mida").value = e.mida;
@@ -1393,7 +1413,13 @@ function instalaTitol() {
     else canviaTitol({ font: v || null });
   });
   $("#t-pes").addEventListener("change", (e) => canviaTitol({ pes: +e.target.value }));
+  $("#t-clau-font").addEventListener("change", (e) => {
+    const v = e.target.value;
+    if (v.startsWith("bib:")) baixaLletra(v.slice(4), "titol", "clau_font");
+    else canviaTitol({ clau_font: v || null });
+  });
   for (const [id, clau, perDefecte] of [["t-majuscules", "majuscules", false], ["t-ombra", "ombra", true],
+    ["t-clau-cursiva", "clau_cursiva", false],
     ["t-amaga", "amaga_subtitols", false]]) {
     $(`#${id}`).addEventListener("click", () => canviaTitol({ [clau]: !(estilTitol[clau] ?? perDefecte) }));
   }
@@ -1504,6 +1530,7 @@ function pintaKits() {
   $("#nom-kit-panell").textContent = actual?.nom || "";
   $("#nom-kit-titol").textContent = actual?.nom || "";
   $("#nom-kit-broll").textContent = actual?.nom || "";
+  $("#nom-kit-marca").textContent = actual?.nom || "";
 }
 
 function respostaKit(r, missatge) {
@@ -1645,12 +1672,12 @@ function mostraAnimacio() {
 }
 
 // Una lletra gratuïta de la biblioteca: el servidor la baixa al kit (el primer cop) i la fa servir.
-async function baixaLletra(id, seccio = "subtitols") {
+async function baixaLletra(id, seccio = "subtitols", clau = "font") {
   const nom = bibliotecaLletres.lletres.find((l) => l.id === id)?.nom || id;
   avis(`Baixant la lletra «${nom}»…`, 20000);
   try {
     await desaEstils();
-    respostaEstil(await api("/api/marca/lletra", { id, seccio, kit: kitActual }));
+    respostaEstil(await api("/api/marca/lletra", { id, seccio, clau, kit: kitActual }));
     avis(`Lletra «${nom}» afegida al kit.`);
   } catch (e) {
     avis(e.message, 6000);
@@ -1806,6 +1833,12 @@ function instalaEstil() {
   interruptor("e-majuscules", "majuscules");
   interruptor("e-ombra", "ombra");
   interruptor("e-clau-sola", "clau_sola", true);
+  interruptor("e-clau-cursiva", "clau_cursiva");
+  $("#e-clau-font").addEventListener("change", (e) => {
+    const v = e.target.value;
+    if (v.startsWith("bib:")) baixaLletra(v.slice(4), "subtitols", "clau_font");
+    else canviaEstil({ clau_font: v || null });
+  });
   const lliscador = (id, clau) => $(`#${id}`).addEventListener("input", (e) => canviaEstil({ [clau]: +e.target.value }));
   lliscador("e-mida", "mida");
   lliscador("e-posicio", "posicio_y");
@@ -2251,7 +2284,7 @@ function pintaPanellBroll() {
   const cont = $("#estils-broll");
   cont.textContent = "";
   for (const p of estilsBroll) {
-    miniBroll(botoEstil(cont, p, p === actual, () => canviaBroll({ ...p.valors }, true)), p.mostra);
+    miniBroll(botoEstil(cont, p, p === actual, () => canviaBroll(ambMarca("broll", p.valors), true)), p.mostra);
   }
   const disposicio = e.disposicio || "pantalla";
   const ambForma = disposicio === "targeta" || disposicio === "carrusel";
@@ -2556,6 +2589,7 @@ function instalaControls() {
   instalaTitol();
   instalaBroll();
   instalaSo();
+  instalaMarca();
   instalaPestanyes();
   setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
@@ -2598,6 +2632,7 @@ function instalaControls() {
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
     if (editantTitol && e.key === "Escape") { tancaTitol(); return; }
     if (editantBroll && e.key === "Escape") { tancaBroll(); return; }
+    if (editantMarca && e.key === "Escape") { tancaMarca(); return; }
     if (e.ctrlKey && e.metaKey && e.code === "KeyS") {  // ⌃⌘S, com al Finder
       e.preventDefault();
       mostraColumna("barra", document.body.classList.contains("sense-barra"));
@@ -2647,6 +2682,7 @@ async function inicia() {
   estilsPredefinits = P.estils_subtitols || [];
   estilsTitol = P.estils_titol || [];
   aplicaEstilTitol(P.estil_titol);
+  aplicaMarca(P);
   aplicaBroll(P);
   aplicaSo(P);
   kits = P.kits || [];
@@ -2787,6 +2823,89 @@ function instalaSo() {
     for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaSo({ [clau]: b.dataset.valor }));
   }
   $("#s-volum").addEventListener("input", (e) => canviaSo({ volum_efectes: +e.target.value }));
+}
+
+// --- La teva marca ------------------------------------------------------------------------------
+// Els colors i les lletres, cadascun amb la seva feina, i com són els vídeos de la persona. La fa
+// l'entrevista de marca al xat; aquí es retoca. En desar-la, el servidor l'escampa pel kit
+// (subtítols, títol i b-roll) i els estils fets se'n queden els colors.
+
+let estilMarca = null;
+let editantMarca = false;
+const COLORS_MARCA = [["m-color-principal", "color_principal"], ["m-color-destacat", "color_destacat"],
+  ["m-color-clar", "color_clar"]];
+const LLETRES_MARCA = [["m-lletra-titols", "lletra_titols"], ["m-lletra-text", "lletra_text"],
+  ["m-lletra-accent", "lletra_accent"]];
+const TEXTOS_MARCA = [["m-prohibits", "colors_prohibits"], ["m-crida", "crida"], ["m-compte", "compte"],
+  ["m-public", "public"], ["m-referencia", "referencia"]];
+
+function aplicaMarca(r) {
+  if (!r.estil_marca) return;
+  estilMarca = { ...r.estil_marca, ...pendents.marca };
+  pintaResumMarca();
+  pintaPanellMarca();
+}
+
+function pintaResumMarca() {
+  const m = estilMarca;
+  if (!m) return;
+  const colors = [m.color_principal, m.color_destacat, m.color_clar];
+  $$("#mostra-marca i").forEach((el, k) => { el.style.background = colors[k] || ""; });
+  const feta = colors.some(Boolean) || m.compte;
+  $("#nom-marca").textContent = feta ? (m.compte || m.crida || "Colors i lletres") : "Encara no: digues a Claude «fem la meva marca»";
+}
+
+function pintaPanellMarca() {
+  const m = estilMarca;
+  if (!m || $("#panell-marca").hidden) return;
+  for (const [id, clau] of COLORS_MARCA) $(`#${id}`).value = (m[clau] || "#8E8E93").toLowerCase();
+  for (const [id, clau] of LLETRES_MARCA) {
+    if (document.activeElement !== $(`#${id}`)) ompleLletres($(`#${id}`), m[clau], { buit: "Sense triar" });
+  }
+  for (const [id, clau] of TEXTOS_MARCA) if (document.activeElement !== $(`#${id}`)) $(`#${id}`).value = m[clau] || "";
+  marcaSegmentat("m-energia", m.energia || "net");
+  marcaSegmentat("m-grafics", m.grafics || "normal");
+}
+
+function canviaMarca(canvis) {
+  estilMarca = { ...estilMarca, ...canvis };
+  pintaResumMarca();
+  apunta("marca", canvis);
+}
+
+function obreMarca() {
+  editantMarca = true;
+  $(".barra").classList.add("editant-estil");
+  $("#panell-marca").hidden = false;
+  $(".barra").scrollTop = 0;
+  pintaPanellMarca();
+  $("#tanca-marca").focus();
+}
+
+function tancaMarca() {
+  editantMarca = false;
+  $(".barra").classList.remove("editant-estil");
+  $("#panell-marca").hidden = true;
+  $("#obre-marca").focus();
+}
+
+function instalaMarca() {
+  $("#obre-marca").addEventListener("click", obreMarca);
+  $("#tanca-marca").addEventListener("click", tancaMarca);
+  for (const [id, clau] of COLORS_MARCA) {
+    $(`#${id}`).addEventListener("input", (e) => canviaMarca({ [clau]: e.target.value.toUpperCase() }));
+  }
+  for (const [id, clau] of LLETRES_MARCA) {
+    $(`#${id}`).addEventListener("change", (e) => {
+      const v = e.target.value;
+      if (v.startsWith("bib:")) baixaLletra(v.slice(4), "marca", clau);
+      else canviaMarca({ [clau]: v || null });
+    });
+  }
+  for (const [id, clau] of TEXTOS_MARCA) $(`#${id}`).addEventListener("input", (e) => canviaMarca({ [clau]: e.target.value }));
+  for (const [id, clau] of [["m-energia", "energia"], ["m-grafics", "grafics"]]) {
+    for (const b of $$(`#${id} button`)) b.addEventListener("click", () => { canviaMarca({ [clau]: b.dataset.valor }); pintaPanellMarca(); });
+  }
 }
 
 inicia();
