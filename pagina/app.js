@@ -105,6 +105,7 @@ let darrerDesplacamentManual = 0;
 
 let cua = Promise.resolve();
 let pendent = false;
+let errorDesant = null;  // si l'últim desament ha fallat (fins que un altre surti bé)
 function sincronitza() {
   if (pendent) return;     // diversos canvis seguits viatgen en una sola petició
   pendent = true;
@@ -112,12 +113,14 @@ function sincronitza() {
     pendent = false;
     try {
       const r = await api("/api/estat", estat);
+      errorDesant = null;
       estat.revisio = r.estat.revisio;
       aplicaTrams(r);
       if (!pendent && escoltaPendent != null) { escoltaTall(escoltaPendent); escoltaPendent = null; }
     } catch (e) {
       if (e.codi !== 409 || e.dades?.error === "projecte-canviat") throw e;
       // La pàgina també és oberta en una altra pestanya i allà s'ha desat després.
+      errorDesant = null;
       estat = e.dades.estat;
       desfer.length = 0;
       refer.length = 0;
@@ -126,7 +129,18 @@ function sincronitza() {
       marcaPausa();
       avis("Aquesta pàgina també és oberta en una altra pestanya. He carregat els canvis més nous.", 6000);
     }
-  }).catch((e) => avis("No s'ha pogut desar: " + e.message));
+  }).catch((e) => { errorDesant = e; avis("No s'ha pogut desar: " + e.message); });
+}
+
+// Abans d'exportar, s'han d'haver desat tots els canvis, i bé: si no, el vídeo sortiria sense els
+// últims talls. Si mentre s'espera n'arriba un altre, també s'espera.
+async function canvisDesats() {
+  let esperada;
+  do {
+    esperada = cua;
+    await esperada;
+  } while (esperada !== cua);
+  if (errorDesant) throw new Error("No s'han pogut desar els últims canvis i el vídeo no els tindria. Torna-ho a provar.");
 }
 
 function canvia(fn, { repinta = false } = {}) {
@@ -511,8 +525,14 @@ function instalaText() {
       return;
     }
     seleccioFeta = idsEntre(inici, fi);  // queda marcada fins al clic dret o ⌫
+    seleccio = null;  // l'arrossegament s'ha acabat: moure el ratolí ja no la canvia
+    pintaSeleccio();
   });
-  document.addEventListener("pointercancel", () => { if (seleccio?.dret) deixaSeleccio(); });
+  document.addEventListener("pointercancel", () => {
+    if (!seleccio) return;
+    if (seleccio.dret) deixaSeleccio();
+    else { seleccio = null; pintaSeleccio(); }
+  });
   cont.addEventListener("contextmenu", (e) => {
     // El clic dret el fa servir «pointerdown» per tallar: aquí només amaguem el menú.
     if (mode === "talla" && e.target.closest(".p")) e.preventDefault();
@@ -642,6 +662,10 @@ function posaTemps(t) {
   R.salt = null;
   if (!R.v.paused && !jaCarregat(t)) {
     R.v.pause();
+    R.repren = true;
+  } else if (R.v.paused && R.reproduint && vista === "directe") {
+    // El navegador l'ha aturat sol (passa en arribar al final del fitxer amb els paràgrafs
+    // reordenats): sona encara, així que després del salt continua.
     R.repren = true;
   }
   R.v.currentTime = t;
@@ -1566,6 +1590,7 @@ async function consultaFeina() {
 
 async function comencaRender(qualitat) {
   try {
+    await canvisDesats();
     const r = await api("/api/exporta", { qualitat });
     seguimentFeina(r.feina);
   } catch (e) {
@@ -1884,7 +1909,10 @@ function instalaControls() {
   $("#velo").addEventListener("click", tancaFinal);
   const perAEditors = async (dades) => {
     tancaFinal();
-    try { seguimentFeina((await api("/api/editors", dades)).feina); } catch (e) { avis(e.message); }
+    try {
+      await canvisDesats();
+      seguimentFeina((await api("/api/editors", dades)).feina);
+    } catch (e) { avis(e.message); }
   };
   $("#exporta-editors").addEventListener("click", () => perAEditors({ capa: $("#editors-capa").checked }));
   $("#exporta-trossos").addEventListener("click", () => perAEditors({ trossos: true }));

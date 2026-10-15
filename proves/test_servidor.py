@@ -4,6 +4,7 @@ import re
 import socket
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -99,6 +100,70 @@ class TestServidor(unittest.TestCase):
         c.close()
         pujats = self.carpeta / "broll" / "pujats"
         self.assertEqual(list(pujats.iterdir()) if pujats.exists() else [], [])
+
+    def test_un_desament_lent_no_trepitja_el_reel_tornat_a_obrir(self):
+        # Segona revisió de Codex: una petició començada abans de tornar a obrir el reel es desava
+        # sobre l'estat vell i esborrava els canvis fets després.
+        (self.carpeta / "reels.json").write_text(json.dumps({"reels": [{"id": "r", "paraules": [[0, 4]]}]}),
+                                                 encoding="utf-8")
+        self.assertEqual(self.peticio("POST", "/api/obre", {"reel": "r"}, self.bones())[0], 200)
+        dades = json.loads(self.peticio("GET", "/api/projecte")[1])
+        clau = dades["clau_projecte"]
+        # Pestanya A: envia les capçaleres, però el cos arriba tard.
+        lenta = {**dades["estat"], "esborrades": {"1": "usuari"}}
+        cos = json.dumps(lenta).encode()
+        a = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        a.putrequest("POST", "/api/estat", skip_host=True)
+        for k, v in {**self.bones(**{"X-Tallat-Projecte": clau}), "Host": f"127.0.0.1:{self.port}",
+                     "Content-Length": str(len(cos))}.items():
+            a.putheader(k, v)
+        a.endheaders()
+        time.sleep(0.3)
+        # Pestanya B: surt del reel, el torna a obrir i hi desa un canvi.
+        self.peticio("POST", "/api/obre", {}, self.bones())
+        self.peticio("POST", "/api/obre", {"reel": "r"}, self.bones())
+        nou = {**json.loads(self.peticio("GET", "/api/projecte")[1])["estat"], "esborrades": {"2": "usuari"}}
+        self.assertEqual(self.peticio("POST", "/api/estat", nou, self.bones(**{"X-Tallat-Projecte": clau}))[0], 200)
+        a.send(cos)
+        self.assertEqual(a.getresponse().status, 409)
+        a.close()
+        desat = json.loads((self.carpeta / "reels" / "r" / "edicio.json").read_text(encoding="utf-8"))
+        self.assertIn("2", desat["esborrades"])
+        self.assertNotIn("1", desat["esborrades"])
+
+    def test_els_fitxers_servits_no_poden_executar_scripts(self):
+        # Segona revisió de Codex: un sticker SVG amb un script, obert directament, podia llegir el codi de la pàgina.
+        (self.carpeta / "stickers").mkdir()
+        (self.carpeta / "stickers" / "i1.svg").write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', encoding="utf-8")
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("GET", "/stickers/i1.svg")
+        r = c.getresponse()
+        r.read()
+        c.close()
+        self.assertEqual(r.status, 200)
+        self.assertIn("sandbox", r.getheader("Content-Security-Policy", ""))
+        self.assertEqual(r.getheader("X-Content-Type-Options"), "nosniff")
+
+    def test_dues_pujades_amb_el_mateix_nom_no_es_barregen(self):
+        sticker = {"id": "i2", "tipus": "sticker", "text": "un cor", "paraules": None, "inici": 1.0, "final": 1.0,
+                   "ancora": 2, "estat": "acceptada", "manual": True}
+        ins = json.loads((self.carpeta / "instruccions.json").read_text(encoding="utf-8"))
+        (self.carpeta / "instruccions.json").write_text(json.dumps(ins + [sticker]), encoding="utf-8")
+        bones = self.bones(**{"Content-Type": "application/octet-stream"})
+        resultats = []
+
+        def puja(contingut):
+            resultats.append(self.peticio("POST", "/api/broll/puja?instruccio=i2&nom=image.png", contingut, bones)[0])
+        fils = [threading.Thread(target=puja, args=(bytes([65 + k]) * 300_000,)) for k in range(4)]
+        for f in fils:
+            f.start()
+        for f in fils:
+            f.join()
+        self.assertEqual(resultats, [200] * 4)
+        final = (self.carpeta / "stickers" / "i2.png").read_bytes()
+        self.assertEqual(len(set(final)), 1)  # sencer d'una sola pujada, no barrejat
+        self.assertEqual([f.name for f in (self.carpeta / "broll" / "pujats").iterdir()], [])
 
 
 if __name__ == "__main__":

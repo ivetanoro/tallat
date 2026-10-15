@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import traceback
+import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -174,6 +175,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             else:
                 self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", tipus)
+            # Els fitxers (stickers SVG pujats, exports…) no poden executar res encara que s'obrin
+            # directament al navegador: un SVG amb un script podria llegir el codi de la pàgina.
+            if not tipus.startswith(("video/", "audio/")):  # els vídeos s'han de poder mirar tal qual
+                self.send_header("Content-Security-Policy", "sandbox; default-src 'none'; img-src 'self' data:; "
+                                                            "style-src 'unsafe-inline'; font-src 'self'")
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Length", str(final - inici + 1))
             self.send_header("ETag", etiqueta)
@@ -301,6 +308,11 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             except json.JSONDecodeError:
                 return self._json({"error": "JSON no vàlid"}, HTTPStatus.BAD_REQUEST)
             with bloqueig:
+                # Mentre llegíem el cos, una altra pestanya pot haver canviat de projecte o haver tornat
+                # a obrir el mateix reel (amb canvis desats): es comprova amb el que hi ha obert ara.
+                projecte = obert["p"]
+                if ruta in RUTES_DEL_PROJECTE and self.headers.get("X-Tallat-Projecte") != clau_de(projecte):
+                    return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
                 if ruta == "/api/obre":  # canvia a un reel proposat o torna a la gravació sencera
                     arrel = obert["arrel"]
                     rid = cos.get("reel")
@@ -425,8 +437,9 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._no_permesa(HTTPStatus.NOT_FOUND, "No trobo aquesta instrucció")
             carpeta = projecte.carpeta_instruccions() / broll.CARPETA / "pujats"
             carpeta.mkdir(parents=True, exist_ok=True)
-            desti = carpeta / nom
-            temporal = carpeta / f".{nom}.pujant"
+            # Un fitxer temporal per pujada: dues pestanyes que pugin «image.png» alhora no es barregen.
+            # Conserva l'extensió (és la que diu si és vídeo, imatge o sticker).
+            temporal = carpeta / f".pujant-{uuid.uuid4().hex}{Path(nom).suffix.lower()}"
             try:
                 with temporal.open("wb") as f:
                     pendent = mida
@@ -436,21 +449,23 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                             raise ConnectionError("pujada interrompuda")
                         f.write(tros)
                         pendent -= len(tros)
-                temporal.replace(desti)
             except (OSError, ConnectionError):
                 temporal.unlink(missing_ok=True)
                 self.close_connection = True
                 return
-            with bloqueig:
-                try:
-                    projecte.assigna_recurs(iid, desti)
-                except KeyError:
-                    desti.unlink(missing_ok=True)
-                    return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
-                except Exception as e:
-                    desti.unlink(missing_ok=True)
-                    return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
-                return self._json(instantania())
+            try:
+                with bloqueig:
+                    if self.headers.get("X-Tallat-Projecte") != clau_de(obert["p"]):
+                        return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
+                    try:
+                        obert["p"].assigna_recurs(iid, temporal)  # en fa una còpia al projecte
+                    except KeyError:
+                        return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
+                    except Exception as e:
+                        return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
+                    return self._json(instantania())
+            finally:
+                temporal.unlink(missing_ok=True)
 
         def _puja_font(self):
             """Rep una font (.ttf, .otf, .woff o .woff2) i la fa servir per als subtítols."""
