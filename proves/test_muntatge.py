@@ -6,6 +6,7 @@ from pathlib import Path
 
 import tallat
 from motor import muntatge
+from motor.projecte import Projecte
 
 
 def paraules(n: int) -> list[dict]:
@@ -44,6 +45,30 @@ class TestRetranscriure(unittest.TestCase):
                 tallat.ordre_transcriu(args)
             self.assertIn("reel", str(e.exception.code))
             self.assertEqual((arrel / "transcripcio.json").read_text(encoding="utf-8"), "{}")
+
+
+class TestRecursosDelReel(unittest.TestCase):
+    def test_un_b_roll_d_un_tros_que_no_hi_es_no_entra_al_reel(self):
+        # Revisió de Codex: un b-roll amb l'àncora a la paraula 1 sortia al principi d'un reel
+        # que només fa servir les paraules 4 i 5.
+        with tempfile.TemporaryDirectory() as d:
+            carpeta = Path(d)
+            (carpeta / "transcripcio.json").write_text(json.dumps(
+                {"video": str(carpeta / "no-hi-es.mov"), "fps": "30", "durada": 5.0, "paraules": paraules(10)}),
+                encoding="utf-8")
+            (carpeta / "broll").mkdir()
+            for nom in ("i1.mp4", "i2.mp4"):
+                (carpeta / "broll" / nom).write_bytes(b"")
+            (carpeta / "instruccions.json").write_text(json.dumps([
+                {"id": f"i{k}", "tipus": "broll", "text": "x", "paraules": None, "inici": 0, "final": 0,
+                 "ancora": ancora, "estat": "acceptada", "manual": True, "fitxer": f"broll/i{k}.mp4"}
+                for k, ancora in ((1, 1), (2, 4))]), encoding="utf-8")
+            projecte = Projecte(carpeta)
+            projecte.estat["esborrades"] = {i: "muntatge" for i in range(10) if i not in (4, 5)}
+            projecte.estat["ordre"] = [[4, 5]]
+            brolls = projecte.brolls(projecte.trams())
+        self.assertEqual([b["id"] for b in brolls], ["i2"])
+        self.assertLess(brolls[0]["inici"], 0.1)  # al principi del reel (amb el petit marge d'abans de la paraula)
 
 
 if __name__ == "__main__":

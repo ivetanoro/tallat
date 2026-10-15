@@ -241,6 +241,12 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
 """
 
 
+def _empremta(fitxer) -> str | None:
+    """Empremta del contingut d'un fitxer: si se substitueix per un altre amb el mateix nom, canvia."""
+    path = Path(fitxer).expanduser()
+    return hashlib.sha1(path.read_bytes()).hexdigest() if path.is_file() else None
+
+
 def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qualitat: str,
                avis=None, stickers: list[dict] | None = None, estil_stickers: dict | None = None) -> Path:
     """Dibuixa subtítols i stickers amb HyperFrames en un .mov transparent (reaprofita el darrer si no ha canviat).
@@ -249,11 +255,10 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     # L'esborrany es dibuixa a mitja mida (unes 3-4 vegades més ràpid); l'export final, a 1080 o en 4K.
     escala = {"4k": "4k", "esborrany": "540"}.get(qualitat, "1080")
     font = estil.get("font_fitxer")
-    empremta_st = [[str(st["fitxer"]), int(Path(st["fitxer"]).stat().st_mtime), st["inici"], st["durada"]]
-                   for st in stickers or []]
-    codi = hashlib.sha1(CODI_ANIMACIO.read_bytes()).hexdigest()  # si canvien les animacions, cal tornar a dibuixar
-    clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers, codi],
-                      sort_keys=True)
+    empremta_st = [[str(st["fitxer"]), _empremta(st["fitxer"]), st["inici"], st["durada"]] for st in stickers or []]
+    codi = _empremta(CODI_ANIMACIO)  # si canvien les animacions, cal tornar a dibuixar
+    clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers, codi,
+                       _empremta(font) if font else None], sort_keys=True)
     nom = hashlib.sha1(clau.encode()).hexdigest()[:12]
     base = carpeta / "subtitols"
     sortida = base / f"subtitols_{escala}_{nom}.mov"

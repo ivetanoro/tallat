@@ -262,15 +262,21 @@ class Projecte:
         """B-rolls o stickers acceptats amb fitxer, situats al muntatge: [{id, fitxer, inici, durada}]."""
         base = self.carpeta_instruccions()
         total = sum(b - a for a, b in trams)
-        paraules = self.paraules()
+        # Cada paraula, amb el bloc on sona (en un reel, cada tros triat de la gravació és un bloc).
+        blocs = edicio._blocs(self.paraules(), self.estat.get("ordre"))
+        bloc_de = {p["id"]: bloc for bloc in blocs for p in bloc}
         resultat = []
         for ins in self.instruccions():
             if ins.get("tipus") != tipus or ins.get("estat") != "acceptada" or not ins.get("fitxer"):
                 continue
             if ins.get("ancora") is None or not (base / ins["fitxer"]).exists():
                 continue
-            # Comença a la primera paraula que es queda a partir de l'àncora.
-            seguent = next((p for p in paraules[ins["ancora"]:] if p["conservada"]), None)
+            # Comença a la primera paraula que es queda a partir de l'àncora, dins del mateix bloc:
+            # si l'àncora és d'un tros que aquest reel no fa servir, el recurs no hi va.
+            bloc = bloc_de.get(ins["ancora"])
+            if bloc is None:
+                continue
+            seguent = next((p for p in bloc if p["id"] >= ins["ancora"] and p["conservada"]), None)
             m = self.al_muntatge(seguent["inici"], trams) if seguent else None
             if m is None or m >= total - 0.1:
                 continue

@@ -1,4 +1,7 @@
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from motor import marca, subtitols
 
@@ -81,6 +84,29 @@ class TestParaulesClau(unittest.TestCase):
         self.assertEqual(subtitols.emoji_de("d'idees,"), "💡")
         self.assertEqual(subtitols.emoji_de("Minuts"), "⏰")  # «minut*» vol dir qualsevol paraula que comenci així
         self.assertIsNone(subtitols.emoji_de("que"))
+
+
+class TestMemoriaDelRender(unittest.TestCase):
+    def test_canviar_la_font_amb_el_mateix_nom_torna_a_dibuixar(self):
+        # Revisió de Codex: la vista prèvia ja feia servir la font nova, però el vídeo reaprofitava el dibuix vell.
+        dibuixos = []
+
+        def hyperframes(ordre, **_):
+            sortida = Path(ordre[ordre.index("--output") + 1])
+            sortida.write_bytes(b"mov")
+            dibuixos.append(sortida)
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(subtitols.subprocess, "run", hyperframes):
+            font = Path(d) / "la-meva.ttf"
+            font.write_bytes(b"lletra antiga")
+            estil = {**ESTIL, "font_fitxer": str(font)}
+            linies = [{"inici": 0.0, "final": 1.0, "paraules": [{"text": "hola", "inici": 0.0, "final": 1.0}]}]
+            primer = subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany")
+            self.assertEqual(subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany"), primer)
+            self.assertEqual(len(dibuixos), 1)
+            font.write_bytes(b"lletra nova")
+            self.assertNotEqual(subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany"), primer)
+            self.assertEqual(len(dibuixos), 2)
 
 
 if __name__ == "__main__":

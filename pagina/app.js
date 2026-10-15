@@ -412,22 +412,34 @@ function commuta(ids, treure) {
 let seleccio = null;
 const marcades = new Set();
 
+// Una selecció va de la primera paraula a l'última tal com es veuen a la pàgina. Amb paràgrafs
+// reordenats, els números de paraula no van seguits: «de la 108 a la 1» són 108, 109, 0 i 1.
+let ordreVisual = new Map();  // id → posició a la pàgina (es calcula en començar cada selecció)
+
+function llegeixOrdreVisual() {
+  ordreVisual = new Map([...$("#transcripcio").querySelectorAll(".p")].map((s, i) => [+s.dataset.id, i]));
+}
+
+function idsEntre(a, b) {
+  const ids = [...ordreVisual.keys()];
+  const [i, j] = [ordreVisual.get(a), ordreVisual.get(b)].sort((x, y) => x - y);
+  return i === undefined || j === undefined ? [] : ids.slice(i, j + 1);
+}
+
 function pintaSeleccio() {
   for (const id of marcades) spans.get(id)?.classList.remove("seleccio");
   marcades.clear();
-  const rang = seleccio ? [Math.min(seleccio.inici, seleccio.fi), Math.max(seleccio.inici, seleccio.fi)] : seleccioFeta;
-  if (!rang) return;
-  for (let id = rang[0]; id <= rang[1]; id++) { spans.get(id)?.classList.add("seleccio"); marcades.add(id); }
+  const ids = seleccio ? idsEntre(seleccio.inici, seleccio.fi) : seleccioFeta;
+  for (const id of ids || []) { spans.get(id)?.classList.add("seleccio"); marcades.add(id); }
 }
 
 // Clic: anar a la paraula i reproduir des d'allà. Clic dret (o control + clic): treure-la o
 // recuperar-la; arrossegant amb el botó dret, totes les que s'hi passen. Arrossegar amb el
 // botó esquerre selecciona unes quantes paraules; després, clic dret o ⌫.
-let seleccioFeta = null;  // [primera, última] de l'última selecció arrossegada
+let seleccioFeta = null;  // ids de l'última selecció arrossegada, en l'ordre de la pàgina
 
-function commutaRang(a, b) {
-  const ids = Array.from({ length: b - a + 1 }, (_, i) => a + i);
-  commuta(ids, ids.some((id) => !esFora(id)));
+function commutaIds(ids) {
+  if (ids.length) commuta(ids, ids.some((id) => !esFora(id)));
 }
 
 function deixaSeleccio() {
@@ -448,12 +460,13 @@ function instalaText() {
       if (!s || mode !== "talla") return;
       e.preventDefault();
       const id = +s.dataset.id;
-      if (seleccioFeta && id >= seleccioFeta[0] && id <= seleccioFeta[1]) {
-        commutaRang(...seleccioFeta);  // clic dret a sobre d'una selecció feta: tota de cop
+      if (seleccioFeta?.includes(id)) {
+        commutaIds(seleccioFeta);  // clic dret a sobre d'una selecció feta: tota de cop
         deixaSeleccio();
         return;
       }
       seleccioFeta = null;
+      llegeixOrdreVisual();
       seleccio = { inici: id, fi: id, mogut: false, dret: true };
       pintaSeleccio();
       return;
@@ -473,6 +486,7 @@ function instalaText() {
     if (mode === "corregeix") { e.preventDefault(); editaParaula(s, id); return; }
     e.preventDefault();
     seleccioFeta = null;
+    llegeixOrdreVisual();
     seleccio = { inici: id, fi: id, mogut: false };
     pintaSeleccio();
   });
@@ -485,8 +499,9 @@ function instalaText() {
     if (!seleccio) return;
     const { inici, fi, mogut, dret } = seleccio;
     if (dret) {  // botó dret: treu (o recupera) la paraula o totes les que s'hi han arrossegat
+      const ids = idsEntre(inici, fi);
       deixaSeleccio();
-      commutaRang(Math.min(inici, fi), Math.max(inici, fi));
+      commutaIds(ids);
       return;
     }
     if (!mogut) {  // un clic: hi anem i sona des d'allà
@@ -495,7 +510,7 @@ function instalaText() {
       reprodueixDes(inici);
       return;
     }
-    seleccioFeta = [Math.min(inici, fi), Math.max(inici, fi)];  // queda marcada fins al clic dret o ⌫
+    seleccioFeta = idsEntre(inici, fi);  // queda marcada fins al clic dret o ⌫
   });
   document.addEventListener("pointercancel", () => { if (seleccio?.dret) deixaSeleccio(); });
   cont.addEventListener("contextmenu", (e) => {
@@ -505,7 +520,7 @@ function instalaText() {
   document.addEventListener("keydown", (e) => {
     if (!seleccioFeta || e.target.matches("input, textarea, select") || !["Backspace", "Delete"].includes(e.key)) return;
     e.preventDefault();
-    commutaRang(...seleccioFeta);
+    commutaIds(seleccioFeta);
     deixaSeleccio();
   });
   $(".text").addEventListener("wheel", () => { darrerDesplacamentManual = performance.now(); }, { passive: true });
@@ -1220,8 +1235,10 @@ function comprovaTall() {
   if (vista === "directe" && R.reproduint && trams.length && !R.v.seeking && R.salt == null) {
     const t = R.v.currentTime;
     const [a, b] = trams[Math.min(R.k, trams.length - 1)];
-    if (t < a - 0.3 || t > b + 0.3) recolloca();
-    else if (t >= b - 0.03) salta();
+    // Passat el final del tros, sempre al següent del muntatge, encara que el navegador hagi anat
+    // tard: buscar per temps de la gravació s'hi saltaria els trossos que s'han mogut més amunt.
+    if (t >= b - 0.03) salta();
+    else if (t < a - 0.3) recolloca();
   }
 }
 
