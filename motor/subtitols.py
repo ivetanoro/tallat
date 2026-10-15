@@ -238,14 +238,19 @@ def _js(dades) -> str:
 
 def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict] | None = None,
                stickers: list[dict] | None = None, estil_stickers: dict | None = None,
-               escala: float = 1.0) -> str:
+               escala: float = 1.0, titol: dict | None = None, estil_titol: dict | None = None) -> str:
     """HTML d'una composició HyperFrames transparent amb els subtítols i els stickers.
 
     Els subtítols els dibuixa `subtitols.js`, el mateix codi que fa servir la vista prèvia de la
     pàgina de revisió (s'ha de copiar al costat d'aquest index.html).
     `stickers`: [{"src": nom del fitxer dins la composició, "inici": s, "durada": s}]."""
     es = estil_stickers or {}
+    et = estil_titol or {}
     amplada, alcada = round(AMPLADA * escala), round(ALCADA * escala)
+    amaga = [titol["inici"], titol["final"]] if titol and et.get("amaga_subtitols") else None
+    titol_js = (f'TallatSubtitols.titol(document.getElementById("titol"), {_js(titol)}, {_js(et)}, '
+                f'{{ tl, familia: {_js(familia_css({"font": et.get("font") or estil.get("font")}))} }});'
+                if titol else "")
     font_face = _font_face(fonts or [])
 
     blocs, passos = [], []
@@ -283,7 +288,7 @@ def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict]
       {font_face}
       html, body {{ margin: 0; background: transparent; }}
       #root {{ position: relative; width: 100%; height: 100%; overflow: hidden; background: transparent; }}
-      #subtitols {{ transform: scale({escala}); transform-origin: 0 0; }}
+      #subtitols, #titol {{ transform: scale({escala}); transform-origin: 0 0; }}
       .enganxina {{ position: absolute; inset: 0; }}
       .sticker {{ position: absolute; height: auto; {ombra_sticker} }}
     </style>
@@ -292,12 +297,14 @@ def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict]
     <div id="root" data-composition-id="subtitols" data-start="0"
          data-width="{amplada}" data-height="{alcada}" data-duration="{durada:.3f}">
       <div id="subtitols"></div>
+      <div id="titol"></div>
 {chr(10).join(blocs)}
     </div>
     <script>
       const tl = gsap.timeline({{ paused: true }});
       TallatSubtitols.construeix(document.getElementById("subtitols"), {_js(linies)}, {_js(estil)},
-                                 {{ tl, familia: {_js(familia_css(estil))} }});
+                                 {{ tl, familia: {_js(familia_css(estil))}, amaga: {_js(amaga)} }});
+      {titol_js}
 {chr(10).join(passos)}
       window.__timelines["subtitols"] = tl;
     </script>
@@ -314,11 +321,12 @@ def _empremta(fitxer) -> str | None:
 
 def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qualitat: str,
                avis=None, stickers: list[dict] | None = None, estil_stickers: dict | None = None,
-               fonts: list[dict] | None = None) -> Path:
+               fonts: list[dict] | None = None, titol: dict | None = None, estil_titol: dict | None = None) -> Path:
     """Dibuixa subtítols i stickers amb HyperFrames en un .mov transparent (reaprofita el darrer si no ha canviat).
 
     `stickers`: [{"fitxer": Path, "inici": s, "durada": s}].
-    `fonts`: les lletres del kit que fan servir els subtítols, [{familia, pes, fitxer}] (marca.fonts_de)."""
+    `fonts`: les lletres del kit que fan servir els subtítols, [{familia, pes, fitxer}] (marca.fonts_de).
+    `titol`: el títol del ganxo, {text, inici, final}, amb el seu estil (`estil_titol`)."""
     # L'esborrany es dibuixa a mitja mida (unes 3-4 vegades més ràpid); l'export final, a 1080 o en 4K.
     escala = {"4k": "4k", "esborrany": "540"}.get(qualitat, "1080")
     fonts = fonts or []
@@ -326,7 +334,7 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     codi = _empremta(CODI_ANIMACIO)  # si canvien les animacions, cal tornar a dibuixar
     empremta_fonts = [[f["familia"], f["pes"], _empremta(f["fitxer"])] for f in fonts]
     clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers, codi,
-                       empremta_fonts], sort_keys=True)
+                       empremta_fonts, titol, estil_titol if titol else None], sort_keys=True)
     nom = hashlib.sha1(clau.encode()).hexdigest()[:12]
     base = carpeta / "subtitols"
     sortida = base / f"subtitols_{escala}_{nom}.mov"
@@ -347,7 +355,8 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
         shutil.copy(st["fitxer"], projecte / nom)
         locals_st.append({"src": nom, "inici": st["inici"], "durada": st["durada"]})
     (projecte / "index.html").write_text(composicio(linies, estil, durada, fonts_locals, locals_st, estil_stickers,
-                                                    escala=0.5 if escala == "540" else 1.0), encoding="utf-8")
+                                                    escala=0.5 if escala == "540" else 1.0,
+                                                    titol=titol, estil_titol=estil_titol), encoding="utf-8")
 
     temporal = sortida.with_suffix(".tmp.mov")
     ordre = ["npx", "--yes", f"hyperframes@{VERSIO_HYPERFRAMES}", "render", str(projecte),

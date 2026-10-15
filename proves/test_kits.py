@@ -156,5 +156,24 @@ class TestKitDelProjecte(AmbKits):
         self.assertEqual(p.kit(), "el-meu-estil")
 
 
+class TestTitolDelProjecte(TestKitDelProjecte):
+    def test_el_titol_va_en_temps_del_muntatge(self):
+        p = self.projecte(self.casa / "video")
+        self.assertIsNone(p.titol())
+        p.estat["titol"] = {"text": "Hola\n*món*", "durada": None}
+        self.assertEqual(p.titol([(0.0, 1.0), (2.0, 4.0)]), {"text": "Hola\n*món*", "inici": 0.0, "final": 3.0})
+        p.estat["titol"]["durada"] = 9.0  # mai més llarg que el vídeo
+        self.assertEqual(p.titol([(0.0, 2.0)])["final"], 2.0)
+
+    def test_la_lletra_del_titol_tambe_va_al_render(self):
+        (marca.ruta().parent / "fonts").mkdir(exist_ok=True)
+        for nom in ("Inter__var.woff2", "Fraunces__var.woff2", "Anton__400.woff2"):
+            (marca.ruta().parent / "fonts" / nom).write_bytes(b"wOF2")
+        marca.desa("subtitols", {"font": "Inter"})
+        marca.desa("titol", {"font": "Fraunces"})
+        p = self.projecte(self.casa / "video")
+        self.assertEqual(sorted(f["familia"] for f in p.fonts_subtitols()), ["Fraunces", "Inter"])
+
+
 if __name__ == "__main__":
     unittest.main()

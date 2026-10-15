@@ -32,7 +32,17 @@ PAUSA_PARAGRAF = 0.7  # segons de silenci que també obren un paràgraf nou
 def estat_buit(pausa_maxima: float | None = PAUSA_MAXIMA) -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": pausa_maxima, "pauses_mantingudes": [],
-            "subtitols": True, "ordre": None, "zooms": [], "destacades": {}}
+            "subtitols": True, "ordre": None, "zooms": [], "destacades": {}, "titol": None}
+
+
+def titol_net(titol) -> dict | None:
+    """El títol del ganxo d'un vídeo, comprovat: {text, durada (o None: la del kit)}; None si no n'hi ha."""
+    if not isinstance(titol, dict) or not isinstance(titol.get("text"), str) or not titol["text"].strip():
+        return None
+    text = "\n".join(l.strip() for l in titol["text"].replace("\r", "").split("\n"))[:400].strip()
+    durada = titol.get("durada")
+    durada = min(10.0, max(0.5, float(durada))) if isinstance(durada, (int, float)) and not isinstance(durada, bool) else None
+    return {"text": text, "durada": durada}
 
 
 def llegeix_estat(path: Path) -> dict:

@@ -91,6 +91,12 @@ let estilSub = null;       // estil dels subtítols (de ~/.tallat/brand.json)
 let estilsPredefinits = []; // [{id, nom, descripcio, valors}] de config/estils_subtitols.json
 let fontsKit = [];         // les lletres del kit: [{familia, pes, url}]
 let bibliotecaLletres = { lletres: [], grups: {} };  // les lletres gratuïtes que es poden baixar
+let estilTitol = null;      // l'estil del títol del ganxo (del kit)
+let estilsTitol = [];       // els estils de títol predefinits
+let titolMuntatge = null;   // el títol d'aquest vídeo en temps del muntatge: {text, inici, final}, o null
+let editantTitol = false;   // el panell de l'estil del títol és obert
+let previaTitol = null;
+const MOSTRA_TITOL = { text: "El teu\n*títol*\naquí", inici: 0, final: 3 };  // mentre es tria l'estil sense títol
 let editantEstil = false;  // el panell d'estil és obert: el reproductor en mostra una línia d'exemple
 let instruccions = [];     // instruccions de veu «Claude, …»
 let zoomsTram = [];        // quins trossos porten zoom
@@ -184,6 +190,7 @@ function canvia(fn, { repinta = false } = {}) {
 
 function refresca(repinta) {
   if (repinta) pintaText(); else actualitzaParaules();
+  pintaTitol();
   actualitzaPropostes();
   actualitzaPauses();
   $("#desfes").disabled = !desfer.length;
@@ -213,6 +220,7 @@ function refes() {
 
 function aplicaTrams(r) {
   if (r.subtitols) { liniesSub = r.subtitols; previaBruta = true; marcaClaus(); }
+  if ("titol" in r) { titolMuntatge = r.titol; previaBruta = true; }
   if (r.paragrafs && P && r !== P && JSON.stringify(r.paragrafs) !== JSON.stringify(P.paragrafs)) {
     P.paragrafs = r.paragrafs;  // l'ordre dels paràgrafs ha canviat (moure'ls, desfer-ho, una altra pestanya)
     pintaText();
@@ -918,29 +926,45 @@ let previa = null;          // la línia de temps dels subtítols a la vista pr�
 let previaBruta = true;     // cal tornar-la a construir (han canviat les línies o l'estil)
 let previaTemps = NaN;      // l'últim moment dibuixat
 
+function titolVisible() {
+  return titolMuntatge || (editantTitol ? { ...MOSTRA_TITOL, final: estilTitol?.durada || 3 } : null);
+}
+
 function refaPrevia() {
   previaBruta = false;
   previaTemps = NaN;
-  previa = estilSub && window.TallatSubtitols
-    ? TallatSubtitols.construeix($("#ts-host"), liniesSub, estilSub, { familia: familiaCss(estilSub) })
-    : null;
+  if (!window.TallatSubtitols) { previa = previaTitol = null; return; }
+  const titol = titolVisible();
+  const amaga = titol && estilTitol?.amaga_subtitols ? [titol.inici, titol.final] : null;
+  previa = estilSub ? TallatSubtitols.construeix($("#ts-host"), liniesSub, estilSub, { familia: familiaCss(estilSub), amaga }) : null;
+  previaTitol = estilTitol ? TallatSubtitols.titol($("#tt-host"), titol, estilTitol,
+    { familia: familiaCss({ font: estilTitol.font || estilSub?.font }) }) : null;
 }
 
 function pintaSubtitols() {
   const capa = $("#capa-subtitols");
-  const visible = vista === "directe" && (estat?.subtitols !== false || editantEstil) && liniesSub.length > 0;
+  const ambSubtitols = (estat?.subtitols !== false || editantEstil) && liniesSub.length > 0;
+  const titol = titolVisible();
+  const visible = vista === "directe" && (ambSubtitols || !!titol);
   capa.hidden = !visible;
   if (!visible) return;
+  $("#ts-host").hidden = !ambSubtitols;
   if (previaBruta) refaPrevia();
-  if (!previa) return;
   let m = tempsMuntatge();
+  // Mentre es tria l'estil del títol amb el vídeo aturat, el títol sempre es veu (ja escrit).
+  if (editantTitol && !sona() && titol && !(m >= titol.inici && m < titol.final)) {
+    m = Math.max(titol.inici, titol.final - 0.35);
+    if (m !== previaTemps) { previa?.seek(m, false); previaTitol?.seek(m, false); previaTemps = m; }
+    return;
+  }
+  if (!previa) { if (m !== previaTemps) { previaTitol?.seek(m, false); previaTemps = m; } return; }
   // Mentre es tria l'estil amb el vídeo aturat, sempre hi ha una línia d'exemple a la vista.
-  if (editantEstil && !sona() && !liniesSub.some((l) => m >= l.inici && m < l.final)) {
+  if (editantEstil && !sona() && liniesSub.length && !liniesSub.some((l) => m >= l.inici && m < l.final)) {
     const l = liniesSub.find((x) => x.inici >= m) || liniesSub[liniesSub.length - 1];
     const w = l.paraules[Math.min(1, l.paraules.length - 1)];
     m = Math.min(l.final - 0.01, w.inici + 0.45);
   }
-  if (m !== previaTemps) { previa.seek(m, false); previaTemps = m; }
+  if (m !== previaTemps) { previa.seek(m, false); previaTitol?.seek(m, false); previaTemps = m; }
 }
 
 const escapaFont = (f) => (/^[\w-]+$/.test(f) ? f : `"${String(f).replace(/["\\]/g, "")}"`);
@@ -1018,6 +1042,30 @@ function pintaResumEstil() {
     { paraules: [["Aa", false, null]], alcada: 1080, mida: 0.36 });
 }
 
+// El desplegable de lletres: les del kit que ha pujat la persona, les del Mac i les gratuïtes (les que
+// encara no són al kit porten «bib:»: triar-les les baixa). Amb `laDelsSubtitols`, també «la dels subtítols».
+function ompleLletres(select, valor, { laDelsSubtitols = false } = {}) {
+  select.textContent = "";
+  const grup = (nom) => { const g = document.createElement("optgroup"); g.label = nom; select.append(g); return g; };
+  const opcio = (on, v, text) => { const o = document.createElement("option"); o.value = v; o.textContent = text; on.append(o); };
+  if (laDelsSubtitols) opcio(select, "", `La dels subtítols (${estilSub?.font === "system-ui" ? "San Francisco" : estilSub?.font || ""})`);
+  const alKit = new Set(fontsKit.map((f) => f.familia));
+  const deLaBiblioteca = new Set(bibliotecaLletres.lletres.map((l) => l.nom));
+  const meves = [...alKit].filter((f) => !deLaBiblioteca.has(f));
+  if (meves.length) { const g = grup("Les teves"); for (const f of meves) opcio(g, f, f); }
+  const delMac = grup("Del Mac");
+  for (const [v, text] of FONTS) opcio(delMac, v, text);
+  for (const [id, nom] of Object.entries(bibliotecaLletres.grups || {})) {
+    const g = grup(`${nom} · gratuïtes`);
+    for (const l of bibliotecaLletres.lletres.filter((x) => x.grup === id)) {
+      opcio(g, alKit.has(l.nom) ? l.nom : `bib:${l.id}`, alKit.has(l.nom) ? `${l.nom} ✓` : l.nom);
+    }
+  }
+  const actual = valor || "";
+  if (![...select.options].some((o) => o.value === actual)) opcio(select, actual, actual);
+  select.value = actual;
+}
+
 function marcaSegmentat(id, valor) {
   for (const b of $$(`#${id} button`)) b.setAttribute("aria-checked", String(b.dataset.valor === valor));
 }
@@ -1056,24 +1104,7 @@ function pintaPanellEstil() {
   $("#e-majuscules").setAttribute("aria-checked", String(!!e.majuscules));
   $("#e-ombra").setAttribute("aria-checked", String(!!e.ombra));
 
-  const font = $("#e-font");
-  font.textContent = "";
-  const grup = (nom) => { const g = document.createElement("optgroup"); g.label = nom; font.append(g); return g; };
-  const opcio = (on, valor, text) => { const o = document.createElement("option"); o.value = valor; o.textContent = text; on.append(o); };
-  const alKit = new Set(fontsKit.map((f) => f.familia));
-  const deLaBiblioteca = new Set(bibliotecaLletres.lletres.map((l) => l.nom));
-  const meves = [...alKit].filter((f) => !deLaBiblioteca.has(f));
-  if (meves.length) { const g = grup("Les teves"); for (const f of meves) opcio(g, f, f); }
-  const delMac = grup("Del Mac");
-  for (const [valor, text] of FONTS) opcio(delMac, valor, text);
-  for (const [id, nom] of Object.entries(bibliotecaLletres.grups || {})) {
-    const g = grup(`${nom} · gratuïtes`);
-    for (const l of bibliotecaLletres.lletres.filter((x) => x.grup === id)) {
-      opcio(g, alKit.has(l.nom) ? l.nom : `bib:${l.id}`, alKit.has(l.nom) ? `${l.nom} ✓` : l.nom);
-    }
-  }
-  if (![...font.options].some((o) => o.value === e.font)) opcio(font, e.font, e.font);
-  font.value = e.font;
+  ompleLletres($("#e-font"), e.font);
   $("#avis-lletra").hidden = !bibliotecaLletres.lletres.length;
 
   const pes = $("#e-pes");
@@ -1129,9 +1160,211 @@ function respostaEstil(r) {
   if (r.biblioteca_lletres) bibliotecaLletres = r.biblioteca_lletres;
   if (r.fonts_kit) carregaFontsKit(r.fonts_kit);
   if (r.subtitols) liniesSub = r.subtitols;
+  if (r.estils_titol) estilsTitol = r.estils_titol;
+  if ("titol" in r) titolMuntatge = r.titol;
   // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
   aplicaEstilSubtitols({ ...r.estil_subtitols, ...estilPendent });
+  if (r.estil_titol) aplicaEstilTitol({ ...r.estil_titol, ...titolPendent });
   pintaPanellEstil();
+  pintaPanellTitol();
+}
+
+// --- El títol del ganxo -------------------------------------------------------------------------
+// Un text dissenyat els primers segons. El text és de cada vídeo (a l'estat: es desfà com la resta);
+// l'estil, del kit. Es dibuixa amb pagina/subtitols.js, com al vídeo final.
+
+function aplicaEstilTitol(e) {
+  if (!e) return;
+  estilTitol = e;
+  previaBruta = true;
+  pintaResumTitol();
+}
+
+function pintaTitol() {
+  if (!estat) return;
+  const camp = $("#text-titol");
+  const t = estat.titol;
+  if (document.activeElement !== camp) camp.value = t?.text || "";
+  const durada = t?.durada ?? estilTitol?.durada ?? 3;
+  $("#durada-titol").value = durada;
+  $("#durada-titol-text").textContent = fmtSegons(durada);
+  $("#camp-durada-titol").hidden = !t;
+}
+
+// El text: a la vista, de seguida; a l'estat (i a desfer), quan s'acaba d'escriure.
+let temporitzadorTitol = null;
+function canviaTextTitol() {
+  const text = $("#text-titol").value;
+  const durada = estat.titol?.durada ?? null;
+  titolMuntatge = text.trim()
+    ? { text, inici: 0, final: Math.min(duradaFinal || 99, durada ?? estilTitol?.durada ?? 3) } : null;
+  previaBruta = true;
+  $("#camp-durada-titol").hidden = !text.trim();
+  clearTimeout(temporitzadorTitol);
+  temporitzadorTitol = setTimeout(() => canvia((e) => { e.titol = text.trim() ? { text, durada } : null; }), 700);
+}
+
+function canviaDuradaTitol(durada) {
+  $("#durada-titol-text").textContent = fmtSegons(durada);
+  if (titolMuntatge) { titolMuntatge = { ...titolMuntatge, final: Math.min(duradaFinal || 99, durada) }; previaBruta = true; }
+  clearTimeout(temporitzadorTitol);
+  temporitzadorTitol = setTimeout(() => canvia((e) => { if (e.titol) e.titol = { ...e.titol, durada }; }), 400);
+}
+
+let titolPendent = {};
+let temporitzadorEstilTitol = null;
+function canviaTitol(canvis, mostra = false) {
+  aplicaEstilTitol({ ...estilTitol, ...canvis });
+  pintaPanellTitol();
+  Object.assign(titolPendent, canvis);
+  clearTimeout(temporitzadorEstilTitol);
+  temporitzadorEstilTitol = setTimeout(desaEstilTitol, 300);
+  if (mostra) mostraTitol();
+}
+
+async function desaEstilTitol() {
+  const canvis = titolPendent;
+  titolPendent = {};
+  if (!Object.keys(canvis).length) return;
+  try {
+    await cua;
+    respostaEstil(await api("/api/marca", { titol: canvis }));
+  } catch (e) { avis(e.message, 5000); }
+}
+
+// Fa sonar el títol des del principi perquè es vegi com entra.
+function mostraTitol() {
+  if (vista !== "directe" || sona() || !titolMuntatge) return;
+  vesA(titolMuntatge.inici);
+  reprodueix();
+  R.aturaA = Math.min(duradaFinal, titolMuntatge.final + 0.2);
+}
+
+function predefinitTitol(e = estilTitol) {
+  if (!e) return null;
+  return estilsTitol.find((p) => Object.entries(p.valors).every(([k, v]) =>
+    (typeof v === "number" ? Math.abs((e[k] ?? NaN) - v) < 1e-6 : String(e[k]).toUpperCase() === String(v).toUpperCase())));
+}
+
+// Una mostra quieta d'un estil de títol, amb el mateix codi que el títol de debò.
+function pintaMostraTitol(caixa, e, text, alcada) {
+  if (!window.TallatSubtitols || !e) return;
+  const host = document.createElement("div");
+  caixa.textContent = "";
+  caixa.append(host);
+  const v = { ...e, posicio_y: 0.5, amplada_maxima: 0.94, fons: e.fons === "enfosquit" ? "cap" : e.fons };
+  const tl = TallatSubtitols.titol(host, { text, inici: 0, final: 9 }, v,
+    { familia: familiaCss({ font: e.font || estilSub?.font }), alcada });
+  tl.seek(5, false);
+  host.style.transform = `scale(${caixa.clientWidth / TallatSubtitols.AMPLADA})`;
+}
+
+function pintaResumTitol() {
+  if (!estilTitol) return;
+  $("#nom-estil-titol").textContent = predefinitTitol()?.nom ?? "Personalitzat";
+  pintaMostraTitol($("#mostra-titol"), { ...estilTitol, mida: 0.3, clau_mida: 1 }, "Aa", 1080);
+}
+
+function pintaPanellTitol() {
+  const e = estilTitol;
+  if (!e || $("#panell-titol").hidden) return;
+  const actual = predefinitTitol();
+  const cont = $("#estils-titol");
+  cont.textContent = "";
+  for (const p of estilsTitol) {
+    const b = document.createElement("button");
+    b.className = "estil";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(p === actual));
+    b.title = p.descripcio;
+    b.innerHTML = `<span class="estil-mostra"></span><span class="estil-nom"></span>`;
+    b.querySelector(".estil-nom").textContent = p.nom;
+    b.addEventListener("click", () => canviaTitol({ ...p.valors }, true));
+    cont.append(b);
+    pintaMostraTitol(b.querySelector(".estil-mostra"), { ...e, ...p.valors, mida: Math.min(0.11, (p.valors.mida || e.mida) * 1.5) },
+      "El meu\n*títol*", 675);
+  }
+  $("#t-animacio").value = e.animacio;
+  marcaSegmentat("t-fons", e.fons || "cap");
+  marcaSegmentat("t-alineacio", e.alineacio || "centre");
+  ompleLletres($("#t-font"), e.font, { laDelsSubtitols: true });
+  const pes = $("#t-pes");
+  if (![...pes.options].some((o) => +o.value === +e.pes)) {
+    const o = document.createElement("option"); o.value = e.pes; o.textContent = `Gruix ${e.pes}`; pes.append(o);
+  }
+  pes.value = String(e.pes);
+  $("#t-majuscules").setAttribute("aria-checked", String(!!e.majuscules));
+  $("#t-ombra").setAttribute("aria-checked", String(e.ombra !== false));
+  $("#t-amaga").setAttribute("aria-checked", String(!!e.amaga_subtitols));
+  $("#t-mida").value = e.mida;
+  $("#t-clau-mida").value = e.clau_mida;
+  $("#t-espaiat").value = e.espaiat ?? 0;
+  $("#t-interlineat").value = e.interlineat ?? 1;
+  $("#t-posicio").value = e.posicio_y;
+  $("#t-gruix").value = e.gruix_contorn ?? 0;
+  $("#t-color").value = e.color.toLowerCase();
+  $("#t-clau-color").value = (e.clau_color || e.color).toLowerCase();
+  $("#t-contorn").value = e.contorn.toLowerCase();
+  $("#t-fons-color").value = (e.fons_color || "#000000").toLowerCase();
+  $("#camp-t-fons").hidden = (e.fons || "cap") === "cap";
+}
+
+function obreTitol() {
+  editantTitol = true;
+  previaBruta = true;
+  if (vista !== "directe") canviaVista("directe");
+  $(".barra").classList.add("editant-estil");
+  $("#panell-titol").hidden = false;
+  $(".barra").scrollTop = 0;
+  pintaPanellTitol();
+  if (!titolMuntatge) avis("Encara no has escrit el títol: el reproductor en mostra un d'exemple.", 4000);
+  $("#tanca-titol").focus();
+}
+
+function tancaTitol() {
+  editantTitol = false;
+  previaBruta = true;
+  $(".barra").classList.remove("editant-estil");
+  $("#panell-titol").hidden = true;
+  $("#obre-estil-titol").focus();
+}
+
+function instalaTitol() {
+  $("#text-titol").addEventListener("input", canviaTextTitol);
+  $("#durada-titol").addEventListener("input", (e) => canviaDuradaTitol(+e.target.value));
+  $("#obre-estil-titol").addEventListener("click", obreTitol);
+  $("#tanca-titol").addEventListener("click", tancaTitol);
+  $("#t-animacio").addEventListener("change", (e) => canviaTitol({ animacio: e.target.value }, true));
+  for (const [id, clau] of [["t-fons", "fons"], ["t-alineacio", "alineacio"]]) {
+    for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaTitol({ [clau]: b.dataset.valor }, true));
+  }
+  $("#t-font").addEventListener("change", (e) => {
+    const v = e.target.value;
+    if (v.startsWith("bib:")) baixaLletra(v.slice(4), "titol");
+    else canviaTitol({ font: v || null });
+  });
+  $("#t-pes").addEventListener("change", (e) => canviaTitol({ pes: +e.target.value }));
+  for (const [id, clau, perDefecte] of [["t-majuscules", "majuscules", false], ["t-ombra", "ombra", true],
+    ["t-amaga", "amaga_subtitols", false]]) {
+    $(`#${id}`).addEventListener("click", () => canviaTitol({ [clau]: !(estilTitol[clau] ?? perDefecte) }));
+  }
+  for (const [id, clau] of [["t-mida", "mida"], ["t-clau-mida", "clau_mida"], ["t-espaiat", "espaiat"],
+    ["t-interlineat", "interlineat"], ["t-posicio", "posicio_y"], ["t-gruix", "gruix_contorn"]]) {
+    $(`#${id}`).addEventListener("input", (e) => canviaTitol({ [clau]: +e.target.value }));
+  }
+  for (const [id, clau] of [["t-color", "color"], ["t-clau-color", "clau_color"], ["t-contorn", "contorn"],
+    ["t-fons-color", "fons_color"]]) {
+    $(`#${id}`).addEventListener("input", (e) => canviaTitol({ [clau]: e.target.value.toUpperCase() }));
+  }
+  $("#restableix-titol").addEventListener("click", async () => {
+    try {
+      clearTimeout(temporitzadorEstilTitol);
+      titolPendent = {};
+      await cua;
+      respostaEstil(await api("/api/marca/restableix", { seccio: "titol" }));
+      avis("El títol ha tornat a l'estil de tallat.");
+    } catch (e) { avis(e.message); }
+  });
 }
 
 // --- Kits d'estil -----------------------------------------------------------------------------
@@ -1160,6 +1393,7 @@ function pintaKits() {
   $("#kit-defecte").hidden = !!actual?.per_defecte;
   $("#kit-esborra").hidden = !!actual?.per_defecte;
   $("#nom-kit-panell").textContent = actual?.nom || "";
+  $("#nom-kit-titol").textContent = actual?.nom || "";
 }
 
 function respostaKit(r, missatge) {
@@ -1271,17 +1505,18 @@ function mostraAnimacio() {
 }
 
 // Una lletra gratuïta de la biblioteca: el servidor la baixa al kit (el primer cop) i la fa servir.
-async function baixaLletra(id) {
+async function baixaLletra(id, seccio = "subtitols") {
   const nom = bibliotecaLletres.lletres.find((l) => l.id === id)?.nom || id;
   avis(`Baixant la lletra «${nom}»…`, 20000);
   try {
     clearTimeout(temporitzadorEstil);
     await desaEstil();
-    respostaEstil(await api("/api/marca/lletra", { id }));
+    respostaEstil(await api("/api/marca/lletra", { id, seccio }));
     avis(`Lletra «${nom}» afegida al kit.`);
   } catch (e) {
     avis(e.message, 6000);
     pintaPanellEstil();
+    pintaPanellTitol();
   }
 }
 
@@ -1424,7 +1659,7 @@ function instalaEstil() {
   // La capa de subtítols treballa a 1080 px d'amplada: l'escalem a la mida del reproductor.
   const capa = $("#capa-subtitols");
   new ResizeObserver(() => {
-    $("#ts-host").style.transform = `scale(${capa.clientWidth / 1080})`;
+    for (const host of ["#ts-host", "#tt-host"]) $(host).style.transform = `scale(${capa.clientWidth / 1080})`;
   }).observe(capa);
   if (!window.gsap) registre("sense-gsap", {});  // sense internet: subtítols sense animacions
 
@@ -2130,6 +2365,7 @@ function instalaControls() {
   instalaSeccions();
   instalaEstil();
   instalaKits();
+  instalaTitol();
   setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
@@ -2186,6 +2422,7 @@ function instalaControls() {
     if (e.target.matches("input, textarea, select")) return;
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
     if (editantEstil && e.key === "Escape") { tancaEstil(); return; }
+    if (editantTitol && e.key === "Escape") { tancaTitol(); return; }
     if (e.ctrlKey && e.metaKey && e.code === "KeyS") {  // ⌃⌘S, com al Finder
       e.preventDefault();
       mostraColumna("barra", document.body.classList.contains("sense-barra"));
@@ -2234,6 +2471,8 @@ async function inicia() {
   marcaPausa();
   marcaSubtitols();
   estilsPredefinits = P.estils_subtitols || [];
+  estilsTitol = P.estils_titol || [];
+  aplicaEstilTitol(P.estil_titol);
   kits = P.kits || [];
   kitActual = P.kit;
   pintaKits();

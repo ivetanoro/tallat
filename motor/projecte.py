@@ -164,8 +164,21 @@ class Projecte:
         return self.estil()["subtitols"]
 
     def fonts_subtitols(self) -> list[dict]:
-        """Les lletres del kit que fan servir els subtítols d'aquest vídeo."""
-        return marca.fonts_de(self.estil_subtitols(), kit=self.kit())
+        """Les lletres del kit que fan servir els subtítols (i el títol) d'aquest vídeo."""
+        estil = self.estil()
+        return marca.fonts_de(estil["subtitols"], kit=self.kit(), titol=estil.get("titol"))
+
+    def titol(self, trams=None) -> dict | None:
+        """El títol del ganxo, a punt per dibuixar: {text, inici, final} en temps del muntatge (o None)."""
+        titol = edicio.titol_net(self.estat.get("titol"))
+        if not titol:
+            return None
+        trams = trams if trams is not None else self.trams()
+        total = sum(b - a for a, b in trams)
+        if total <= 0:
+            return None
+        durada = titol["durada"] or float(self.estil().get("titol", {}).get("durada", 3.0))
+        return {"text": titol["text"], "inici": 0.0, "final": round(min(total, durada), 3)}
 
     def linies_subtitols(self, trams=None) -> list[dict]:
         return subtitols.grups(self.paraules(), trams if trams is not None else self.trams(),
@@ -175,12 +188,14 @@ class Projecte:
         """Capa transparent amb els subtítols (si estan activats) i els stickers; None si no n'hi ha cap."""
         linies = self.linies_subtitols(trams) if self.estat.get("subtitols", True) else []
         enganxines = self.stickers(trams)
-        if not linies and not enganxines:
+        titol = self.titol(trams)
+        if not linies and not enganxines and not titol:
             return None
         estil = self.estil()
         return subtitols.renderitza(linies, estil["subtitols"], sum(b - a for a, b in trams),
                                     self.carpeta, qualitat, avis, stickers=enganxines,
-                                    estil_stickers=estil.get("stickers", {}), fonts=self.fonts_subtitols())
+                                    estil_stickers=estil.get("stickers", {}), fonts=self.fonts_subtitols(),
+                                    titol=titol, estil_titol=estil.get("titol"))
 
     # --- Instruccions de veu ------------------------------------------------------
 

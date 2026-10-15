@@ -306,6 +306,29 @@ def ordre_gust(args) -> None:
         sys.exit(str(e))
 
 
+def ordre_titol(args) -> None:
+    projecte = _carrega(args)
+    if args.treu or args.text is not None:
+        if args.treu:
+            projecte.estat["titol"] = None
+        else:  # les línies, separades amb «|» (o amb salts de línia de debò)
+            text = "\n".join(l.strip() for l in args.text.replace("|", "\n").split("\n"))
+            projecte.estat["titol"] = edicio.titol_net({"text": text, "durada": args.durada})
+            if projecte.estat["titol"] is None:
+                sys.exit("El títol no pot ser buit.")
+        projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1  # la pàgina oberta s'hi posa al dia
+        projecte.desa()
+    titol = edicio.titol_net(projecte.estat.get("titol"))
+    if not titol:
+        print("Aquest vídeo no té títol del ganxo.")
+        return
+    estil = projecte.estil()["titol"]
+    print("Títol del ganxo (les parts *entre asteriscs* surten destacades):")
+    print("\n".join(f"  {l}" for l in titol["text"].split("\n")))
+    print(f"Durada: {titol['durada'] or estil['durada']} s · estil del kit: {estil['animacio']}, {estil['alineacio']}"
+          + (" · amaga els subtítols mentre surt" if estil.get("amaga_subtitols") else ""))
+
+
 def ordre_destaca(args) -> None:
     projecte = _carrega(args)
     destacades = projecte.estat.setdefault("destacades", {})
@@ -490,6 +513,13 @@ def main() -> None:
     kl.add_argument("id", help="L'id de la lletra (tallat.py kit lletres)")
     kl.add_argument("--kit", help="El kit (si no, el per defecte)")
     ki.set_defaults(func=ordre_kit)
+
+    ti = sub.add_parser("titol", help="El títol del ganxo: un text dissenyat als primers segons")
+    ti.add_argument("--projecte", required=True)
+    ti.add_argument("text", nargs="?", help="Les línies separades amb «|»; el que va *entre asteriscs* surt destacat")
+    ti.add_argument("--durada", type=float, help="Segons (si no, els del kit)")
+    ti.add_argument("--treu", action="store_true", help="Treu el títol")
+    ti.set_defaults(func=ordre_titol)
 
     de = sub.add_parser("destaca", help="Les paraules destacades dels subtítols (més grans i d'un altre color)")
     de.add_argument("--projecte", required=True)

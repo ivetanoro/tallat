@@ -73,6 +73,23 @@
     </section>
 
 
+    <section class="seccio" data-seccio="titol">
+      <h2>Títol del ganxo</h2>
+      <textarea class="text-titol" id="text-titol" rows="3" placeholder="El títol dels primers segons…"
+                aria-label="Títol del ganxo"></textarea>
+      <p class="detall">Cada línia, una línia del títol. El que posis *entre asteriscs* surt destacat.</p>
+      <div class="camp-titol" id="camp-durada-titol">
+        <label class="etiqueta" for="durada-titol">Durada</label>
+        <input type="range" id="durada-titol" min="1" max="8" step="0.5">
+        <span class="valor" id="durada-titol-text"></span>
+      </div>
+      <button class="fila-estil" id="obre-estil-titol" aria-label="Canvia l'estil del títol">
+        <span class="mostra-estil" id="mostra-titol" aria-hidden="true">Aa</span>
+        <span class="fila-estil-text"><strong id="nom-estil-titol">Estil del títol</strong><span>Lletra, colors i com entra</span></span>
+        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+      </button>
+    </section>
+
     <section class="seccio" data-seccio="gust">
       <h2>El teu gust <span class="compte" id="compte-gust"></span></h2>
       <div id="gust"></div>
@@ -91,6 +108,102 @@
       <h2>Versions</h2>
       <div id="versions"><p class="buit">Encara no has exportat res.</p></div>
     </section>
+
+    <div class="panell-estil" id="panell-titol" hidden>
+      <button class="enllac tornar" id="tanca-titol">‹ Enrere</button>
+      <h2 class="titol-panell">Estil del títol</h2>
+      <p class="detall">Es desa al kit «<span id="nom-kit-titol"></span>». Mira'l al reproductor mentre el canvies.</p>
+      <div class="estils" id="estils-titol" role="radiogroup" aria-label="Estils de títol predefinits"></div>
+
+      <div class="camp">
+        <label class="etiqueta" for="t-animacio">Com entra</label>
+        <select id="t-animacio">
+          <option value="puja">Puja · línia a línia</option>
+          <option value="pop">Pop · amb un petit salt</option>
+          <option value="fos">Fos · s'encén suaument</option>
+          <option value="cortina">Cortina · es destapa</option>
+          <option value="maquina">Màquina d'escriure · lletra a lletra</option>
+          <option value="cap">Cap · surt i prou</option>
+        </select>
+      </div>
+      <div class="camp">
+        <span class="etiqueta" id="et-t-fons">Darrere</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-t-fons" id="t-fons">
+          <button role="radio" data-valor="cap">Res</button>
+          <button role="radio" data-valor="enfosquit" title="El vídeo s'enfosqueix darrere el títol">Enfosquit</button>
+          <button role="radio" data-valor="pindola" title="Una caixa de color darrere cada línia">Caixa</button>
+        </div>
+      </div>
+      <div class="camp">
+        <span class="etiqueta" id="et-t-alineacio">Alineació</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-t-alineacio" id="t-alineacio">
+          <button role="radio" data-valor="esquerra">Esquerra</button>
+          <button role="radio" data-valor="centre">Centre</button>
+          <button role="radio" data-valor="dreta">Dreta</button>
+          <button role="radio" data-valor="esglao" title="Línies a banda i banda; les destacades, al mig">Esglaó</button>
+        </div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="t-font">Lletra</label>
+        <select id="t-font"></select>
+        <div class="fila-camps">
+          <select id="t-pes" aria-label="Gruix de la lletra">
+            <option value="400">Normal</option>
+            <option value="600">Seminegreta</option>
+            <option value="700">Negreta</option>
+            <option value="800">Extranegreta</option>
+            <option value="900">Negra</option>
+          </select>
+          <button class="interruptor" id="t-majuscules" role="switch" aria-checked="false">
+            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Majúscules
+          </button>
+        </div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="t-mida">Mida</label>
+        <input type="range" id="t-mida" min="0.035" max="0.14" step="0.002">
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="t-clau-mida">Quant més grans les destacades</label>
+        <input type="range" id="t-clau-mida" min="1" max="4" step="0.05">
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="t-espaiat">Espai entre lletres</label>
+        <input type="range" id="t-espaiat" min="-0.1" max="0.2" step="0.005">
+        <div class="extrems" aria-hidden="true"><span>Juntes</span><span>Separades</span></div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="t-interlineat">Espai entre línies</label>
+        <input type="range" id="t-interlineat" min="0.8" max="1.5" step="0.01">
+        <div class="extrems" aria-hidden="true"><span>Juntes</span><span>Separades</span></div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="t-posicio">Posició</label>
+        <input type="range" id="t-posicio" min="0.05" max="0.95" step="0.01">
+        <div class="extrems" aria-hidden="true"><span>Dalt</span><span>Baix</span></div>
+      </div>
+      <div class="camp">
+        <span class="etiqueta">Colors</span>
+        <div class="colors">
+          <label class="color"><input type="color" id="t-color"><span>Text</span></label>
+          <label class="color"><input type="color" id="t-clau-color"><span>Destacat</span></label>
+          <label class="color"><input type="color" id="t-contorn"><span>Contorn</span></label>
+          <label class="color" id="camp-t-fons"><input type="color" id="t-fons-color"><span>Darrere</span></label>
+        </div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="t-gruix">Gruix del contorn</label>
+        <input type="range" id="t-gruix" min="0" max="0.12" step="0.005">
+        <div class="extrems" aria-hidden="true"><span>Sense</span><span>Gruixut</span></div>
+      </div>
+      <button class="interruptor" id="t-ombra" role="switch" aria-checked="true">
+        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Ombra
+      </button>
+      <button class="interruptor" id="t-amaga" role="switch" aria-checked="false">
+        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Sense subtítols mentre surt el títol
+      </button>
+      <button class="enllac" id="restableix-titol">Torna a l'estil de tallat</button>
+    </div>
 
     <div class="panell-estil" id="panell-estil" hidden>
       <button class="enllac tornar" id="tanca-estil">‹ Enrere</button>
@@ -290,7 +403,7 @@
       <video id="video-a" preload="auto" playsinline></video>
       <video id="video-esborrany" preload="auto" playsinline class="amagat"></video>
       <video id="video-broll" class="broll amagat" muted playsinline preload="auto"></video>
-      <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><div id="ts-host"></div></div>
+      <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><div id="ts-host"></div><div id="tt-host"></div></div>
       <div class="capa-stickers" id="capa-stickers" aria-hidden="true"></div>
       <button class="gran-play" id="gran-play" aria-label="Reprodueix">
         <svg viewBox="0 0 40 40"><path d="M15 11.5v17l13-8.5z"/></svg>

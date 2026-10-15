@@ -1,0 +1,108 @@
+{
+  "_info": "Estils predefinits del títol del ganxo (parteixen de «comu»). No toquen la lletra.",
+  "comu": {
+    "alineacio": "centre",
+    "majuscules": false,
+    "espaiat": -0.02,
+    "interlineat": 0.95,
+    "gruix_contorn": 0.0,
+    "ombra": true,
+    "fons": "cap",
+    "amaga_subtitols": false,
+    "contorn": "#000000",
+    "fons_color": "#000000"
+  },
+  "estils": [
+    {
+      "id": "esglao",
+      "nom": "Esglaó",
+      "descripcio": "Línies a banda i banda i la destacada, gegant, al mig",
+      "valors": {
+        "alineacio": "esglao",
+        "pes": 800,
+        "mida": 0.064,
+        "clau_mida": 2.3,
+        "color": "#FFFFFF",
+        "clau_color": "#F6DD8F",
+        "espaiat": -0.05,
+        "interlineat": 0.86,
+        "animacio": "puja",
+        "posicio_y": 0.14
+      }
+    },
+    {
+      "id": "retol",
+      "nom": "Rètol",
+      "descripcio": "Tot el ganxo al mig, en rosa amb contorn fosc",
+      "valors": {
+        "pes": 800,
+        "mida": 0.075,
+        "clau_mida": 1.0,
+        "color": "#F9B4D2",
+        "clau_color": "#F9B4D2",
+        "contorn": "#3B1D2E",
+        "gruix_contorn": 0.07,
+        "ombra": false,
+        "interlineat": 1.02,
+        "animacio": "pop",
+        "posicio_y": 0.42,
+        "amaga_subtitols": true
+      }
+    },
+    {
+      "id": "maquina",
+      "nom": "Màquina",
+      "descripcio": "S'escriu lletra a lletra, amb cursor i el fons enfosquit",
+      "valors": {
+        "alineacio": "esquerra",
+        "pes": 700,
+        "mida": 0.068,
+        "clau_mida": 1.0,
+        "color": "#FFFFFF",
+        "clau_color": "#FFD60A",
+        "espaiat": 0.0,
+        "interlineat": 1.1,
+        "animacio": "maquina",
+        "fons": "enfosquit",
+        "fons_color": "#000000",
+        "posicio_y": 0.45,
+        "amaga_subtitols": true
+      }
+    },
+    {
+      "id": "revista",
+      "nom": "Revista",
+      "descripcio": "En majúscules, amb la destacada gran i de color",
+      "valors": {
+        "majuscules": true,
+        "pes": 800,
+        "mida": 0.052,
+        "clau_mida": 1.9,
+        "color": "#FFFFFF",
+        "clau_color": "#FF5A36",
+        "espaiat": 0.02,
+        "interlineat": 0.92,
+        "animacio": "fos",
+        "posicio_y": 0.2
+      }
+    },
+    {
+      "id": "caixa",
+      "nom": "Caixa",
+      "descripcio": "Cada línia dins d'una caixa de color",
+      "valors": {
+        "pes": 800,
+        "mida": 0.062,
+        "clau_mida": 1.0,
+        "color": "#111111",
+        "clau_color": "#111111",
+        "fons": "pindola",
+        "fons_color": "#FFFFFF",
+        "ombra": false,
+        "interlineat": 1.25,
+        "animacio": "cortina",
+        "posicio_y": 0.3
+      }
+    }
+  ]
+}

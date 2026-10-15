@@ -6,6 +6,9 @@
  *
  *   const tl = TallatSubtitols.construeix(element, linies, estil, { familia });
  *   tl.seek(segons);
+ *   TallatSubtitols.titol(element, { text, inici, final }, estilTitol, { tl, familia });
+ *
+ * El títol del ganxo: cada línia del text és una línia; el que va *entre asteriscs* surt destacat.
  *
  * `linies`: [{inici, final, bloc, paraules: [{text, inici, final, clau, emoji}]}] en temps del muntatge.
  * Amb `disposicio: "apilat"`, les línies d'un mateix `bloc` s'apilen una sota l'altra (la posició
@@ -63,7 +66,27 @@
   position: absolute; left: 50%; bottom: 86%; width: 1.3em; margin-left: -0.65em; z-index: 2;
   font-size: 1.35em; line-height: 1; text-align: center; font-style: normal; font-weight: 400;
   -webkit-text-stroke: 0; text-shadow: none; -webkit-text-fill-color: initial; opacity: 0;
-}`;
+}
+.tt-capa { position: absolute; left: 0; top: 0; width: ${AMPLADA}px; pointer-events: none; visibility: hidden; }
+.tt-enfosquit { position: absolute; inset: 0; background: var(--tt-fons); opacity: 0; }
+.tt-bloc {
+  position: absolute; left: calc((100% - var(--tt-amplada)) / 2); top: var(--tt-y); width: var(--tt-amplada);
+  transform: translateY(var(--tt-ancora)); text-align: center; font-kerning: normal;
+  font-family: var(--tt-font); font-weight: var(--tt-pes); font-size: var(--tt-mida); color: var(--tt-color);
+  text-transform: var(--tt-majuscules); letter-spacing: var(--tt-espaiat); line-height: var(--tt-interlineat);
+}
+.tt-fila { margin: 0; min-height: calc(var(--tt-interlineat) * 1em); }
+.tt-fila.tt-te-clau { min-height: calc(var(--tt-interlineat) * var(--tt-clau-mida) * 1em); }
+.tt-fila.ts-al-esquerra { text-align: left; }
+.tt-fila.ts-al-dreta { text-align: right; }
+.tt-text { -webkit-text-stroke: var(--tt-gruix) var(--tt-contorn); paint-order: stroke fill; text-shadow: var(--tt-ombra); }
+.tt-clau { font-size: calc(var(--tt-clau-mida) * 1em); color: var(--tt-clau-color); line-height: 1; }
+.tt-pindola .tt-dins {
+  padding: 0.04em 0.28em 0.08em; border-radius: 0.22em; background: var(--tt-fons);
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.tt-c, .tt-cursor { display: none; }
+.tt-cursor { font-weight: 300; margin-left: 0.03em; -webkit-text-stroke: 0; }`;
 
   function posaCss(doc) {
     if (doc.getElementById("tallat-subtitols-css")) return;
@@ -217,9 +240,14 @@
       return { el, files, seq, inici: b.linies[0].inici, final: b.linies[b.linies.length - 1].final };
     });
 
-    if (!gsap) return senseAnimacions(construides, estil, destacat, apilat);
+    const amaga = Array.isArray(op.amaga) ? op.amaga : null;  // [inici, final]: el títol hi és, ells no
+    if (!gsap) return senseAnimacions(construides, estil, destacat, apilat, arrel, amaga);
 
     const tl = op.tl || gsap.timeline({ paused: true });
+    if (amaga) {
+      tl.set(arrel, { opacity: 0 }, amaga[0]);
+      tl.set(arrel, { opacity: 1 }, amaga[1]);
+    }
     let n = 0;  // línia de tot el vídeo (per alternar d'on entren)
     for (const b of construides) {
       // Els blocs i les línies es mostren i s'amaguen amb un canvi instantani.
@@ -265,9 +293,10 @@
   }
 
   // Sense GSAP: les línies apareixen senceres i la paraula que sona canvia de color.
-  function senseAnimacions(construides, estil, destacat, apilat) {
+  function senseAnimacions(construides, estil, destacat, apilat, arrel, amaga) {
     return {
       seek(t) {
+        if (amaga) arrel.style.opacity = t >= amaga[0] && t < amaga[1] ? 0 : 1;
         for (const b of construides) {
           const visible = t >= b.inici && t < b.final;
           b.el.style.visibility = visible ? "visible" : "hidden";
@@ -287,5 +316,116 @@
     };
   }
 
-  global.TallatSubtitols = { construeix, AMPLADA };
+  // --- El títol del ganxo ---------------------------------------------------------------------
+
+  // «#3 canvis\n*ser creadora*\nnivell fàcil» → [[{text, clau}], …] (una llista de trossos per línia).
+  function llegeixTitol(text) {
+    return String(text || "").split("\n").map((l) => l.trim()).filter(Boolean).map((l) =>
+      l.split("*").map((tros, k) => ({ text: tros, clau: k % 2 === 1 })).filter((x) => x.text));
+  }
+
+  function titol(arrel, t, estil, op) {
+    op = op || {};
+    const doc = arrel.ownerDocument;
+    const gsap = global.gsap;
+    posaCss(doc);
+    arrel.textContent = "";
+    arrel.className = "tt-capa";
+    const linies = t ? llegeixTitol(t.text) : [];
+    if (!linies.length) return op.tl || { seek() { return this; } };
+
+    const inici = Number(t.inici) || 0;
+    const final = Math.max(inici + 0.2, Number(t.final) || inici + (Number(estil.durada) || 3));
+    const animacio = estil.animacio || "puja";
+    const maquina = animacio === "maquina";
+    const y = estil.posicio_y ?? 0.25;
+    arrel.style.height = `${op.alcada || 1920}px`;
+    const v = {
+      "--tt-y": `${y * 100}%`, "--tt-ancora": `${-y * 100}%`,
+      "--tt-amplada": `${(estil.amplada_maxima ?? 0.86) * 100}%`,
+      "--tt-font": op.familia || "system-ui, sans-serif",
+      "--tt-pes": Number(estil.pes) || 800,
+      "--tt-mida": `${(estil.mida ?? 0.07) * AMPLADA}px`,
+      "--tt-color": estil.color, "--tt-clau-color": estil.clau_color || estil.color,
+      "--tt-clau-mida": Number(estil.clau_mida) || 1,
+      "--tt-contorn": estil.contorn, "--tt-gruix": `${(estil.gruix_contorn || 0) * 2}em`,
+      "--tt-majuscules": estil.majuscules ? "uppercase" : "none",
+      "--tt-espaiat": `${Number(estil.espaiat) || 0}em`, "--tt-interlineat": Number(estil.interlineat) || 1,
+      "--tt-ombra": estil.ombra !== false ? "0 0.05em 0.18em rgba(0, 0, 0, 0.45)" : "none",
+      "--tt-fons": estil.fons === "enfosquit" ? rgba(estil.fons_color, 0.5) : (estil.fons_color || "#000000"),
+    };
+    for (const [k, valor] of Object.entries(v)) arrel.style.setProperty(k, valor);
+
+    const enfosquit = estil.fons === "enfosquit" ? element(doc, "div", "tt-enfosquit") : null;
+    if (enfosquit) arrel.append(enfosquit);
+    const bloc = element(doc, "div", `tt-bloc${estil.fons === "pindola" ? " tt-pindola" : ""}`);
+    arrel.append(bloc);
+    let torn = 0;
+    const alinea = (trossos) => {
+      const a = ["esquerra", "dreta", "esglao"].includes(estil.alineacio) ? estil.alineacio : "centre";
+      if (a !== "esglao") return a;
+      if (trossos.every((x) => x.clau)) return "centre";
+      return torn++ % 2 ? "dreta" : "esquerra";
+    };
+    const files = linies.map((trossos) => {
+      const p = element(doc, "p", `tt-fila ts-al-${alinea(trossos)}${trossos.some((x) => x.clau) ? " tt-te-clau" : ""}`);
+      const dins = element(doc, "span", "tt-dins");
+      p.append(dins);
+      const lletres = [];
+      for (const tros of trossos) {
+        const s = element(doc, "span", `tt-text${tros.clau ? " tt-clau" : ""}`, maquina ? null : tros.text);
+        if (maquina) {
+          for (const c of tros.text) { const l = element(doc, "span", "tt-c", c); s.append(l); lletres.push(l); }
+        }
+        dins.append(s);
+      }
+      const cursor = maquina ? element(doc, "span", "tt-cursor", "|") : null;
+      if (cursor) dins.append(cursor);
+      bloc.append(p);
+      return { p, lletres, cursor };
+    });
+
+    if (!gsap) {  // sense animacions: el títol hi és sencer mentre dura
+      for (const f of files) for (const l of f.lletres) l.style.display = "inline";
+      if (enfosquit) enfosquit.style.opacity = 1;
+      return { seek(s) { arrel.style.visibility = s >= inici && s < final ? "visible" : "hidden"; return this; } };
+    }
+
+    const tl = op.tl || gsap.timeline({ paused: true });
+    tl.set(arrel, { visibility: "visible" }, inici);
+    tl.set(arrel, { visibility: "hidden" }, final);
+    if (enfosquit) {
+      tl.fromTo(enfosquit, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power1.out" }, inici);
+      tl.fromTo(enfosquit, { opacity: 1 }, { opacity: 0, duration: 0.25, immediateRender: false }, Math.max(inici, final - 0.25));
+    }
+    tl.fromTo(bloc, { opacity: 1 }, { opacity: 0, duration: 0.2, immediateRender: false }, Math.max(inici, final - 0.2));
+    files.forEach((f, k) => {
+      const t0 = inici + 0.1 * k;
+      if (animacio === "puja") tl.fromTo(f.p, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, t0);
+      else if (animacio === "pop") tl.fromTo(f.p, { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2)" }, inici + 0.08 * k);
+      else if (animacio === "fos") tl.fromTo(f.p, { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.out" }, inici + 0.12 * k);
+      else if (animacio === "cortina") {
+        tl.fromTo(f.p, { clipPath: "inset(-30% 100% -30% 0%)" }, { clipPath: "inset(-30% -5% -30% -5%)", duration: 0.5, ease: "power2.out" }, inici + 0.12 * k);
+      }
+    });
+    if (maquina) {
+      // Lletra a lletra, amb el cursor al final del que ja s'ha escrit; quan acaba, el cursor fa pampallugues.
+      const total = files.reduce((n, f) => n + f.lletres.length, 0) || 1;
+      const pas = Math.min(0.06, Math.max(0.015, ((final - inici) * 0.55) / total));
+      let ara = inici + 0.2;
+      files.forEach((f, k) => {
+        tl.set(f.cursor, { display: "inline" }, ara);
+        for (const l of f.lletres) { tl.set(l, { display: "inline" }, ara); ara += pas; }
+        if (k + 1 < files.length) { tl.set(f.cursor, { display: "none" }, ara); ara += pas * 3; }
+      });
+      const darrer = files[files.length - 1].cursor;
+      for (let s = ara + 0.3; s < final - 0.1; s += 0.5) {
+        tl.set(darrer, { opacity: 0 }, s);
+        tl.set(darrer, { opacity: 1 }, s + 0.25);
+      }
+    }
+    return tl;
+  }
+
+  global.TallatSubtitols = { construeix, titol, llegeixTitol, AMPLADA };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -34,6 +34,7 @@ Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre 
 .venv/bin/python tallat.py gust [afegeix SECCIO "TEXT" [--ajust clau=valor] | treu NUMERO]
 .venv/bin/python tallat.py kit [nou NOM [--copia-de ID] | nom ID NOM | per-defecte ID | tria ID --projecte CARPETA | exporta ID [--a CARPETA] | importa FITXER.zip | esborra ID | lletres | lletra ID [--kit KIT]]
 .venv/bin/python tallat.py destaca --projecte CARPETA [--si ID…] [--no ID…] [--automatic]
+.venv/bin/python tallat.py titol --projecte CARPETA ["LÍNIA | *DESTACAT* | LÍNIA"] [--durada S] [--treu]
 ```
 
 La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que diu la persona no es publiquen mai).
@@ -111,6 +112,12 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 - **Lletres**: les del Mac, 18 de gratuïtes (Inter, Inter Tight, Archivo, Anton, Bebas Neue, Montserrat, Poppins, Fraunces, Playfair Display, Caveat…; `tallat.py kit lletres`) que es baixen dins del kit el primer cop que es trien (`tallat.py kit lletra ID`, o a la pàgina), i les que puja la persona. Totes les lletres que no són del Mac viuen a la carpeta `fonts/` del kit i viatgen amb ell.
 - La vista prèvia i el vídeo final fan servir el mateix codi d'animació (`pagina/subtitols.js`): el que es veu a la pàgina és el que surt.
 - Es desa al **kit d'estil** del vídeo (vegeu més avall), a la secció `subtitols`. Si la persona et demana un canvi al xat, edita el `kit.json` d'aquell kit: cada opció hi té una nota que l'explica. Els estils predefinits són a `config/estils_subtitols.json`; els emojis, a `config/emojis.json` (la persona en pot afegir a `~/.tallat/emojis.json`).
+
+## Títol del ganxo
+
+- Un text dissenyat que surt els primers segons del vídeo (com els rètols dels reels: «#3 canvis / *ser creadora* / nivell fàcil»). Cada línia és una línia; el que va `*entre asteriscs*` surt destacat (més gran i del color destacat). El text és de cada vídeo (a l'estat: es desfà amb ⌘Z); l'estil, del kit (secció `titol`): lletra (null: la dels subtítols), mida, `clau_mida`, colors, contorn, ombra, `alineacio` (també `esglao`: les línies a banda i banda i les només destacades, al mig), posició, `animacio` (puja, pop, fos, cortina, `maquina` —lletra a lletra amb cursor— o cap), `fons` (cap, `enfosquit` —el vídeo s'enfosqueix— o `pindola` —una caixa darrere cada línia), `durada` i `amaga_subtitols`. Estils fets: Esglaó, Rètol, Màquina, Revista i Caixa (`config/estils_titol.json`).
+- A la pàgina: secció **Títol del ganxo** (el text i la durada) i **Estil del títol**. Al xat: `tallat.py titol`.
+- Quan facis el primer muntatge o la persona demani un títol, proposa-n'hi un i ensenya-l'hi abans de posar-lo: 2-4 línies curtes, en la seva veu, amb una sola part destacada (la idea que fa quedar-se a mirar), sense paraules buides ni promeses que el vídeo no compleix. Si el títol repeteix el que es diu, recomana «sense subtítols mentre surt el títol».
 
 ## Kits d'estil
 

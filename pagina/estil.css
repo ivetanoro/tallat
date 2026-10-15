@@ -485,6 +485,16 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
 }
 .panell-estil select:hover, select.tria-kit:hover { box-shadow: 0 0 0 1px var(--omplir-fort), 0 1px 1px rgba(0, 0, 0, 0.04); }
 .panell-estil input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.text-titol {
+  width: 100%; min-height: 64px; padding: var(--e2) var(--e3); border: 0; border-radius: var(--radi); resize: vertical;
+  font: inherit; font-size: var(--t-ui); line-height: 1.4; color: var(--text); background: var(--omplir);
+  -webkit-user-select: text; user-select: text;
+}
+.text-titol::placeholder { color: var(--text-3); }
+.camp-titol { display: flex; align-items: center; gap: var(--e3); margin-top: var(--e2); }
+.camp-titol input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.camp-titol .valor { min-width: 3em; text-align: right; font-size: var(--t-petit); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.seccio[data-seccio="titol"] .fila-estil { margin-top: var(--e3); }
 .sub-camps { display: flex; flex-direction: column; gap: var(--e2); padding-left: var(--e3); border-left: 2px solid var(--omplir); }
 .sub-camps[hidden] { display: none; }
 .sub-camps .detall { margin: 0; }
@@ -564,7 +574,9 @@ body.mode-destaca .p.clau.fora { color: var(--tret); box-shadow: none; font-weig
 @keyframes sticker-entra {
   from { transform: translate(-50%, -50%) rotate(calc(var(--rot, 8deg) - 18deg)) scale(0); opacity: 0; }
 }
-#ts-host, .estil-mostra > .ts-capa, .mostra-estil > .ts-capa { transform-origin: 0 0; }
+#ts-host, #tt-host, .estil-mostra > .ts-capa, .mostra-estil > .ts-capa, .estil-mostra > .tt-capa,
+.mostra-estil > .tt-capa { transform-origin: 0 0; }
+#tt-host { position: absolute; left: 0; top: 0; }
 
 .gran-play {
   grid-area: 1 / 1; z-index: 2;

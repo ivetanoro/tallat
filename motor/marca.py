@@ -28,6 +28,7 @@ from pathlib import Path
 CONFIG = Path(__file__).resolve().parent.parent / "config"
 PER_DEFECTE = CONFIG / "brand.example.json"
 ESTILS = CONFIG / "estils_subtitols.json"
+ESTILS_TITOL = CONFIG / "estils_titol.json"
 LLETRES = CONFIG / "lletres.json"
 USUARI = Path.home() / ".tallat" / "brand.json"  # l'estil d'abans dels kits: amb ell es fa el primer kit
 KITS = Path.home() / ".tallat" / "kits"
@@ -41,11 +42,14 @@ MIDA_MAXIMA_KIT = 60 * 1024 * 1024  # un kit importat (amb les seves fonts), com
 FORMATS_FONT = {".ttf", ".otf", ".woff", ".woff2"}
 
 # Què es pot canviar (des de la pàgina o amb les regles del teu gust), i entre quins límits.
-EDITABLES = {"subtitols", "broll", "stickers", "talls"}
+EDITABLES = {"subtitols", "titol", "broll", "stickers", "talls"}
 RANGS = {
     "subtitols": {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.05, 0.95),
                   "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60),
                   "espaiat": (-0.12, 0.3), "interlineat": (0.75, 1.6), "linies_max": (2, 8), "clau_mida": (1.0, 3.5)},
+    "titol": {"mida": (0.03, 0.2), "pes": (100, 900), "clau_mida": (1.0, 4.0), "espaiat": (-0.12, 0.3),
+              "interlineat": (0.75, 1.6), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.05, 0.95),
+              "amplada_maxima": (0.4, 0.98), "durada": (0.5, 10.0)},
     "broll": {"durada": (0.5, 4.0)},
     "stickers": {"durada": (0.5, 6.0), "mida": (0.08, 0.8), "x": (0.0, 1.0), "y": (0.0, 1.0), "rotacio": (-30, 30)},
     "talls": {"pausa_maxima": (0.1, 2.0)},
@@ -56,6 +60,8 @@ OPCIONS = {
                   "fons": {"cap", "pindola"}, "disposicio": {"linia", "apilat"},
                   "alineacio": {"centre", "esquerra", "dreta", "esglao"}},
     "stickers": {"animacio": {"pop", "cap"}},
+    "titol": {"alineacio": {"centre", "esquerra", "dreta", "esglao"},
+              "animacio": {"puja", "pop", "fos", "cortina", "maquina", "cap"}, "fons": {"cap", "enfosquit", "pindola"}},
 }
 COLORS = {"color", "color_actiu", "contorn", "fons_color", "clau_color"}
 NOM_DE_FONT = re.compile(r"^[\w][\w .-]{0,60}$")
@@ -286,6 +292,12 @@ def pausa_per_defecte() -> float:
     return float(carrega().get("talls", {}).get("pausa_maxima", 0.35))
 
 
+def estils_titol() -> list[dict]:
+    """Els estils de títol predefinits: [{id, nom, descripcio, valors}] (cada un parteix de «comu»)."""
+    dades = json.loads(ESTILS_TITOL.read_text(encoding="utf-8"))
+    return [{**e, "valors": {**dades.get("comu", {}), **e["valors"]}} for e in dades["estils"]]
+
+
 def estils() -> list[dict]:
     """Els estils de subtítols predefinits: [{id, nom, descripcio, valors}]. Cada un parteix de «comu»
     (la disposició de sempre), perquè triar-ne un no deixi a mitges el que havia posat un altre."""
@@ -308,6 +320,9 @@ def valida(seccio: str, canvis: dict) -> dict:
         if defecte is None and clau in COLORS:  # un color que també pot ser «el de sempre» (null)
             if valor is not None and not (isinstance(valor, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", valor)):
                 raise ValueError(f"{clau} ha de ser un color com #FFD60A")
+        elif defecte is None and clau == "font":  # una lletra que també pot ser «la dels subtítols» (null)
+            if valor is not None and not (isinstance(valor, str) and NOM_DE_FONT.match(valor)):
+                raise ValueError("Aquest nom de font no és vàlid")
         elif defecte is None:  # camins de fitxers (font pròpia, LUT): no es posen per aquí
             if valor is not None:
                 raise ValueError(f"{clau} no es pot canviar així")
@@ -399,13 +414,17 @@ def fonts_del_kit(kit: str | None = None, path: Path | None = None) -> list[dict
     return llista
 
 
-def fonts_de(estil: dict, kit: str | None = None, path: Path | None = None) -> list[dict]:
-    """Les lletres del kit que fa servir un estil de subtítols."""
-    return [f for f in fonts_del_kit(kit, path) if f["familia"] == estil.get("font")]
+def fonts_de(estil: dict, kit: str | None = None, path: Path | None = None, titol: dict | None = None) -> list[dict]:
+    """Les lletres del kit que fa servir un estil de subtítols (i, si se'n passa, el del títol)."""
+    families = {estil.get("font"), (titol or {}).get("font") or estil.get("font")}
+    return [f for f in fonts_del_kit(kit, path) if f["familia"] in families]
 
 
-def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = None) -> dict:
-    """Posa una lletra de la biblioteca al kit (la baixa el primer cop) i la fa servir per als subtítols."""
+def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = None, seccio: str = "subtitols") -> dict:
+    """Posa una lletra de la biblioteca al kit (la baixa el primer cop) i la fa servir per als subtítols
+    (o per al títol, amb seccio="titol"). Torna l'estil d'aquella secció."""
+    if seccio not in ("subtitols", "titol"):
+        raise ValueError("Secció desconeguda")
     biblioteca = biblioteca_lletres()
     lletra = next((l for l in biblioteca["lletres"] if l["id"] == id_lletra), None)
     if lletra is None:
@@ -434,9 +453,9 @@ def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = Non
         temporal.write_bytes(contingut)
         temporal.replace(desti)
     dades = _llegeix_json(path)
-    dades.setdefault("subtitols", {}).update({"font": nom, "font_fitxer": None})
+    dades.setdefault(seccio, {}).update({"font": nom, **({"font_fitxer": None} if seccio == "subtitols" else {})})
     _escriu(dades, path)
-    return carrega(path)["subtitols"]
+    return carrega(path)[seccio]
 
 
 def desa_font(nom: str, contingut: bytes, path: Path | None = None, kit: str | None = None) -> dict:

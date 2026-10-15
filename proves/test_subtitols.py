@@ -184,5 +184,34 @@ class TestDisseny(unittest.TestCase):
             self.assertIn("disposicio", e["valors"])
 
 
+class TestTitol(unittest.TestCase):
+    """El títol del ganxo: text del vídeo, estil del kit, dibuixat amb el mateix codi."""
+
+    def test_el_titol_es_neteja(self):
+        self.assertEqual(edicio.titol_net({"text": "  #3 canvis \r\n *ser creadora*\n", "durada": 99}),
+                         {"text": "#3 canvis\n*ser creadora*", "durada": 10.0})
+        for dolent in (None, {}, {"text": "   "}, {"text": 3}, "text"):
+            self.assertIsNone(edicio.titol_net(dolent))
+        self.assertIsNone(edicio.titol_net({"text": "hola", "durada": True})["durada"])
+
+    def test_la_composicio_porta_el_titol(self):
+        titol = {"text": "#3 canvis\n*ser creadora*", "inici": 0.0, "final": 3.0}
+        estil_titol = dict(marca.carrega(marca.PER_DEFECTE)["titol"], amaga_subtitols=True, font="Fraunces")
+        html = subtitols.composicio([], ESTIL, 5.0, titol=titol, estil_titol=estil_titol)
+        self.assertIn('TallatSubtitols.titol(document.getElementById("titol")', html)
+        self.assertIn('amaga: [0.0, 3.0]', html)  # sense subtítols mentre surt el títol
+        self.assertIn('familia: "\\"Fraunces\\", system-ui', html)  # la lletra del títol, en JSON
+        self.assertNotIn("TallatSubtitols.titol(", subtitols.composicio([], ESTIL, 5.0))
+
+    def test_estils_de_titol_valids(self):
+        for e in marca.estils_titol():
+            with self.subTest(estil=e["id"]):
+                self.assertEqual(marca.valida("titol", e["valors"]), e["valors"])
+        self.assertEqual(marca.valida("titol", {"font": None, "animacio": "maquina"}), {"font": None, "animacio": "maquina"})
+        for dolent in ({"animacio": "explota"}, {"fons": "neó"}, {"font": "x; }"}):
+            with self.assertRaises(ValueError):
+                marca.valida("titol", dolent)
+
+
 if __name__ == "__main__":
     unittest.main()

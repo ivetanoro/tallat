@@ -131,6 +131,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                               "url": "/stickers/" + st["fitxer"].name + f"?v={int(st['fitxer'].stat().st_mtime)}"}
                              for st in projecte.stickers(trams)],
                 "subtitols": projecte.linies_subtitols(trams),
+                "titol": projecte.titol(trams),
                 "paragrafs": projecte.paragrafs()}
 
     def versio_estil(projecte) -> str:
@@ -146,7 +147,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         fonts = [{"familia": f["familia"], "pes": f["pes"],
                   "url": f"/marca/fonts/{quote(f['fitxer'].name)}?v={int(f['fitxer'].stat().st_mtime)}"}
                  for f in marca.fonts_del_kit(kit) if f["fitxer"].parent == marca.ruta(kit).parent / "fonts"]
-        return {"estil_subtitols": estil, "fitxer_estil": str(marca.ruta(kit)),
+        return {"estil_subtitols": estil, "estil_titol": obert["p"].estil().get("titol", {}),
+                "estils_titol": marca.estils_titol(), "fitxer_estil": str(marca.ruta(kit)),
                 "kit": kit, "kits": marca.kits(), "fonts_kit": fonts, "versio_estil": versio_estil(obert["p"]),
                 "biblioteca_lletres": marca.biblioteca_lletres(),
                 "estils_subtitols": marca.estils()}
@@ -423,18 +425,24 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     except Exception as e:  # ffmpeg no ha pogut llegir el fitxer
                         return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
                     return self._json(instantania())
-                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil dels subtítols, al kit d'aquest vídeo
+                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil (subtítols o títol), al kit del vídeo
                     try:
                         if ruta.endswith("restableix"):
-                            marca.restableix("subtitols", kit=projecte.kit())
+                            seccio = cos.get("seccio") or "subtitols"
+                            if seccio not in ("subtitols", "titol"):
+                                raise ValueError("Secció desconeguda")
+                            marca.restableix(seccio, kit=projecte.kit())
                         else:
-                            marca.desa("subtitols", cos.get("subtitols") or {}, kit=projecte.kit())
+                            for seccio in ("subtitols", "titol"):
+                                if isinstance(cos.get(seccio), dict):
+                                    marca.desa(seccio, cos[seccio], kit=projecte.kit())
                     except ValueError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                     return self._json({**info_marca(), **instantania()})
                 if ruta == "/api/marca/lletra":  # una lletra de la biblioteca (es baixa al kit el primer cop)
                     try:
-                        marca.baixa_lletra(str(cos.get("id", "")), kit=projecte.kit())
+                        marca.baixa_lletra(str(cos.get("id", "")), kit=projecte.kit(),
+                                           seccio="titol" if cos.get("seccio") == "titol" else "subtitols")
                     except KeyError:
                         return self._json({"error": "No conec aquesta lletra"}, HTTPStatus.NOT_FOUND)
                     except ConnectionError as e:
@@ -606,6 +614,7 @@ def _estat_de_json(cos: dict) -> dict:
     for clau in ("esborrades", "propostes", "correccions", "destacades"):
         estat[clau] = {int(k): v for k, v in (estat[clau] or {}).items()}
     estat["destacades"] = {k: bool(v) for k, v in estat["destacades"].items()}
+    estat["titol"] = edicio.titol_net(estat.get("titol"))
     for clau in ("mantingudes", "pauses_mantingudes"):
         estat[clau] = [int(i) for i in (estat[clau] or [])]
     return estat
