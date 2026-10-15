@@ -1,7 +1,10 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "tallat",
-  "owner": { "name": "tallat" },
+  "owner": {
+    "name": "Ivet Anoro",
+    "url": "https://github.com/ivetanoro"
+  },
   "metadata": {
     "description": "tallat: editor de reels en català, de codi obert, que funciona dins de Claude."
   },
@@ -12,8 +15,16 @@
       "description": "Editor de reels en català, per paraules: transcriu, treu el farciment, proposa reels, hi posa subtítols, b-roll i stickers, i exporta en vertical.",
       "version": "0.5.0",
       "category": "media",
-      "keywords": ["vídeo", "reels", "català", "subtítols", "edició"],
-      "skills": ["./skills/tallat"]
+      "keywords": [
+        "vídeo",
+        "reels",
+        "català",
+        "subtítols",
+        "edició"
+      ],
+      "skills": [
+        "./skills/tallat"
+      ]
     }
   ]
 }

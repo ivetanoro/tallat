@@ -1,14 +1,31 @@
 {
   "name": "tallat",
   "version": "0.5.0",
+  "author": {
+    "name": "Ivet Anoro",
+    "url": "https://github.com/ivetanoro"
+  },
+  "homepage": "https://github.com/ivetanoro/tallat",
+  "repository": "https://github.com/ivetanoro/tallat",
   "description": "Editor de reels en català, per paraules: transcriu, treu el farciment, proposa reels, hi posa subtítols, b-roll i stickers, i exporta en vertical. Tot en aquest ordinador.",
   "license": "AGPL-3.0-or-later",
-  "keywords": ["vídeo", "reels", "català", "subtítols", "edició"],
-  "skills": ["./skills/"],
+  "keywords": [
+    "vídeo",
+    "reels",
+    "català",
+    "subtítols",
+    "edició"
+  ],
+  "skills": [
+    "./skills/"
+  ],
   "interface": {
     "displayName": "tallat",
     "shortDescription": "Edita els teus reels en català tocant les paraules",
     "category": "Media",
-    "defaultPrompt": ["Instal·la tallat.", "Edita aquest vídeo amb tallat."]
+    "defaultPrompt": [
+      "Instal·la tallat.",
+      "Edita aquest vídeo amb tallat."
+    ]
   }
 }

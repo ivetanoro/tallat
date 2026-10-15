@@ -33,7 +33,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 A l'app de Claude, a la pestanya **Code**, escriu al xat aquestes dues línies (d'una en una):
 
 ```
-/plugin marketplace add USUARI/tallat
+/plugin marketplace add ivetanoro/tallat
 /plugin install tallat@tallat
 ```
 
@@ -120,7 +120,7 @@ Les regles del projecte són a [CLAUDE.md](CLAUDE.md): tot en català, marca neu
 
 ## Llicència i agraïments
 
-tallat és de codi obert amb llicència [GNU AGPL v3](LICENSE) (o qualsevol versió posterior). Vol dir:
+tallat és de codi obert. Copyright © 2026 Ivet Anoro, amb llicència [GNU AGPL v3](LICENSE) (o qualsevol versió posterior). Vol dir:
 
 - Tothom el pot fer servir, estudiar, modificar i compartir, també per guanyar diners amb els vídeos que en surtin.
 - Qui en reparteixi una versió modificada, o l'ofereixi com a servei per internet, n'ha de publicar el codi amb aquesta mateixa llicència. Ningú no pot fer-ne una versió tancada.
