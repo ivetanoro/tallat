@@ -12,7 +12,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 - **Neteja sola.** Treu els «eh» i els «mmm», et proposa els «vale» i els «o sigui» perquè decideixis tu, i escurça els silencis llargs.
 - **Instruccions de veu mentre graves.** «Claude, torno a començar», «tallat, zoom aquí», «Claude, aquí un b-roll d'un vinil girant», «tallat, sticker d'un cor». tallat les troba a la gravació, les treu del vídeo i les aplica.
 - **Primer muntatge.** D'una gravació llarga, Claude et proposa entre un i cinc reels, cadascun amb el seu ganxo i el seu final.
-- **Subtítols animats.** Tretze estils per començar (Clàssic, Karaoke, Impacte, Neó…), amb la teva lletra i els teus colors. El que veus a la pàgina és el que surt al vídeo.
+- **Subtítols animats i dissenyats.** Disset estils per començar (Clàssic, Karaoke, Neó, Apilat, Esglaó, Rètol…): línies que s'apilen, paraules destacades enormes i d'un altre color (les tries tu o les tria tallat), alineacions de títol, 18 lletres gratuïtes o la teva, i els teus colors. El que veus a la pàgina és el que surt al vídeo.
 - **B-roll i stickers.** Fitxers teus, o generats amb la intel·ligència artificial d'imatge o vídeo que tinguis connectada a Claude.
 - **Canvies l'ordre** dels paràgrafs arrossegant-los.
 - **Kits d'estil.** Desa el teu estil (lletra, colors, animacions, durada del b-roll…) amb un nom, fes-ne uns quants per a tipus de vídeo diferents, tria'n un per a cada vídeo i passa'l a qui vulguis en un `.zip`.
@@ -68,6 +68,7 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | escoltar des d'una paraula | clic a la paraula |
    | treure o recuperar una paraula | clic dret (o control + clic) |
    | treure'n unes quantes de cop | arrossega amb el clic dret per sobre |
+   | destacar una paraula als subtítols (o deixar de destacar-la) | mode **Destaca**, a dalt, i clic a la paraula |
    | canviar l'ordre d'un paràgraf | arrossega'l per la nansa ⠿ de l'esquerra |
    | desfer / refer | ⌘Z / ⇧⌘Z |
    | reproduir o aturar | espai |

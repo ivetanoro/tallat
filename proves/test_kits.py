@@ -81,7 +81,7 @@ class TestKits(AmbKits):
         self.assertEqual(next(k["nom"] for k in marca.kits() if k["id"] == nou), "El meu estil (importat)")
         estil = marca.carrega(kit=nou)["subtitols"]
         self.assertEqual((estil["color"], estil["animacio"], estil["font"]), ("#ABCDEF", "fos", "La Meva"))
-        self.assertEqual(marca.fitxer_font(estil).read_bytes(), b"OTTO-font")
+        self.assertEqual(marca.fonts_de(estil, kit=nou)[0]["fitxer"].read_bytes(), b"OTTO-font")
 
     def test_un_kit_importat_no_pot_fer_mal(self):
         memoria = io.BytesIO()

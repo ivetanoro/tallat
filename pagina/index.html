@@ -108,6 +108,22 @@
         </div>
       </div>
       <div class="camp">
+        <span class="etiqueta" id="et-disposicio">Les línies</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-disposicio" id="e-disposicio">
+          <button role="radio" data-valor="linia" title="Cada línia substitueix l'anterior">Una cada cop</button>
+          <button role="radio" data-valor="apilat" title="Les línies d'una frase s'apilen una sota l'altra">S'apilen</button>
+        </div>
+      </div>
+      <div class="camp">
+        <span class="etiqueta" id="et-alineacio">Alineació</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-alineacio" id="e-alineacio">
+          <button role="radio" data-valor="esquerra">Esquerra</button>
+          <button role="radio" data-valor="centre">Centre</button>
+          <button role="radio" data-valor="dreta">Dreta</button>
+          <button role="radio" data-valor="esglao" title="Una línia a l'esquerra i la següent a la dreta">Esglaó</button>
+        </div>
+      </div>
+      <div class="camp">
         <span class="etiqueta" id="et-apareixen">Apareixen</span>
         <div class="segmentat ample" role="radiogroup" aria-labelledby="et-apareixen" id="e-apareixen">
           <button role="radio" data-valor="paraula">D'una en una</button>
@@ -151,10 +167,21 @@
         </div>
       </div>
       <div class="camp">
-        <span class="etiqueta">Paraules clau</span>
+        <span class="etiqueta">Paraules destacades</span>
         <button class="interruptor" id="e-clau" role="switch" aria-checked="false">
-          <span class="pista" aria-hidden="true"><span class="bola"></span></span>Més grans i de color
+          <span class="pista" aria-hidden="true"><span class="bola"></span></span>Més grans i d'un altre color
         </button>
+        <div class="sub-camps" id="camps-clau">
+          <label class="etiqueta" for="e-clau-mida">Quant més grans</label>
+          <input type="range" id="e-clau-mida" min="1" max="3.5" step="0.05">
+          <div class="fila-camps">
+            <label class="color"><input type="color" id="e-clau-color"><span>Color</span></label>
+            <button class="interruptor" id="e-clau-sola" role="switch" aria-checked="false">
+              <span class="pista" aria-hidden="true"><span class="bola"></span></span>Soles a la seva línia
+            </button>
+          </div>
+          <p class="detall">Tria quines són amb «Destaca», a dalt del text. Les que no triïs, les tria tallat.</p>
+        </div>
         <button class="interruptor" id="e-emojis" role="switch" aria-checked="false">
           <span class="pista" aria-hidden="true"><span class="bola"></span></span>Amb un emoji
         </button>
@@ -164,6 +191,7 @@
         <label class="etiqueta" for="e-font">Lletra</label>
         <select id="e-font"></select>
         <button class="enllac puja-font" id="puja-font">Puja una font teva…</button>
+        <p class="detall avis-lletra" id="avis-lletra" hidden>Les lletres gratuïtes es baixen al kit el primer cop que les tries (cal internet).</p>
         <div class="fila-camps">
           <select id="e-pes" aria-label="Gruix de la lletra">
             <option value="400">Normal</option>
@@ -178,12 +206,22 @@
         </div>
       </div>
       <div class="camp">
+        <label class="etiqueta" for="e-espaiat">Espai entre lletres</label>
+        <input type="range" id="e-espaiat" min="-0.1" max="0.2" step="0.005">
+        <div class="extrems" aria-hidden="true"><span>Juntes</span><span>Separades</span></div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="e-interlineat">Espai entre línies</label>
+        <input type="range" id="e-interlineat" min="0.8" max="1.5" step="0.01">
+        <div class="extrems" aria-hidden="true"><span>Juntes</span><span>Separades</span></div>
+      </div>
+      <div class="camp">
         <label class="etiqueta" for="e-mida">Mida</label>
         <input type="range" id="e-mida" min="0.04" max="0.12" step="0.002">
       </div>
       <div class="camp">
         <label class="etiqueta" for="e-posicio">Posició</label>
-        <input type="range" id="e-posicio" min="0.12" max="0.88" step="0.01">
+        <input type="range" id="e-posicio" min="0.05" max="0.95" step="0.01">
         <div class="extrems" aria-hidden="true"><span>Dalt</span><span>Baix</span></div>
       </div>
 
@@ -218,6 +256,7 @@
       <div class="segmentat" role="radiogroup" aria-label="Mode" id="mode">
         <button role="radio" data-mode="talla" aria-checked="true">Talla</button>
         <button role="radio" data-mode="corregeix">Corregeix el text</button>
+        <button role="radio" data-mode="destaca" title="Tria quines paraules surten destacades als subtítols">Destaca</button>
       </div>
       <div class="grup">
         <button class="icona" id="desfes" title="Desfés (⌘Z)" aria-label="Desfés" disabled>

@@ -354,7 +354,7 @@ def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
     capa = None
     if amb_capa and linies:
         mov = subtitols.renderitza(linies, projecte.estil_subtitols(), sum(b - a for a, b in trams),
-                                   projecte.carpeta, "1080", avis)  # només els subtítols: els stickers van a part
+                                   projecte.carpeta, "1080", avis, fonts=projecte.fonts_subtitols())  # només els subtítols: els stickers van a part
         capa = desti / "subtitols.mov"
         shutil.copy(mov, capa)
     (desti / f"{nom}.fcpxml").write_text(fcpxml(nom, projecte.video, pla, capa), encoding="utf-8")

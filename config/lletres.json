@@ -1,0 +1,139 @@
+{
+  "_info": "Lletres gratuïtes (de Google Fonts, amb llicència lliure OFL; Permanent Marker, Apache 2.0) que tallat baixa quan algú les tria, dins del kit. Es baixen del paquet de Fontsource (només els caràcters llatins, que inclouen el català).",
+  "versio": "5.3.0",
+  "cdn": "https://cdn.jsdelivr.net/npm",
+  "grups": {
+    "sense": "Sense serifa",
+    "condensada": "Condensades",
+    "serifa": "Amb serifa",
+    "ma": "Escrites a mà"
+  },
+  "lletres": [
+    {
+      "id": "inter",
+      "nom": "Inter",
+      "grup": "sense",
+      "variable": true
+    },
+    {
+      "id": "inter-tight",
+      "nom": "Inter Tight",
+      "grup": "sense",
+      "variable": true
+    },
+    {
+      "id": "archivo",
+      "nom": "Archivo",
+      "grup": "sense",
+      "variable": true
+    },
+    {
+      "id": "archivo-black",
+      "nom": "Archivo Black",
+      "grup": "sense",
+      "pesos": [
+        400
+      ]
+    },
+    {
+      "id": "montserrat",
+      "nom": "Montserrat",
+      "grup": "sense",
+      "variable": true
+    },
+    {
+      "id": "poppins",
+      "nom": "Poppins",
+      "grup": "sense",
+      "pesos": [
+        400,
+        600,
+        700,
+        800,
+        900
+      ]
+    },
+    {
+      "id": "dm-sans",
+      "nom": "DM Sans",
+      "grup": "sense",
+      "variable": true
+    },
+    {
+      "id": "space-grotesk",
+      "nom": "Space Grotesk",
+      "grup": "sense",
+      "variable": true
+    },
+    {
+      "id": "syne",
+      "nom": "Syne",
+      "grup": "sense",
+      "variable": true
+    },
+    {
+      "id": "fredoka",
+      "nom": "Fredoka",
+      "grup": "sense",
+      "variable": true
+    },
+    {
+      "id": "anton",
+      "nom": "Anton",
+      "grup": "condensada",
+      "pesos": [
+        400
+      ]
+    },
+    {
+      "id": "bebas-neue",
+      "nom": "Bebas Neue",
+      "grup": "condensada",
+      "pesos": [
+        400
+      ]
+    },
+    {
+      "id": "fraunces",
+      "nom": "Fraunces",
+      "grup": "serifa",
+      "variable": true
+    },
+    {
+      "id": "playfair-display",
+      "nom": "Playfair Display",
+      "grup": "serifa",
+      "variable": true
+    },
+    {
+      "id": "dm-serif-display",
+      "nom": "DM Serif Display",
+      "grup": "serifa",
+      "pesos": [
+        400
+      ]
+    },
+    {
+      "id": "instrument-serif",
+      "nom": "Instrument Serif",
+      "grup": "serifa",
+      "pesos": [
+        400
+      ]
+    },
+    {
+      "id": "caveat",
+      "nom": "Caveat",
+      "grup": "ma",
+      "variable": true
+    },
+    {
+      "id": "permanent-marker",
+      "nom": "Permanent Marker",
+      "grup": "ma",
+      "pesos": [
+        400
+      ]
+    }
+  ]
+}

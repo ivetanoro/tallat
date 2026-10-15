@@ -32,7 +32,7 @@ PAUSA_PARAGRAF = 0.7  # segons de silenci que també obren un paràgraf nou
 def estat_buit(pausa_maxima: float | None = PAUSA_MAXIMA) -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": pausa_maxima, "pauses_mantingudes": [],
-            "subtitols": True, "ordre": None, "zooms": []}
+            "subtitols": True, "ordre": None, "zooms": [], "destacades": {}}
 
 
 def llegeix_estat(path: Path) -> dict:
@@ -40,7 +40,7 @@ def llegeix_estat(path: Path) -> dict:
     if path.exists():
         estat.update(json.loads(path.read_text(encoding="utf-8")))
     # Les claus JSON són text; internament fem servir enters.
-    for clau in ("esborrades", "propostes", "correccions"):
+    for clau in ("esborrades", "propostes", "correccions", "destacades"):
         estat[clau] = {int(k): v for k, v in estat[clau].items()}
     estat["mantingudes"] = [int(i) for i in estat["mantingudes"]]
     estat["pauses_mantingudes"] = [int(i) for i in estat["pauses_mantingudes"]]
@@ -49,7 +49,7 @@ def llegeix_estat(path: Path) -> dict:
 
 def desa_estat(estat: dict, path: Path) -> None:
     sortida = dict(estat)
-    for clau in ("esborrades", "propostes", "correccions"):
+    for clau in ("esborrades", "propostes", "correccions", "destacades"):
         sortida[clau] = {str(k): v for k, v in sorted(estat[clau].items())}
     sortida["mantingudes"] = sorted(set(estat["mantingudes"]))
     sortida["pauses_mantingudes"] = sorted(set(estat["pauses_mantingudes"]))
@@ -84,6 +84,8 @@ def aplica(paraules: list[dict], estat: dict) -> list[dict]:
             q["proposta"] = estat["propostes"][p["id"]]
         if p["id"] in estat["correccions"]:
             q["correccio"] = estat["correccions"][p["id"]]
+        if p["id"] in estat.get("destacades", {}):  # destacada als subtítols (true) o no (false), triat a mà
+            q["destacada"] = bool(estat["destacades"][p["id"]])
         resultat.append(q)
     return resultat
 

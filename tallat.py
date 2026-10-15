@@ -306,6 +306,32 @@ def ordre_gust(args) -> None:
         sys.exit(str(e))
 
 
+def ordre_destaca(args) -> None:
+    projecte = _carrega(args)
+    destacades = projecte.estat.setdefault("destacades", {})
+    if args.automatic:
+        destacades.clear()
+    total = len(projecte.dades["paraules"])
+    for ids, valor in ((args.si or [], True), (args.no or [], False)):
+        for id_ in ids:
+            if not 0 <= id_ < total:
+                sys.exit(f"No hi ha cap paraula amb el número {id_} (n'hi ha de 0 a {total - 1}).")
+            destacades[id_] = valor
+    if args.si or args.no or args.automatic:
+        projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1  # la pàgina oberta s'hi posa al dia
+        projecte.desa()
+    claus = [(w["id"], w["text"]) for l in projecte.linies_subtitols() for w in l["paraules"] if w["clau"]]
+    print(f"Paraules destacades als subtítols ({len(claus)}):")
+    print("  " + "  ".join(f"{i}:{text}" for i, text in claus))
+    triades = sorted(destacades.items())
+    if triades:
+        print("Triades a mà (la resta les tria tallat): "
+              + ", ".join(f"{i} {'sí' if v else 'no'}" for i, v in triades))
+    if not projecte.estil_subtitols().get("clau_grans"):
+        print("Avís: el kit d'aquest vídeo no fa més grans les paraules destacades. "
+              "S'activa a la pàgina: Subtítols → Estil → Paraules destacades.")
+
+
 def ordre_kit(args) -> None:
     try:
         if args.accio == "nou":
@@ -332,13 +358,23 @@ def ordre_kit(args) -> None:
         elif args.accio == "esborra":
             desti = marca.esborra_kit(args.kit)
             print(f"Kit tret de la llista. Si el vols recuperar, és a {desti}.")
+        elif args.accio == "lletres":
+            biblioteca = marca.biblioteca_lletres()
+            for grup, nom in biblioteca["grups"].items():
+                print(f"{nom}: " + ", ".join(f"{l['nom']} ({l['id']})" for l in biblioteca["lletres"] if l["grup"] == grup))
+            print("\nPer posar-ne una a un kit: tallat.py kit lletra ID [--kit KIT]. Es baixa el primer cop.")
+        elif args.accio == "lletra":
+            if not any(l["id"] == args.id for l in marca.biblioteca_lletres()["lletres"]):
+                sys.exit(f"No conec la lletra «{args.id}». Mira quines hi ha amb: tallat.py kit lletres")
+            estil = marca.baixa_lletra(args.id, kit=args.kit)
+            print(f"Els subtítols del kit {marca.resol(args.kit)} fan servir «{estil['font']}».")
         else:
             for k in marca.kits():
                 print(f"{'★' if k['per_defecte'] else ' '} {k['id']}: {k['nom']}")
             print(f"\n★ = el kit per defecte (el dels vídeos nous). Els kits són a {marca.KITS}.")
     except KeyError as e:
         sys.exit(f"No trobo el kit «{e.args[0]}». Mira quins n'hi ha amb: tallat.py kit")
-    except (ValueError, OSError) as e:
+    except (ValueError, OSError) as e:  # ConnectionError (no s'ha pogut baixar una lletra) és un OSError
         sys.exit(str(e))
 
 
@@ -449,7 +485,18 @@ def main() -> None:
     kim.add_argument("fitxer")
     kb = ks.add_parser("esborra", help="Treu un kit de la llista (es guarda a ~/.tallat/kits-esborrats)")
     kb.add_argument("kit")
+    ks.add_parser("lletres", help="Les lletres gratuïtes que es poden posar a un kit")
+    kl = ks.add_parser("lletra", help="Posa una lletra gratuïta als subtítols d'un kit (la baixa el primer cop)")
+    kl.add_argument("id", help="L'id de la lletra (tallat.py kit lletres)")
+    kl.add_argument("--kit", help="El kit (si no, el per defecte)")
     ki.set_defaults(func=ordre_kit)
+
+    de = sub.add_parser("destaca", help="Les paraules destacades dels subtítols (més grans i d'un altre color)")
+    de.add_argument("--projecte", required=True)
+    de.add_argument("--si", type=int, nargs="+", metavar="ID", help="Paraules que han de sortir destacades")
+    de.add_argument("--no", type=int, nargs="+", metavar="ID", help="Paraules que no han de sortir destacades")
+    de.add_argument("--automatic", action="store_true", help="Oblida les triades a mà: les tria totes tallat")
+    de.set_defaults(func=ordre_destaca)
 
     args = p.parse_args()
     args.func(args)

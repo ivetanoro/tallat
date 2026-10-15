@@ -75,10 +75,15 @@ class TestGrups(unittest.TestCase):
         self.assertNotIn("</script><b>", html)
 
     def test_nom_de_font_amb_espais(self):
-        self.assertEqual(subtitols.familia_css(dict(ESTIL, font="Avenir Next"), False), '"Avenir Next", sans-serif')
-        self.assertEqual(subtitols.familia_css(dict(ESTIL, font="system-ui"), False), "system-ui, sans-serif")
-        self.assertNotIn("}", subtitols.familia_css(dict(ESTIL, font='x"; } body {'), False))
-        self.assertIn("SubtitolsMarca", subtitols.familia_css(ESTIL, True))
+        self.assertEqual(subtitols.familia_css(dict(ESTIL, font="Avenir Next")), '"Avenir Next", system-ui, sans-serif')
+        self.assertEqual(subtitols.familia_css(dict(ESTIL, font="system-ui")), "system-ui, sans-serif")
+        self.assertNotIn("}", subtitols.familia_css(dict(ESTIL, font='x"; } body {')))
+        # Les lletres del kit es declaren amb @font-face, amb el seu nom i el seu gruix.
+        html = subtitols.composicio([], dict(ESTIL, font="Poppins"), 1.0,
+                                    fonts=[{"familia": "Poppins", "pes": "700", "src": "font0.woff2"},
+                                           {"familia": "Inter", "pes": "100 1000", "src": "font1.woff2"}])
+        self.assertIn("""@font-face { font-family: "Poppins"; src: url('font0.woff2'); font-weight: 700;""", html)
+        self.assertIn("""font-family: "Inter"; src: url('font1.woff2'); font-weight: 100 1000;""", html)
 
 
 class TestParaulesClau(unittest.TestCase):
@@ -106,16 +111,77 @@ class TestMemoriaDelRender(unittest.TestCase):
             dibuixos.append(sortida)
             return mock.Mock(returncode=0, stdout="", stderr="")
         with tempfile.TemporaryDirectory() as d, mock.patch.object(subtitols.subprocess, "run", hyperframes):
-            font = Path(d) / "la-meva.ttf"
+            font = Path(d) / "La Meva.ttf"
             font.write_bytes(b"lletra antiga")
-            estil = {**ESTIL, "font_fitxer": str(font)}
+            estil = {**ESTIL, "font": "La Meva"}
+            fonts = [{"familia": "La Meva", "pes": "100 1000", "fitxer": font}]
             linies = [{"inici": 0.0, "final": 1.0, "paraules": [{"text": "hola", "inici": 0.0, "final": 1.0}]}]
-            primer = subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany")
-            self.assertEqual(subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany"), primer)
+            primer = subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany", fonts=fonts)
+            self.assertEqual(subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany", fonts=fonts), primer)
             self.assertEqual(len(dibuixos), 1)
             font.write_bytes(b"lletra nova")
-            self.assertNotEqual(subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany"), primer)
+            self.assertNotEqual(subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany", fonts=fonts), primer)
             self.assertEqual(len(dibuixos), 2)
+
+
+def frase(text: str, pas: float = 0.3):
+    return paraules(*[(w, i * pas, i * pas + pas - 0.05) for i, w in enumerate(text.split())])
+
+
+class TestDisseny(unittest.TestCase):
+    """Les peces dels estils dissenyats: paraules destacades soles, línies apilades i triades a mà."""
+
+    def test_les_destacades_van_soles_a_la_seva_linia(self):
+        estil = dict(ESTIL, clau_grans=True, clau_sola=True, paraules_per_linia=3)
+        linies = subtitols.grups(frase("is as ambitious or entrepreneurial"), [(0, 5)], estil)
+        self.assertEqual([[w["text"] for w in l["paraules"]] for l in linies],
+                         [["is", "as"], ["ambitious"], ["or"], ["entrepreneurial"]])
+        self.assertEqual([l["paraules"][0]["clau"] for l in linies], [False, True, False, True])
+
+    def test_apilades_es_queden_fins_al_final_de_la_frase(self):
+        estil = dict(ESTIL, disposicio="apilat", paraules_per_linia=2, linies_max=4)
+        p = frase("una dues tres quatre cinc.") + [
+            {"id": 5, "text": "sis", "inici": 3.0, "final": 3.2, "frase": 1, "conservada": True}]
+        linies = subtitols.grups(p, [(0, 4)], estil)
+        self.assertEqual([[w["text"] for w in l["paraules"]] for l in linies],
+                         [["una", "dues"], ["tres", "quatre"], ["cinc"], ["sis"]])
+        self.assertEqual([l["bloc"] for l in linies], [0, 0, 0, 1])  # la frase nova, en un bloc nou
+        self.assertEqual(len({l["final"] for l in linies[:3]}), 1)  # les tres es queden fins al final del bloc
+        self.assertLess(linies[0]["inici"], linies[1]["inici"])
+
+    def test_un_bloc_no_passa_del_maxim_de_linies(self):
+        estil = dict(ESTIL, disposicio="apilat", paraules_per_linia=1, linies_max=3)
+        linies = subtitols.grups(frase("a1 b2 c3 d4 e5"), [(0, 5)], estil)
+        self.assertEqual([l["bloc"] for l in linies], [0, 0, 0, 1, 1])
+
+    def test_sense_apilar_cada_linia_acaba_quan_comenca_la_seguent(self):
+        linies = subtitols.grups(frase("una dues tres quatre"), [(0, 5)], dict(ESTIL, paraules_per_linia=2))
+        self.assertEqual(linies[0]["final"], linies[1]["inici"])
+
+    def test_les_triades_a_ma_manen(self):
+        p = frase("tinc una idea genial")
+        p[3]["destacada"] = True   # «genial», sí
+        p[2]["destacada"] = False  # «idea», no (tallat l'hauria triat)
+        linies = subtitols.grups(p, [(0, 5)], dict(ESTIL, clau_grans=True, paraules_per_linia=4, lletres_per_linia=30))
+        self.assertEqual([(w["text"], w["clau"]) for w in linies[0]["paraules"]],
+                         [("tinc", False), ("una", False), ("idea", False), ("genial", True)])
+        self.assertEqual([w["id"] for w in linies[0]["paraules"]], [0, 1, 2, 3])
+
+    def test_l_estat_guarda_les_destacades(self):
+        estat = edicio.estat_buit()
+        estat["destacades"] = {3: True, 1: False}
+        with tempfile.TemporaryDirectory() as d:
+            edicio.desa_estat(estat, Path(d) / "edicio.json")
+            llegit = edicio.llegeix_estat(Path(d) / "edicio.json")
+        self.assertEqual(llegit["destacades"], {3: True, 1: False})
+        aplicades = edicio.aplica(frase("a b c d"), llegit)
+        self.assertEqual([x.get("destacada") for x in aplicades], [None, False, None, True])
+
+    def test_estils_nous_valids(self):
+        ids = {e["id"] for e in marca.estils()}
+        self.assertTrue({"apilat", "esglao", "titular", "retol"} <= ids)
+        for e in marca.estils():  # tots porten la base comuna
+            self.assertIn("disposicio", e["valors"])
 
 
 if __name__ == "__main__":

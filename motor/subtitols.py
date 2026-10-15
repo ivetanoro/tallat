@@ -90,13 +90,20 @@ def emoji_de(paraula: str) -> str | None:
 
 
 def _marca_claus(linia: list[dict]) -> None:
-    """Paraules clau d'una línia: els números i la paraula llarga més important (en sol quedar una)."""
+    """Paraules clau d'una línia: els números i la paraula llarga més important (en sol quedar una).
+
+    Les que s'han triat a mà (o les ha triat Claude) manen: «destacada» true sempre ho és, false mai.
+    Si la línia ja en té alguna de triada a mà, no se n'hi afegeix cap més."""
+    triades = any(m.get("destacada") is True for m in linia)
     candidates = [(len(_pla(m["text"])), k) for k, m in enumerate(linia)
-                  if _pla(m["text"]) not in PARAULES_PONT and len(_pla(m["text"])) >= 4]
-    millor = max(candidates)[1] if candidates else None
+                  if m.get("destacada") is None and _pla(m["text"]) not in PARAULES_PONT and len(_pla(m["text"])) >= 4]
+    millor = max(candidates)[1] if candidates and not triades else None
     emoji_posat = False
     for k, m in enumerate(linia):
-        m["clau"] = k == millor or bool(re.search(r"\d", m["text"]))
+        if m.get("destacada") is not None:
+            m["clau"] = m["destacada"]
+        else:
+            m["clau"] = k == millor or (not triades and bool(re.search(r"\d", m["text"])))
         m["emoji"] = None
         if not emoji_posat:  # com a molt un emoji per línia, perquè no n'hi hagi massa
             m["emoji"] = emoji_de(m["text"])
@@ -137,8 +144,8 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
         temps = al_muntatge(p["inici"], p["final"])
         text = _neteja_text(p.get("correccio", p["text"]), estil.get("puntuacio", False))
         if temps and text:
-            mots.append({"text": text, "inici": round(temps[0], 3), "final": round(max(temps), 3),
-                         "fi_frase": bool(FI_DE_FRASE.search(p["text"]))})
+            mots.append({"id": p["id"], "text": text, "inici": round(temps[0], 3), "final": round(max(temps), 3),
+                         "fi_frase": bool(FI_DE_FRASE.search(p["text"])), "destacada": p.get("destacada")})
 
     mots.sort(key=lambda m: m["inici"])  # en un reel muntat, l'ordre és el del muntatge
     maxim_p = max(1, int(estil.get("paraules_per_linia", 3)))
@@ -154,23 +161,74 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
         actual.append(m)
     if actual:
         linies.append(actual)
-
-    resultat = []
-    for i, linia in enumerate(linies):
+    for linia in linies:
         _marca_claus(linia)
-        final = linia[-1]["final"] + RETEN
-        if i + 1 < len(linies):
-            seguent = linies[i + 1][0]["inici"]
-            final = seguent if seguent - linia[-1]["final"] < ENGANXA else min(final, seguent)
-        final = min(final, acum[-1] + (trams[-1][1] - trams[-1][0]) if trams else final)
-        resultat.append({"inici": linia[0]["inici"], "final": round(final, 3),
-                         "paraules": [{k: m[k] for k in ("text", "inici", "final", "clau", "emoji")} for m in linia]})
+    if estil.get("clau_grans") and estil.get("clau_sola"):
+        linies = [tros for linia in linies for tros in _separa_claus(linia)]
+
+    # Apilades: les línies d'una frase s'acumulen (un «bloc») fins que la frase acaba, hi ha una pausa
+    # o ja no n'hi caben més; totes les del bloc es queden a la pantalla fins al final del bloc.
+    apilat = estil.get("disposicio") == "apilat"
+    maxim_b = max(1, int(estil.get("linies_max", 4)))
+    blocs = []
+    for linia in linies:
+        if (apilat and blocs and len(blocs[-1]) < maxim_b and not blocs[-1][-1][-1]["fi_frase"]
+                and linia[0]["inici"] - blocs[-1][-1][-1]["final"] <= PAUSA_LINIA):
+            blocs[-1].append(linia)
+        else:
+            blocs.append([linia])
+
+    final_video = acum[-1] + (trams[-1][1] - trams[-1][0]) if trams else None
+    resultat = []
+    for b, bloc in enumerate(blocs):
+        darrera = bloc[-1]
+        final = darrera[-1]["final"] + RETEN
+        if b + 1 < len(blocs):
+            seguent = blocs[b + 1][0][0]["inici"]
+            final = seguent if seguent - darrera[-1]["final"] < ENGANXA else min(final, seguent)
+        if final_video is not None:
+            final = min(final, final_video)
+        for i, linia in enumerate(bloc):
+            # Sense apilar, cada línia s'acaba quan comença la següent (com sempre).
+            fi = final if apilat or i + 1 == len(bloc) else bloc[i + 1][0]["inici"]
+            resultat.append({"inici": linia[0]["inici"], "final": round(fi, 3), "bloc": b,
+                             "paraules": [{k: m[k] for k in ("id", "text", "inici", "final", "clau", "emoji")}
+                                          for m in linia]})
     return resultat
 
 
-def familia_css(estil: dict, font_propia: bool) -> str:
-    """La família de lletra dels subtítols, a punt per al CSS."""
-    return "'SubtitolsMarca', system-ui, sans-serif" if font_propia else f"{_familia(estil['font'])}, sans-serif"
+def _separa_claus(linia: list[dict]) -> list[list[dict]]:
+    """Cada paraula destacada, sola a la seva línia: «is as ambitious or» → «is as» | «ambitious» | «or»."""
+    trossos, actual = [], []
+    for m in linia:
+        if m["clau"]:
+            if actual:
+                trossos.append(actual)
+            trossos.append([m])
+            actual = []
+        else:
+            actual.append(m)
+    if actual:
+        trossos.append(actual)
+    for tros in trossos[:-1]:  # el final de frase només és a l'últim tros
+        tros[-1] = dict(tros[-1], fi_frase=False)
+    return trossos
+
+
+def familia_css(estil: dict) -> str:
+    """La família de lletra dels subtítols, a punt per al CSS (les del kit es declaren amb @font-face)."""
+    familia = _familia(estil.get("font") or "system-ui")
+    return f"{familia}, sans-serif" if familia == "system-ui" else f"{familia}, system-ui, sans-serif"
+
+
+def _font_face(fonts: list[dict]) -> str:
+    """Les @font-face de les lletres del kit: [{familia, pes, src}] (src, el fitxer dins la composició)."""
+    regles = []
+    for f in fonts:
+        pes = str(f["pes"]) if re.fullmatch(r"\d+( \d+)?", str(f["pes"])) else "100 1000"
+        regles.append(f"@font-face {{ font-family: {_familia(f['familia'])}; src: url('{html.escape(f['src'])}'); "
+                      f"font-weight: {pes}; font-display: block; }}")
+    return "\n      ".join(regles)
 
 
 def _js(dades) -> str:
@@ -178,7 +236,7 @@ def _js(dades) -> str:
     return json.dumps(dades, ensure_ascii=False).replace("</", "<\\/")
 
 
-def composicio(linies: list[dict], estil: dict, durada: float, font_local: str | None = None,
+def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict] | None = None,
                stickers: list[dict] | None = None, estil_stickers: dict | None = None,
                escala: float = 1.0) -> str:
     """HTML d'una composició HyperFrames transparent amb els subtítols i els stickers.
@@ -188,8 +246,7 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
     `stickers`: [{"src": nom del fitxer dins la composició, "inici": s, "durada": s}]."""
     es = estil_stickers or {}
     amplada, alcada = round(AMPLADA * escala), round(ALCADA * escala)
-    font_face = (f"@font-face {{ font-family: 'SubtitolsMarca'; src: url('{font_local}'); font-display: block; }}"
-                 if font_local else "")
+    font_face = _font_face(fonts or [])
 
     blocs, passos = [], []
     for k, st in enumerate(stickers or []):
@@ -240,7 +297,7 @@ def composicio(linies: list[dict], estil: dict, durada: float, font_local: str |
     <script>
       const tl = gsap.timeline({{ paused: true }});
       TallatSubtitols.construeix(document.getElementById("subtitols"), {_js(linies)}, {_js(estil)},
-                                 {{ tl, familia: {_js(familia_css(estil, bool(font_local)))} }});
+                                 {{ tl, familia: {_js(familia_css(estil))} }});
 {chr(10).join(passos)}
       window.__timelines["subtitols"] = tl;
     </script>
@@ -256,17 +313,20 @@ def _empremta(fitxer) -> str | None:
 
 
 def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qualitat: str,
-               avis=None, stickers: list[dict] | None = None, estil_stickers: dict | None = None) -> Path:
+               avis=None, stickers: list[dict] | None = None, estil_stickers: dict | None = None,
+               fonts: list[dict] | None = None) -> Path:
     """Dibuixa subtítols i stickers amb HyperFrames en un .mov transparent (reaprofita el darrer si no ha canviat).
 
-    `stickers`: [{"fitxer": Path, "inici": s, "durada": s}]."""
+    `stickers`: [{"fitxer": Path, "inici": s, "durada": s}].
+    `fonts`: les lletres del kit que fan servir els subtítols, [{familia, pes, fitxer}] (marca.fonts_de)."""
     # L'esborrany es dibuixa a mitja mida (unes 3-4 vegades més ràpid); l'export final, a 1080 o en 4K.
     escala = {"4k": "4k", "esborrany": "540"}.get(qualitat, "1080")
-    font = estil.get("font_fitxer")
+    fonts = fonts or []
     empremta_st = [[str(st["fitxer"]), _empremta(st["fitxer"]), st["inici"], st["durada"]] for st in stickers or []]
     codi = _empremta(CODI_ANIMACIO)  # si canvien les animacions, cal tornar a dibuixar
+    empremta_fonts = [[f["familia"], f["pes"], _empremta(f["fitxer"])] for f in fonts]
     clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers, codi,
-                       _empremta(font) if font else None], sort_keys=True)
+                       empremta_fonts], sort_keys=True)
     nom = hashlib.sha1(clau.encode()).hexdigest()[:12]
     base = carpeta / "subtitols"
     sortida = base / f"subtitols_{escala}_{nom}.mov"
@@ -275,20 +335,18 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
 
     projecte = base / nom
     projecte.mkdir(parents=True, exist_ok=True)
-    font_local = None
-    if font:
-        origen = Path(font).expanduser()
-        if not origen.exists():
-            raise FileNotFoundError(f"No trobo la font dels subtítols: {origen}")
-        font_local = "font" + origen.suffix.lower()
-        shutil.copy(origen, projecte / font_local)
+    fonts_locals = []
+    for k, f in enumerate(fonts):
+        src = f"font{k}{Path(f['fitxer']).suffix.lower()}"
+        shutil.copy(f["fitxer"], projecte / src)
+        fonts_locals.append({"familia": f["familia"], "pes": f["pes"], "src": src})
     shutil.copy(CODI_ANIMACIO, projecte / "subtitols.js")
     locals_st = []
     for k, st in enumerate(stickers or []):
         nom = f"sticker{k}{Path(st['fitxer']).suffix.lower()}"
         shutil.copy(st["fitxer"], projecte / nom)
         locals_st.append({"src": nom, "inici": st["inici"], "durada": st["durada"]})
-    (projecte / "index.html").write_text(composicio(linies, estil, durada, font_local, locals_st, estil_stickers,
+    (projecte / "index.html").write_text(composicio(linies, estil, durada, fonts_locals, locals_st, estil_stickers,
                                                     escala=0.5 if escala == "540" else 1.0), encoding="utf-8")
 
     temporal = sortida.with_suffix(".tmp.mov")

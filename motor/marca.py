@@ -20,12 +20,15 @@ import re
 import shutil
 import time
 import unicodedata
+import urllib.error
+import urllib.request
 import zipfile
 from pathlib import Path
 
 CONFIG = Path(__file__).resolve().parent.parent / "config"
 PER_DEFECTE = CONFIG / "brand.example.json"
 ESTILS = CONFIG / "estils_subtitols.json"
+LLETRES = CONFIG / "lletres.json"
 USUARI = Path.home() / ".tallat" / "brand.json"  # l'estil d'abans dels kits: amb ell es fa el primer kit
 KITS = Path.home() / ".tallat" / "kits"
 FITXER_KIT = "kit.json"
@@ -40,8 +43,9 @@ FORMATS_FONT = {".ttf", ".otf", ".woff", ".woff2"}
 # Què es pot canviar (des de la pàgina o amb les regles del teu gust), i entre quins límits.
 EDITABLES = {"subtitols", "broll", "stickers", "talls"}
 RANGS = {
-    "subtitols": {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.08, 0.92),
-                  "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60)},
+    "subtitols": {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.05, 0.95),
+                  "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60),
+                  "espaiat": (-0.12, 0.3), "interlineat": (0.75, 1.6), "linies_max": (2, 8), "clau_mida": (1.0, 3.5)},
     "broll": {"durada": (0.5, 4.0)},
     "stickers": {"durada": (0.5, 6.0), "mida": (0.08, 0.8), "x": (0.0, 1.0), "y": (0.0, 1.0), "rotacio": (-30, 30)},
     "talls": {"pausa_maxima": (0.1, 2.0)},
@@ -49,10 +53,11 @@ RANGS = {
 OPCIONS = {
     "subtitols": {"animacio": {"pop", "fos", "cap", "impacte", "cortina", "pes"}, "apareixen": {"paraula", "linia"},
                   "destacat": {"color", "caixa", "karaoke", "gran"}, "aspecte": {"normal", "neo", "degradat"},
-                  "fons": {"cap", "pindola"}},
+                  "fons": {"cap", "pindola"}, "disposicio": {"linia", "apilat"},
+                  "alineacio": {"centre", "esquerra", "dreta", "esglao"}},
     "stickers": {"animacio": {"pop", "cap"}},
 }
-COLORS = {"color", "color_actiu", "contorn", "fons_color"}
+COLORS = {"color", "color_actiu", "contorn", "fons_color", "clau_color"}
 NOM_DE_FONT = re.compile(r"^[\w][\w .-]{0,60}$")
 
 
@@ -282,8 +287,11 @@ def pausa_per_defecte() -> float:
 
 
 def estils() -> list[dict]:
-    """Els estils de subtítols predefinits: [{id, nom, descripcio, valors}]."""
-    return json.loads(ESTILS.read_text(encoding="utf-8"))["estils"]
+    """Els estils de subtítols predefinits: [{id, nom, descripcio, valors}]. Cada un parteix de «comu»
+    (la disposició de sempre), perquè triar-ne un no deixi a mitges el que havia posat un altre."""
+    dades = json.loads(ESTILS.read_text(encoding="utf-8"))
+    comu = dades.get("comu", {})
+    return [{**e, "valors": {**comu, **e["valors"]}} for e in dades["estils"]]
 
 
 def valida(seccio: str, canvis: dict) -> dict:
@@ -297,7 +305,10 @@ def valida(seccio: str, canvis: dict) -> dict:
             raise ValueError(f"Opció desconeguda: {clau}")
         defecte = base[clau]
         rangs, opcions = RANGS.get(seccio, {}), OPCIONS.get(seccio, {})
-        if defecte is None:  # camins de fitxers (font pròpia, LUT): no es posen per aquí
+        if defecte is None and clau in COLORS:  # un color que també pot ser «el de sempre» (null)
+            if valor is not None and not (isinstance(valor, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", valor)):
+                raise ValueError(f"{clau} ha de ser un color com #FFD60A")
+        elif defecte is None:  # camins de fitxers (font pròpia, LUT): no es posen per aquí
             if valor is not None:
                 raise ValueError(f"{clau} no es pot canviar així")
         elif isinstance(defecte, bool):
@@ -353,6 +364,81 @@ def restableix(seccio: str, path: Path | None = None, kit: str | None = None) ->
     return carrega(path)[seccio]
 
 
+# --- Lletres ------------------------------------------------------------------------------------
+# Cada kit porta les seves lletres a fonts/. El nom del fitxer en diu la família i el gruix:
+# «Inter__var.woff2» (una lletra variable: tots els gruixos), «Poppins__700.woff2» o, les que puja
+# la persona, «La Meva Lletra.otf». Així el kit es pot passar a algú amb les lletres i tot.
+
+def biblioteca_lletres() -> dict:
+    """Les lletres gratuïtes que tallat pot baixar (config/lletres.json)."""
+    return json.loads(LLETRES.read_text(encoding="utf-8"))
+
+
+def _nom_familia(text: str) -> str:
+    return re.sub(r"[^\w .-]", "", str(text)).replace("__", "_").strip()[:60]
+
+
+def fonts_del_kit(kit: str | None = None, path: Path | None = None) -> list[dict]:
+    """Les lletres que porta un kit: [{familia, pes, fitxer}] (pes: un número o «100 1000», tots)."""
+    path = path or ruta(kit)
+    carpeta = path.parent / "fonts"
+    llista = []
+    for f in sorted(carpeta.iterdir()) if carpeta.is_dir() else []:
+        if not f.is_file() or f.suffix.lower() not in FORMATS_FONT or f.name.startswith("."):
+            continue
+        familia, _, pes = f.stem.partition("__")
+        llista.append({"familia": familia, "pes": pes if pes.isdigit() else "100 1000", "fitxer": f})
+    # Els kits d'abans: la font pròpia era un fitxer qualsevol, i la família, la de «font».
+    subtitols = _llegeix_json(path).get("subtitols")
+    if isinstance(subtitols, dict) and subtitols.get("font_fitxer") and subtitols.get("font"):
+        fitxer = Path(str(subtitols["font_fitxer"])).expanduser()
+        fitxer = fitxer if fitxer.is_absolute() else path.parent / fitxer
+        if fitxer.is_file() and fitxer.suffix.lower() in FORMATS_FONT and not any(
+                f["fitxer"] == fitxer and f["familia"] == subtitols["font"] for f in llista):
+            llista.append({"familia": str(subtitols["font"]), "pes": "100 1000", "fitxer": fitxer})
+    return llista
+
+
+def fonts_de(estil: dict, kit: str | None = None, path: Path | None = None) -> list[dict]:
+    """Les lletres del kit que fa servir un estil de subtítols."""
+    return [f for f in fonts_del_kit(kit, path) if f["familia"] == estil.get("font")]
+
+
+def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = None) -> dict:
+    """Posa una lletra de la biblioteca al kit (la baixa el primer cop) i la fa servir per als subtítols."""
+    biblioteca = biblioteca_lletres()
+    lletra = next((l for l in biblioteca["lletres"] if l["id"] == id_lletra), None)
+    if lletra is None:
+        raise KeyError(id_lletra)
+    path = path or ruta(kit)
+    carpeta = path.parent / "fonts"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    nom, id_ = lletra["nom"], lletra["id"]
+    if lletra.get("variable"):
+        fitxers = [(f"@fontsource-variable/{id_}", f"{id_}-latin-wght-normal", "var")]
+    else:
+        fitxers = [(f"@fontsource/{id_}", f"{id_}-latin-{p}-normal", str(p)) for p in lletra["pesos"]]
+    for paquet, fitxer, pes in fitxers:
+        desti = carpeta / f"{nom}__{pes}.woff2"
+        if desti.is_file():
+            continue
+        url = f"{biblioteca['cdn']}/{paquet}@{biblioteca['versio']}/files/{fitxer}.woff2"
+        try:
+            with urllib.request.urlopen(url, timeout=30) as resposta:
+                contingut = resposta.read(5_000_001)
+        except (OSError, urllib.error.URLError) as e:
+            raise ConnectionError(f"No he pogut baixar la lletra «{nom}». Comprova la connexió a internet.") from e
+        if not contingut.startswith(b"wOF2") or len(contingut) > 5_000_000:
+            raise ConnectionError(f"La lletra «{nom}» no s'ha baixat bé. Torna-ho a provar.")
+        temporal = desti.with_name(f".{desti.name}.baixant")
+        temporal.write_bytes(contingut)
+        temporal.replace(desti)
+    dades = _llegeix_json(path)
+    dades.setdefault("subtitols", {}).update({"font": nom, "font_fitxer": None})
+    _escriu(dades, path)
+    return carrega(path)["subtitols"]
+
+
 def desa_font(nom: str, contingut: bytes, path: Path | None = None, kit: str | None = None) -> dict:
     """Guarda una font pròpia dins del kit (a la seva carpeta fonts/) i la fa servir per als subtítols."""
     origen = Path(nom).name
@@ -360,12 +446,12 @@ def desa_font(nom: str, contingut: bytes, path: Path | None = None, kit: str | N
         raise ValueError("La font ha de ser un fitxer .ttf, .otf, .woff o .woff2")
     if not contingut:
         raise ValueError("El fitxer de la font és buit")
+    familia = _nom_familia(Path(origen).stem) or "La meva font"
     path = path or ruta(kit)
     (path.parent / "fonts").mkdir(parents=True, exist_ok=True)
-    (path.parent / "fonts" / origen).write_bytes(contingut)
-    familia = re.sub(r"[^\w .-]", "", Path(origen).stem)[:60] or "La meva font"
+    (path.parent / "fonts" / f"{familia}{Path(origen).suffix.lower()}").write_bytes(contingut)
     dades = _llegeix_json(path)
-    dades.setdefault("subtitols", {}).update({"font": familia, "font_fitxer": f"fonts/{origen}"})
+    dades.setdefault("subtitols", {}).update({"font": familia, "font_fitxer": None})
     _escriu(dades, path)
     return carrega(path)["subtitols"]
 

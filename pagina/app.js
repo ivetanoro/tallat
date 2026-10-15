@@ -89,7 +89,8 @@ let esborrany = null;      // {nom, trams, acum, durada} de la versió que es mi
 let liniesSub = [];        // subtítols en temps del muntatge (calculats pel servidor)
 let estilSub = null;       // estil dels subtítols (de ~/.tallat/brand.json)
 let estilsPredefinits = []; // [{id, nom, descripcio, valors}] de config/estils_subtitols.json
-let fontMarca = null;      // URL de la font pròpia dels subtítols, si n'hi ha
+let fontsKit = [];         // les lletres del kit: [{familia, pes, url}]
+let bibliotecaLletres = { lletres: [], grups: {} };  // les lletres gratuïtes que es poden baixar
 let editantEstil = false;  // el panell d'estil és obert: el reproductor en mostra una línia d'exemple
 let instruccions = [];     // instruccions de veu «Claude, …»
 let zoomsTram = [];        // quins trossos porten zoom
@@ -127,7 +128,7 @@ function sincronitza() {
       aplicaTrams(e.dades);
       refresca(true);
       marcaPausa();
-      avis("Aquesta pàgina també és oberta en una altra pestanya. He carregat els canvis més nous.", 6000);
+      avis("Hi ha hagut canvis des d'un altre lloc (una altra pestanya o Claude, des del xat). He carregat els més nous.", 6000);
     }
   }).catch((e) => { errorDesant = e; avis("No s'ha pogut desar: " + e.message); });
 }
@@ -141,6 +142,35 @@ async function canvisDesats() {
     await esperada;
   } while (esperada !== cua);
   if (errorDesant) throw new Error("No s'han pogut desar els últims canvis i el vídeo no els tindria. Torna-ho a provar.");
+}
+
+// Claude també pot fer canvis des del xat (paraules destacades, el kit…): la pàgina hi pregunta
+// sovint i, si n'hi ha i aquí no hi ha res a mig desar, els carrega.
+let versioEstil = null;
+async function miraNovetats() {
+  if (document.hidden || !estat) return;
+  const esperada = cua;
+  await esperada;
+  if (esperada !== cua || pendent) return;
+  try {
+    const n = await (await fetch("/api/novetats")).json();
+    if (n.clau_projecte !== P.clau_projecte || esperada !== cua || pendent) return;
+    if (versioEstil == null) versioEstil = n.estil;
+    if (n.estil !== versioEstil) {
+      respostaEstil(await api("/api/marca/info"));
+    }
+    if (n.revisio > estat.revisio) {
+      const r = await api("/api/instantania");
+      if (esperada !== cua || pendent) return;
+      estat = r.estat;
+      desfer.length = 0;
+      refer.length = 0;
+      aplicaTrams(r);
+      refresca(true);
+      marcaPausa();
+      avis("Claude ha fet canvis al vídeo. Ja els veus aquí.", 4000);
+    }
+  } catch { /* el servidor no respon: ja ho dirà la propera acció */ }
 }
 
 function canvia(fn, { repinta = false } = {}) {
@@ -182,7 +212,7 @@ function refes() {
 }
 
 function aplicaTrams(r) {
-  if (r.subtitols) { liniesSub = r.subtitols; previaBruta = true; }
+  if (r.subtitols) { liniesSub = r.subtitols; previaBruta = true; marcaClaus(); }
   if (r.paragrafs && P && r !== P && JSON.stringify(r.paragrafs) !== JSON.stringify(P.paragrafs)) {
     P.paragrafs = r.paragrafs;  // l'ordre dels paràgrafs ha canviat (moure'ls, desfer-ho, una altra pestanya)
     pintaText();
@@ -235,6 +265,7 @@ function pintaText() {
     cont.append(par);
   });
   actualitzaParaules();
+  marcaClaus();
 }
 
 // --- Canviar l'ordre dels paràgrafs ---------------------------------------------------------
@@ -498,6 +529,7 @@ function instalaText() {
     if (!s) { seleccioFeta = null; pintaSeleccio(); return; }
     const id = +s.dataset.id;
     if (mode === "corregeix") { e.preventDefault(); editaParaula(s, id); return; }
+    if (mode === "destaca") { e.preventDefault(); commutaDestacada(id); return; }
     e.preventDefault();
     seleccioFeta = null;
     llegeixOrdreVisual();
@@ -544,6 +576,26 @@ function instalaText() {
     deixaSeleccio();
   });
   $(".text").addEventListener("wheel", () => { darrerDesplacamentManual = performance.now(); }, { passive: true });
+}
+
+// --- Paraules destacades ------------------------------------------------------------------------
+// Als subtítols, algunes paraules surten més grans i d'un altre color. tallat en tria soles; en el
+// mode «Destaca» se'n poden afegir o treure (i Claude també ho pot fer amb «tallat.py destaca»).
+
+function marcaClaus() {
+  const claus = new Set(liniesSub.flatMap((l) => l.paraules.filter((w) => w.clau).map((w) => w.id)));
+  for (const [id, s] of spans) s.classList.toggle("clau", claus.has(id));
+}
+
+function commutaDestacada(id) {
+  if (esFora(id)) { avis("Aquesta paraula no surt al vídeo."); return; }
+  const ara = liniesSub.some((l) => l.paraules.some((w) => w.id === id && w.clau));
+  canvia((e) => { e.destacades = { ...(e.destacades || {}), [String(id)]: !ara }; });
+  spans.get(id)?.classList.toggle("clau", !ara);  // es veu de seguida; el servidor ho confirma
+  if (!estilSub?.clau_grans) {
+    canviaEstil({ clau_grans: true });
+    avis("He activat les paraules destacades a l'estil dels subtítols.", 4000);
+  }
 }
 
 function editaParaula(s, id) {
@@ -892,13 +944,12 @@ function pintaSubtitols() {
 }
 
 const escapaFont = (f) => (/^[\w-]+$/.test(f) ? f : `"${String(f).replace(/["\\]/g, "")}"`);
-const familiaCss = (e) => `${e.font_fitxer && fontMarca ? '"SubtitolsMarca"' : escapaFont(e.font || "system-ui")}, system-ui, sans-serif`;
+const familiaCss = (e) => `${escapaFont(e.font || "system-ui")}, system-ui, sans-serif`;
 
 function aplicaEstilSubtitols(e) {
   if (!e) return;
   estilSub = e;
   previaBruta = true;
-  if (e.font_fitxer && fontMarca) carregaFontMarca(fontMarca);
   pintaResumEstil();
 }
 
@@ -916,16 +967,29 @@ const destacatDe = (e) => (e.destaca === false ? "cap" : e.destacat || "color");
 // Frase d'exemple per als botons dels estils: «idea» és la paraula clau i porta emoji.
 const MOSTRA = [["Tinc", false, null], ["una", false, null], ["idea", true, "💡"], ["genial", false, null]];
 
-let fontCarregada = null;
-async function carregaFontMarca(url) {
-  if (!url || fontCarregada?.url === url) return;
-  try {
-    const font = new FontFace("SubtitolsMarca", `url(${url})`);
-    await font.load();
-    if (fontCarregada) document.fonts.delete(fontCarregada.font);
-    document.fonts.add(font);
-    fontCarregada = { url, font };
-  } catch { avis("No he pogut carregar la teva font. Torna-la a pujar o tria'n una altra.", 5000); }
+// Les lletres del kit (les pujades i les de la biblioteca) es carreguen al navegador amb el seu nom,
+// com al vídeo final. Quan n'arriba una de nova, la vista prèvia la fa servir sola.
+const fontsCarregades = new Map();  // url → FontFace
+async function carregaFontsKit(fonts) {
+  fontsKit = fonts || [];
+  const vigents = new Set(fontsKit.map((f) => f.url));
+  for (const [url, font] of fontsCarregades) {
+    if (!vigents.has(url)) { document.fonts.delete(font); fontsCarregades.delete(url); }
+  }
+  for (const f of fontsKit) {
+    if (fontsCarregades.has(f.url)) continue;
+    try {
+      const font = new FontFace(f.familia, `url(${f.url})`, { weight: String(f.pes) });
+      fontsCarregades.set(f.url, font);
+      await font.load();
+      document.fonts.add(font);
+      previaBruta = true;
+      pintaResumEstil();
+    } catch {
+      fontsCarregades.delete(f.url);
+      avis(`No he pogut carregar la lletra «${f.familia}». Torna-la a pujar o tria'n una altra.`, 5000);
+    }
+  }
 }
 
 function predefinitActual(e = estilSub) {
@@ -994,11 +1058,23 @@ function pintaPanellEstil() {
 
   const font = $("#e-font");
   font.textContent = "";
-  const opcio = (valor, text) => { const o = document.createElement("option"); o.value = valor; o.textContent = text; font.append(o); };
-  if (e.font_fitxer) opcio("__propia", `${e.font} (la teva font)`);
-  for (const [valor, text] of FONTS) opcio(valor, text);
-  if (!e.font_fitxer && !FONTS.some(([v]) => v === e.font)) opcio(e.font, e.font);
-  font.value = e.font_fitxer ? "__propia" : e.font;
+  const grup = (nom) => { const g = document.createElement("optgroup"); g.label = nom; font.append(g); return g; };
+  const opcio = (on, valor, text) => { const o = document.createElement("option"); o.value = valor; o.textContent = text; on.append(o); };
+  const alKit = new Set(fontsKit.map((f) => f.familia));
+  const deLaBiblioteca = new Set(bibliotecaLletres.lletres.map((l) => l.nom));
+  const meves = [...alKit].filter((f) => !deLaBiblioteca.has(f));
+  if (meves.length) { const g = grup("Les teves"); for (const f of meves) opcio(g, f, f); }
+  const delMac = grup("Del Mac");
+  for (const [valor, text] of FONTS) opcio(delMac, valor, text);
+  for (const [id, nom] of Object.entries(bibliotecaLletres.grups || {})) {
+    const g = grup(`${nom} · gratuïtes`);
+    for (const l of bibliotecaLletres.lletres.filter((x) => x.grup === id)) {
+      opcio(g, alKit.has(l.nom) ? l.nom : `bib:${l.id}`, alKit.has(l.nom) ? `${l.nom} ✓` : l.nom);
+    }
+  }
+  if (![...font.options].some((o) => o.value === e.font)) opcio(font, e.font, e.font);
+  font.value = e.font;
+  $("#avis-lletra").hidden = !bibliotecaLletres.lletres.length;
 
   const pes = $("#e-pes");
   if (![...pes.options].some((o) => +o.value === +e.pes)) {
@@ -1006,6 +1082,14 @@ function pintaPanellEstil() {
   }
   pes.value = String(e.pes);
   $("#e-mida").value = e.mida;
+  $("#e-espaiat").value = e.espaiat ?? 0;
+  $("#e-interlineat").value = e.interlineat ?? 1.12;
+  marcaSegmentat("e-disposicio", e.disposicio || "linia");
+  marcaSegmentat("e-alineacio", e.alineacio || "centre");
+  $("#camps-clau").hidden = !e.clau_grans;
+  $("#e-clau-mida").value = e.clau_mida ?? 1.4;
+  $("#e-clau-color").value = (e.clau_color || e.color_actiu).toLowerCase();
+  $("#e-clau-sola").setAttribute("aria-checked", String(!!e.clau_sola));
   $("#e-posicio").value = e.posicio_y;
   $("#e-gruix").value = e.gruix_contorn;
   $("#e-color").value = e.color.toLowerCase();
@@ -1041,7 +1125,9 @@ async function desaEstil() {
 
 function respostaEstil(r) {
   if (r.kits) { kits = r.kits; kitActual = r.kit; pintaKits(); }
-  fontMarca = r.font_marca;
+  if (r.versio_estil) versioEstil = r.versio_estil;
+  if (r.biblioteca_lletres) bibliotecaLletres = r.biblioteca_lletres;
+  if (r.fonts_kit) carregaFontsKit(r.fonts_kit);
   if (r.subtitols) liniesSub = r.subtitols;
   // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
   aplicaEstilSubtitols({ ...r.estil_subtitols, ...estilPendent });
@@ -1182,6 +1268,21 @@ function mostraAnimacio() {
   vesA(Math.max(0, linia.inici - 0.2));
   reprodueix();
   R.aturaA = Math.min(duradaFinal, linia.final + 0.4);
+}
+
+// Una lletra gratuïta de la biblioteca: el servidor la baixa al kit (el primer cop) i la fa servir.
+async function baixaLletra(id) {
+  const nom = bibliotecaLletres.lletres.find((l) => l.id === id)?.nom || id;
+  avis(`Baixant la lletra «${nom}»…`, 20000);
+  try {
+    clearTimeout(temporitzadorEstil);
+    await desaEstil();
+    respostaEstil(await api("/api/marca/lletra", { id }));
+    avis(`Lletra «${nom}» afegida al kit.`);
+  } catch (e) {
+    avis(e.message, 6000);
+    pintaPanellEstil();
+  }
 }
 
 async function pujaFont(fitxer) {
@@ -1336,6 +1437,8 @@ function instalaEstil() {
   segmentat("e-apareixen", (v) => ({ apareixen: v }), true);
   segmentat("e-aspecte", (v) => ({ aspecte: v }));
   segmentat("e-fons", (v) => ({ fons: v }), true);
+  segmentat("e-disposicio", (v) => ({ disposicio: v }), true);
+  segmentat("e-alineacio", (v) => ({ alineacio: v }));
   $("#e-animacio").addEventListener("change", (e) => canviaEstil({ animacio: e.target.value }, true));
   $("#e-destacat").addEventListener("change", (e) => {
     const v = e.target.value;
@@ -1347,19 +1450,25 @@ function instalaEstil() {
   interruptor("e-emojis", "emojis", true);
   interruptor("e-majuscules", "majuscules");
   interruptor("e-ombra", "ombra");
+  interruptor("e-clau-sola", "clau_sola", true);
   const lliscador = (id, clau) => $(`#${id}`).addEventListener("input", (e) => canviaEstil({ [clau]: +e.target.value }));
   lliscador("e-mida", "mida");
   lliscador("e-posicio", "posicio_y");
   lliscador("e-gruix", "gruix_contorn");
+  lliscador("e-espaiat", "espaiat");
+  lliscador("e-interlineat", "interlineat");
+  lliscador("e-clau-mida", "clau_mida");
   const color = (id, clau) => $(`#${id}`).addEventListener("input", (e) => canviaEstil({ [clau]: e.target.value.toUpperCase() }));
   color("e-color", "color");
   color("e-color-actiu", "color_actiu");
   color("e-contorn", "contorn");
   color("e-fons-color", "fons_color");
+  color("e-clau-color", "clau_color");
   $("#e-pes").addEventListener("change", (e) => canviaEstil({ pes: +e.target.value }));
   $("#e-font").addEventListener("change", (e) => {
     const v = e.target.value;
-    if (v !== "__propia") canviaEstil({ font: v, font_fitxer: null });
+    if (v.startsWith("bib:")) baixaLletra(v.slice(4));
+    else canviaEstil({ font: v, font_fitxer: null });
   });
   // El Safari només obre la finestra de triar fitxers des d'un clic en un botó (no des d'un desplegable).
   $("#puja-font").addEventListener("click", () => $("#fitxer-font").click());
@@ -1626,7 +1735,7 @@ async function treuRegla(r) {
     gust = res.gust;
     pintaGust();
     if (res.desfet) {  // l'opció que canviava ha tornat a com estava
-      fontMarca = res.font_marca;
+      if (res.fonts_kit) carregaFontsKit(res.fonts_kit);
       aplicaEstilSubtitols(res.estil_subtitols);
       aplicaTrams(res);
       pintaPanellEstil();
@@ -1967,15 +2076,21 @@ function avis(text, ms = 2600) {
 
 // --- Inici ------------------------------------------------------------------------------------
 
+const AJUDES = {
+  talla: "Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la; arrossega amb el clic dret per fer-ho amb unes quantes. Per canviar l'ordre d'un paràgraf, arrossega'l per la nansa ⠿ de l'esquerra.",
+  corregeix: "Toca una paraula per corregir com s'escriu als subtítols. <kbd>↩</kbd> per desar, <kbd>esc</kbd> per deixar-ho.",
+  destaca: "Toca una paraula per destacar-la als subtítols (més gran i d'un altre color) o per deixar de destacar-la. Les subratllades ja ho estan: les que no triïs, les tria tallat.",
+};
+
 function instalaControls() {
   for (const b of $$("#mode button")) {
     b.addEventListener("click", () => {
       mode = b.dataset.mode;
       for (const x of $$("#mode button")) x.setAttribute("aria-checked", String(x === b));
       document.body.classList.toggle("mode-corregeix", mode === "corregeix");
-      $("#ajuda").innerHTML = mode === "talla"
-        ? "Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la; arrossega amb el clic dret per fer-ho amb unes quantes. Per canviar l'ordre d'un paràgraf, arrossega'l per la nansa ⠿ de l'esquerra."
-        : "Toca una paraula per corregir com s'escriu als subtítols. <kbd>↩</kbd> per desar, <kbd>esc</kbd> per deixar-ho.";
+      document.body.classList.toggle("mode-destaca", mode === "destaca");
+      $("#ajuda").innerHTML = AJUDES[mode];
+      if (mode === "destaca") marcaClaus();
     });
   }
   for (const b of $$("#pauses button")) {
@@ -2015,6 +2130,7 @@ function instalaControls() {
   instalaSeccions();
   instalaEstil();
   instalaKits();
+  setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
     canvia((e) => { e.subtitols = e.subtitols === false; });
@@ -2121,7 +2237,9 @@ async function inicia() {
   kits = P.kits || [];
   kitActual = P.kit;
   pintaKits();
-  fontMarca = P.font_marca;
+  bibliotecaLletres = P.biblioteca_lletres || bibliotecaLletres;
+  versioEstil = P.versio_estil;
+  carregaFontsKit(P.fonts_kit || []);
   aplicaEstilSubtitols(P.estil_subtitols);
   pintaNotes();
   gust = P.gust || [];

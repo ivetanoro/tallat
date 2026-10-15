@@ -7,7 +7,10 @@
  *   const tl = TallatSubtitols.construeix(element, linies, estil, { familia });
  *   tl.seek(segons);
  *
- * `linies`: [{inici, final, paraules: [{text, inici, final, clau, emoji}]}] en temps del muntatge.
+ * `linies`: [{inici, final, bloc, paraules: [{text, inici, final, clau, emoji}]}] en temps del muntatge.
+ * Amb `disposicio: "apilat"`, les línies d'un mateix `bloc` s'apilen una sota l'altra (la posició
+ * marca on queda el bloc: a dalt creix cap avall, a baix creix cap amunt). Si no, cada línia
+ * substitueix l'anterior.
  * Fa servir GSAP si hi és; si no (sense internet), en dona una versió sense animacions.
  */
 (function (global) {
@@ -17,12 +20,22 @@
   const ESTILS_CSS = `
 .ts-capa { position: absolute; left: 0; top: 0; width: ${AMPLADA}px; pointer-events: none; }
 .ts-linia { position: absolute; inset: 0; visibility: hidden; }
-.ts-text {
-  position: absolute; left: 50%; top: var(--ts-y); width: var(--ts-amplada); margin: 0;
-  transform: translate(-50%, -50%); text-align: center; line-height: 1.12;
+.ts-tipus {
   font-family: var(--ts-font); font-weight: var(--ts-pes); font-size: var(--ts-mida);
   color: var(--ts-color); text-transform: var(--ts-majuscules); font-kerning: normal;
+  letter-spacing: var(--ts-espaiat); line-height: var(--ts-interlineat);
 }
+.ts-text {
+  position: absolute; left: 50%; top: var(--ts-y); width: var(--ts-amplada); margin: 0;
+  transform: translate(-50%, -50%); text-align: center;
+}
+.ts-bloc {
+  position: absolute; left: calc((100% - var(--ts-amplada)) / 2); top: var(--ts-y); width: var(--ts-amplada);
+  transform: translateY(var(--ts-ancora));
+}
+.ts-fila { margin: 0; text-align: center; opacity: 0; }  /* opacitat, no visibilitat: així s'amaguen amb el bloc */
+.ts-al-esquerra > .ts-text, .ts-fila.ts-al-esquerra { text-align: left; }
+.ts-al-dreta > .ts-text, .ts-fila.ts-al-dreta { text-align: right; }
 .ts-fons {
   display: inline-block; max-width: 100%; padding: 0.12em 0.5em 0.16em; border-radius: 0.6em;
   background: var(--ts-fons);
@@ -39,8 +52,8 @@
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   filter: var(--ts-ombra-filtre);
 }
-.ts-clau .ts-t { font-size: 1.4em; line-height: 1; }
-.ts-normal .ts-clau .ts-t, .ts-neo .ts-clau .ts-t { color: var(--ts-actiu); }
+.ts-clau .ts-t { font-size: calc(var(--ts-clau-mida) * 1em); line-height: 1; }
+.ts-normal .ts-clau .ts-t, .ts-neo .ts-clau .ts-t { color: var(--ts-clau-color); }
 .ts-d-caixa .ts-p, .ts-d-gran .ts-p { margin: 0 0.07em; }
 .ts-caixa-p {
   position: absolute; inset: -0.04em -0.12em -0.02em; z-index: 0; border-radius: 0.18em;
@@ -116,11 +129,24 @@
     const deCop = estil.apareixen === "linia";
     const pes = Number(estil.pes) || 800;
     const ombra = estil.ombra !== false;
+    const apilat = estil.disposicio === "apilat";
+    const alineacio = ["esquerra", "dreta", "esglao"].includes(estil.alineacio) ? estil.alineacio : "centre";
+    // Esglaó: les línies van a l'esquerra i a la dreta per torns; les que només són paraules destacades,
+    // al mig (com un títol: «#3 canvis» a l'esquerra, «SER CREADORA» al mig, «nivell fàcil» a la dreta).
+    let torn = 0;
+    const alinea = (linia) => {
+      if (alineacio !== "esglao") return alineacio;
+      if (estil.clau_grans && linia.paraules.length && linia.paraules.every((w) => w.clau)) return "centre";
+      return torn++ % 2 ? "dreta" : "esquerra";
+    };
+    const colorClau = estil.clau_color || estil.color_actiu;
+    const y = op.y ?? estil.posicio_y;
 
     arrel.className = `ts-capa ts-${aspecte} ts-d-${destacat}`;
     arrel.style.height = `${op.alcada || 1920}px`;
     const v = {
-      "--ts-y": `${(op.y ?? estil.posicio_y) * 100}%`,
+      "--ts-y": `${y * 100}%`,
+      "--ts-ancora": `${-y * 100}%`,  // un bloc apilat: a dalt creix cap avall; a baix, cap amunt
       "--ts-amplada": `${(op.amplada ?? estil.amplada_maxima) * 100}%`,
       "--ts-font": op.familia || "system-ui, sans-serif",
       "--ts-pes": pes,
@@ -130,6 +156,10 @@
       "--ts-contorn": estil.contorn,
       "--ts-gruix": `${(estil.gruix_contorn || 0) * 2}em`,
       "--ts-majuscules": estil.majuscules ? "uppercase" : "none",
+      "--ts-espaiat": `${Number(estil.espaiat) || 0}em`,
+      "--ts-interlineat": Number(estil.interlineat) || 1.12,
+      "--ts-clau-mida": Number(estil.clau_mida) || 1.4,
+      "--ts-clau-color": colorClau,
       "--ts-ombra": ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none",
       "--ts-ombra-filtre": ombra ? "drop-shadow(0 0.04em 0.1em rgba(0, 0, 0, 0.5))" : "none",
       "--ts-fons": rgba(estil.fons_color, 0.62),
@@ -137,57 +167,89 @@
     for (const [k, valor] of Object.entries(v)) arrel.style.setProperty(k, valor);
     arrel.textContent = "";
 
-    const construides = linies.map((linia) => {
-      const el = element(doc, "div", "ts-linia");
-      const text = element(doc, "p", "ts-text");
+    // Una línia: el fons (si n'hi ha) i les paraules.
+    function fila(p, linia) {
       const fons = estil.fons === "pindola" ? element(doc, "span", "ts-fons") : null;
-      const cont = fons || text;
-      if (fons) text.append(fons);
+      const cont = fons || p;
+      if (fons) p.append(fons);
       const paraules = linia.paraules.map((w, j) => {
-        const p = element(doc, "span", `ts-p${estil.clau_grans && w.clau ? " ts-clau" : ""}`);
+        const el = element(doc, "span", `ts-p${estil.clau_grans && w.clau ? " ts-clau" : ""}`);
         const caixa = destacat === "caixa" ? element(doc, "span", "ts-caixa-p") : null;
-        if (caixa) p.append(caixa);
+        if (caixa) el.append(caixa);
         const t = element(doc, "span", "ts-t", w.text);
-        p.append(t);
+        el.append(t);
         const emoji = estil.emojis && w.emoji ? element(doc, "span", "ts-emoji", w.emoji) : null;
-        if (emoji) p.append(emoji);
+        if (emoji) el.append(emoji);
         if (j) cont.append(" ");
-        cont.append(p);
-        return { w, p, t, caixa, emoji };
+        cont.append(el);
+        return { w, p: el, t, caixa, emoji };
       });
-      el.append(text);
+      return { linia, p, fons, paraules };
+    }
+
+    // Blocs: apilades, les línies d'un mateix bloc; si no, cada línia és un bloc.
+    const blocs = [];
+    for (const linia of linies) {
+      const darrer = blocs[blocs.length - 1];
+      if (apilat && darrer && linia.bloc != null && darrer.id === linia.bloc) darrer.linies.push(linia);
+      else blocs.push({ id: linia.bloc, linies: [linia] });
+    }
+    const construides = blocs.map((b, i) => {
+      const el = element(doc, "div", "ts-linia");
+      let files;
+      if (apilat) {
+        const cos = element(doc, "div", "ts-bloc ts-tipus");
+        el.append(cos);
+        torn = 0;  // cada bloc comença a l'esquerra
+        files = b.linies.map((linia) => {
+          const p = element(doc, "p", `ts-fila ts-al-${alinea(linia)}`);
+          cos.append(p);
+          return fila(p, linia);
+        });
+      } else {
+        el.classList.add(`ts-al-${alinea(b.linies[0])}`);
+        const p = element(doc, "p", "ts-text ts-tipus");
+        el.append(p);
+        files = [fila(p, b.linies[0])];
+      }
       arrel.append(el);
-      return { linia, el, text, fons, paraules };
+      const seq = files.flatMap((f) => f.paraules.map((x) => ({ ...x, fila: f })));  // en l'ordre que sonen
+      return { el, files, seq, inici: b.linies[0].inici, final: b.linies[b.linies.length - 1].final };
     });
 
-    if (!gsap) return senseAnimacions(construides, estil, destacat);
+    if (!gsap) return senseAnimacions(construides, estil, destacat, apilat);
 
     const tl = op.tl || gsap.timeline({ paused: true });
-    construides.forEach(({ linia, el, text, fons, paraules }, i) => {
-      // Les línies es mostren i s'amaguen amb un canvi instantani a l'inici i al final.
-      tl.set(el, { visibility: "visible" }, linia.inici);
-      tl.set(el, { visibility: "hidden" }, linia.final);
-      if (fons) tl.fromTo(fons, { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.16, ease: "power2.out" }, linia.inici);
-      if (deCop) {
-        entra(tl, animacio === "cortina" ? text : paraules.map((x) => x.p), linia.inici, animacio, i, pes);
-      } else {
-        paraules.forEach((x, j) => entra(tl, x.p, x.w.inici, animacio, i * 7 + j, pes));
+    let n = 0;  // línia de tot el vídeo (per alternar d'on entren)
+    for (const b of construides) {
+      // Els blocs i les línies es mostren i s'amaguen amb un canvi instantani.
+      tl.set(b.el, { visibility: "visible" }, b.inici);
+      tl.set(b.el, { visibility: "hidden" }, b.final);
+      for (const f of b.files) {
+        if (apilat) tl.set(f.p, { opacity: 1 }, f.linia.inici);
+        if (f.fons) tl.fromTo(f.fons, { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.16, ease: "power2.out" }, f.linia.inici);
+        if (deCop) {
+          entra(tl, animacio === "cortina" ? f.p : f.paraules.map((x) => x.p), f.linia.inici, animacio, n, pes);
+        } else {
+          f.paraules.forEach((x, j) => entra(tl, x.p, x.w.inici, animacio, n * 7 + j, pes));
+        }
+        n++;
       }
-      paraules.forEach((x, j) => {
+      b.seq.forEach((x, j) => {
         const ara = x.w.inici;
-        const fi = j + 1 < paraules.length ? paraules[j + 1].w.inici : linia.final;
+        const fi = j + 1 < b.seq.length ? b.seq[j + 1].w.inici : x.fila.linia.final;
+        const colorDeSempre = x.p.classList.contains("ts-clau") ? colorClau : estil.color;
         if (destacat === "color") {
           tl.set(x.t, { color: estil.color_actiu }, ara);
-          tl.set(x.t, { color: x.p.classList.contains("ts-clau") ? estil.color_actiu : estil.color }, fi);
+          tl.set(x.t, { color: colorDeSempre }, fi);
         } else if (destacat === "karaoke") {
-          tl.set(x.t, { color: estil.color_actiu }, ara);  // es queda pintada fins al final de la línia
+          tl.set(x.t, { color: estil.color_actiu }, ara);  // es queda pintada fins al final
         } else if (destacat === "caixa") {
           tl.fromTo(x.caixa, { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.12, ease: "back.out(2)" }, ara);
           tl.to(x.caixa, { opacity: 0, duration: 0.08 }, Math.max(ara + 0.12, fi));
           if (aspecte !== "degradat") {  // damunt la caixa, la lletra que es llegeixi millor
             tl.set(x.t, { color: contrast(estil.color_actiu), textShadow: "none", webkitTextStrokeWidth: 0 }, ara);
-            tl.set(x.t, { color: x.p.classList.contains("ts-clau") ? estil.color_actiu : estil.color,
-              textShadow: "", webkitTextStrokeWidth: "" }, fi);
+            tl.set(x.t, { color: colorDeSempre, textShadow: "", webkitTextStrokeWidth: "" }, fi);
           }
         } else if (destacat === "gran") {
           tl.to(x.t, { scale: 1.12, duration: 0.1, ease: "power2.out" }, ara);
@@ -198,25 +260,27 @@
             { opacity: 1, scale: 1, y: 0, rotation: 0, duration: 0.4, ease: "back.out(2.6)" }, ara);
         }
       });
-    });
+    }
     return tl;
   }
 
   // Sense GSAP: les línies apareixen senceres i la paraula que sona canvia de color.
-  function senseAnimacions(construides, estil, destacat) {
+  function senseAnimacions(construides, estil, destacat, apilat) {
     return {
       seek(t) {
-        for (const { linia, el, paraules } of construides) {
-          const visible = t >= linia.inici && t < linia.final;
-          el.style.visibility = visible ? "visible" : "hidden";
-          if (!visible || destacat === "cap") continue;
-          paraules.forEach((x, j) => {
-            const fi = j + 1 < paraules.length ? paraules[j + 1].w.inici : linia.final;
+        for (const b of construides) {
+          const visible = t >= b.inici && t < b.final;
+          b.el.style.visibility = visible ? "visible" : "hidden";
+          if (!visible) continue;
+          if (apilat) for (const f of b.files) f.p.style.opacity = t >= f.linia.inici ? 1 : 0;
+          for (const x of b.seq) if (x.emoji) x.emoji.style.opacity = 1;
+          if (destacat === "cap") continue;
+          b.seq.forEach((x, j) => {
+            const fi = j + 1 < b.seq.length ? b.seq[j + 1].w.inici : x.fila.linia.final;
             const sona = t >= x.w.inici && (destacat === "karaoke" || t < fi);
             if (x.caixa) x.caixa.style.opacity = sona ? 1 : 0;
             else x.t.style.color = sona ? estil.color_actiu : "";
           });
-          for (const x of paraules) if (x.emoji) x.emoji.style.opacity = 1;
         }
         return this;
       },

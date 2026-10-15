@@ -14,7 +14,7 @@ import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from motor import broll, edicio, editors, exporta, gust, marca, muntatge, stickers
 from motor.projecte import EXPORTS, PROXY, Projecte
@@ -26,7 +26,8 @@ MIDA_MAXIMA_PUJADA = 2 * 1024 ** 3   # un b-roll o un sticker
 # Les peticions que canvien el projecte obert: han de dir a quin projecte van (dues pestanyes).
 RUTES_DEL_PROJECTE = {"/api/estat", "/api/neteja", "/api/notes", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors",
-                      "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/kit/tria", "/api/kit/nou",
+                      "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
+                      "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa"}
 RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa"}  # el cos és el fitxer mateix
 
@@ -132,14 +133,23 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "subtitols": projecte.linies_subtitols(trams),
                 "paragrafs": projecte.paragrafs()}
 
+    def versio_estil(projecte) -> str:
+        """Canvia quan canvia el kit del vídeo o el seu fitxer (o les seves lletres)."""
+        kit = projecte.kit()
+        carpeta = marca.ruta(kit).parent
+        fitxers = [carpeta / marca.FITXER_KIT, carpeta / "fonts"]
+        return f"{kit}:" + ":".join(str(f.stat().st_mtime_ns) if f.exists() else "-" for f in fitxers)
+
     def info_marca() -> dict:
         kit = obert["p"].kit()
         estil = obert["p"].estil_subtitols()
-        font = marca.fitxer_font(estil)
+        fonts = [{"familia": f["familia"], "pes": f["pes"],
+                  "url": f"/marca/fonts/{quote(f['fitxer'].name)}?v={int(f['fitxer'].stat().st_mtime)}"}
+                 for f in marca.fonts_del_kit(kit) if f["fitxer"].parent == marca.ruta(kit).parent / "fonts"]
         return {"estil_subtitols": estil, "fitxer_estil": str(marca.ruta(kit)),
-                "kit": kit, "kits": marca.kits(),
-                "estils_subtitols": marca.estils(),
-                "font_marca": f"/marca/font?v={int(font.stat().st_mtime)}" if font else None}
+                "kit": kit, "kits": marca.kits(), "fonts_kit": fonts, "versio_estil": versio_estil(obert["p"]),
+                "biblioteca_lletres": marca.biblioteca_lletres(),
+                "estils_subtitols": marca.estils()}
 
     class Gestor(BaseHTTPRequestHandler):
         # HTTP/1.1: connexions que es mantenen obertes, com esperen els reproductors de vídeo
@@ -264,9 +274,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
             if ruta.startswith("/stickers/"):
                 return self._segur(projecte.carpeta_instruccions() / stickers.CARPETA, ruta[len("/stickers/"):])
-            if ruta == "/marca/font":  # la font pròpia dels subtítols, per a la vista prèvia
-                font = marca.fitxer_font(projecte.estil_subtitols())
-                return self._fitxer(font) if font else self.send_error(HTTPStatus.NOT_FOUND)
+            if ruta.startswith("/marca/fonts/"):  # les lletres del kit, per a la vista prèvia
+                return self._segur(marca.ruta(projecte.kit()).parent / "fonts", ruta[len("/marca/fonts/"):])
             if ruta == "/api/biblioteca":
                 return self._json({"broll": [p.name for p in broll.biblioteca()],
                                    "sticker": [p.name for p in stickers.biblioteca()]})
@@ -274,6 +283,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._segur(projecte.carpeta / EXPORTS, ruta[len("/exports/"):])
             if ruta == "/api/projecte":
                 with bloqueig:
+                    projecte.al_dia()
                     info = exporta.info_video(projecte.video) if projecte.video.exists() else {}
                     return self._json({
                         "nom": projecte.nom, "clau_projecte": clau_de(projecte),
@@ -289,6 +299,18 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         **instantania()})
             if ruta == "/api/feina":
                 return self._json({"feina": feina.info(), "exports": projecte.exports()})
+            if ruta == "/api/novetats":  # la pàgina hi pregunta sovint: hi ha canvis fets des del xat?
+                with bloqueig:
+                    projecte.al_dia()
+                    return self._json({"clau_projecte": clau_de(projecte), "revisio": projecte.estat.get("revisio", 0),
+                                       "estil": versio_estil(projecte)})
+            if ruta == "/api/instantania":
+                with bloqueig:
+                    projecte.al_dia()
+                    return self._json(instantania())
+            if ruta == "/api/marca/info":
+                with bloqueig:
+                    return self._json({**info_marca(), **instantania()})
             if ruta == "/api/kit/exporta":  # el kit en un .zip, per passar-lo a algú (es baixa)
                 kit = (parse_qs(urlparse(self.path).query).get("kit") or [""])[0]
                 try:
@@ -334,6 +356,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 projecte = obert["p"]
                 if ruta in RUTES_DEL_PROJECTE and self.headers.get("X-Tallat-Projecte") != clau_de(projecte):
                     return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
+                projecte.al_dia()  # si Claude hi ha fet canvis des del xat, es tenen en compte
                 if ruta == "/api/obre":  # canvia a un reel proposat o torna a la gravació sencera
                     arrel = obert["arrel"]
                     rid = cos.get("reel")
@@ -408,6 +431,14 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                             marca.desa("subtitols", cos.get("subtitols") or {}, kit=projecte.kit())
                     except ValueError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+                    return self._json({**info_marca(), **instantania()})
+                if ruta == "/api/marca/lletra":  # una lletra de la biblioteca (es baixa al kit el primer cop)
+                    try:
+                        marca.baixa_lletra(str(cos.get("id", "")), kit=projecte.kit())
+                    except KeyError:
+                        return self._json({"error": "No conec aquesta lletra"}, HTTPStatus.NOT_FOUND)
+                    except ConnectionError as e:
+                        return self._json({"error": str(e)}, HTTPStatus.BAD_GATEWAY)
                     return self._json({**info_marca(), **instantania()})
                 if ruta.startswith("/api/kit/"):  # triar, crear, canviar el nom, per defecte o treure un kit
                     kit = str(cos.get("kit") or "")
@@ -564,7 +595,7 @@ class _Servidor(ThreadingHTTPServer):
 
 def _estat_json(estat: dict) -> dict:
     sortida = dict(estat)
-    for clau in ("esborrades", "propostes", "correccions"):
+    for clau in ("esborrades", "propostes", "correccions", "destacades"):
         sortida[clau] = {str(k): v for k, v in estat[clau].items()}
     return sortida
 
@@ -572,8 +603,9 @@ def _estat_json(estat: dict) -> dict:
 def _estat_de_json(cos: dict) -> dict:
     estat = edicio.estat_buit()
     estat.update({k: v for k, v in cos.items() if k in estat})
-    for clau in ("esborrades", "propostes", "correccions"):
+    for clau in ("esborrades", "propostes", "correccions", "destacades"):
         estat[clau] = {int(k): v for k, v in (estat[clau] or {}).items()}
+    estat["destacades"] = {k: bool(v) for k, v in estat["destacades"].items()}
     for clau in ("mantingudes", "pauses_mantingudes"):
         estat[clau] = [int(i) for i in (estat[clau] or [])]
     return estat

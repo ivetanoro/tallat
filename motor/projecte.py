@@ -45,6 +45,7 @@ class Projecte:
         self.avisos: list[str] = []
         self.dades = json.loads((self.carpeta / TRANSCRIPCIO).read_text(encoding="utf-8"))
         self.estat = self._carrega_estat()
+        self._versio_al_disc = self._versio_estat()
 
     @property
     def nom(self) -> str:
@@ -73,6 +74,25 @@ class Projecte:
     def desa(self) -> None:
         edicio.desa_estat(self.estat, self.carpeta / EDICIO)
         (self.carpeta / REVISIO).write_text(edicio.text_revisio(self.paraules()), encoding="utf-8")
+        self._versio_al_disc = self._versio_estat()
+
+    def _versio_estat(self):
+        try:
+            return (self.carpeta / EDICIO).stat().st_mtime_ns
+        except OSError:
+            return None
+
+    def al_dia(self) -> bool:
+        """Si algú altre ha canviat edicio.json (Claude, amb una ordre, mentre la pàgina és oberta),
+        el torna a llegir. La revisió puja: la pàgina, en desar, veurà que hi ha canvis més nous."""
+        versio = self._versio_estat()
+        if versio is None or versio == self._versio_al_disc:
+            return False
+        revisio = self.estat.get("revisio", 0)
+        self.estat = self._carrega_estat()
+        self.estat["revisio"] = max(self.estat.get("revisio", 0), revisio) + 1
+        self._versio_al_disc = versio
+        return True
 
     def paraules(self) -> list[dict]:
         return edicio.aplica(self.dades["paraules"], self.estat)
@@ -143,6 +163,10 @@ class Projecte:
     def estil_subtitols(self) -> dict:
         return self.estil()["subtitols"]
 
+    def fonts_subtitols(self) -> list[dict]:
+        """Les lletres del kit que fan servir els subtítols d'aquest vídeo."""
+        return marca.fonts_de(self.estil_subtitols(), kit=self.kit())
+
     def linies_subtitols(self, trams=None) -> list[dict]:
         return subtitols.grups(self.paraules(), trams if trams is not None else self.trams(),
                                self.estil_subtitols())
@@ -153,9 +177,10 @@ class Projecte:
         enganxines = self.stickers(trams)
         if not linies and not enganxines:
             return None
-        return subtitols.renderitza(linies, self.estil_subtitols(), sum(b - a for a, b in trams),
+        estil = self.estil()
+        return subtitols.renderitza(linies, estil["subtitols"], sum(b - a for a, b in trams),
                                     self.carpeta, qualitat, avis, stickers=enganxines,
-                                    estil_stickers=self.estil().get("stickers", {}))
+                                    estil_stickers=estil.get("stickers", {}), fonts=self.fonts_subtitols())
 
     # --- Instruccions de veu ------------------------------------------------------
 
