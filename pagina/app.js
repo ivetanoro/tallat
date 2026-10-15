@@ -1035,6 +1035,112 @@ function tancaEstil() {
   $("#obre-estil").focus();
 }
 
+// --- Columnes i seccions -----------------------------------------------------------------------
+// Les columnes es poden fer més amples o més estretes (arrossegant-ne la vora) i amagar; les
+// seccions de la barra lateral es poden plegar. Aquest navegador ho recorda per a la propera vegada.
+
+const desa = (clau, valor) => { try { localStorage.setItem(clau, JSON.stringify(valor)); } catch { /* sense memòria */ } };
+const llegeix = (clau, perDefecte) => {
+  try { const v = localStorage.getItem(clau); return v == null ? perDefecte : JSON.parse(v); } catch { return perDefecte; }
+};
+const MIN_TEXT = 400;  // el text (i la barra d'eines) sempre ha de tenir com a mínim aquest espai
+const COLUMNES = {
+  barra: { variable: "--amplada-barra", min: 200, max: 480, classe: "sense-barra", boto: "#commuta-barra" },
+  reproductor: { variable: "--amplada-reproductor", min: 260, max: 760, classe: "sense-reproductor", boto: "#commuta-reproductor" },
+};
+
+function ampladaDe(nom) {
+  return parseFloat(getComputedStyle(document.body).getPropertyValue(COLUMNES[nom].variable)) || 0;
+}
+
+function posaAmplada(nom, px) {
+  const c = COLUMNES[nom];
+  const altra = nom === "barra" ? "reproductor" : "barra";
+  const lloc = window.innerWidth - (document.body.classList.contains(COLUMNES[altra].classe) ? 0 : ampladaDe(altra)) - MIN_TEXT;
+  const amplada = Math.round(limita(px, c.min, Math.max(c.min, Math.min(c.max, lloc))));
+  document.body.style.setProperty(c.variable, `${amplada}px`);
+  return amplada;
+}
+
+function mostraColumna(nom, visible) {
+  const c = COLUMNES[nom];
+  document.body.classList.toggle(c.classe, !visible);
+  $(c.boto).setAttribute("aria-pressed", String(visible));
+  $(c.boto).title = (visible ? "Amaga " : "Mostra ") +
+    (nom === "barra" ? "la columna de l'esquerra (⌃⌘S)" : "el vídeo (⌥⌘V)");
+  desa(`tallat.amaga.${nom}`, !visible);
+}
+
+function instalaColumnes() {
+  for (const [nom, c] of Object.entries(COLUMNES)) {
+    const amplada = llegeix(`tallat.amplada.${nom}`, null);
+    if (amplada) posaAmplada(nom, amplada);
+    mostraColumna(nom, !llegeix(`tallat.amaga.${nom}`, false));
+    $(c.boto).addEventListener("click", () => mostraColumna(nom, document.body.classList.contains(c.classe)));
+
+    const vora = $(`#divisor-${nom}`);
+    const deixa = () => {
+      vora.classList.remove("arrossegant");
+      document.body.classList.remove("redimensionant");
+      desa(`tallat.amplada.${nom}`, ampladaDe(nom));
+    };
+    vora.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      vora.setPointerCapture(e.pointerId);
+      vora.classList.add("arrossegant");
+      document.body.classList.add("redimensionant");
+    });
+    vora.addEventListener("pointermove", (e) => {
+      if (!vora.classList.contains("arrossegant")) return;
+      posaAmplada(nom, nom === "barra" ? e.clientX : window.innerWidth - e.clientX);
+    });
+    vora.addEventListener("pointerup", deixa);
+    vora.addEventListener("pointercancel", deixa);
+    vora.addEventListener("dblclick", () => {  // torna a la mida normal
+      document.body.style.removeProperty(c.variable);
+      try { localStorage.removeItem(`tallat.amplada.${nom}`); } catch { /* sense memòria */ }
+    });
+    vora.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      const mes = (e.key === "ArrowRight") === (nom === "barra") ? 16 : -16;
+      desa(`tallat.amplada.${nom}`, posaAmplada(nom, ampladaDe(nom) + mes));
+    });
+  }
+  // Si la finestra es fa més petita, que el text no quedi espremut.
+  window.addEventListener("resize", () => {
+    for (const nom of Object.keys(COLUMNES)) {
+      if (document.body.style.getPropertyValue(COLUMNES[nom].variable)) posaAmplada(nom, ampladaDe(nom));
+    }
+  });
+}
+
+const XEBRO_SECCIO = '<svg class="xebro-seccio" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>';
+
+function instalaSeccions() {
+  const plegades = new Set(llegeix("tallat.plegades", []));
+  for (const seccio of $$(".barra .seccio[data-seccio]")) {
+    const h2 = seccio.querySelector("h2");
+    const boto = document.createElement("button");
+    boto.className = "plega";
+    boto.innerHTML = XEBRO_SECCIO;
+    boto.append(...[...h2.childNodes]);  // el títol i el comptador hi passen tal qual
+    h2.append(boto);
+    const posa = (plegada) => {
+      seccio.classList.toggle("plegada", plegada);
+      boto.setAttribute("aria-expanded", String(!plegada));
+    };
+    posa(plegades.has(seccio.dataset.seccio));
+    boto.addEventListener("click", () => {
+      const plegada = !seccio.classList.contains("plegada");
+      posa(plegada);
+      if (plegada) plegades.add(seccio.dataset.seccio); else plegades.delete(seccio.dataset.seccio);
+      desa("tallat.plegades", [...plegades]);
+    });
+  }
+}
+
 function instalaEstil() {
   // La capa de subtítols treballa a 1080 px d'amplada: l'escalem a la mida del reproductor.
   const capa = $("#capa-subtitols");
@@ -1719,6 +1825,8 @@ function instalaControls() {
       avis("Neteja feta. Les paraules que havies recuperat es respecten.");
     } catch (e) { avis(e.message); }
   });
+  instalaColumnes();
+  instalaSeccions();
   instalaEstil();
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
@@ -1772,6 +1880,16 @@ function instalaControls() {
     if (e.target.matches("input, textarea, select")) return;
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
     if (editantEstil && e.key === "Escape") { tancaEstil(); return; }
+    if (e.ctrlKey && e.metaKey && e.code === "KeyS") {  // ⌃⌘S, com al Finder
+      e.preventDefault();
+      mostraColumna("barra", document.body.classList.contains("sense-barra"));
+      return;
+    }
+    if (e.altKey && e.metaKey && e.code === "KeyV") {  // ⌥⌘V
+      e.preventDefault();
+      mostraColumna("reproductor", document.body.classList.contains("sense-reproductor"));
+      return;
+    }
     if (e.key === " ") { e.preventDefault(); R.aturaA = null; sona() ? atura() : reprodueix(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); vesA(tempsMuntatge() - 5); }
     else if (e.key === "ArrowRight") { e.preventDefault(); vesA(tempsMuntatge() + 5); }

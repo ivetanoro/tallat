@@ -49,6 +49,10 @@
   --radi-mitja: 12px;
   --radi-gran: 20px;
   --molla: cubic-bezier(0.22, 1, 0.36, 1); /* sense rebot: per a la interfície */
+
+  /* Amplada de les columnes (la persona les pot canviar arrossegant-ne la vora) */
+  --amplada-barra: 288px;
+  --amplada-reproductor: 400px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -85,7 +89,7 @@ body {
   height: 100%;
   margin: 0;
   display: grid;
-  grid-template-columns: 288px minmax(0, 1fr) 400px;
+  grid-template-columns: var(--amplada-barra) minmax(0, 1fr) var(--amplada-reproductor);
   background: var(--fons);
   color: var(--text);
   font-family: var(--font);
@@ -376,6 +380,50 @@ body.mode-corregeix .p { cursor: text; }
 .interruptor[aria-checked="true"] .bola { transform: translateX(14px); }
 .interruptor[aria-checked="true"]:active .bola { transform: translateX(14px) scaleX(1.15); }
 
+/* --- Columnes: amagar-les i canviar-ne l'amplada --------------------------- */
+
+.barra { grid-column: 1; }
+.text { grid-column: 2; }
+.reproductor { grid-column: 3; }
+body.sense-barra { --amplada-barra: 0px !important; }
+body.sense-reproductor { --amplada-reproductor: 0px !important; }
+body.sense-barra .barra, body.sense-reproductor .reproductor { display: none; }
+body.sense-barra #divisor-barra, body.sense-reproductor #divisor-reproductor { display: none; }
+#commuta-barra[aria-pressed="true"], #commuta-reproductor[aria-pressed="true"] { color: var(--text); }
+
+.divisor {
+  position: fixed; top: 0; bottom: 0; z-index: 20; width: 9px; margin-left: -4px;
+  cursor: col-resize; touch-action: none;
+}
+#divisor-barra { left: var(--amplada-barra); }
+#divisor-reproductor { left: calc(100vw - var(--amplada-reproductor)); }
+.divisor::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px;
+  background: transparent; transition: background-color 150ms ease-out;
+}
+.divisor:hover::after, .divisor.arrossegant::after { background: var(--accent); }
+.divisor:focus-visible { outline: none; }
+.divisor:focus-visible::after { background: var(--accent); width: 2px; }
+body.redimensionant, body.redimensionant * { cursor: col-resize !important; user-select: none; }
+
+/* --- Seccions de la barra lateral, plegables ------------------------------- */
+
+.seccio h2 .plega {
+  display: flex; align-items: center; gap: var(--e1); width: 100%; padding: 0; margin: 0 0 0 -18px;
+  border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.seccio h2 .plega:hover { color: var(--text); }
+.plega .xebro-seccio {
+  flex: none; width: 14px; height: 14px; color: var(--text-3); opacity: 0;
+  transition: transform 200ms var(--molla), opacity 150ms ease-out;
+  transform: rotate(90deg);
+}
+.barra:hover .plega .xebro-seccio, .plega:focus-visible .xebro-seccio, .seccio.plegada .xebro-seccio { opacity: 1; }
+.seccio.plegada .xebro-seccio { transform: none; }
+.seccio.plegada { margin-top: var(--e5); }
+.seccio.plegada > :not(h2) { display: none !important; }
+.seccio.plegada h2 { margin-bottom: 0; }
+
 /* --- Estil dels subtítols -------------------------------------------------- */
 
 .fila-estil {
@@ -610,12 +658,14 @@ body.reproduint .play .si-play { display: block; }
 /* --- Adaptacions ------------------------------------------------------------ */
 
 @media (max-width: 1200px) {
-  body { grid-template-columns: 248px minmax(0, 1fr) 332px; }
+  :root { --amplada-barra: 248px; --amplada-reproductor: 332px; }
   .marca-temps { display: none; }
   .eines, .ajuda, .transcripcio { padding-left: var(--e6); padding-right: var(--e6); }
 }
 @media (max-width: 900px) {
   body { grid-template-columns: 1fr; overflow: auto; }
+  .barra, .text, .reproductor { grid-column: auto; }
+  .divisor, #commuta-barra, #commuta-reproductor { display: none; }
   .barra, .text, .reproductor { height: auto; }
   .reproductor { order: -1; height: 70vh; border-left: 0; }
   .transcripcio { padding-bottom: var(--e8); }
