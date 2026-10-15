@@ -29,6 +29,7 @@ CONFIG = Path(__file__).resolve().parent.parent / "config"
 PER_DEFECTE = CONFIG / "brand.example.json"
 ESTILS = CONFIG / "estils_subtitols.json"
 ESTILS_TITOL = CONFIG / "estils_titol.json"
+ESTILS_BROLL = CONFIG / "estils_broll.json"
 LLETRES = CONFIG / "lletres.json"
 USUARI = Path.home() / ".tallat" / "brand.json"  # l'estil d'abans dels kits: amb ell es fa el primer kit
 KITS = Path.home() / ".tallat" / "kits"
@@ -50,7 +51,8 @@ RANGS = {
     "titol": {"mida": (0.03, 0.2), "pes": (100, 900), "clau_mida": (1.0, 4.0), "espaiat": (-0.12, 0.3),
               "interlineat": (0.75, 1.6), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.05, 0.95),
               "amplada_maxima": (0.4, 0.98), "durada": (0.5, 10.0)},
-    "broll": {"durada": (0.5, 4.0)},
+    "broll": {"durada": (0.5, 4.0), "mida": (0.25, 1.0), "posicio_x": (0.0, 1.0), "posicio_y": (0.0, 1.0),
+              "radi": (0.0, 0.5), "vora": (0.0, 0.04), "rotacio": (-15, 15)},
     "stickers": {"durada": (0.5, 6.0), "mida": (0.08, 0.8), "x": (0.0, 1.0), "y": (0.0, 1.0), "rotacio": (-30, 30)},
     "talls": {"pausa_maxima": (0.1, 2.0)},
 }
@@ -60,10 +62,13 @@ OPCIONS = {
                   "fons": {"cap", "pindola"}, "disposicio": {"linia", "apilat"},
                   "alineacio": {"centre", "esquerra", "dreta", "esglao"}},
     "stickers": {"animacio": {"pop", "cap"}},
+    "broll": {"disposicio": {"pantalla", "targeta", "partida", "carrusel"},
+              "proporcio": {"9:16", "3:4", "4:5", "1:1", "16:9"},
+              "animacio": {"pop", "puja", "llisca", "fos", "cap"}},
     "titol": {"alineacio": {"centre", "esquerra", "dreta", "esglao"},
               "animacio": {"puja", "pop", "fos", "cortina", "maquina", "cap"}, "fons": {"cap", "enfosquit", "pindola"}},
 }
-COLORS = {"color", "color_actiu", "contorn", "fons_color", "clau_color"}
+COLORS = {"color", "color_actiu", "contorn", "fons_color", "clau_color", "vora_color"}
 NOM_DE_FONT = re.compile(r"^[\w][\w .-]{0,60}$")
 
 
@@ -298,6 +303,12 @@ def estils_titol() -> list[dict]:
     return [{**e, "valors": {**dades.get("comu", {}), **e["valors"]}} for e in dades["estils"]]
 
 
+def estils_broll() -> list[dict]:
+    """Les maneres de posar el b-roll predefinides: [{id, nom, descripcio, valors}]."""
+    dades = json.loads(ESTILS_BROLL.read_text(encoding="utf-8"))
+    return [{**e, "valors": {**dades.get("comu", {}), **e["valors"]}} for e in dades["estils"]]
+
+
 def estils() -> list[dict]:
     """Els estils de subtítols predefinits: [{id, nom, descripcio, valors}]. Cada un parteix de «comu»
     (la disposició de sempre), perquè triar-ne un no deixi a mitges el que havia posat un altre."""
@@ -374,7 +385,10 @@ def restableix(seccio: str, path: Path | None = None, kit: str | None = None) ->
         raise ValueError(f"No es pot canviar la secció «{seccio}»")
     path = path or ruta(kit)
     dades = _llegeix_json(path)
+    abans = dades.get(seccio) if isinstance(dades.get(seccio), dict) else {}
     dades[seccio] = json.loads(PER_DEFECTE.read_text(encoding="utf-8"))[seccio]
+    if seccio == "broll" and abans.get("lut"):  # el LUT és un fitxer de la persona: es queda
+        dades[seccio]["lut"] = abans["lut"]
     _escriu(dades, path)
     return carrega(path)[seccio]
 

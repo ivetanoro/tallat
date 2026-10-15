@@ -123,6 +123,19 @@ def _copia_recursos(pla: dict, desti: Path) -> None:
         st["px"] = _mida_imatge(nou)
 
 
+def _lloc_broll(br: dict) -> dict | None:
+    """On va un b-roll en targeta (motor/targetes.py), dit com ho entenen els editors: escala,
+    centre (de -0,5 a 0,5), inclinació i quant se'n retalla per cada banda (0 a 1). None si tapa
+    tota la pantalla. Les cantonades arrodonides, la vora i l'ombra no hi van."""
+    c = br.get("caixa")
+    if not c or (c["w"] >= AMPLADA and c["h"] >= ALCADA):
+        return None
+    dins_w, dins_h = c["w"] - 2 * c["vora"], c["h"] - 2 * c["vora"]
+    k = max(dins_w / AMPLADA, dins_h / ALCADA)  # el clip cobreix la targeta, com a l'export
+    return {"escala": k, "centre": ((c["x"] + c["w"] / 2) / AMPLADA - 0.5, (c["y"] + c["h"] / 2) / ALCADA - 0.5),
+            "rotacio": c["rotacio"], "retall": ((1 - dins_w / (k * AMPLADA)) / 2, (1 - dins_h / (k * ALCADA)) / 2)}
+
+
 def _tros_de(trossos: list[dict], f: int) -> dict:
     """El tros del muntatge on cau el fotograma f."""
     return next((x for x in trossos if x["offset"] <= f < x["offset"] + x["b"] - x["a"]), trossos[-1])
@@ -155,7 +168,17 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         durada = t.fotogrames(br["durada"])
         recursos.append(f'<asset id="{rid}" name="{nom_br}" start="0s" duration="{t.fcp(durada)}" hasVideo="1" '
                         f'format="r4"><media-rep kind="original-media" src="{_url(br["fitxer"])}"/></asset>')
-        connecta(t.fotogrames(br["inici"]), lambda off, rid=rid, nom_br=nom_br, durada=durada:
+        lloc, ajust = _lloc_broll(br), ""
+        if lloc:  # en targeta: retallat, més petit i al seu lloc (posicions en % de l'alçada, y amunt)
+            rh, rv = lloc["retall"]
+            ajust = (f'<adjust-crop mode="trim"><trim-rect left="{rh * AMPLADA / ALCADA * 100:.3f}" '
+                     f'right="{rh * AMPLADA / ALCADA * 100:.3f}" top="{rv * 100:.3f}" bottom="{rv * 100:.3f}"/>'
+                     f'</adjust-crop><adjust-transform position="{lloc["centre"][0] * AMPLADA / ALCADA * 100:.2f} '
+                     f'{-lloc["centre"][1] * 100:.2f}" scale="{lloc["escala"]:.4f} {lloc["escala"]:.4f}" '
+                     f'rotation="{-lloc["rotacio"]:g}"/>')
+        connecta(t.fotogrames(br["inici"]), lambda off, rid=rid, nom_br=nom_br, durada=durada, ajust=ajust:
+                 f'<asset-clip ref="{rid}" lane="1" offset="{t.fcp(off)}" name="{nom_br}" start="0s" '
+                 f'duration="{t.fcp(durada)}">{ajust}</asset-clip>' if ajust else
                  f'<asset-clip ref="{rid}" lane="1" offset="{t.fcp(off)}" name="{nom_br}" start="0s" '
                  f'duration="{t.fcp(durada)}"/>')
     for st in pla["stickers"]:
@@ -271,7 +294,18 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         ini, d = t.fotogrames(br["inici"]), t.fotogrames(br["durada"])
         d30 = t30.fotogrames(br["durada"])
         f_xml = fitxer(f"file-b{k}", br["fitxer"], d30, AMPLADA, ALCADA, False, True, rate30)
-        v2.append(clip(Path(br["fitxer"]).stem, ini, ini + d, 0, d30, f_xml, moviment(100), rate_font=rate30))
+        lloc = _lloc_broll(br)
+        filtre = moviment(100)
+        if lloc:  # en targeta: més petit, al seu lloc i retallat
+            rh, rv = lloc["retall"]
+            filtre = moviment(lloc["escala"] * 100, lloc["centre"], lloc["rotacio"]) + (
+                "<filter><effect><name>Crop</name><effectid>crop</effectid><effectcategory>motion</effectcategory>"
+                "<effecttype>motion</effecttype><mediatype>video</mediatype>" + "".join(
+                    f"<parameter><parameterid>{costat}</parameterid><name>{costat}</name><valuemin>0</valuemin>"
+                    f"<valuemax>100</valuemax><value>{valor * 100:.3f}</value></parameter>"
+                    for costat, valor in (("left", rh), ("right", rh), ("top", rv), ("bottom", rv)))
+                + "</effect></filter>")
+        v2.append(clip(Path(br["fitxer"]).stem, ini, ini + d, 0, d30, f_xml, filtre, rate_font=rate30))
     v3 = []
     for k, st in enumerate(pla["stickers"]):
         ini, d = t.fotogrames(st["inici"]), t.fotogrames(st["durada"])
@@ -407,6 +441,9 @@ def _llista_recursos(brolls: list[dict], stickers: list[dict]) -> str:
     if brolls:
         linies.append("\nB-roll (carpeta «broll»): arrossega cada fitxer a la pista de sobre del vídeo, al moment")
         linies.append("que diu el nom. Tapa la imatge i el so continua.")
+        if any(_lloc_broll(b) for b in brolls):
+            linies.append("Al teu kit, el b-roll va en targeta: posa'l més petit i al seu lloc (al projecte de")
+            linies.append("Premiere i Final Cut ja hi és; les cantonades arrodonides i la vora, no).")
         linies += [f"  B{i} al {_moment(b['inici'])}, durant {b['durada']:.1f} s".replace(".", ",")
                    for i, b in enumerate(brolls, 1)]
     if stickers:

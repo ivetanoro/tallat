@@ -16,7 +16,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import broll, edicio, instruccions, marca, neteja, stickers, subtitols
+from motor import broll, edicio, instruccions, marca, neteja, stickers, subtitols, targetes
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -311,7 +311,11 @@ class Projecte:
         return self._recursos(trams, "sticker")
 
     def brolls(self, trams) -> list[dict]:
-        return self._recursos(trams, "broll")
+        """Els b-rolls al muntatge, amb on van a la pantalla i com entren (motor/targetes.py)."""
+        estil = self.estil()
+        sub = estil.get("subtitols", {})
+        accent = sub.get("clau_color") or sub.get("color_actiu") or "#FFFFFF"
+        return targetes.disposa(self._recursos(trams, "broll"), estil.get("broll", {}), accent)
 
     def _recursos(self, trams, tipus: str) -> list[dict]:
         """B-rolls o stickers acceptats amb fitxer, situats al muntatge: [{id, fitxer, inici, durada}]."""

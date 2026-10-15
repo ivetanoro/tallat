@@ -223,7 +223,7 @@ function aplicaTrams(r) {
     pintaText();
   }
   if (r.zooms) zoomsTram = r.zooms;
-  if (r.brolls) brollsMuntatge = r.brolls;
+  if (r.brolls) { brollsMuntatge = r.brolls; pintaResumBroll(); }
   if (r.stickers) stickersMuntatge = r.stickers;
   if (r.zoom) $(".pantalla").style.setProperty("--zoom", r.zoom);
   if (r.instruccions) { instruccions = r.instruccions; if (P) pintaInstruccions(); }
@@ -1172,8 +1172,19 @@ function respostaEstil(r) {
   // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
   aplicaEstilSubtitols({ ...r.estil_subtitols, ...estilPendent });
   if (r.estil_titol) aplicaEstilTitol({ ...r.estil_titol, ...titolPendent });
+  aplicaBroll(r);
   pintaPanellEstil();
   pintaPanellTitol();
+}
+
+function aplicaBroll(r) {
+  if (r.estil_broll) estilBroll = { ...r.estil_broll, ...brollPendent };
+  if (r.estils_broll) estilsBroll = r.estils_broll;
+  if (r.mostra_broll) mostraBroll = r.mostra_broll;
+  if (r.brolls) brollsMuntatge = r.brolls;
+  pintaResumBroll();
+  pintaPanellBroll();
+  if (mostraBrollDespres && !Object.keys(brollPendent).length) mostraBrollViu();
 }
 
 // --- El títol del ganxo -------------------------------------------------------------------------
@@ -1459,6 +1470,7 @@ function pintaKits() {
   $("#sep-treu-kit").hidden = !!actual?.per_defecte;
   $("#nom-kit-panell").textContent = actual?.nom || "";
   $("#nom-kit-titol").textContent = actual?.nom || "";
+  $("#nom-kit-broll").textContent = actual?.nom || "";
 }
 
 function respostaKit(r, missatge) {
@@ -2123,18 +2135,230 @@ async function obre(reel) {
 }
 
 // --- B-roll en directe ----------------------------------------------------------------------
+// On va cada b-roll (pantalla sencera, targeta, pantalla partida o carrusel) ho calcula el servidor
+// (motor/targetes.py), i és el mateix que fa servir el vídeo final. Aquí només es dibuixa.
 
-const vB = $("#video-broll");
+const brollsVius = new Map();  // id del b-roll → la seva targeta a la pantalla
+
+function estilTargeta(el, c) {
+  const sig = JSON.stringify(c);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  Object.assign(el.style, {
+    left: `${c.x}px`, top: `${c.y}px`, width: `${c.w}px`, height: `${c.h}px`, borderRadius: `${c.radi}px`,
+    borderWidth: `${c.vora}px`, borderColor: c.vora_color, background: c.vora ? c.vora_color : "#000",
+    boxShadow: c.ombra ? "0 14px 48px rgba(0, 0, 0, 0.45)" : "none",
+  });
+}
+
+function targetaBroll(c, contingut) {
+  const el = document.createElement("div");
+  el.className = "targeta-broll";
+  el.append(contingut);
+  estilTargeta(el, c);
+  return el;
+}
+
+// L'animació d'entrada, amb les mateixes fórmules que l'export (motor/targetes.py):
+// si en canvies una, canvia també l'altra.
+function animacioBroll(b, m) {
+  const p = Math.min(1, Math.max(0, (m - b.inici) / (b.entrada || 0.4)));
+  const cubica = 1 - (1 - p) ** 3;
+  let escala = 1, dx = 0, dy = 0, opacitat = 1;
+  if (b.animacio === "pop") {
+    const q = p - 1;
+    escala = 0.8 + 0.2 * (1 + 2.70158 * q ** 3 + 1.70158 * q ** 2);
+    opacitat = Math.min(1, p / 0.4);
+  } else if (b.animacio === "puja") { dy = 96 * (1 - cubica); opacitat = p; }
+  else if (b.animacio === "llisca") { dx = 380 * b.direccio * (1 - cubica); opacitat = p; }
+  else if (b.animacio === "fos") opacitat = p;
+  return { transform: `translate(${dx}px, ${dy}px) rotate(${b.caixa.rotacio}deg) scale(${escala})`, opacity: String(opacitat) };
+}
+
 function pintaBroll() {
   const m = tempsMuntatge();
-  const b = vista === "directe" ? brollsMuntatge.find((x) => m >= x.inici && m < x.inici + x.durada) : null;
-  vB.classList.toggle("amagat", !b);
-  if (!b) { if (!vB.paused) vB.pause(); return; }
-  if (!vB.src.endsWith(b.url)) vB.src = b.url;
-  const desitjat = m - b.inici;
-  if (vB.readyState >= 1 && Math.abs(vB.currentTime - desitjat) > 0.15) vB.currentTime = desitjat;
-  if (R.reproduint && vB.paused) vB.play().catch(() => {});
-  if (!R.reproduint && !vB.paused) vB.pause();
+  const actius = vista === "directe" ? brollsMuntatge.filter((b) => m >= b.inici && m < (b.fins ?? b.inici + b.durada)) : [];
+  const partida = actius.some((b) => b.partida);
+  for (const v of $$(".pantalla > video")) v.classList.toggle("partida", partida && v === R.v);
+  $("#capa-broll").classList.toggle("partida", partida);
+  const ids = new Set(actius.map((b) => b.id));
+  for (const [id, el] of brollsVius) {
+    if (!ids.has(id)) { el.firstChild.pause(); el.remove(); brollsVius.delete(id); }
+  }
+  for (const b of actius) {
+    let el = brollsVius.get(b.id);
+    if (!el) {
+      const v = document.createElement("video");
+      Object.assign(v, { muted: true, playsInline: true, preload: "auto", src: b.url });
+      el = targetaBroll(b.caixa, v);
+      $("#br-host").append(el);
+      brollsVius.set(b.id, el);
+    }
+    estilTargeta(el, b.caixa);
+    el.style.zIndex = String(brollsMuntatge.indexOf(b));
+    Object.assign(el.style, animacioBroll(b, m));
+    const v = el.firstChild;
+    if (!v.src.endsWith(b.url)) v.src = b.url;
+    // Al carrusel, quan el clip s'acaba, la targeta es queda quieta a l'últim fotograma.
+    const quiet = m - b.inici >= b.durada - 0.05;
+    const desitjat = Math.min(m - b.inici, Math.max(0, b.durada - 0.05));
+    if (v.readyState >= 1 && Math.abs(v.currentTime - desitjat) > 0.15) v.currentTime = desitjat;
+    if (R.reproduint && !quiet && v.paused) v.play().catch(() => {});
+    if ((!R.reproduint || quiet) && !v.paused) v.pause();
+  }
+}
+
+// Una miniatura quieta: la pantalla, la persona i on van les targetes.
+function miniBroll(cont, mostra) {
+  if (!cont || !mostra) return;
+  const mini = document.createElement("div");
+  mini.className = "mini-broll";
+  mini.classList.toggle("partida", mostra.some((b) => b.partida));
+  for (const b of mostra) {
+    const el = targetaBroll(b.caixa, document.createElement("i"));
+    el.style.transform = `rotate(${b.caixa.rotacio}deg)`;
+    mini.append(el);
+  }
+  cont.textContent = "";
+  cont.append(mini);
+  mini.style.transform = `scale(${cont.clientHeight / 1920}) translate(-540px, -960px)`;
+}
+
+// --- L'estil del b-roll (panell) ----------------------------------------------------------------
+
+let estilBroll = null;   // la secció «broll» del kit
+let estilsBroll = [];    // les maneres predefinides, cada una amb la seva miniatura
+let mostraBroll = [];    // la miniatura de l'estil d'ara
+let editantBroll = false;
+let brollPendent = {};
+let temporitzadorBroll = null;
+let mostraBrollDespres = false;  // fer sonar el primer b-roll quan arribi la disposició nova
+
+function predefinitBroll(e = estilBroll) {
+  if (!e) return null;
+  return estilsBroll.find((p) => Object.entries(p.valors).every(([k, v]) =>
+    (typeof v === "number" ? Math.abs((e[k] ?? NaN) - v) < 1e-6 : String(e[k]).toUpperCase() === String(v).toUpperCase())));
+}
+
+function pintaResumBroll() {
+  if (!estilBroll) return;
+  const n = brollsMuntatge.length;
+  $("#nom-estil-broll").textContent = `${predefinitBroll()?.nom ?? "Personalitzat"}`
+    + (n ? ` · ${n === 1 ? "1 en aquest vídeo" : `${n} en aquest vídeo`}` : "");
+  miniBroll($("#mostra-broll"), mostraBroll);
+}
+
+function pintaPanellBroll() {
+  const e = estilBroll;
+  if (!e || $("#panell-broll").hidden) return;
+  const actual = predefinitBroll();
+  const cont = $("#estils-broll");
+  cont.textContent = "";
+  for (const p of estilsBroll) {
+    const b = document.createElement("button");
+    b.className = "estil";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(p === actual));
+    b.title = p.descripcio;
+    b.innerHTML = `<span class="estil-mostra"></span><span class="estil-nom"></span>`;
+    b.querySelector(".estil-nom").textContent = p.nom;
+    b.addEventListener("click", () => canviaBroll({ ...p.valors }, true));
+    cont.append(b);
+    miniBroll(b.querySelector(".estil-mostra"), p.mostra);
+  }
+  const disposicio = e.disposicio || "pantalla";
+  const ambForma = disposicio === "targeta" || disposicio === "carrusel";
+  $("#camp-b-mida").hidden = disposicio !== "targeta";
+  $("#camp-b-posicio").hidden = !ambForma;
+  $("#b-posicio-x").hidden = $("#b-posicio-x").nextElementSibling.hidden = disposicio !== "targeta";
+  $("#grup-b-forma").hidden = !ambForma;
+  $("#b-animacio").value = e.animacio || "cap";
+  $("#b-mida").value = e.mida;
+  $("#b-posicio-y").value = e.posicio_y;
+  $("#b-posicio-x").value = e.posicio_x;
+  marcaSegmentat("b-proporcio", e.proporcio || "4:5");
+  $("#b-radi").value = e.radi;
+  $("#b-vora").value = e.vora;
+  $("#b-rotacio").value = e.rotacio ?? 0;
+  $("#b-ombra").setAttribute("aria-checked", String(e.ombra !== false));
+  $("#b-vora-kit").setAttribute("aria-checked", String(!e.vora_color));
+  const accent = estilSub?.clau_color || estilSub?.color_actiu || "#FFFFFF";
+  $("#b-vora-color").value = (e.vora_color || accent).toLowerCase();
+  $("#camp-b-vora-color").hidden = !(e.vora > 0);
+}
+
+function canviaBroll(canvis, mostra = false) {
+  estilBroll = { ...estilBroll, ...canvis };
+  pintaPanellBroll();
+  Object.assign(brollPendent, canvis);
+  if (mostra) mostraBrollDespres = true;
+  clearTimeout(temporitzadorBroll);
+  temporitzadorBroll = setTimeout(desaEstilBroll, 300);
+}
+
+async function desaEstilBroll() {
+  const canvis = brollPendent;
+  brollPendent = {};
+  if (!Object.keys(canvis).length) return;
+  try {
+    await cua;
+    respostaEstil(await api("/api/marca", { broll: canvis }));
+  } catch (e) { avis(e.message, 5000); }
+}
+
+// Fa sonar el primer b-roll del vídeo perquè es vegi com entra.
+function mostraBrollViu() {
+  mostraBrollDespres = false;
+  const b = brollsMuntatge[0];
+  if (vista !== "directe" || sona() || !b) return;
+  vesA(Math.max(0, b.inici - 0.3));
+  reprodueix();
+  R.aturaA = Math.min(duradaFinal, (b.fins ?? b.inici + b.durada) + 0.2);
+}
+
+function obreBroll() {
+  editantBroll = true;
+  if (vista !== "directe") canviaVista("directe");
+  $(".barra").classList.add("editant-estil");
+  $("#panell-broll").hidden = false;
+  $(".barra").scrollTop = 0;
+  pintaPanellBroll();
+  if (!brollsMuntatge.length) avis("Aquest vídeo encara no té b-roll: les miniatures ensenyen com quedarà.", 4000);
+  $("#tanca-broll").focus();
+}
+
+function tancaBroll() {
+  editantBroll = false;
+  $(".barra").classList.remove("editant-estil");
+  $("#panell-broll").hidden = true;
+  $("#obre-estil-broll").focus();
+}
+
+function instalaBroll() {
+  new ResizeObserver(() => {
+    $("#br-host").style.transform = `scale(${$("#capa-broll").clientWidth / 1080})`;
+  }).observe($("#capa-broll"));
+  $("#obre-estil-broll").addEventListener("click", obreBroll);
+  $("#tanca-broll").addEventListener("click", tancaBroll);
+  $("#b-animacio").addEventListener("change", (e) => canviaBroll({ animacio: e.target.value }, true));
+  for (const b of $$("#b-proporcio button")) b.addEventListener("click", () => canviaBroll({ proporcio: b.dataset.valor }, true));
+  for (const [id, clau] of [["b-mida", "mida"], ["b-posicio-y", "posicio_y"], ["b-posicio-x", "posicio_x"],
+    ["b-radi", "radi"], ["b-vora", "vora"], ["b-rotacio", "rotacio"]]) {
+    $(`#${id}`).addEventListener("input", (e) => canviaBroll({ [clau]: +e.target.value }));
+  }
+  $("#b-ombra").addEventListener("click", () => canviaBroll({ ombra: estilBroll.ombra === false }));
+  $("#b-vora-kit").addEventListener("click", () =>
+    canviaBroll({ vora_color: estilBroll.vora_color ? null : $("#b-vora-color").value.toUpperCase() }));
+  $("#b-vora-color").addEventListener("input", (e) => canviaBroll({ vora_color: e.target.value.toUpperCase() }));
+  $("#restableix-broll").addEventListener("click", async () => {
+    try {
+      clearTimeout(temporitzadorBroll);
+      brollPendent = {};
+      await cua;
+      respostaEstil(await api("/api/marca/restableix", { seccio: "broll" }));
+      avis("El b-roll ha tornat a l'estil de tallat.");
+    } catch (e) { avis(e.message); }
+  });
 }
 
 // Stickers en directe: mateixa posició, mida i rotació que tindran a l'export.
@@ -2363,6 +2587,7 @@ function instalaControls() {
   instalaEstil();
   instalaKits();
   instalaTitol();
+  instalaBroll();
   instalaPestanyes();
   setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
@@ -2405,6 +2630,7 @@ function instalaControls() {
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
     if (editantEstil && e.key === "Escape") { tancaEstil(); return; }
     if (editantTitol && e.key === "Escape") { tancaTitol(); return; }
+    if (editantBroll && e.key === "Escape") { tancaBroll(); return; }
     if (e.ctrlKey && e.metaKey && e.code === "KeyS") {  // ⌃⌘S, com al Finder
       e.preventDefault();
       mostraColumna("barra", document.body.classList.contains("sense-barra"));
@@ -2455,6 +2681,7 @@ async function inicia() {
   estilsPredefinits = P.estils_subtitols || [];
   estilsTitol = P.estils_titol || [];
   aplicaEstilTitol(P.estil_titol);
+  aplicaBroll(P);
   kits = P.kits || [];
   kitActual = P.kit;
   pintaKits();

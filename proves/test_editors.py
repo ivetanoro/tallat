@@ -95,3 +95,26 @@ class TestEditors(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBrollEnTargeta(unittest.TestCase):
+    def test_la_targeta_va_al_seu_lloc(self):
+        from motor import targetes
+        p = pla()
+        p["brolls"] = targetes.disposa(p["brolls"], {"disposicio": "targeta", "mida": 0.5, "proporcio": "9:16",
+                                                     "posicio_x": 0.25, "posicio_y": 0.25, "radi": 0.1})
+        lloc = editors._lloc_broll(p["brolls"][0])
+        self.assertAlmostEqual(lloc["escala"], 0.5)
+        self.assertEqual(lloc["retall"], (0.0, 0.0))  # 9:16 dins de 9:16: no cal retallar
+        self.assertAlmostEqual(lloc["centre"][0], -0.25)
+        fcp = xml.dom.minidom.parseString(editors.fcpxml("Prova", Path("/tmp/v.mov"), p))
+        broll = [c for c in fcp.getElementsByTagName("asset-clip") if c.getAttribute("lane") == "1"][0]
+        self.assertEqual(broll.getElementsByTagName("adjust-transform")[0].getAttribute("scale"), "0.5000 0.5000")
+        premiere = editors.xmeml("Prova", Path("/tmp/v.mov"), p)
+        self.assertIn("<effectid>crop</effectid>", premiere)
+        xml.dom.minidom.parseString(premiere)
+
+    def test_a_pantalla_sencera_res_de_nou(self):
+        self.assertIsNone(editors._lloc_broll({"inici": 0, "durada": 1}))
+        from motor import targetes
+        self.assertIsNone(editors._lloc_broll(targetes.disposa([{"id": "b", "inici": 0, "durada": 1}], {})[0]))

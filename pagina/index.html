@@ -20,7 +20,7 @@
       <button role="tab" id="tab-edita" data-pestanya="edita" aria-controls="pestanya-edita" aria-selected="true"
               title="Què queda al vídeo: reels, instruccions de veu, propostes i silencis">Edita<span class="punt" id="punt-edita" hidden></span></button>
       <button role="tab" id="tab-estil" data-pestanya="estil" aria-controls="pestanya-estil" aria-selected="false"
-              title="Com es veu: el kit, els subtítols i el títol">Estil</button>
+              title="Com es veu: el kit, els subtítols, el títol i el b-roll">Estil</button>
       <button role="tab" id="tab-videos" data-pestanya="videos" aria-controls="pestanya-videos" aria-selected="false"
               title="Els esborranys i els vídeos finals que has exportat">Vídeos<span class="compte-pestanya" id="compte-videos"></span></button>
     </div>
@@ -86,6 +86,11 @@
       <button class="fila-estil" id="obre-estil-titol" aria-label="Títol del ganxo: escriu-lo i canvia'n l'estil">
         <span class="mostra-estil" id="mostra-titol" aria-hidden="true">Aa</span>
         <span class="fila-estil-text"><strong>Títol del ganxo</strong><span id="nom-estil-titol"></span></span>
+        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+      </button>
+      <button class="fila-estil" id="obre-estil-broll" aria-label="B-roll: tria com surt a la pantalla">
+        <span class="mostra-estil" id="mostra-broll" aria-hidden="true"></span>
+        <span class="fila-estil-text"><strong>B-roll</strong><span id="nom-estil-broll"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
     </section>
@@ -211,6 +216,77 @@
         </div>
       </details>
       <button class="enllac" id="restableix-titol">Torna a l'estil de tallat</button>
+    </div>
+
+    <div class="panell-estil" id="panell-broll" hidden>
+      <button class="enllac tornar" id="tanca-broll">‹ Enrere</button>
+      <h2 class="titol-panell">B-roll</h2>
+      <p class="detall">Com surten les imatges i els vídeos de recurs. Es desa al kit «<span id="nom-kit-broll"></span>».</p>
+      <div class="estils" id="estils-broll" role="radiogroup" aria-label="Maneres de posar el b-roll"></div>
+      <div class="camp">
+        <label class="etiqueta" for="b-animacio">Com entra</label>
+        <select id="b-animacio">
+          <option value="pop">Pop · amb un petit salt</option>
+          <option value="puja">Puja · des d'una mica més avall</option>
+          <option value="llisca">Llisca · des del costat</option>
+          <option value="fos">Fos · s'encén suaument</option>
+          <option value="cap">Cap · tall sec</option>
+        </select>
+      </div>
+      <div class="camp" id="camp-b-mida">
+        <label class="etiqueta" for="b-mida">Mida</label>
+        <input type="range" id="b-mida" min="0.3" max="1" step="0.01">
+      </div>
+      <div class="camp" id="camp-b-posicio">
+        <label class="etiqueta" for="b-posicio-y">Posició</label>
+        <input type="range" id="b-posicio-y" min="0.1" max="0.9" step="0.01" aria-label="Posició de dalt a baix">
+        <div class="extrems" aria-hidden="true"><span>Dalt</span><span>Baix</span></div>
+        <input type="range" id="b-posicio-x" min="0" max="1" step="0.01" aria-label="Posició d'esquerra a dreta">
+        <div class="extrems" aria-hidden="true"><span>Esquerra</span><span>Dreta</span></div>
+      </div>
+      <details class="grup-estil" id="grup-b-forma">
+        <summary>Forma i vora<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+        <div class="cos-grup">
+          <div class="camp">
+            <span class="etiqueta" id="et-b-proporcio">Forma</span>
+            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-b-proporcio" id="b-proporcio">
+              <button role="radio" data-valor="9:16" title="Alta, com el reel">9:16</button>
+              <button role="radio" data-valor="3:4">3:4</button>
+              <button role="radio" data-valor="4:5">4:5</button>
+              <button role="radio" data-valor="1:1" title="Quadrada">1:1</button>
+              <button role="radio" data-valor="16:9" title="Apaïsada">16:9</button>
+            </div>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="b-radi">Cantonades</label>
+            <input type="range" id="b-radi" min="0" max="0.5" step="0.01">
+            <div class="extrems" aria-hidden="true"><span>Rectes</span><span>Rodones</span></div>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="b-vora">Vora</label>
+            <input type="range" id="b-vora" min="0" max="0.04" step="0.001">
+            <div class="extrems" aria-hidden="true"><span>Sense</span><span>Gruixuda</span></div>
+          </div>
+          <div class="camp" id="camp-b-vora-color">
+            <span class="etiqueta">Color de la vora</span>
+            <div class="fila-camps">
+              <label class="color"><input type="color" id="b-vora-color"><span>Color</span></label>
+              <button class="interruptor" id="b-vora-kit" role="switch" aria-checked="true">
+                <span class="pista" aria-hidden="true"><span class="bola"></span></span>El destacat dels subtítols
+              </button>
+            </div>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="b-rotacio">Inclinació</label>
+            <input type="range" id="b-rotacio" min="-15" max="15" step="1">
+            <div class="extrems" aria-hidden="true"><span>Esquerra</span><span>Dreta</span></div>
+          </div>
+          <button class="interruptor" id="b-ombra" role="switch" aria-checked="true">
+            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Ombra
+          </button>
+        </div>
+      </details>
+      <button class="enllac" id="restableix-broll">Torna a l'estil de tallat</button>
     </div>
 
     <div class="panell-estil" id="panell-estil" hidden>
@@ -427,7 +503,7 @@
     <div class="pantalla">
       <video id="video-a" preload="auto" playsinline></video>
       <video id="video-esborrany" preload="auto" playsinline class="amagat"></video>
-      <video id="video-broll" class="broll amagat" muted playsinline preload="auto"></video>
+      <div class="capa-broll" id="capa-broll" aria-hidden="true"><div id="br-host"></div></div>
       <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><div id="ts-host"></div><div id="tt-host"></div></div>
       <div class="capa-stickers" id="capa-stickers" aria-hidden="true"></div>
       <button class="gran-play" id="gran-play" aria-label="Reprodueix">

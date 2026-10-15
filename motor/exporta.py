@@ -9,6 +9,8 @@ import threading
 from fractions import Fraction
 from pathlib import Path
 
+from motor import targetes
+
 QUALITATS = {
     # nom: (amplada, alçada, bitrate de vídeo)
     "esborrany": (720, 1280, "4M"),
@@ -64,11 +66,13 @@ def _enquadrament(amplada: int, alcada: int, ow: int, oh: int) -> str:
 
 def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = False,
             zooms: list[bool] | None = None, mida: tuple[int, int] | None = None,
-            brolls: list[tuple[float, float]] | None = None) -> str:
+            brolls: list[dict] | None = None, peces: list[dict] | None = None) -> str:
     """Cada tros és una entrada pròpia (ja retallada amb -ss/-t); aquí només s'uneixen.
 
-    Ordre de les entrades: els trossos, després els b-rolls (un per entrada, ja preparats) i,
-    al final, la capa de subtítols. Les capes s'apilen així: vídeo, b-roll i subtítols a dalt."""
+    Ordre de les entrades: els trossos, els b-rolls (un per entrada, ja preparats), les imatges
+    fixes de les targetes (forma i marc, vegeu `_entrades_peces`) i, al final, la capa de
+    subtítols. Les capes s'apilen així: vídeo, b-roll i subtítols a dalt."""
+    brolls = brolls or []
     parts, entrades = [], []
     for i, (a, b) in enumerate(trams):
         d = b - a
@@ -83,25 +87,37 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = Fa
         entrades.append(f"[v{i}][a{i}]")
     parts.append(f"{''.join(entrades)}concat=n={len(trams)}:v=1:a=1[vc][ac];")
     mida_sortida = enquadrament.split("scale=")[1].split(":flags")[0]
+    ow, oh = (int(x) for x in mida_sortida.split(":"))
     parts.append(f"[vc]{enquadrament}[vb0];")
     actual = "vb0"
-    for k, (inici, durada) in enumerate(brolls or []):
-        # El b-roll comença a «inici» del muntatge i tapa la imatge durant «durada» (tall sec).
-        entrada = len(trams) + k
-        parts.append(f"[{entrada}:v]scale={mida_sortida}:flags=lanczos,setsar=1,format=yuv420p,"
-                     f"setpts=PTS-STARTPTS+{inici:.4f}/TB[br{k}];")
-        parts.append(f"[{actual}][br{k}]overlay=0:0:eof_action=pass:"
-                     f"enable='between(t,{inici:.4f},{inici + durada:.4f})'[vb{k + 1}];")
-        actual = f"vb{k + 1}"
+    if brolls:
+        # El b-roll comença a «inici» del muntatge: a pantalla sencera, en targeta, en pantalla
+        # partida o en carrusel (motor/targetes.py, la mateixa disposició que la vista prèvia).
+        peces = peces or [{"mascara": None, "marc": None} for _ in brolls]
+        linies, actual = targetes.filtre(brolls, peces, len(trams), _entrades_peces(peces, len(trams) + len(brolls)),
+                                         actual, (ow, oh))
+        parts += linies
     if not capa:
         parts.append(f"[{actual}]null[vout]")
     else:
         # La capa de subtítols (ProRes amb transparència) és l'última entrada.
         # Cal passar tots dos a un format amb canal alfa perquè l'overlay la respecti.
+        n_peces = sum(1 for p in peces or [] for v in p.values() if v)
         parts.append(f"[{actual}]format=yuva444p[vba];")
-        parts.append(f"[{len(trams) + len(brolls or [])}:v]scale={mida_sortida}:flags=lanczos,format=yuva444p[capa];")
+        parts.append(f"[{len(trams) + len(brolls) + n_peces}:v]scale={mida_sortida}:flags=lanczos,format=yuva444p[capa];")
         parts.append("[vba][capa]overlay=0:0:format=yuv444:eof_action=pass,format=yuv420p[vout]")
     return "\n".join(parts)
+
+
+def _entrades_peces(peces: list[dict], primera: int) -> dict:
+    """{(k, "mascara"|"marc"): índex de l'entrada}: les imatges fixes de les targetes, en ordre."""
+    index, n = {}, primera
+    for k, p in enumerate(peces):
+        for tipus in ("mascara", "marc"):
+            if p.get(tipus):
+                index[(k, tipus)] = n
+                n += 1
+    return index
 
 
 def _executa(ordre: list[str], durada: float, progres) -> None:
@@ -128,19 +144,29 @@ def _executa(ordre: list[str], durada: float, progres) -> None:
 def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualitat: str,
             progres=None, capa: Path | None = None, zooms: list[bool] | None = None,
             brolls: list[dict] | None = None) -> Path:
-    """`brolls`: [{"fitxer": Path, "inici": segons del muntatge, "durada": segons}]."""
+    """`brolls`: [{"fitxer": Path, "inici": segons del muntatge, "durada": segons}], ja disposats
+    amb `targetes.disposa` (si no ho estan, van a pantalla sencera)."""
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
     ow, oh, bitrate = QUALITATS[qualitat]
     info = info_video(video)
     enquadrament = _enquadrament(info["amplada"], info["alcada"], ow, oh)
 
+    brolls = [b if "caixa" in b else targetes.disposa([b], {})[0] for b in brolls or []]
     sortida.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
-        f.write(_filtre(trams, enquadrament, capa=capa is not None, zooms=zooms,
-                        mida=(info["amplada"], info["alcada"]),
-                        brolls=[(b["inici"], b["durada"]) for b in brolls or []]))
-        filtre = f.name
+    with tempfile.TemporaryDirectory() as temporal:
+        # Les targetes arrodonides, amb vora o amb ombra necessiten unes imatges fixes (forma i marc).
+        peces = targetes.prepara_peces(brolls, ow / targetes.AMPLADA, Path(temporal))
+        filtre = Path(temporal) / "filtre.txt"
+        filtre.write_text(_filtre(trams, enquadrament, capa=capa is not None, zooms=zooms,
+                                  mida=(info["amplada"], info["alcada"]), brolls=brolls, peces=peces),
+                          encoding="utf-8")
+        _exporta(video, trams, sortida, qualitat, info, filtre, brolls, peces, capa, progres)
+    return sortida
+
+
+def _exporta(video, trams, sortida, qualitat, info, filtre, brolls, peces, capa, progres) -> None:
+    _, _, bitrate = QUALITATS[qualitat]
 
     # Cada tros s'obre com una entrada pròpia: ffmpeg salta directament al seu inici
     # i només descodifica el que fem servir (molt més ràpid amb gravacions llargues).
@@ -150,8 +176,13 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
     for a, b in trams:
         inici, durada = temps_exactes(a, b, info["fps"])
         entrades += ["-ss", inici, "-t", durada, "-i", str(video)]
-    for b in brolls or []:
+    for b in brolls:
         entrades += ["-i", str(b["fitxer"])]
+    for b, p in zip(brolls, peces):
+        for tipus in ("mascara", "marc"):
+            if p.get(tipus):  # una imatge quieta que dura el que es veu la targeta
+                entrades += ["-loop", "1", "-framerate", "30", "-t", f"{b['fins'] - b['inici'] + 0.1:.3f}",
+                             "-i", str(p[tipus])]
     if capa is not None:
         entrades += ["-i", str(capa)]
 
@@ -163,11 +194,7 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
         "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(sortida),
     ]
-    try:
-        _executa(ordre, sum(b - a for a, b in trams), progres)
-    finally:
-        Path(filtre).unlink(missing_ok=True)
-    return sortida
+    _executa(ordre, sum(b - a for a, b in trams), progres)
 
 
 def fes_proxy(video: Path, sortida: Path, progres=None) -> Path:

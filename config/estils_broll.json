@@ -1,0 +1,22 @@
+{
+  "_info": "Maneres de posar el b-roll que surten a la pàgina de revisió (pestanya Estil › B-roll). Cada una parteix de «comu».",
+  "comu": {"mida": 0.82, "posicio_x": 0.5, "posicio_y": 0.38, "proporcio": "4:5", "radi": 0.06, "vora": 0.0,
+           "vora_color": null, "ombra": true, "rotacio": 0, "animacio": "cap"},
+  "estils": [
+    {"id": "pantalla", "nom": "Pantalla sencera", "descripcio": "Tapa tota la imatge un moment (tall sec).",
+     "valors": {"disposicio": "pantalla"}},
+    {"id": "targeta", "nom": "Targeta", "descripcio": "Una targeta gran amb les cantonades arrodonides; la persona es veu al voltant.",
+     "valors": {"disposicio": "targeta", "animacio": "pop"}},
+    {"id": "finestra", "nom": "Finestra", "descripcio": "Una finestra petita a la cantonada, amb vora del color del kit.",
+     "valors": {"disposicio": "targeta", "mida": 0.44, "posicio_x": 0.74, "posicio_y": 0.2, "proporcio": "9:16",
+                "radi": 0.1, "vora": 0.006, "animacio": "llisca"}},
+    {"id": "foto", "nom": "Foto", "descripcio": "Com una foto impresa: vora blanca gruixuda i una mica inclinada.",
+     "valors": {"disposicio": "targeta", "mida": 0.7, "posicio_y": 0.36, "radi": 0.02, "vora": 0.025,
+                "vora_color": "#FFFFFF", "rotacio": -4, "animacio": "pop"}},
+    {"id": "partida", "nom": "Pantalla partida", "descripcio": "El b-roll a la meitat de dalt i tu a la de baix.",
+     "valors": {"disposicio": "partida", "animacio": "fos"}},
+    {"id": "carrusel", "nom": "Tres targetes", "descripcio": "Els b-rolls seguits entren d'un en un, en targetes una al costat de l'altra.",
+     "valors": {"disposicio": "carrusel", "posicio_y": 0.36, "proporcio": "9:16", "radi": 0.08, "vora": 0.005,
+                "animacio": "puja"}}
+  ]
+}

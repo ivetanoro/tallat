@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from motor import broll, edicio, editors, exporta, marca, muntatge, stickers
+from motor import broll, edicio, editors, exporta, marca, muntatge, stickers, targetes
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -124,7 +124,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "durada_final": round(sum(b - a for a, b in trams), 3),
                 "zooms": projecte.zooms_per_tram(trams), "zoom": exporta.ZOOM,
                 "instruccions": projecte.instruccions(),
-                "brolls": [{"id": b["id"], "inici": b["inici"], "durada": b["durada"],
+                "brolls": [{**{k: v for k, v in b.items() if k != "fitxer"},
                             "url": "/broll/" + b["fitxer"].name + f"?v={int(b['fitxer'].stat().st_mtime)}"}
                            for b in projecte.brolls(trams)],
                 "stickers": [{"id": st["id"], "inici": st["inici"], "durada": st["durada"],
@@ -144,11 +144,16 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
     def info_marca() -> dict:
         kit = obert["p"].kit()
         estil = obert["p"].estil_subtitols()
+        broll_estil = obert["p"].estil().get("broll", {})
+        accent = estil.get("clau_color") or estil.get("color_actiu") or "#FFFFFF"
         fonts = [{"familia": f["familia"], "pes": f["pes"],
                   "url": f"/marca/fonts/{quote(f['fitxer'].name)}?v={int(f['fitxer'].stat().st_mtime)}"}
                  for f in marca.fonts_del_kit(kit) if f["fitxer"].parent == marca.ruta(kit).parent / "fonts"]
         return {"estil_subtitols": estil, "estil_titol": obert["p"].estil().get("titol", {}),
-                "estils_titol": marca.estils_titol(), "fitxer_estil": str(marca.ruta(kit)),
+                "estils_titol": marca.estils_titol(), "estil_broll": broll_estil,
+                "mostra_broll": targetes.mostra(broll_estil, accent),
+                "estils_broll": [{**e, "mostra": targetes.mostra({**broll_estil, **e["valors"]}, accent)}
+                                 for e in marca.estils_broll()], "fitxer_estil": str(marca.ruta(kit)),
                 "kit": kit, "kits": marca.kits(), "fonts_kit": fonts, "versio_estil": versio_estil(obert["p"]),
                 "biblioteca_lletres": marca.biblioteca_lletres(),
                 "estils_subtitols": marca.estils()}
@@ -418,15 +423,15 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     except Exception as e:  # ffmpeg no ha pogut llegir el fitxer
                         return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
                     return self._json(instantania())
-                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil (subtítols o títol), al kit del vídeo
+                if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil (subtítols, títol o b-roll), al kit del vídeo
                     try:
                         if ruta.endswith("restableix"):
                             seccio = cos.get("seccio") or "subtitols"
-                            if seccio not in ("subtitols", "titol"):
+                            if seccio not in ("subtitols", "titol", "broll"):
                                 raise ValueError("Secció desconeguda")
                             marca.restableix(seccio, kit=projecte.kit())
                         else:
-                            for seccio in ("subtitols", "titol"):
+                            for seccio in ("subtitols", "titol", "broll"):
                                 if isinstance(cos.get(seccio), dict):
                                     marca.desa(seccio, cos[seccio], kit=projecte.kit())
                     except ValueError as e:

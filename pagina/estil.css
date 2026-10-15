@@ -588,6 +588,54 @@ body.mode-destaca .p.clau.fora { color: var(--tret); box-shadow: none; font-weig
   clip-path: inset(calc((1 - 1 / var(--zoom, 1.15)) * 50%) round calc(var(--radi-gran) / var(--zoom, 1.15)));
   box-shadow: none;
 }
+/* Pantalla partida: mentre surt el b-roll, la franja del mig de la persona baixa a la meitat
+   de sota (com fa l'export, motor/targetes.py). */
+.pantalla video.partida {
+  transform: translateY(25%);
+  clip-path: inset(25% 0 25% 0 round 0 0 var(--radi-gran) var(--radi-gran));
+  box-shadow: none;
+}
+.pantalla video.partida.zoom {
+  transform: translateY(25%) scale(var(--zoom, 1.15));
+  clip-path: inset(calc(50% - 25% / var(--zoom, 1.15)) calc(50% - 50% / var(--zoom, 1.15))
+                   round 0 0 calc(var(--radi-gran) / var(--zoom, 1.15)) calc(var(--radi-gran) / var(--zoom, 1.15)));
+}
+/* B-roll en directe: treballa a 1080 × 1920 (com l'export) i s'escala a la mida del reproductor. */
+.capa-broll {
+  grid-area: 1 / 1; position: relative; z-index: 1; pointer-events: none;
+  width: min(100cqw, calc(100cqh * 9 / 16)); aspect-ratio: 9 / 16;
+  overflow: hidden; border-radius: var(--radi-gran);
+}
+.capa-broll.partida::before { content: ""; position: absolute; inset: 0 0 50% 0; background: #000; }
+#br-host { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
+.targeta-broll {
+  position: absolute; box-sizing: border-box; overflow: hidden; border-style: solid;
+  background: #000; will-change: transform, opacity;
+}
+.targeta-broll > video, .targeta-broll > i { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A les miniatures, en lloc del vídeo, un degradat. */
+.targeta-broll > i { background: linear-gradient(150deg, #8e8e93, #3a3a3c); }
+.targeta-broll:nth-child(3n + 2) > i { background: linear-gradient(150deg, #aeaeb2, #48484a); }
+.targeta-broll:nth-child(3n + 3) > i { background: linear-gradient(150deg, #d1d1d6, #636366); }
+.mini-broll {
+  position: absolute; left: 50%; top: 50%; width: 1080px; height: 1920px; transform-origin: 0 0;
+  background: linear-gradient(180deg, #2c2c2e, #1c1c1e);
+}
+/* La persona, a les miniatures: un cap i unes espatlles. */
+.mini-broll::before {
+  content: ""; position: absolute; left: 340px; top: 620px; width: 400px; height: 1300px;
+  border-radius: 200px 200px 0 0; background: #48484a;
+  -webkit-mask: radial-gradient(circle 150px at 200px 160px, #000 99%, transparent 100%),
+                linear-gradient(#000, #000) 0 360px / 100% 100% no-repeat;
+          mask: radial-gradient(circle 150px at 200px 160px, #000 99%, transparent 100%),
+                linear-gradient(#000, #000) 0 360px / 100% 100% no-repeat;
+}
+.mini-broll.partida::after {
+  content: ""; position: absolute; inset: 0 0 50% 0; background: #000;
+}
+.mini-broll.partida::before { top: 1100px; }
+.estil-mostra .mini-broll .targeta-broll, .mostra-estil .mini-broll .targeta-broll { z-index: 1; }
+
 /* Subtítols en directe: mateixa caixa que el vídeo, mides relatives a la seva amplada. */
 .capa-subtitols {
   grid-area: 1 / 1; position: relative; z-index: 1; pointer-events: none;
