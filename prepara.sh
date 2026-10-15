@@ -79,8 +79,16 @@ if [ -d "$CARPETA/.venv" ] && [ ! -L "$CARPETA/.venv" ]; then
   VENV="$CARPETA/.venv"
 fi
 if [ ! -x "$VENV/bin/python" ] || ! "$VENV/bin/python" -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 11) else 1)' 2>/dev/null; then
+  # Un entorn a mitges (una instal·lació interrompuda) o d'una altra versió: s'aparta i se'n fa un de
+  # nou (uv no en fa cap en una carpeta que no sigui buida). L'apartat s'esborra quan el nou funciona.
+  if [ -e "$VENV" ] || [ -L "$VENV" ]; then
+    rm -rf "$VENV.vell"
+    mv "$VENV" "$VENV.vell" || falla "No he pogut apartar l'entorn de Python d'abans ($VENV)."
+  fi
   UV_PYTHON_INSTALL_DIR="$TALLAT/python" "$BIN/uv" venv --quiet --python 3.11 "$VENV" \
     || falla "No he pogut crear l'entorn de Python."
+  "$VENV/bin/python" -c 'import sys' 2>/dev/null || falla "L'entorn de Python nou no funciona."
+  rm -rf "$VENV.vell"
 fi
 [ "$VENV" = "$CARPETA/.venv" ] || ln -sfn "$VENV" "$CARPETA/.venv"
 fet "$("$PY" --version) a $VENV"

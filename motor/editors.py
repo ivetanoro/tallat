@@ -32,6 +32,7 @@ from xml.sax.saxutils import escape
 from motor import exporta, marca, subtitols
 
 AMPLADA, ALCADA = 1080, 1920
+FPS_RECURSOS = 30  # el b-roll (motor/broll.py) i la capa de subtítols (motor/subtitols.py) es fan a 30 fps
 
 
 def _mida_imatge(path: Path) -> tuple[int, int]:
@@ -134,7 +135,7 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
     recursos = [
         f'<format id="r1" frameDuration="{t.durada_fotograma}" width="{AMPLADA}" height="{ALCADA}"/>',
         f'<format id="r2" frameDuration="{t.durada_fotograma}" width="{info["amplada"]}" height="{info["alcada"]}"/>',
-        f'<asset id="r3" name="{escape(video.stem)}" start="0s" duration="{t.fcp(t.fotogrames(info["durada"]))}" '
+        f'<asset id="r3" name="{_attr(video.stem)}" start="0s" duration="{t.fcp(t.fotogrames(info["durada"]))}" '
         f'hasVideo="1" hasAudio="1" format="r2" audioSources="1" audioChannels="2" audioRate="48000">'
         f'<media-rep kind="original-media" src="{_url(video)}"/></asset>',
         '<format id="r4" frameDuration="1/30s" width="1080" height="1920"/>',
@@ -149,7 +150,7 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
 
     n = 6
     for br in pla["brolls"]:
-        rid, nom_br = f"r{n}", escape(Path(br["fitxer"]).stem)
+        rid, nom_br = f"r{n}", _attr(Path(br["fitxer"]).stem)
         n += 1
         durada = t.fotogrames(br["durada"])
         recursos.append(f'<asset id="{rid}" name="{nom_br}" start="0s" duration="{t.fcp(durada)}" hasVideo="1" '
@@ -158,7 +159,7 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
                  f'<asset-clip ref="{rid}" lane="1" offset="{t.fcp(off)}" name="{nom_br}" start="0s" '
                  f'duration="{t.fcp(durada)}"/>')
     for st in pla["stickers"]:
-        rid, nom_st = f"r{n}", escape(Path(st["fitxer"]).stem)
+        rid, nom_st = f"r{n}", _attr(Path(st["fitxer"]).stem)
         fid = f"r{n + 1}"
         n += 2
         w, h = st["px"]
@@ -178,7 +179,7 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
                  f'rotation="{-rot:g}"/></video>')
     if capa is not None:
         recursos.append(f'<asset id="r{n}" name="subtitols" start="0s" duration="{t.fcp(pla["total"])}" hasVideo="1" '
-                        f'format="r1"><media-rep kind="original-media" src="{_url(capa)}"/></asset>')
+                        f'format="r4"><media-rep kind="original-media" src="{_url(capa)}"/></asset>')
         connectats[0].append(f'<asset-clip ref="r{n}" lane="3" offset="{t.fcp(trossos[0]["a"])}" name="subtitols" '
                              f'start="0s" duration="{t.fcp(pla["total"])}"/>')
 
@@ -187,16 +188,21 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         ajustos = '<adjust-conform type="fill"/>'
         if x["zoom"]:
             ajustos += f'<adjust-transform scale="{exporta.ZOOM} {exporta.ZOOM}"/>'
-        espina.append(f'<asset-clip ref="r3" offset="{t.fcp(x["offset"])}" name="{escape(video.stem)}" '
+        espina.append(f'<asset-clip ref="r3" offset="{t.fcp(x["offset"])}" name="{_attr(video.stem)}" '
                       f'start="{t.fcp(x["a"])}" duration="{t.fcp(x["b"] - x["a"])}" format="r2" tcFormat="NDF">'
                       f'{ajustos}{"".join(connectats[i])}</asset-clip>')
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE fcpxml>\n<fcpxml version="1.10">\n'
             f'  <resources>\n    {chr(10).join("    " + r if j else r for j, r in enumerate(recursos))}\n  </resources>\n'
-            f'  <library>\n    <event name="tallat">\n      <project name="{escape(nom)}">\n'
+            f'  <library>\n    <event name="tallat">\n      <project name="{_attr(nom)}">\n'
             f'        <sequence format="r1" duration="{t.fcp(pla["total"])}" tcStart="0s" tcFormat="NDF" '
             f'audioLayout="stereo" audioRate="48k">\n          <spine>\n'
             + "\n".join("            " + e for e in espina) +
             '\n          </spine>\n        </sequence>\n      </project>\n    </event>\n  </library>\n</fcpxml>\n')
+
+
+def _attr(text) -> str:
+    """Text a punt per anar dins d'un atribut entre cometes: un nom com «la "meva" gravació» no el trenca."""
+    return escape(str(text), {'"': "&quot;"})
 
 
 def _url(path: Path) -> str:
@@ -207,8 +213,15 @@ def _url(path: Path) -> str:
 
 def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
     t, info, trossos = pla["t"], pla["info"], pla["trossos"]
-    base, ntsc = t.timebase
-    rate = f"<rate><timebase>{base}</timebase><ntsc>{'TRUE' if ntsc else 'FALSE'}</ntsc></rate>"
+    # El b-roll i la capa de subtítols són a 30 fps encara que el vídeo sigui a 60 (o a 25): els
+    # punts d'entrada i de sortida d'un fitxer es compten amb els seus fps; on comença i on acaba
+    # a la seqüència, amb els de la seqüència.
+    t30 = _Temps(FPS_RECURSOS)
+
+    def rate_de(temps: _Temps) -> str:
+        base, ntsc = temps.timebase
+        return f"<rate><timebase>{base}</timebase><ntsc>{'TRUE' if ntsc else 'FALSE'}</ntsc></rate>"
+    rate, rate30 = rate_de(t), rate_de(t30)
     total_font = t.fotogrames(info["durada"])
     omple = max(AMPLADA / info["amplada"], ALCADA / info["alcada"]) * 100  # que el vídeo ompli el 9:16
     comptador = iter(range(1, 10_000))
@@ -224,23 +237,24 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
                 f"<value><horiz>{centre[0]:.4f}</horiz><vert>{centre[1]:.4f}</vert></value></parameter>"
                 "</effect></filter>")
 
-    def fitxer(fid: str, path: Path, durada: int, w: int, h: int, so: bool, primer: bool) -> str:
+    def fitxer(fid: str, path: Path, durada: int, w: int, h: int, so: bool, primer: bool,
+               rate_font: str = rate) -> str:
         if not primer:
             return f'<file id="{fid}"/>'
         audio = ("<audio><samplecharacteristics><depth>16</depth><samplerate>48000</samplerate>"
                  "</samplecharacteristics><channelcount>2</channelcount></audio>") if so else ""
         return (f'<file id="{fid}"><name>{escape(Path(path).name)}</name>'
-                f'<pathurl>{escape("file://localhost" + quote(str(Path(path).resolve())))}</pathurl>{rate}'
+                f'<pathurl>{escape("file://localhost" + quote(str(Path(path).resolve())))}</pathurl>{rate_font}'
                 f"<duration>{durada}</duration><media><video><samplecharacteristics><width>{w}</width>"
                 f"<height>{h}</height></samplecharacteristics></video>{audio}</media></file>")
 
     def clip(nom_clip: str, inici: int, final: int, entrada: int, sortida: int, fitxer_xml: str,
-             filtre: str = "", durada_font: int | None = None, tipus: str = "video") -> str:
+             filtre: str = "", durada_font: int | None = None, tipus: str = "video", rate_font: str = rate) -> str:
         cid = f"clipitem-{next(comptador)}"
         pista = ("<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack>"
                  if tipus == "audio" else "")
         return (f'<clipitem id="{cid}"><name>{escape(nom_clip)}</name><enabled>TRUE</enabled>'
-                f"<duration>{durada_font if durada_font is not None else sortida - entrada}</duration>{rate}"
+                f"<duration>{durada_font if durada_font is not None else sortida - entrada}</duration>{rate_font}"
                 f"<start>{inici}</start><end>{final}</end><in>{entrada}</in><out>{sortida}</out>"
                 f"{fitxer_xml}{pista}{filtre}</clipitem>")
 
@@ -255,8 +269,9 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
     v2 = []
     for k, br in enumerate(pla["brolls"]):
         ini, d = t.fotogrames(br["inici"]), t.fotogrames(br["durada"])
-        f_xml = fitxer(f"file-b{k}", br["fitxer"], d, AMPLADA, ALCADA, False, True)
-        v2.append(clip(Path(br["fitxer"]).stem, ini, ini + d, 0, d, f_xml, moviment(100)))
+        d30 = t30.fotogrames(br["durada"])
+        f_xml = fitxer(f"file-b{k}", br["fitxer"], d30, AMPLADA, ALCADA, False, True, rate30)
+        v2.append(clip(Path(br["fitxer"]).stem, ini, ini + d, 0, d30, f_xml, moviment(100), rate_font=rate30))
     v3 = []
     for k, st in enumerate(pla["stickers"]):
         ini, d = t.fotogrames(st["inici"]), t.fotogrames(st["durada"])
@@ -267,8 +282,9 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
                        moviment(escala, (st["x"] - 0.5, st["y"] - 0.5), st["rot"])))
     v4 = []
     if capa is not None:
-        f_xml = fitxer("file-capa", capa, pla["total"], AMPLADA, ALCADA, False, True)
-        v4.append(clip("subtitols", 0, pla["total"], 0, pla["total"], f_xml, moviment(100)))
+        d30 = t30.fotogrames(float(pla["total"] / t.fr))
+        f_xml = fitxer("file-capa", capa, d30, AMPLADA, ALCADA, False, True, rate30)
+        v4.append(clip("subtitols", 0, pla["total"], 0, d30, f_xml, moviment(100), rate_font=rate30))
 
     pistes = "".join(f"<track>{''.join(p)}</track>" for p in (v1, v2, v3, v4) if p)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">'

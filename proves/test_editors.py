@@ -61,6 +61,30 @@ class TestEditors(unittest.TestCase):
         self.assertEqual(escales[:2], ["50.00", "57.50"])  # 2160 → 1080 (50 %), i amb zoom ×1,15
         self.assertEqual(len(dom.getElementsByTagName("track")), 4)  # vídeo, b-roll, stickers i so
 
+    def test_un_nom_amb_cometes_no_trenca_el_fcpxml(self):
+        # Segona revisió de Codex: les cometes dins dels noms trencaven l'XML de Final Cut i DaVinci.
+        doc = editors.fcpxml('El "meu" reel', Path('/tmp/la "meva" gravació.MOV'), pla())
+        dom = xml.dom.minidom.parseString(doc)
+        self.assertEqual(dom.getElementsByTagName("project")[0].getAttribute("name"), 'El "meu" reel')
+
+    def test_premiere_a_60_fps_amb_b_roll_a_30(self):
+        # Segona revisió de Codex: el b-roll (a 30 fps) s'hi declarava amb els fps del vídeo (60):
+        # 1,5 s eren 90 fotogrames quan el fitxer només en té 45.
+        dades = pla("60")
+        doc = editors.xmeml("Prova", Path("/tmp/video.MOV"), dades, capa=Path("/tmp/subtitols.mov"))
+        dom = xml.dom.minidom.parseString(doc)
+        valor = lambda node, nom: node.getElementsByTagName(nom)[0].firstChild.data
+        broll = next(c for c in dom.getElementsByTagName("clipitem") if valor(c, "name") == "b1")
+        self.assertEqual({k: valor(broll, k) for k in ("start", "end", "in", "out", "duration", "timebase")},
+                         {"start": "90", "end": "180", "in": "0", "out": "45", "duration": "45", "timebase": "30"})
+        capa = next(c for c in dom.getElementsByTagName("clipitem") if valor(c, "name") == "subtitols")
+        self.assertEqual({k: valor(capa, k) for k in ("start", "end", "out", "timebase")},
+                         {"start": "0", "end": "90", "out": "45", "timebase": "30"})
+
+    def test_els_fps_dels_recursos_coincideixen(self):
+        from motor import broll, subtitols
+        self.assertEqual({broll.FPS, subtitols.FPS}, {editors.FPS_RECURSOS})
+
     def test_trossos(self):
         self.assertEqual(editors._moment(78.12), "1m18,1s")
         self.assertEqual(editors._on({"x": 0.28, "y": 0.3}), "a dalt a l'esquerra")

@@ -35,6 +35,32 @@ class TestGust(unittest.TestCase):
         self.assertEqual(marca.carrega()["subtitols"]["mida"], 0.075)
         self.assertEqual(gust.llegeix(), [])
 
+    def test_un_valor_fora_de_rang_es_pot_desfer(self):
+        # Segona revisió de Codex: l'estil limitava 0,2 a 0,16, però la regla guardava 0,2 i no es podia desfer.
+        maxim = marca.RANGS["subtitols"]["mida"][1]
+        regla = gust.afegeix("subtitols", "Subtítols enormes", "subtitols.mida=0.2")
+        self.assertEqual(regla["ajust"]["valor"], maxim)
+        self.assertEqual(marca.carrega()["subtitols"]["mida"], maxim)
+        _, desfet = gust.treu(regla["id"])
+        self.assertTrue(desfet)
+        self.assertEqual(marca.carrega()["subtitols"]["mida"], 0.075)
+
+    def test_un_valor_no_valid_no_canvia_res(self):
+        with self.assertRaises(ValueError):
+            gust.afegeix("subtitols", "Lletra estranya", "subtitols.mida=gran")
+        self.assertEqual(marca.carrega()["subtitols"]["mida"], 0.075)
+        self.assertEqual(gust.llegeix(), [])
+
+    def test_si_no_es_pot_desar_la_regla_l_ajust_es_desfa(self):
+        # Segona revisió de Codex: l'estil quedava canviat sense cap regla que en recordés el valor d'abans.
+        with mock.patch.object(gust, "_desa", side_effect=OSError("disc ple")):
+            with self.assertRaises(OSError):
+                gust.afegeix("subtitols", "Subtítols més grans", "subtitols.mida=0.09")
+            with self.assertRaises(OSError):
+                gust.afegeix("talls", "Deixa els vale", "farciment.deixa=vale")
+        self.assertEqual(marca.carrega()["subtitols"]["mida"], 0.075)
+        self.assertEqual(neteja.seccio_de("vale"), "proposa")
+
     def test_si_algu_ho_ha_tornat_a_canviar_no_es_desfa(self):
         regla = gust.afegeix("subtitols", "Subtítols més grans", "subtitols.mida=0.09")
         marca.desa("subtitols", {"mida": 0.1})  # després la persona l'ha canviat a la pàgina

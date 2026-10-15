@@ -105,7 +105,7 @@ Les instruccions es treuen soles del vídeo, i a la pàgina decideixes si les ac
 ## Si alguna cosa falla
 
 - Digues a Claude **«comprova tallat»**. Revisa cada peça i et diu què falta.
-- Pots tornar a demanar **«instal·la tallat»** tantes vegades com vulguis: no esborra res, només fa el que falta.
+- Pots tornar a demanar **«instal·la tallat»** tantes vegades com vulguis: no toca res teu (vídeos, projectes ni configuració), només fa el que falta o el que ha quedat a mitges.
 
 ## Per a qui vulgui tocar el codi
 
