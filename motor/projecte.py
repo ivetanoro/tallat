@@ -2,7 +2,6 @@
 
   transcripcio.json   paraules amb els seus temps (no es toca després de transcriure)
   edicio.json         què es treu, què es proposa, correccions i pauses
-  notes.json          notes en moments exactes de l'esborrany
   original.txt        el text sencer, per consultar
   revisio.txt         el text amb [tret] i {proposat}
   proxy.mp4           còpia lleugera per a la pàgina de revisió
@@ -24,7 +23,6 @@ EDICIO = "edicio.json"
 EDICIO_TEXT = "edicio.txt"  # format de la fase 1: s'importa un cop
 ORIGINAL = "original.txt"
 REVISIO = "revisio.txt"
-NOTES = "notes.json"
 PROXY = "proxy.mp4"
 EXPORTS = "exports"
 KIT_TRIAT = "kit-triat.json"
@@ -355,24 +353,7 @@ class Projecte:
         treure, proposar = neteja.detecta(self.dades["paraules"], neteja.carrega_llista())
         self.estat = edicio.aplica_neteja(self.estat, treure, proposar)
 
-    # --- Notes i exports ---------------------------------------------------------
-
-    def notes(self) -> list[dict]:
-        path = self.carpeta / NOTES
-        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
-
-    def desa_notes(self, notes: list[dict]) -> None:
-        (self.carpeta / NOTES).write_text(json.dumps(notes, ensure_ascii=False, indent=1), encoding="utf-8")
-
-    def afegeix_nota(self, nota: dict) -> None:
-        """Afegeix (o substitueix, si ja hi és) una nota, sense tocar les altres."""
-        notes = [n for n in self.notes() if n.get("id") != nota.get("id")]
-        notes.append({k: nota[k] for k in ("id", "versio", "temps", "temps_original", "text", "creada") if k in nota})
-        notes.sort(key=lambda n: (str(n.get("versio")), n.get("temps") or 0, n.get("id") or 0))
-        self.desa_notes(notes)
-
-    def esborra_nota(self, nid) -> None:
-        self.desa_notes([n for n in self.notes() if n.get("id") != nid])
+    # --- Exports ---------------------------------------------------------
 
     def exports(self) -> list[dict]:
         carpeta = self.carpeta / EXPORTS
@@ -394,7 +375,7 @@ class Projecte:
         return self.video
 
     def desa_talls(self, sortida: Path, trams: list) -> None:
-        """Desa els talls de cada versió exportada, per poder situar-hi les notes."""
+        """Desa els talls de cada versió exportada (per marcar-los al reproductor i per situar-hi un moment)."""
         sortida.with_suffix(".talls.json").write_text(json.dumps(trams), encoding="utf-8")
 
     def sortida(self, qualitat: str) -> Path:

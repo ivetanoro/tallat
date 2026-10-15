@@ -21,8 +21,8 @@
               title="Què queda al vídeo: reels, instruccions de veu, propostes i silencis">Edita<span class="punt" id="punt-edita" hidden></span></button>
       <button role="tab" id="tab-estil" data-pestanya="estil" aria-controls="pestanya-estil" aria-selected="false"
               title="Com es veu: el kit, els subtítols i el títol">Estil</button>
-      <button role="tab" id="tab-revisa" data-pestanya="revisa" aria-controls="pestanya-revisa" aria-selected="false"
-              title="Les notes de l'esborrany, les versions i el teu gust">Revisa<span class="compte-pestanya" id="compte-revisa"></span></button>
+      <button role="tab" id="tab-videos" data-pestanya="videos" aria-controls="pestanya-videos" aria-selected="false"
+              title="Els esborranys i els vídeos finals que has exportat">Vídeos<span class="compte-pestanya" id="compte-videos"></span></button>
     </div>
 
     <div class="pestanya" id="pestanya-edita" role="tabpanel" aria-labelledby="tab-edita">
@@ -91,22 +91,10 @@
     </section>
     </div>
 
-    <div class="pestanya" id="pestanya-revisa" role="tabpanel" aria-labelledby="tab-revisa" hidden>
-    <section class="seccio" data-seccio="notes">
-      <h2>Notes <span class="compte" id="compte-notes"></span></h2>
-      <div id="notes"><p class="buit">Fes un esborrany (a dalt, a la dreta) i deixa-hi notes en moments exactes.</p></div>
-    </section>
+    <div class="pestanya" id="pestanya-videos" role="tabpanel" aria-labelledby="tab-videos" hidden>
     <section class="seccio" data-seccio="versions">
-      <h2>Versions</h2>
-      <div id="versions"><p class="buit">Encara no has exportat res.</p></div>
-    </section>
-    <section class="seccio" data-seccio="gust">
-      <h2>El teu gust <span class="compte" id="compte-gust"></span></h2>
-      <div id="gust"></div>
-      <form class="nova-regla" id="nova-regla">
-        <input id="text-regla" type="text" placeholder="Afegeix una regla…" autocomplete="off"
-               aria-label="Regla nova per als vídeos següents">
-      </form>
+      <h2>Vídeos exportats</h2>
+      <div id="versions"><p class="buit">Encara no n'has exportat cap. Fes-ne un amb «Esborrany» o «Final…», a dalt.</p></div>
     </section>
     </div>
 
@@ -470,10 +458,6 @@
     <button class="interruptor" id="escolta" role="switch" aria-checked="true" title="En treure o recuperar paraules, escolta uns segons al voltant del tall">
       <span class="pista" aria-hidden="true"><span class="bola"></span></span>Escolta cada tall
     </button>
-    <form class="nova-nota" id="nova-nota" hidden>
-      <input id="text-nota" type="text" placeholder="Nota en aquest moment…" autocomplete="off">
-      <button class="boto" type="submit">Afegeix</button>
-    </form>
   </section>
 
   <div class="divisor" id="divisor-barra" role="separator" aria-orientation="vertical" tabindex="0"

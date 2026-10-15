@@ -103,9 +103,6 @@ let zoomsTram = [];        // quins trossos porten zoom
 let brollsMuntatge = [];   // b-rolls situats al muntatge: [{id, inici, durada, url}]
 let stickersMuntatge = []; // stickers situats al muntatge: [{id, inici, durada, url}]
 let biblioteca = { broll: [], sticker: [] };  // fitxers de ~/.tallat/broll/ i ~/.tallat/stickers/
-let notes = [];
-let gust = [];             // regles del teu gust (~/.tallat/gust.json)
-let seccionsGust = {};
 let darrerDesplacamentManual = 0;
 
 // --- Desar ----------------------------------------------------------------------------
@@ -1380,7 +1377,7 @@ function instalaTitol() {
 }
 
 // --- Pestanyes de la columna de l'esquerra ------------------------------------------------------
-// Edita (què queda al vídeo), Estil (com es veu) i Revisa (notes, versions i el teu gust). Es
+// Edita (què queda al vídeo), Estil (com es veu) i Vídeos (els que s'han exportat). Es
 // recorda la darrera. A «Edita», un punt avisa si hi ha coses per decidir.
 
 function triaPestanya(nom, { focus = false } = {}) {
@@ -1398,7 +1395,7 @@ function triaPestanya(nom, { focus = false } = {}) {
 function actualitzaPestanyes() {
   const perDecidir = instruccions.some((i) => i.estat === "pendent") || Object.keys(estat?.propostes || {}).length > 0;
   $("#punt-edita").hidden = !perDecidir;
-  $("#compte-revisa").textContent = notes.length || "";
+
 }
 
 function instalaPestanyes() {
@@ -1423,7 +1420,7 @@ function instalaPestanyes() {
   }
 }
 
-// Les files que es poden clicar (reels, instruccions, propostes, notes…) també es poden fer servir
+// Les files que es poden clicar (reels, instruccions, propostes, vídeos…) també es poden fer servir
 // amb el teclat: es poden enfocar amb ⇥ i ↩ o l'espai fan el mateix que el clic.
 function fesClicable(item) {
   item.tabIndex = 0;
@@ -1942,7 +1939,7 @@ function instalaReproductor() {
   requestAnimationFrame(bucle);
 }
 
-// --- Vistes, esborranys i notes -------------------------------------------------------------
+// --- Vistes i esborranys --------------------------------------------------------------------
 
 function canviaVista(nova) {
   if (nova === vista) return;
@@ -1952,7 +1949,6 @@ function canviaVista(nova) {
   const directe = vista === "directe";
   R.v.classList.toggle("amagat", !directe);
   vE.classList.toggle("amagat", directe);
-  $("#nova-nota").hidden = directe;
   $("#escolta").hidden = !directe;
   if (directe) pintaMarques(trams, acum, duradaFinal);
   else if (esborrany) pintaMarques(esborrany.trams || [], esborrany.acum || [], esborrany.durada);
@@ -1979,9 +1975,10 @@ async function carregaVersio(nom, aTemps = 0) {
 }
 
 function pintaVersions(exports) {
+  $("#compte-videos").textContent = exports.length || "";
   const cont = $("#versions");
   cont.textContent = "";
-  if (!exports.length) { cont.innerHTML = '<p class="buit">Encara no has exportat res.</p>'; return; }
+  if (!exports.length) { cont.innerHTML = '<p class="buit">Encara no n\'has exportat cap. Fes-ne un amb «Esborrany» o «Final…», a dalt.</p>'; return; }
   for (const x of exports) {
     const item = document.createElement("div");
     item.className = "item";
@@ -1997,114 +1994,6 @@ function pintaVersions(exports) {
   }
   const darrer = exports.find((x) => x.qualitat === "esborrany");
   $('#vista [data-vista="esborrany"]').disabled = !darrer && !esborrany;
-}
-
-function pintaNotes() {
-  $("#compte-notes").textContent = notes.length || "";
-  actualitzaPestanyes();
-  const cont = $("#notes");
-  cont.textContent = "";
-  if (!notes.length) {
-    cont.innerHTML = '<p class="buit">Fes un esborrany (a dalt, a la dreta) i deixa-hi notes en moments exactes.</p>';
-    return;
-  }
-  for (const n of notes) {
-    const item = document.createElement("div");
-    item.className = "item nota";
-    item.innerHTML = `<span class="temps-petit">${fmt(n.temps)}</span><span class="context"></span>
-      <button class="mini recorda" title="Recorda-ho per als vídeos següents" aria-label="Recorda-ho sempre">${ICONES.recorda}</button>
-      <button class="mini esborra" title="Esborra la nota" aria-label="Esborra la nota">${ICONES.esborra}</button>`;
-    item.querySelector(".context").textContent = n.text;
-    item.querySelector(".recorda").addEventListener("click", (e) => {
-      e.stopPropagation();
-      afegeixRegla(n.text);
-    });
-    item.querySelector(".esborra").addEventListener("click", (e) => {
-      e.stopPropagation();
-      notes = notes.filter((x) => x.id !== n.id);
-      desaNotes({ esborra: n.id });
-    });
-    item.addEventListener("click", () => {
-      if (esborrany?.nom === n.versio) { canviaVista("esborrany"); vE.currentTime = n.temps; }
-      else carregaVersio(n.versio, n.temps);
-    });
-    fesClicable(item);
-    cont.append(item);
-  }
-}
-
-// --- El teu gust ---------------------------------------------------------------------------------
-// Regles que serveixen per als vídeos següents. Claude les afegeix quan li dius una correcció
-// «per sempre»; aquí es veuen, se'n poden escriure i se'n poden treure.
-
-function pintaGust() {
-  $("#compte-gust").textContent = gust.length || "";
-  const cont = $("#gust");
-  cont.textContent = "";
-  if (!gust.length) {
-    cont.innerHTML = '<p class="buit">Quan diguis a l\'assistent una correcció «per sempre», sortirà aquí.</p>';
-    return;
-  }
-  for (const r of gust) {
-    const item = document.createElement("div");
-    item.className = "item regla";
-    item.innerHTML = `<span class="regla-text"><span class="regla-cos"></span><span class="regla-detall"></span></span>
-      <button class="mini" title="Treu la regla" aria-label="Treu la regla">${ICONES.esborra}</button>`;
-    item.querySelector(".regla-cos").textContent = r.text;
-    item.querySelector(".regla-detall").textContent = (seccionsGust[r.seccio] || r.seccio) +
-      (r.ajust ? " · s'aplica sola" : "");
-    item.querySelector(".mini").addEventListener("click", () => treuRegla(r));
-    cont.append(item);
-  }
-}
-
-async function afegeixRegla(text) {
-  try {
-    gust = (await api("/api/gust", { text })).gust;
-    pintaGust();
-    avis("Ho recordaré per als vídeos següents.");
-  } catch (e) { avis(e.message); }
-}
-
-async function treuRegla(r) {
-  try {
-    await cua;
-    const res = await api("/api/gust/treu", { id: r.id });
-    gust = res.gust;
-    pintaGust();
-    if (res.desfet) {  // l'opció que canviava ha tornat a com estava
-      if (res.fonts_kit) carregaFontsKit(res.fonts_kit);
-      aplicaEstilSubtitols(res.estil_subtitols);
-      aplicaTrams(res);
-      pintaPanellEstil();
-    }
-    avis(res.desfet ? "Regla treta. L'opció que canviava ha tornat a com estava." : "Regla treta.");
-  } catch (e) { avis(e.message); }
-}
-
-// Les notes es desen d'una en una (afegir o esborrar), perquè dues pestanyes no es trepitgin.
-async function desaNotes(operacio) {
-  pintaNotes();
-  try {
-    notes = (await api("/api/notes", operacio)).notes;
-    pintaNotes();
-  } catch (e) { avis("No s'ha pogut desar la nota: " + e.message); }
-}
-
-function afegeixNota(text) {
-  if (!esborrany) return;
-  const m = vE.currentTime;
-  let original = null;
-  if (esborrany.trams?.length) {
-    let k = 0;
-    while (k + 1 < esborrany.trams.length && esborrany.acum[k + 1] <= m) k++;
-    original = arrodoneix(esborrany.trams[k][0] + (m - esborrany.acum[k]));
-  }
-  const nota = { id: Date.now(), versio: esborrany.nom, temps: arrodoneix(m), temps_original: original,
-                 text, creada: new Date().toISOString() };
-  notes.push(nota);
-  notes.sort((a, b) => (a.versio === b.versio ? a.temps - b.temps : a.id - b.id));
-  desaNotes({ afegeix: nota });
 }
 
 // --- Renders --------------------------------------------------------------------------------
@@ -2148,7 +2037,7 @@ async function consultaFeina() {
         avis("A punt. T'obro la carpeta: hi ha un LLEGEIX-ME amb els passos.", 6000);
         api("/api/mostra", { nom: feina.fitxer }).catch(() => {});
       } else if (feina.qualitat === "esborrany") {
-        avis("L'esborrany és a punt. Mira'l i deixa-hi notes.");
+        avis("L'esborrany és a punt. Mira'l i digues a Claude què vols canviar (amb el segon, que veus sota el vídeo).", 6000);
         carregaVersio(feina.fitxer);
       } else {
         avis(`Versió final en ${QUALITATS[feina.qualitat]} a punt.`);
@@ -2510,22 +2399,6 @@ function instalaControls() {
     tancaFinal();
     comencaRender(qualitat);
   });
-  $("#nova-nota").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const text = $("#text-nota").value.trim();
-    if (!text) return;
-    afegeixNota(text);
-    $("#text-nota").value = "";
-    avis(`Nota afegida a ${fmt(vE.currentTime)}`);
-  });
-  $("#text-nota").addEventListener("focus", () => vE.pause());
-  $("#nova-regla").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const text = $("#text-regla").value.trim();
-    if (!text) return;
-    afegeixRegla(text);
-    $("#text-regla").value = "";
-  });
 
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea, select")) return;
@@ -2574,7 +2447,6 @@ async function inicia() {
   $("#nom-projecte").textContent = P.nom;
   $("#durada-original").textContent = fmt(P.durada);
   estat = P.estat;
-  notes = P.notes || [];
   aplicaTrams(P);
   pintaText();
   refresca(false);
@@ -2590,10 +2462,6 @@ async function inicia() {
   versioEstil = P.versio_estil;
   carregaFontsKit(P.fonts_kit || []);
   aplicaEstilSubtitols(P.estil_subtitols);
-  pintaNotes();
-  gust = P.gust || [];
-  seccionsGust = P.seccions_gust || {};
-  pintaGust();
   pintaVersions(P.exports || []);
   pintaReels();
   try { biblioteca = await api("/api/biblioteca"); } catch { biblioteca = { broll: [], sticker: [] }; }

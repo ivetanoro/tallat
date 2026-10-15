@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from motor import broll, edicio, editors, exporta, gust, marca, muntatge, stickers
+from motor import broll, edicio, editors, exporta, marca, muntatge, stickers
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -24,7 +24,7 @@ MIDA_MAXIMA_FONT = 20 * 1024 * 1024  # una font no passa mai d'uns quants MB
 MIDA_MAXIMA_JSON = 10 * 1024 * 1024  # l'estat d'un projecte llarg no arriba ni a 1 MB
 MIDA_MAXIMA_PUJADA = 2 * 1024 ** 3   # un b-roll o un sticker
 # Les peticions que canvien el projecte obert: han de dir a quin projecte van (dues pestanyes).
-RUTES_DEL_PROJECTE = {"/api/estat", "/api/neteja", "/api/notes", "/api/instruccio", "/api/broll/biblioteca",
+RUTES_DEL_PROJECTE = {"/api/estat", "/api/neteja", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
@@ -293,9 +293,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         "font": projecte.dades.get("font"), "origen": info,
                         "paraules": projecte.dades["paraules"],
                         "paragrafs": projecte.paragrafs(),
-                        "notes": projecte.notes(), "exports": projecte.exports(), "feina": feina.info(),
+                        "exports": projecte.exports(), "feina": feina.info(),
                         "estil_stickers": projecte.estil().get("stickers", {}),
-                        "gust": gust.llegeix(), "seccions_gust": gust.SECCIONS,
                         **info_marca(),
                         **info_reels(),
                         **instantania()})
@@ -384,12 +383,6 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
                     projecte.desa()
                     return self._json(instantania())
-                if ruta == "/api/notes":  # d'una en una: dues pestanyes no es trepitgen les notes
-                    if isinstance(cos.get("afegeix"), dict):
-                        projecte.afegeix_nota(cos["afegeix"])
-                    elif cos.get("esborra") is not None:
-                        projecte.esborra_nota(cos["esborra"])
-                    return self._json({"notes": projecte.notes()})
                 if ruta == "/api/registre":  # què fa el reproductor al navegador (per trobar errors)
                     with (projecte.carpeta / "registre-pagina.log").open("a", encoding="utf-8") as f:
                         for e in cos.get("events", [])[:500]:
@@ -469,19 +462,6 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     except ValueError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                     return self._json({**info_marca(), **instantania()})
-                if ruta == "/api/gust":  # una regla nova escrita a la pàgina (o una nota que es vol recordar)
-                    try:
-                        gust.afegeix(cos.get("seccio") or "altres", cos.get("text", ""))
-                    except ValueError as e:
-                        return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
-                    return self._json({"gust": gust.llegeix()})
-                if ruta == "/api/gust/treu":
-                    try:
-                        _, desfet = gust.treu(int(cos.get("id")))
-                    except (KeyError, TypeError, ValueError):
-                        return self._json({"error": "No trobo aquesta regla"}, HTTPStatus.NOT_FOUND)
-                    # Si la regla tenia un ajust (p. ex. la mida dels subtítols), ha tornat a com estava.
-                    return self._json({"gust": gust.llegeix(), "desfet": desfet, **info_marca(), **instantania()})
                 if ruta == "/api/editors":  # projecte per acabar-lo en un altre editor
                     if not feina.comença(projecte, "editors", capa=bool(cos.get("capa")),
                                          trossos=bool(cos.get("trossos"))):

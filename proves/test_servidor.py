@@ -79,24 +79,23 @@ class TestServidor(unittest.TestCase):
         self.assertEqual(self.peticio("GET", "/api/projecte", host="dolenta.example")[0], 403)
 
     def test_peticions_d_altres_webs_rebutjades(self):
-        nota = {"afegeix": {"id": 1, "versio": "v", "temps": 1, "text": "hola"}}
-        self.assertEqual(self.peticio("POST", "/api/notes", nota, {"Content-Type": "application/json"})[0], 403)
-        self.assertEqual(self.peticio("POST", "/api/notes", nota, self.bones(Origin="http://dolenta.example"))[0], 403)
-        self.assertEqual(self.peticio("POST", "/api/notes", nota, self.bones(**{"Content-Type": "text/plain"}))[0], 415)
-        self.assertEqual(json.loads(self.peticio("GET", "/api/projecte")[1])["notes"], [])
+        kit = {"nom": "Kit d'una altra web"}
+        self.assertEqual(self.peticio("POST", "/api/kit/nou", kit, {"Content-Type": "application/json"})[0], 403)
+        self.assertEqual(self.peticio("POST", "/api/kit/nou", kit, self.bones(Origin="http://dolenta.example"))[0], 403)
+        self.assertEqual(self.peticio("POST", "/api/kit/nou", kit, self.bones(**{"Content-Type": "text/plain"}))[0], 415)
+        self.assertEqual([k["id"] for k in json.loads(self.peticio("GET", "/api/projecte")[1])["kits"]], ["el-meu-estil"])
 
     def test_una_altra_pestanya_amb_un_altre_projecte(self):
-        nota = {"afegeix": {"id": 1, "versio": "v", "temps": 1, "text": "hola"}}
-        estat, cos = self.peticio("POST", "/api/notes", nota, self.bones(**{"X-Tallat-Projecte": "un-altre"}))
+        estat, cos = self.peticio("POST", "/api/kit/nou", {"nom": "x"}, self.bones(**{"X-Tallat-Projecte": "un-altre"}))
         self.assertEqual((estat, json.loads(cos)["error"]), (409, "projecte-canviat"))
 
-    def test_les_notes_de_dues_pestanyes_no_es_trepitgen(self):
-        self.peticio("POST", "/api/notes", {"afegeix": {"id": 1, "versio": "v", "temps": 1, "text": "A"}}, self.bones())
-        estat, cos = self.peticio("POST", "/api/notes", {"afegeix": {"id": 2, "versio": "v", "temps": 2, "text": "B"}},
-                                  self.bones())
-        self.assertEqual([n["text"] for n in json.loads(cos)["notes"]], ["A", "B"])
-        estat, cos = self.peticio("POST", "/api/notes", {"esborra": 1}, self.bones())
-        self.assertEqual([n["text"] for n in json.loads(cos)["notes"]], ["B"])
+    def test_ja_no_hi_ha_notes_ni_regles_a_la_pagina(self):
+        # Es van treure per simplificar: les notes i les regles del gust es diuen a Claude, al xat.
+        for ruta in ("/api/notes", "/api/gust", "/api/gust/treu"):
+            self.assertEqual(self.peticio("POST", ruta, {}, self.bones())[0], 404)
+        dades = json.loads(self.peticio("GET", "/api/projecte")[1])
+        self.assertNotIn("notes", dades)
+        self.assertNotIn("gust", dades)
 
     def test_pujades_dolentes_no_deixen_res(self):
         bones = self.bones(**{"Content-Type": "application/octet-stream"})

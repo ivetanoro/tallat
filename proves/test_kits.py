@@ -175,5 +175,24 @@ class TestTitolDelProjecte(TestKitDelProjecte):
         self.assertEqual(sorted(f["familia"] for f in p.fonts_subtitols()), ["Fraunces", "Inter"])
 
 
+class TestMoment(TestKitDelProjecte):
+    def test_que_hi_ha_en_un_segon(self):
+        # Per quan la persona diu al xat «al segon 1 el títol…»: les paraules d'aquell moment i el que hi surt.
+        import argparse, contextlib, io
+        import tallat
+        p = self.projecte(self.casa / "video")
+        p.estat["esborrades"] = {0: "usuari", 1: "usuari"}
+        p.estat["titol"] = {"text": "Hola\n*món*", "durada": 2.0}
+        p.desa()
+        sortida = io.StringIO()
+        with contextlib.redirect_stdout(sortida):
+            tallat.ordre_moment(argparse.Namespace(projecte=str(p.carpeta), segons=0.3, esborrany=False))
+        text = sortida.getvalue()
+        self.assertIn("del muntatge d'ara", text)
+        self.assertIn("[0:p0]", text)  # la treta, entre claudàtors
+        self.assertIn("»2:p2", text)    # la que sona
+        self.assertIn("títol del ganxo", text)
+
+
 if __name__ == "__main__":
     unittest.main()

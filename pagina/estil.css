@@ -102,7 +102,6 @@ body {
 
 button { font: inherit; color: inherit; -webkit-user-select: none; user-select: none; }
 .barra, .eines, .reproductor, .full { -webkit-user-select: none; user-select: none; }
-.nova-nota input { -webkit-user-select: text; user-select: text; }
 svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 kbd {
   font: 500 var(--t-peu)/1 var(--font); padding: 2px var(--e1); border-radius: 4px;
@@ -178,14 +177,7 @@ kbd {
 .mini.treu:hover { background: var(--auto-suau); color: var(--auto); }
 .mini.deixa:hover { background: var(--accent-suau); color: var(--accent); }
 
-.nota .context { color: var(--text); white-space: normal; }
-.nota .mini.recorda:hover { background: var(--accent-suau); color: var(--accent); }
-.item.regla { align-items: flex-start; padding-top: var(--e2); padding-bottom: var(--e2); cursor: default; }
-.item.regla:hover, .item.regla:active { background: none; }
-.regla-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.regla-cos { color: var(--text); overflow-wrap: anywhere; }
-.regla-detall { font-size: var(--t-peu); color: var(--text-2); }
-.item.regla .mini:hover { background: var(--auto-suau); color: var(--auto); }
+
 .nova-regla { margin-top: var(--e2); }
 .nova-regla input {
   width: 100%; height: 28px; padding: 0 var(--e3); border: 0; border-radius: var(--radi);
@@ -669,13 +661,6 @@ body.reproduint .gran-play { opacity: 0; transform: scale(0.85); pointer-events:
 body.reproduint .play .si-pausa { display: none; }
 body.reproduint .play .si-play { display: block; }
 
-.nova-nota { width: 100%; display: flex; gap: var(--e2); }
-.nova-nota input {
-  flex: 1; min-width: 0; height: 28px; border: 0; border-radius: var(--radi); padding: 0 var(--e3);
-  font: inherit; font-size: var(--t-ui); color: var(--text);
-  background: var(--superficie); box-shadow: inset 0 0 0 1px var(--linia);
-}
-.nova-nota input:focus-visible, .nova-nota input:focus { outline: 3px solid var(--focus); outline-offset: 0; }
 
 /* --- Full modal i avisos ------------------------------------------------------ */
 

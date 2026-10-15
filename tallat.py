@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 
 from motor import comprova, edicio, editors, entorn, exporta, gust, instruccions, marca, muntatge, transcripcio
-from motor.projecte import ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
+from motor.projecte import EXPORTS, ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
 
 
 def _carrega(args) -> Projecte:
@@ -306,6 +306,45 @@ def ordre_gust(args) -> None:
         sys.exit(str(e))
 
 
+def ordre_moment(args) -> None:
+    """Què hi ha en un segon del vídeo: per arreglar el que la persona diu al xat («al segon 12…»)."""
+    projecte = _carrega(args)
+    trams, on, d_on = projecte.trams(), "el muntatge d'ara", "del muntatge d'ara (En directe)"
+    if args.esborrany:  # el temps de l'últim esborrany, que pot ser d'abans dels darrers canvis
+        talls = sorted((projecte.carpeta / EXPORTS).glob("*_esborrany_*.talls.json"), key=lambda f: f.stat().st_mtime)
+        if not talls:
+            sys.exit("Aquest projecte encara no té cap esborrany.")
+        trams = [tuple(t) for t in json.loads(talls[-1].read_text(encoding="utf-8"))]
+        on = f"l'esborrany {talls[-1].name.removesuffix('.talls.json')}"
+        d_on = f"de {on}"
+    acum, original = 0.0, None
+    for a, b in trams:
+        if args.segons < acum + (b - a):
+            original = a + max(0.0, args.segons - acum)
+            break
+        acum += b - a
+    if original is None:
+        sys.exit(f"{on[0].upper()}{on[1:]} dura {acum:.1f} s: el segon {args.segons:g} no hi és.")
+    print(f"Segon {args.segons:g} {d_on} = segon {original:.2f} de la gravació.")
+    a_prop = [p for p in projecte.paraules() if p["final"] >= original - 2.5 and p["inici"] <= original + 2.5]
+    marca_p = lambda p: (("»" if p["inici"] <= original <= p["final"] + 0.15 else "")
+                         + (f"{p['id']}:{p.get('correccio', p['text'])}" if p["conservada"] else f"[{p['id']}:{p['text']}]"))
+    print("Paraules del voltant (» la que sona; [entre claudàtors] les tretes):")
+    print("  " + " ".join(marca_p(p) for p in a_prop))
+    ara = projecte.trams()  # i què hi ha ara en aquell moment
+    m = projecte.al_muntatge(original, ara)
+    if m is None:
+        print("Ara aquest moment ja no surt al vídeo (s'ha tret).")
+        return
+    titol = projecte.titol(ara)
+    if titol and titol["inici"] <= m < titol["final"]:
+        print(f"Hi surt el títol del ganxo: «{titol['text'].replace(chr(10), ' / ')}».")
+    for nom, recursos in (("B-roll", projecte.brolls(ara)), ("Sticker", projecte.stickers(ara))):
+        for r in recursos:
+            if r["inici"] <= m < r["inici"] + r["durada"]:
+                print(f"Hi surt el {nom.lower()} {r['id']} ({Path(r['fitxer']).name}, {r['durada']:g} s).")
+
+
 def ordre_titol(args) -> None:
     projecte = _carrega(args)
     if args.treu or args.text is not None:
@@ -513,6 +552,12 @@ def main() -> None:
     kl.add_argument("id", help="L'id de la lletra (tallat.py kit lletres)")
     kl.add_argument("--kit", help="El kit (si no, el per defecte)")
     ki.set_defaults(func=ordre_kit)
+
+    mo = sub.add_parser("moment", help="Què hi ha en un segon del vídeo (paraules, títol, b-roll, stickers)")
+    mo.add_argument("segons", type=float)
+    mo.add_argument("--projecte", required=True)
+    mo.add_argument("--esborrany", action="store_true", help="El segon és de l'últim esborrany, no del muntatge d'ara")
+    mo.set_defaults(func=ordre_moment)
 
     ti = sub.add_parser("titol", help="El títol del ganxo: un text dissenyat als primers segons")
     ti.add_argument("--projecte", required=True)
