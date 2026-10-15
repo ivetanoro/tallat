@@ -35,6 +35,19 @@ def info_video(video: Path) -> dict:
             "fps": str(Fraction(s["r_frame_rate"])), "durada": float(d["format"]["duration"])}
 
 
+def temps_exactes(a: float, b: float, fps: str) -> tuple[str, str]:
+    """-ss i -t d'un tros perquè ffmpeg en tregui exactament els fotogrames que toquen.
+
+    Els trossos ja comencen i acaben en fotogrames sencers. Amb 4 decimals, a 29,97 fps l'inici
+    del fotograma 1 (0,0333667 s) arribava com a 0,0334 i ffmpeg se'l saltava. Ara es parteix del
+    número de fotograma i s'arrodoneix cap avall al microsegon (que és com ho compta ffmpeg)."""
+    f = Fraction(fps)
+    fa, fb = round(Fraction(a) * f), round(Fraction(b) * f)
+    inici = (fa * 1_000_000 * f.denominator) // f.numerator
+    durada = ((fb - fa) * 1_000_000 * f.denominator) // f.numerator
+    return tuple(f"{us // 1_000_000}.{us % 1_000_000:06d}" for us in (inici, durada))
+
+
 def _enquadrament(amplada: int, alcada: int, ow: int, oh: int) -> str:
     """Retalla el centre fins a 9:16 (si cal) i escala a la mida final."""
     if amplada * 16 > alcada * 9:      # més ample que 9:16 (p. ex. horitzontal)
@@ -126,7 +139,8 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
     # els fotogrames 4K a memòria és unes 4 vegades més lent.
     entrades = []
     for a, b in trams:
-        entrades += ["-ss", f"{a:.4f}", "-t", f"{b - a:.4f}", "-i", str(video)]
+        inici, durada = temps_exactes(a, b, info["fps"])
+        entrades += ["-ss", inici, "-t", durada, "-i", str(video)]
     for b in brolls or []:
         entrades += ["-i", str(b["fitxer"])]
     if capa is not None:

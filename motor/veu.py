@@ -25,20 +25,33 @@ def llegeix_audio(video: Path) -> np.ndarray:
     return np.frombuffer(brut, dtype=np.int16).astype(np.float32) / 32768.0
 
 
+MINIM_VEU = 0.3  # en una gravació parlant, com a mínim aquesta part és veu
+
+
 def mapa(audio: np.ndarray) -> np.ndarray:
-    """Un booleà cada 10 ms: True si hi ha veu."""
+    """Un booleà cada 10 ms: True si hi ha veu.
+
+    El soroll de fons s'estima amb els trossos més fluixos. Si la gravació gairebé no té silencis,
+    el 10 % més fluix ja és veu i tot semblaria silenci: llavors es prova amb el 2 % més fluix i,
+    si encara no es distingeix, es dona tot per veu (així no s'escurça res que no s'hagi de tocar)."""
     mida = int(SR * PAS)
     n = len(audio) // mida
     trossos = audio[:n * mida].reshape(n, mida)
     db = 20 * np.log10(np.sqrt((trossos ** 2).mean(axis=1)) + 1e-9)
-    return db >= float(np.percentile(db, 10)) + SOBRE_EL_SOROLL
+    for percentil in (10, 2):
+        veu = db >= float(np.percentile(db, percentil)) + SOBRE_EL_SOROLL
+        if n and veu.mean() >= MINIM_VEU:
+            return veu
+    return np.ones(n, dtype=bool)
 
 
 def carrega(carpeta: Path, video: Path) -> np.ndarray:
     """El mapa de veu del projecte (es calcula un cop i es desa a veu.npy)."""
     path = carpeta / "veu.npy"
     if path.exists():
-        return np.load(path)
+        desat = np.load(path)
+        if desat.size and desat.mean() >= MINIM_VEU:  # els d'abans que no es fiaven, es tornen a fer
+            return desat
     m = mapa(llegeix_audio(video))
     np.save(path, m)
     return m

@@ -264,14 +264,16 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
 
     # Ajustem a fotogrames sencers. Al costat d'una paraula esborrada arrodonim cap endins,
     # perquè no se'n coli ni un fotograma (una «s» de 30 ms ja se sent).
+    # Es compta en fotogrames enters: en decimals, «13/30 − 12/30» dona una mica menys d'un
+    # fotograma i una paraula d'un sol fotograma desapareixia.
     ajustats = []
     for a, b, tanca_a, tanca_b in brut:
-        a = (math.ceil(a * fps - 1e-6) if tanca_a else math.floor(a * fps + 1e-6)) / fps
-        b = (math.floor(b * fps + 1e-6) if tanca_b else math.ceil(b * fps - 1e-6)) / fps
-        if b - a < 1 / fps:
+        fa = math.ceil(a * fps - 1e-6) if tanca_a else math.floor(a * fps + 1e-6)
+        fb = math.floor(b * fps + 1e-6) if tanca_b else math.ceil(b * fps - 1e-6)
+        if fb - fa < 1:
             continue
-        if ajustats and ajustats[-1][0] <= a <= ajustats[-1][1]:  # continuació directa: un sol tros
-            ajustats[-1] = (ajustats[-1][0], max(ajustats[-1][1], b))
+        if ajustats and ajustats[-1][0] <= fa <= ajustats[-1][1]:  # continuació directa: un sol tros
+            ajustats[-1] = (ajustats[-1][0], max(ajustats[-1][1], fb))
         else:
-            ajustats.append((a, b))
-    return [(round(a, 4), round(b, 4)) for a, b in ajustats]
+            ajustats.append((fa, fb))
+    return [(round(fa / fps, 4), round(fb / fps, 4)) for fa, fb in ajustats]

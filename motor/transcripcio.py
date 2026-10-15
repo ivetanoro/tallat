@@ -81,13 +81,30 @@ def a_paraules(segments: list[dict]) -> list[dict]:
                 paraules.append({"text": text, "inici": w.get("start"), "final": w.get("end"),
                                  "frase": f, "_seg": (seg.get("start"), seg.get("end"))})
 
-    for i, p in enumerate(paraules):
-        if p["inici"] is None:
-            ant = paraules[i - 1]["final"] if i > 0 else None
-            p["inici"] = ant if ant is not None else p["_seg"][0]
-        if p["final"] is None:
-            seg = next((q["inici"] for q in paraules[i + 1:] if q["inici"] is not None), None)
-            p["final"] = seg if seg is not None else p["_seg"][1]
+    # Si n'hi ha diverses de seguides sense temps («Són 25 € avui»), es reparteixen el forat entre
+    # totes (segons la llargada), en lloc de donar-lo tot a la primera i deixar les altres sense durada.
+    i = 0
+    while i < len(paraules):
+        if paraules[i]["inici"] is not None and paraules[i]["final"] is not None:
+            i += 1
+            continue
+        j = i
+        while j < len(paraules) and (paraules[j]["inici"] is None or paraules[j]["final"] is None):
+            j += 1
+        tanda = paraules[i:j]
+        ini = paraules[i - 1]["final"] if i > 0 else None
+        ini = ini if ini is not None else (tanda[0]["inici"] if tanda[0]["inici"] is not None else tanda[0]["_seg"][0])
+        fi = paraules[j]["inici"] if j < len(paraules) else None
+        fi = fi if fi is not None else (tanda[-1]["final"] if tanda[-1]["final"] is not None else tanda[-1]["_seg"][1])
+        ini, fi = (ini or 0.0), max(fi or 0.0, ini or 0.0)
+        pesos = [max(1, len(p["text"])) for p in tanda]
+        t = ini
+        for p, pes in zip(tanda, pesos):
+            p["inici"] = t
+            t += (fi - ini) * pes / sum(pesos)
+            p["final"] = t
+        i = j
+    for p in paraules:
         p["final"] = max(p["final"], p["inici"])
 
     for i, p in enumerate(paraules):
