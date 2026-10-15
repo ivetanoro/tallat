@@ -4,12 +4,25 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
+// Cada petició que canvia alguna cosa porta el codi que el servidor ha posat a la pàgina (perquè
+// cap altra web no li pugui enviar ordres) i diu a quin projecte va (per si en una altra pestanya
+// s'ha obert un altre projecte).
+const TOKEN = document.querySelector('meta[name="tallat-token"]')?.content || "";
+const capcaleres = (extra = {}) => ({ "X-Tallat-Token": TOKEN, "X-Tallat-Projecte": P?.clau_projecte || "", ...extra });
+
 async function api(ruta, dades) {
   const opcions = dades === undefined ? {} : {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dades),
+    method: "POST", headers: capcaleres({ "Content-Type": "application/json" }), body: JSON.stringify(dades),
   };
-  const r = await fetch(ruta, opcions);
+  return resposta(await fetch(ruta, opcions));
+}
+
+async function resposta(r) {
   const json = await r.json().catch(() => ({}));
+  if (r.status === 409 && json.error === "projecte-canviat") {
+    avis("En una altra pestanya s'ha obert un altre projecte. Torno a carregar aquesta pàgina.", 4000);
+    setTimeout(() => location.reload(), 1500);
+  }
   if (!r.ok) throw Object.assign(new Error(json.error || r.statusText), { codi: r.status, dades: json });
   return json;
 }
@@ -35,7 +48,7 @@ function registre(tipus, dades = {}) {
 setInterval(() => {
   if (!registreCua.length) return;
   const events = registreCua.splice(0);
-  fetch("/api/registre", { method: "POST", headers: { "Content-Type": "application/json" },
+  fetch("/api/registre", { method: "POST", headers: capcaleres({ "Content-Type": "application/json" }),
     body: JSON.stringify({ events }) }).catch(() => {});
 }, 1500);
 const ev = (v) => (v ? { id: v.id.replace("video-", ""), t: +v.currentTime.toFixed(3), pausat: v.paused,
@@ -103,7 +116,7 @@ function sincronitza() {
       aplicaTrams(r);
       if (!pendent && escoltaPendent != null) { escoltaTall(escoltaPendent); escoltaPendent = null; }
     } catch (e) {
-      if (e.codi !== 409) throw e;
+      if (e.codi !== 409 || e.dades?.error === "projecte-canviat") throw e;
       // La pàgina també és oberta en una altra pestanya i allà s'ha desat després.
       estat = e.dades.estat;
       desfer.length = 0;
@@ -1009,9 +1022,8 @@ async function pujaFont(fitxer) {
   avis(`Pujant «${fitxer.name}»…`, 20000);
   try {
     await cua;
-    const r = await fetch(`/api/marca/font?nom=${encodeURIComponent(fitxer.name)}`, { method: "POST", body: fitxer });
-    const json = await r.json();
-    if (!r.ok) throw new Error(json.error || r.statusText);
+    const json = await resposta(await fetch(`/api/marca/font?nom=${encodeURIComponent(fitxer.name)}`,
+      { method: "POST", headers: capcaleres(), body: fitxer }));
     respostaEstil(json);
     avis("Font afegida. Ja la veus als subtítols.");
   } catch (e) { avis(e.message, 6000); }
@@ -1396,7 +1408,7 @@ function pintaNotes() {
     item.querySelector(".esborra").addEventListener("click", (e) => {
       e.stopPropagation();
       notes = notes.filter((x) => x.id !== n.id);
-      desaNotes();
+      desaNotes({ esborra: n.id });
     });
     item.addEventListener("click", () => {
       if (esborrany?.nom === n.versio) { canviaVista("esborrany"); vE.currentTime = n.temps; }
@@ -1455,9 +1467,13 @@ async function treuRegla(r) {
   } catch (e) { avis(e.message); }
 }
 
-async function desaNotes() {
+// Les notes es desen d'una en una (afegir o esborrar), perquè dues pestanyes no es trepitgin.
+async function desaNotes(operacio) {
   pintaNotes();
-  try { notes = (await api("/api/notes", { notes })).notes; } catch (e) { avis("No s'ha pogut desar la nota: " + e.message); }
+  try {
+    notes = (await api("/api/notes", operacio)).notes;
+    pintaNotes();
+  } catch (e) { avis("No s'ha pogut desar la nota: " + e.message); }
 }
 
 function afegeixNota(text) {
@@ -1469,10 +1485,11 @@ function afegeixNota(text) {
     while (k + 1 < esborrany.trams.length && esborrany.acum[k + 1] <= m) k++;
     original = arrodoneix(esborrany.trams[k][0] + (m - esborrany.acum[k]));
   }
-  notes.push({ id: Date.now(), versio: esborrany.nom, temps: arrodoneix(m), temps_original: original,
-               text, creada: new Date().toISOString() });
+  const nota = { id: Date.now(), versio: esborrany.nom, temps: arrodoneix(m), temps_original: original,
+                 text, creada: new Date().toISOString() };
+  notes.push(nota);
   notes.sort((a, b) => (a.versio === b.versio ? a.temps - b.temps : a.id - b.id));
-  desaNotes();
+  desaNotes({ afegeix: nota });
 }
 
 // --- Renders --------------------------------------------------------------------------------
@@ -1646,10 +1663,9 @@ async function pujaBroll(iid, fitxer) {
   avis(`Pujant «${fitxer.name}»…`, 20000);
   try {
     await cua;
-    const r = await fetch(`/api/broll/puja?instruccio=${encodeURIComponent(iid)}&nom=${encodeURIComponent(fitxer.name)}`,
-                          { method: "POST", body: fitxer });
-    const json = await r.json();
-    if (!r.ok) throw new Error(json.error || r.statusText);
+    const json = await resposta(await fetch(
+      `/api/broll/puja?instruccio=${encodeURIComponent(iid)}&nom=${encodeURIComponent(fitxer.name)}`,
+      { method: "POST", headers: capcaleres(), body: fitxer }));
     estat = json.estat;
     aplicaTrams(json);
     refresca(true);

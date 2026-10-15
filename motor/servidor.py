@@ -1,8 +1,11 @@
 """Servidor local de la pàgina de revisió. Només escolta a 127.0.0.1: res no surt de l'ordinador."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import mimetypes
+import secrets
 import subprocess
 import sys
 import threading
@@ -17,6 +20,16 @@ from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
 MIDA_MAXIMA_FONT = 20 * 1024 * 1024  # una font no passa mai d'uns quants MB
+MIDA_MAXIMA_JSON = 10 * 1024 * 1024  # l'estat d'un projecte llarg no arriba ni a 1 MB
+MIDA_MAXIMA_PUJADA = 2 * 1024 ** 3   # un b-roll o un sticker
+# Les peticions que canvien el projecte obert: han de dir a quin projecte van (dues pestanyes).
+RUTES_DEL_PROJECTE = {"/api/estat", "/api/neteja", "/api/notes", "/api/instruccio", "/api/broll/biblioteca",
+                      "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors"}
+
+
+def clau_de(projecte: Projecte) -> str:
+    """Un nom curt i estable per a cada projecte (la pàgina el diu a cada petició)."""
+    return hashlib.sha1(str(projecte.carpeta).encode()).hexdigest()[:16]
 
 
 class Feina:
@@ -80,6 +93,13 @@ def _arrel_de(projecte: Projecte) -> Projecte:
 def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
     feina = Feina()
     bloqueig = threading.Lock()
+    # Seguretat: el servidor només escolta aquest Mac, però una web oberta al navegador podria
+    # intentar enviar-li peticions. Per això: només s'accepten els noms 127.0.0.1 i localhost
+    # (contra el «DNS rebinding»), i les peticions que canvien coses han de portar un codi que
+    # només coneix la pàgina de tallat (es crea cada cop que s'engega el servidor).
+    token = secrets.token_urlsafe(24)
+    amfitrions = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    origens = {f"http://{a}" for a in amfitrions}
     # La pàgina pot passar de la gravació sencera a qualsevol dels reels proposats.
     obert = {"p": inicial, "arrel": _arrel_de(inicial)}
 
@@ -174,8 +194,31 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             except (BrokenPipeError, ConnectionResetError):
                 self.close_connection = True  # el navegador ha tallat la descàrrega (passa en saltar)
 
+        def _amfitrio_valid(self) -> bool:
+            if self.headers.get("Host", "") in amfitrions:
+                return True
+            self.close_connection = True
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return False
+
+        def _no_permesa(self, codi: HTTPStatus, missatge: str) -> bool:
+            self.close_connection = True  # no llegim el cos: la connexió no es pot reaprofitar
+            self._json({"error": missatge}, codi)
+            return False
+
+        def _peticio_valida(self, json_esperat: bool) -> bool:
+            origen = self.headers.get("Origin")
+            if origen is not None and origen not in origens:
+                return self._no_permesa(HTTPStatus.FORBIDDEN, "Petició d'una altra web: no permesa")
+            if not hmac.compare_digest(self.headers.get("X-Tallat-Token", ""), token):
+                return self._no_permesa(HTTPStatus.FORBIDDEN, "Petició no autoritzada. Torna a carregar la pàgina.")
+            if json_esperat and not self.headers.get("Content-Type", "").startswith("application/json"):
+                return self._no_permesa(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "S'esperava JSON")
+            return True
+
         def _index(self):
             html = (PAGINA / "index.html").read_text(encoding="utf-8")
+            html = html.replace("</head>", f'  <meta name="tallat-token" content="{token}">\n</head>', 1)
             for nom in ("app.js", "estil.css", "subtitols.js"):
                 versio = int((PAGINA / nom).stat().st_mtime)
                 html = html.replace(f"/pagina/{nom}", f"/pagina/{nom}?v={versio}")
@@ -189,10 +232,14 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
 
         def _cos(self) -> dict:
             n = int(self.headers.get("Content-Length") or 0)
+            if n > MIDA_MAXIMA_JSON:
+                raise ValueError("massa gran")
             return json.loads(self.rfile.read(n) or b"{}")
 
         # --- rutes ---
         def do_GET(self):
+            if not self._amfitrio_valid():
+                return
             projecte = obert["p"]
             ruta = unquote(urlparse(self.path).path)
             if ruta == "/":
@@ -217,7 +264,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 with bloqueig:
                     info = exporta.info_video(projecte.video) if projecte.video.exists() else {}
                     return self._json({
-                        "nom": projecte.nom, "durada": projecte.dades["durada"], "fps": projecte.fps,
+                        "nom": projecte.nom, "clau_projecte": clau_de(projecte),
+                        "durada": projecte.dades["durada"], "fps": projecte.fps,
                         "font": projecte.dades.get("font"), "origen": info,
                         "paraules": projecte.dades["paraules"],
                         "paragrafs": projecte.paragrafs(),
@@ -232,14 +280,24 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def do_POST(self):
-            projecte = obert["p"]
             ruta = urlparse(self.path).path
-            if ruta == "/api/broll/puja":  # el cos és el fitxer mateix, no JSON
+            fitxer = ruta in ("/api/broll/puja", "/api/marca/font")  # el cos és el fitxer mateix
+            if not self._amfitrio_valid() or not self._peticio_valida(json_esperat=not fitxer):
+                return
+            projecte = obert["p"]
+            if ruta in RUTES_DEL_PROJECTE and self.headers.get("X-Tallat-Projecte") != clau_de(projecte):
+                # Una altra pestanya ha obert un altre projecte (un reel, o la gravació sencera).
+                self._no_permesa(HTTPStatus.CONFLICT, "projecte-canviat")
+                return
+            if ruta == "/api/broll/puja":
                 return self._puja_broll(projecte)
-            if ruta == "/api/marca/font":  # també: el cos és el fitxer de la font
+            if ruta == "/api/marca/font":
                 return self._puja_font()
             try:
                 cos = self._cos()
+            except ValueError:
+                self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Petició massa gran")
+                return
             except json.JSONDecodeError:
                 return self._json({"error": "JSON no vàlid"}, HTTPStatus.BAD_REQUEST)
             with bloqueig:
@@ -268,8 +326,11 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
                     projecte.desa()
                     return self._json(instantania())
-                if ruta == "/api/notes":
-                    projecte.desa_notes(cos.get("notes", []))
+                if ruta == "/api/notes":  # d'una en una: dues pestanyes no es trepitgen les notes
+                    if isinstance(cos.get("afegeix"), dict):
+                        projecte.afegeix_nota(cos["afegeix"])
+                    elif cos.get("esborra") is not None:
+                        projecte.esborra_nota(cos["esborra"])
                     return self._json({"notes": projecte.notes()})
                 if ruta == "/api/registre":  # què fa el reproductor al navegador (per trobar errors)
                     with (projecte.carpeta / "registre-pagina.log").open("a", encoding="utf-8") as f:
@@ -349,31 +410,45 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def _puja_broll(self, projecte):
-            """Rep un fitxer (vídeo o imatge) i el fa servir de b-roll d'una instrucció."""
+            """Rep un fitxer (vídeo o imatge) i el fa servir de b-roll o sticker d'una instrucció.
+
+            Abans de llegir res, comprova el tipus, la mida i que la instrucció existeixi."""
             consulta = parse_qs(urlparse(self.path).query)
             iid = (consulta.get("instruccio") or [""])[0]
             nom = Path((consulta.get("nom") or ["fitxer"])[0]).name
             mida = int(self.headers.get("Content-Length") or 0)
             if not (broll.es_compatible(Path(nom)) or stickers.es_compatible(Path(nom))):
-                self.rfile.read(mida)
-                return self._json({"error": "Aquest tipus de fitxer no serveix"}, HTTPStatus.BAD_REQUEST)
+                return self._no_permesa(HTTPStatus.BAD_REQUEST, "Aquest tipus de fitxer no serveix")
+            if not 0 < mida <= MIDA_MAXIMA_PUJADA:
+                return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "El fitxer és buit o massa gran (2 GB com a màxim)")
+            if not any(i["id"] == iid and i.get("tipus") in ("broll", "sticker") for i in projecte.instruccions()):
+                return self._no_permesa(HTTPStatus.NOT_FOUND, "No trobo aquesta instrucció")
             carpeta = projecte.carpeta_instruccions() / broll.CARPETA / "pujats"
             carpeta.mkdir(parents=True, exist_ok=True)
             desti = carpeta / nom
-            with desti.open("wb") as f:
-                pendent = mida
-                while pendent > 0:
-                    tros = self.rfile.read(min(1 << 20, pendent))
-                    if not tros:
-                        break
-                    f.write(tros)
-                    pendent -= len(tros)
+            temporal = carpeta / f".{nom}.pujant"
+            try:
+                with temporal.open("wb") as f:
+                    pendent = mida
+                    while pendent > 0:
+                        tros = self.rfile.read(min(1 << 20, pendent))
+                        if not tros:
+                            raise ConnectionError("pujada interrompuda")
+                        f.write(tros)
+                        pendent -= len(tros)
+                temporal.replace(desti)
+            except (OSError, ConnectionError):
+                temporal.unlink(missing_ok=True)
+                self.close_connection = True
+                return
             with bloqueig:
                 try:
                     projecte.assigna_recurs(iid, desti)
                 except KeyError:
+                    desti.unlink(missing_ok=True)
                     return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
                 except Exception as e:
+                    desti.unlink(missing_ok=True)
                     return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
                 return self._json(instantania())
 
@@ -381,9 +456,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             """Rep una font (.ttf, .otf, .woff o .woff2) i la fa servir per als subtítols."""
             nom = Path((parse_qs(urlparse(self.path).query).get("nom") or [""])[0]).name
             mida = int(self.headers.get("Content-Length") or 0)
-            if mida > MIDA_MAXIMA_FONT:
-                self.close_connection = True
-                return self._json({"error": "La font és massa gran"}, HTTPStatus.BAD_REQUEST)
+            if Path(nom).suffix.lower() not in marca.FORMATS_FONT:
+                return self._no_permesa(HTTPStatus.BAD_REQUEST, "La font ha de ser un fitxer .ttf, .otf, .woff o .woff2")
+            if not 0 < mida <= MIDA_MAXIMA_FONT:
+                return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "La font és buida o massa gran")
             contingut = self.rfile.read(mida)
             with bloqueig:
                 try:

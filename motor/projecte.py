@@ -297,6 +297,16 @@ class Projecte:
     def desa_notes(self, notes: list[dict]) -> None:
         (self.carpeta / NOTES).write_text(json.dumps(notes, ensure_ascii=False, indent=1), encoding="utf-8")
 
+    def afegeix_nota(self, nota: dict) -> None:
+        """Afegeix (o substitueix, si ja hi és) una nota, sense tocar les altres."""
+        notes = [n for n in self.notes() if n.get("id") != nota.get("id")]
+        notes.append({k: nota[k] for k in ("id", "versio", "temps", "temps_original", "text", "creada") if k in nota})
+        notes.sort(key=lambda n: (str(n.get("versio")), n.get("temps") or 0, n.get("id") or 0))
+        self.desa_notes(notes)
+
+    def esborra_nota(self, nid) -> None:
+        self.desa_notes([n for n in self.notes() if n.get("id") != nid])
+
     def exports(self) -> list[dict]:
         carpeta = self.carpeta / EXPORTS
         if not carpeta.exists():
