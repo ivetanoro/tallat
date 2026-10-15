@@ -224,6 +224,8 @@ function aplicaTrams(r) {
   }
   if (r.zooms) zoomsTram = r.zooms;
   if (r.brolls) { brollsMuntatge = r.brolls; pintaResumBroll(); }
+  if (r.efectes) { efectesMuntatge = r.efectes; pintaSo(); }
+  if ("pista_efectes" in r) posaPistaEfectes(r.pista_efectes);
   if (r.stickers) stickersMuntatge = r.stickers;
   if (r.zoom) $(".pantalla").style.setProperty("--zoom", r.zoom);
   if (r.instruccions) { instruccions = r.instruccions; if (P) pintaInstruccions(); }
@@ -916,6 +918,7 @@ function bucle() {
   pintaSubtitols();
   pintaBroll();
   pintaStickers();
+  sonaEfectes();
   R.v.classList.toggle("zoom", vista === "directe" && !!zoomsTram[Math.min(R.k, trams.length - 1)]);
 }
 
@@ -1036,6 +1039,7 @@ function pintaMostra(caixa, e, { paraules, alcada, mida }) {
 }
 
 function pintaResumEstil() {
+  if (!$("#nom-estil")) return;  // els subtítols ja no tenen fila: tenen la seva pestanya
   if (!estilSub || !window.TallatSubtitols) return;
   $("#nom-estil").textContent = estat?.subtitols === false ? "Sense subtítols" : predefinitActual()?.nom ?? "Personalitzat";
   pintaMostra($("#mostra-estil"), { ...estilSub, destaca: false, emojis: false, clau_grans: false, fons: "cap" },
@@ -1073,7 +1077,7 @@ function marcaSegmentat(id, valor) {
 let estilsMostrats = false;  // «Més estils» desplegat
 function pintaPanellEstil() {
   const e = estilSub;
-  if (!e || $("#panell-estil").hidden) return;
+  if (!e || $("#pestanya-subtitols").hidden) return;
   const actual = predefinitActual();
   const cont = $("#estils");
   cont.textContent = "";
@@ -1179,6 +1183,8 @@ function respostaEstil(r) {
 }
 
 function aplicaBroll(r) {
+  if (r.estil_so) { estilSo = { ...r.estil_so, ...soPendent }; pintaSo(); }
+  if (r.sons_propis) $("#s-carpeta").textContent = r.sons_propis.replace(/^\/Users\/[^/]+/, "~");
   if (r.estil_broll) estilBroll = { ...r.estil_broll, ...brollPendent };
   if (r.estils_broll) estilsBroll = r.estils_broll;
   if (r.mostra_broll) mostraBroll = r.mostra_broll;
@@ -1392,10 +1398,11 @@ function instalaTitol() {
 }
 
 // --- Pestanyes de la columna de l'esquerra ------------------------------------------------------
-// Edita (què queda al vídeo), Estil (com es veu) i Vídeos (els que s'han exportat). Es
-// recorda la darrera. A «Edita», un punt avisa si hi ha coses per decidir.
+// Per tasques: Edita (què queda al vídeo), Subtítols, Gràfics (títol i b-roll), So i Vídeos (els
+// exportats). Es recorda la darrera. A «Edita», un punt avisa si hi ha coses per decidir.
 
 function triaPestanya(nom, { focus = false } = {}) {
+  if (nom === "estil") nom = "subtitols";  // la pestanya d'abans
   if (!$(`#pestanya-${nom}`)) nom = "edita";
   for (const tab of $$("#pestanyes [role=tab]")) {
     const triada = tab.dataset.pestanya === nom;
@@ -1405,6 +1412,17 @@ function triaPestanya(nom, { focus = false } = {}) {
     if (triada && focus) tab.focus();
   }
   desa("tallat.pestanya", nom);
+  const subtitols = nom === "subtitols";
+  if (subtitols !== editantEstil) {
+    editantEstil = subtitols;
+    previaBruta = true;
+    previaTemps = NaN;
+    if (subtitols) {
+      if (vista !== "directe") canviaVista("directe");
+      pintaPanellEstil();
+    }
+  }
+  if (nom === "so" && typeof pintaSo === "function") pintaSo();
 }
 
 function actualitzaPestanyes() {
@@ -1643,22 +1661,9 @@ async function pujaFont(fitxer) {
   } catch (e) { avis(e.message, 6000); }
 }
 
+// Els subtítols tenen la seva pestanya: mentre és oberta, el reproductor en mostra sempre una línia.
 function obreEstil() {
-  editantEstil = true;
-  if (vista !== "directe") canviaVista("directe");
-  $(".barra").classList.add("editant-estil");
-  $("#panell-estil").hidden = false;
-  $(".barra").scrollTop = 0;
-  pintaPanellEstil();
-  $("#tanca-estil").focus();
-}
-
-function tancaEstil() {
-  editantEstil = false;
-  previaTemps = NaN;
-  $(".barra").classList.remove("editant-estil");
-  $("#panell-estil").hidden = true;
-  $("#obre-estil").focus();
+  triaPestanya("subtitols");
 }
 
 // --- Columnes i seccions -----------------------------------------------------------------------
@@ -1775,9 +1780,7 @@ function instalaEstil() {
   }).observe(capa);
   if (!window.gsap) registre("sense-gsap", {});  // sense internet: subtítols sense animacions
 
-  $("#obre-estil").addEventListener("click", obreEstil);
   $("#mes-estils").addEventListener("click", () => { estilsMostrats = !$("#estils").classList.contains("tots"); pintaPanellEstil(); });
-  $("#tanca-estil").addEventListener("click", tancaEstil);
   const segmentat = (id, aplica, mostra) => {
     for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaEstil(aplica(b.dataset.valor), mostra));
   };
@@ -2592,6 +2595,7 @@ function instalaControls() {
   instalaKits();
   instalaTitol();
   instalaBroll();
+  instalaSo();
   instalaPestanyes();
   setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
@@ -2632,7 +2636,6 @@ function instalaControls() {
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea, select")) return;
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
-    if (editantEstil && e.key === "Escape") { tancaEstil(); return; }
     if (editantTitol && e.key === "Escape") { tancaTitol(); return; }
     if (editantBroll && e.key === "Escape") { tancaBroll(); return; }
     if (e.ctrlKey && e.metaKey && e.code === "KeyS") {  // ⌃⌘S, com al Finder
@@ -2693,12 +2696,140 @@ async function inicia() {
   versioEstil = P.versio_estil;
   carregaFontsKit(P.fonts_kit || []);
   aplicaEstilSubtitols(P.estil_subtitols);
+  pintaPanellEstil();
   pintaVersions(P.exports || []);
   pintaReels();
   try { biblioteca = await api("/api/biblioteca"); } catch { biblioteca = { broll: [], sticker: [] }; }
   pintaInstruccions();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;
+}
+
+
+// --- So --------------------------------------------------------------------------------------
+// La neteja de la veu i els efectes de so (motor/so.py). Els efectes sonen a la vista prèvia amb
+// la mateixa pista que es barreja al vídeo final; la veu neta només s'escolta a les mostres (i a
+// l'esborrany i el final).
+
+let estilSo = null;        // la secció «so» del kit
+let efectesMuntatge = [];  // [{clau, nom, so, t, actiu}]
+let soPendent = {};
+let temporitzadorSo = null;
+let mostresSo = null;      // {abans, despres, sons: {nom: url}}
+let mostraNivell = null;   // de quin nivell de neteja és la mostra «neta»
+const aEfectes = $("#audio-efectes");
+
+function posaPistaEfectes(url) {
+  if (!url) { aEfectes.removeAttribute("src"); aEfectes.load(); return; }
+  if (!aEfectes.src.endsWith(url)) aEfectes.src = url;
+}
+
+function sonaEfectes() {
+  const actiu = vista === "directe" && R.reproduint && aEfectes.getAttribute("src");
+  if (!actiu) { if (!aEfectes.paused) aEfectes.pause(); return; }
+  const m = tempsMuntatge();
+  if (aEfectes.readyState >= 1 && Math.abs(aEfectes.currentTime - m) > 0.12) aEfectes.currentTime = m;
+  if (aEfectes.paused) aEfectes.play().catch(() => {});
+}
+
+async function carregaMostresSo() {
+  const nivell = estilSo?.soroll || "suau";
+  if (mostresSo && mostraNivell === nivell) return;
+  $("#s-preparant").hidden = false;
+  try {
+    await cua;
+    mostresSo = await api("/api/so/mostres", {});
+    mostraNivell = nivell;
+    $("#s-abans").src = mostresSo.abans;
+    $("#s-despres").src = mostresSo.despres;
+    pintaSo();
+  } catch (e) { avis(e.message, 6000); }
+  $("#s-preparant").hidden = true;
+}
+
+function pintaSo() {
+  if (!estilSo || $("#pestanya-so").hidden) return;
+  const e = estilSo;
+  const neteja = e.neteja !== false;
+  $("#s-neteja").setAttribute("aria-checked", String(neteja));
+  $("#camp-s-soroll").hidden = !neteja;
+  $("#s-despres-caixa").hidden = !neteja;
+  marcaSegmentat("s-soroll", e.soroll || "suau");
+  marcaSegmentat("s-efectes", e.efectes || "pocs");
+  $("#s-volum").value = e.volum_efectes ?? 0.5;
+  $("#camp-s-volum").hidden = e.efectes === "cap";
+  if (neteja && mostraNivell !== (e.soroll || "suau")) carregaMostresSo();
+  if (!mostresSo) carregaMostresSo();
+
+  const actius = efectesMuntatge.filter((x) => x.actiu).length;
+  $("#compte-efectes").textContent = efectesMuntatge.length ? `${actius} de ${efectesMuntatge.length}` : "";
+  const llista = $("#llista-efectes");
+  llista.textContent = "";
+  if (e.efectes === "cap") return;
+  if (!efectesMuntatge.length) {
+    llista.innerHTML = `<p class="buit">Aquest vídeo encara no té res que soni: surten amb el b-roll, els stickers i el títol${e.efectes === "molts" ? ", i amb les paraules destacades" : ""}.</p>`;
+    return;
+  }
+  for (const x of efectesMuntatge) {
+    const fila = document.createElement("div");
+    fila.className = `efecte${x.actiu ? "" : " apagat"}`;
+    const escolta = document.createElement("button");
+    escolta.className = "icona";
+    escolta.title = "Escolta aquest so";
+    escolta.setAttribute("aria-label", `Escolta el so de ${x.nom}`);
+    escolta.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>`;
+    escolta.addEventListener("click", () => {
+      const url = mostresSo?.sons?.[x.so];
+      if (url) new Audio(url).play().catch(() => {});
+    });
+    const moment = document.createElement("button");
+    moment.className = "moment";
+    moment.textContent = fmt(x.t);
+    moment.title = "Ves a aquest moment";
+    moment.addEventListener("click", () => vesA(Math.max(0, x.t - 0.5)));
+    const nom = document.createElement("span");
+    nom.className = "nom-efecte";
+    nom.textContent = x.nom;
+    const interruptor = document.createElement("button");
+    interruptor.className = "interruptor";
+    interruptor.setAttribute("role", "switch");
+    interruptor.setAttribute("aria-checked", String(x.actiu));
+    interruptor.setAttribute("aria-label", `So de ${x.nom} al ${fmt(x.t)}`);
+    interruptor.innerHTML = `<span class="pista" aria-hidden="true"><span class="bola"></span></span>`;
+    interruptor.addEventListener("click", () => canvia((est) => {
+      const apagats = new Set(est.sons_apagats || []);
+      if (apagats.has(x.clau)) apagats.delete(x.clau); else apagats.add(x.clau);
+      est.sons_apagats = [...apagats].sort();
+    }));
+    fila.append(escolta, moment, nom, interruptor);
+    llista.append(fila);
+  }
+}
+
+function canviaSo(canvis) {
+  estilSo = { ...estilSo, ...canvis };
+  pintaSo();
+  Object.assign(soPendent, canvis);
+  clearTimeout(temporitzadorSo);
+  temporitzadorSo = setTimeout(desaSo, 300);
+}
+
+async function desaSo() {
+  const canvis = soPendent;
+  soPendent = {};
+  if (!Object.keys(canvis).length) return;
+  try {
+    await cua;
+    respostaEstil(await api("/api/marca", { so: canvis }));
+  } catch (e) { avis(e.message, 5000); }
+}
+
+function instalaSo() {
+  $("#s-neteja").addEventListener("click", () => canviaSo({ neteja: estilSo.neteja === false }));
+  for (const [id, clau] of [["s-soroll", "soroll"], ["s-efectes", "efectes"]]) {
+    for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaSo({ [clau]: b.dataset.valor }));
+  }
+  $("#s-volum").addEventListener("input", (e) => canviaSo({ volum_efectes: +e.target.value }));
 }
 
 inicia();

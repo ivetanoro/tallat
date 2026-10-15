@@ -263,7 +263,8 @@ def ordre_exporta(args) -> None:
         projecte.estat["subtitols"] = False
     capa = projecte.capa_subtitols(trams, args.qualitat, avis=print)
     exporta.exporta(projecte.font(args.qualitat), trams, sortida, args.qualitat, progres=_barra("exportant"), capa=capa,
-                    zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams))
+                    zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
+                    **projecte.opcions_so(trams))
     projecte.desa_talls(sortida, trams)
     print(f"\nFet en {minuts(time.time() - t0)}:\n  {sortida}")
 

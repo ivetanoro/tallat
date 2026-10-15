@@ -373,6 +373,23 @@ Subtítols animats («subtitols.mov»)
 """
 
 
+EFECTES = """
+Efectes de so: «efectes-de-so.wav» dura tot el muntatge, amb cada efecte al seu moment. Posa'l en
+una pista d'àudio, a l'inici (0:00). La neteja de la veu no hi va: aquí sona la veu original (el
+vídeo que exporta tallat sí que la porta neta).
+"""
+
+
+def _efectes(projecte, trams, desti: Path) -> None:
+    """Copia la pista d'efectes de so (si n'hi ha) i ho explica al LLEGEIX-ME."""
+    pista = projecte.pista_efectes(trams)
+    if pista is None:
+        return
+    shutil.copy(pista, desti / "efectes-de-so.wav")
+    llegeix = desti / "LLEGEIX-ME.txt"
+    llegeix.write_text(llegeix.read_text(encoding="utf-8") + EFECTES, encoding="utf-8")
+
+
 def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
     """Escriu la carpeta per a altres editors i en torna el camí."""
     trams = projecte.trams()
@@ -397,6 +414,7 @@ def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
     (desti / f"{nom}.xml").write_text(xmeml(nom, projecte.video, pla, capa), encoding="utf-8")
     (desti / "LLEGEIX-ME.txt").write_text(
         LLEGEIX_ME.format(nom=nom, video=projecte.video, capa=AMB_CAPA if capa else ""), encoding="utf-8")
+    _efectes(projecte, trams, desti)
     return desti
 
 
@@ -485,4 +503,5 @@ def exporta_trossos(projecte, progres=None) -> Path:
     (desti / "LLEGEIX-ME.txt").write_text(LLEGEIX_ME_TROSSOS.format(
         nom=nom, n=len(trams), durada=_moment(durada),
         recursos=_llista_recursos(pla["brolls"], pla["stickers"])), encoding="utf-8")
+    _efectes(projecte, trams, desti)
     return desti

@@ -43,7 +43,7 @@ MIDA_MAXIMA_KIT = 60 * 1024 * 1024  # un kit importat (amb les seves fonts), com
 FORMATS_FONT = {".ttf", ".otf", ".woff", ".woff2"}
 
 # Què es pot canviar (des de la pàgina o amb les regles del teu gust), i entre quins límits.
-EDITABLES = {"subtitols", "titol", "broll", "stickers", "talls"}
+EDITABLES = {"subtitols", "titol", "broll", "stickers", "talls", "so"}
 RANGS = {
     "subtitols": {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.05, 0.95),
                   "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60),
@@ -55,6 +55,7 @@ RANGS = {
               "radi": (0.0, 0.5), "vora": (0.0, 0.04), "rotacio": (-15, 15)},
     "stickers": {"durada": (0.5, 6.0), "mida": (0.08, 0.8), "x": (0.0, 1.0), "y": (0.0, 1.0), "rotacio": (-30, 30)},
     "talls": {"pausa_maxima": (0.1, 2.0)},
+    "so": {"volum_efectes": (0.0, 1.0)},
 }
 OPCIONS = {
     "subtitols": {"animacio": {"pop", "fos", "cap", "impacte", "cortina", "pes"}, "apareixen": {"paraula", "linia"},
@@ -62,6 +63,7 @@ OPCIONS = {
                   "fons": {"cap", "pindola"}, "disposicio": {"linia", "apilat", "escampat"},
                   "alineacio": {"centre", "esquerra", "dreta", "esglao"}},
     "stickers": {"animacio": {"pop", "cap"}},
+    "so": {"soroll": {"suau", "mitja", "fort"}, "efectes": {"cap", "pocs", "molts"}},
     "broll": {"disposicio": {"pantalla", "targeta", "partida", "carrusel"},
               "proporcio": {"9:16", "3:4", "4:5", "1:1", "16:9"},
               "animacio": {"pop", "puja", "llisca", "fos", "cap"}},

@@ -16,11 +16,40 @@
       <p class="detall" id="trossos">&nbsp;</p>
     </header>
 
+    <section class="seccio kit-cap" data-seccio="kit">
+      <h2>Kit d'estil</h2>
+      <div class="fila-kit">
+        <select id="kit" class="tria-kit" aria-label="Kit d'estil d'aquest vídeo"></select>
+        <button class="icona" id="menu-kit-boto" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-kit"
+                aria-label="Més accions del kit" title="Més accions del kit"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="10" r="1.4"/><circle cx="10" cy="10" r="1.4"/><circle cx="15" cy="10" r="1.4"/></svg></button>
+        <div class="menu-kit" id="menu-kit" role="menu" aria-label="Accions del kit" hidden>
+          <button role="menuitem" id="kit-duplica">Duplica…</button>
+          <button role="menuitem" id="kit-nou">Kit nou amb l'estil de tallat…</button>
+          <button role="menuitem" id="kit-nom">Canvia el nom…</button>
+          <button role="menuitem" id="kit-defecte">Fes-lo per defecte</button>
+          <hr>
+          <button role="menuitem" id="kit-exporta">Exporta (.zip)</button>
+          <button role="menuitem" id="kit-importa">Importa un kit…</button>
+          <hr id="sep-treu-kit">
+          <button role="menuitem" class="perill" id="kit-esborra">Treu-lo</button>
+        </div>
+      </div>
+      <p class="detall" id="kit-detall"></p>
+      <form class="nova-regla" id="form-kit" hidden>
+        <input id="nom-kit" type="text" autocomplete="off" maxlength="60" aria-label="Nom del kit">
+      </form>
+      <input type="file" id="fitxer-kit" accept=".zip,application/zip" hidden>
+    </section>
+
     <div class="segmentat ample pestanyes" role="tablist" aria-label="Què vols fer" id="pestanyes">
       <button role="tab" id="tab-edita" data-pestanya="edita" aria-controls="pestanya-edita" aria-selected="true"
               title="Què queda al vídeo: reels, instruccions de veu, propostes i silencis">Edita<span class="punt" id="punt-edita" hidden></span></button>
-      <button role="tab" id="tab-estil" data-pestanya="estil" aria-controls="pestanya-estil" aria-selected="false"
-              title="Com es veu: el kit, els subtítols, el títol i el b-roll">Estil</button>
+      <button role="tab" id="tab-subtitols" data-pestanya="subtitols" aria-controls="pestanya-subtitols" aria-selected="false"
+              title="Com són els subtítols: l'estil, la lletra, els colors i les paraules destacades">Subtítols</button>
+      <button role="tab" id="tab-grafics" data-pestanya="grafics" aria-controls="pestanya-grafics" aria-selected="false"
+              title="El títol del ganxo i el b-roll">Gràfics</button>
+      <button role="tab" id="tab-so" data-pestanya="so" aria-controls="pestanya-so" aria-selected="false"
+              title="La neteja de la veu i els efectes de so">So</button>
       <button role="tab" id="tab-videos" data-pestanya="videos" aria-controls="pestanya-videos" aria-selected="false"
               title="Els esborranys i els vídeos finals que has exportat">Vídeos<span class="compte-pestanya" id="compte-videos"></span></button>
     </div>
@@ -50,39 +79,10 @@
     </section>
     </div>
 
-    <div class="pestanya" id="pestanya-estil" role="tabpanel" aria-labelledby="tab-estil" hidden>
-    <section class="seccio" data-seccio="kit">
-      <h2>Kit d'estil</h2>
-      <div class="fila-kit">
-        <select id="kit" class="tria-kit" aria-label="Kit d'estil d'aquest vídeo"></select>
-        <button class="icona" id="menu-kit-boto" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-kit"
-                aria-label="Més accions del kit" title="Més accions del kit"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="10" r="1.4"/><circle cx="10" cy="10" r="1.4"/><circle cx="15" cy="10" r="1.4"/></svg></button>
-        <div class="menu-kit" id="menu-kit" role="menu" aria-label="Accions del kit" hidden>
-          <button role="menuitem" id="kit-duplica">Duplica…</button>
-          <button role="menuitem" id="kit-nou">Kit nou amb l'estil de tallat…</button>
-          <button role="menuitem" id="kit-nom">Canvia el nom…</button>
-          <button role="menuitem" id="kit-defecte">Fes-lo per defecte</button>
-          <hr>
-          <button role="menuitem" id="kit-exporta">Exporta (.zip)</button>
-          <button role="menuitem" id="kit-importa">Importa un kit…</button>
-          <hr id="sep-treu-kit">
-          <button role="menuitem" class="perill" id="kit-esborra">Treu-lo</button>
-        </div>
-      </div>
-      <p class="detall" id="kit-detall"></p>
-      <form class="nova-regla" id="form-kit" hidden>
-        <input id="nom-kit" type="text" autocomplete="off" maxlength="60" aria-label="Nom del kit">
-      </form>
-      <input type="file" id="fitxer-kit" accept=".zip,application/zip" hidden>
-    </section>
+    <div class="pestanya" id="pestanya-grafics" role="tabpanel" aria-labelledby="tab-grafics" hidden>
 
-    <section class="seccio" data-seccio="aspecte">
-      <h2>Com es veu</h2>
-      <button class="fila-estil" id="obre-estil" aria-label="Subtítols: canvia'n l'estil">
-        <span class="mostra-estil" id="mostra-estil" aria-hidden="true">Aa</span>
-        <span class="fila-estil-text"><strong>Subtítols</strong><span id="nom-estil"></span></span>
-        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
-      </button>
+    <section class="seccio" data-seccio="grafics">
+      <h2>Gràfics</h2>
       <button class="fila-estil" id="obre-estil-titol" aria-label="Títol del ganxo: escriu-lo i canvia'n l'estil">
         <span class="mostra-estil" id="mostra-titol" aria-hidden="true">Aa</span>
         <span class="fila-estil-text"><strong>Títol del ganxo</strong><span id="nom-estil-titol"></span></span>
@@ -93,6 +93,216 @@
         <span class="fila-estil-text"><strong>B-roll</strong><span id="nom-estil-broll"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
+    </section>
+    </div>
+
+    <div class="pestanya" id="pestanya-subtitols" role="tabpanel" aria-labelledby="tab-subtitols" hidden>
+    <div class="panell-estil" id="panell-estil">
+      <p class="detall">Es desa al kit «<span id="nom-kit-panell"></span>»: canvia tots els vídeos que el fan servir.</p>
+      <button class="interruptor" id="subtitols" role="switch" aria-checked="true">
+        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Posa subtítols al vídeo
+      </button>
+
+      <div class="estils" id="estils" role="radiogroup" aria-label="Estils predefinits"></div>
+      <button class="enllac mes-estils" id="mes-estils" aria-expanded="false" aria-controls="estils">Més estils</button>
+
+      <div class="camp">
+        <label class="etiqueta" for="e-font">Lletra</label>
+        <select id="e-font"></select>
+        <button class="enllac puja-font" id="puja-font">Puja una font teva…</button>
+        <p class="detall avis-lletra" id="avis-lletra" hidden>Les gratuïtes es baixen al kit el primer cop que les tries (cal internet).</p>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="e-mida">Mida</label>
+        <input type="range" id="e-mida" min="0.04" max="0.12" step="0.002">
+      </div>
+      <div class="camp">
+        <span class="etiqueta">Colors</span>
+        <div class="colors">
+          <label class="color"><input type="color" id="e-color"><span>Text</span></label>
+          <label class="color" id="camp-actiu"><input type="color" id="e-color-actiu"><span>Destacat</span></label>
+          <label class="color"><input type="color" id="e-contorn"><span>Contorn</span></label>
+          <label class="color" id="camp-fons"><input type="color" id="e-fons-color"><span>Fons</span></label>
+        </div>
+      </div>
+      <div class="camp">
+        <label class="etiqueta" for="e-posicio">Posició</label>
+        <input type="range" id="e-posicio" min="0.05" max="0.95" step="0.01">
+        <div class="extrems" aria-hidden="true"><span>Dalt</span><span>Baix</span></div>
+      </div>
+
+      <details class="grup-estil" id="grup-e-destacades">
+        <summary>Paraules destacades<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+        <div class="cos-grup">
+          <button class="interruptor" id="e-clau" role="switch" aria-checked="false">
+            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Més grans i d'un altre color
+          </button>
+          <div class="sub-camps" id="camps-clau">
+            <label class="etiqueta" for="e-clau-mida">Quant més grans</label>
+            <input type="range" id="e-clau-mida" min="1" max="3.5" step="0.05">
+            <div class="fila-camps">
+              <label class="color"><input type="color" id="e-clau-color"><span>Color</span></label>
+              <button class="interruptor" id="e-clau-sola" role="switch" aria-checked="false">
+                <span class="pista" aria-hidden="true"><span class="bola"></span></span>Soles a la seva línia
+              </button>
+            </div>
+            <p class="detall">Tria quines són amb «Destaca», a dalt del text. Les que no triïs, les tria tallat.</p>
+          </div>
+          <button class="interruptor" id="e-emojis" role="switch" aria-checked="false">
+            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Amb un emoji
+          </button>
+        </div>
+      </details>
+
+      <details class="grup-estil" id="grup-e-disposicio">
+        <summary>Disposició i animació<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+        <div class="cos-grup">
+          <div class="camp">
+            <span class="etiqueta" id="et-paraules">Paraules a la pantalla</span>
+            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-paraules" id="e-paraules">
+              <button role="radio" data-valor="una">Una</button>
+              <button role="radio" data-valor="poques">2 o 3</button>
+              <button role="radio" data-valor="frase">Frase</button>
+            </div>
+          </div>
+          <div class="camp">
+            <span class="etiqueta" id="et-disposicio">Les línies</span>
+            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-disposicio" id="e-disposicio">
+              <button role="radio" data-valor="linia" title="Cada línia substitueix l'anterior">Una cada cop</button>
+              <button role="radio" data-valor="apilat" title="Les línies d'una frase s'apilen una sota l'altra">S'apilen</button>
+              <button role="radio" data-valor="escampat" title="Les paraules d'una frase surten en llocs i mides diferents">Escampades</button>
+            </div>
+          </div>
+          <div class="camp">
+            <span class="etiqueta" id="et-alineacio">Alineació</span>
+            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-alineacio" id="e-alineacio">
+              <button role="radio" data-valor="esquerra">Esquerra</button>
+              <button role="radio" data-valor="centre">Centre</button>
+              <button role="radio" data-valor="dreta">Dreta</button>
+              <button role="radio" data-valor="esglao" title="Una línia a l'esquerra i la següent a la dreta">Esglaó</button>
+            </div>
+          </div>
+          <div class="camp">
+            <span class="etiqueta" id="et-apareixen">Apareixen</span>
+            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-apareixen" id="e-apareixen">
+              <button role="radio" data-valor="paraula">D'una en una</button>
+              <button role="radio" data-valor="linia">Totes de cop</button>
+            </div>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="e-animacio">Animació</label>
+            <select id="e-animacio">
+              <option value="pop">Pop · fan un petit salt</option>
+              <option value="fos">Fos · s'encenen suaument</option>
+              <option value="impacte">Impacte · entren grans i de cop</option>
+              <option value="cortina">Cortina · es destapen</option>
+              <option value="pes">Gruix · de fines a gruixudes</option>
+              <option value="cap">Cap · surten i prou</option>
+            </select>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="e-destacat">La paraula que sona</label>
+            <select id="e-destacat">
+              <option value="cap">No la destaquis</option>
+              <option value="color">Canvia de color</option>
+              <option value="caixa">Caixa de color al darrere</option>
+              <option value="karaoke">Karaoke · es queden pintades</option>
+              <option value="gran">Es fa més gran</option>
+            </select>
+          </div>
+          <div class="camp">
+            <span class="etiqueta" id="et-aspecte">Aspecte</span>
+            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-aspecte" id="e-aspecte">
+              <button role="radio" data-valor="normal">Normal</button>
+              <button role="radio" data-valor="neo">Neó</button>
+              <button role="radio" data-valor="degradat">Degradat</button>
+            </div>
+          </div>
+          <div class="camp">
+            <span class="etiqueta" id="et-fons">Fons</span>
+            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-fons" id="e-fons">
+              <button role="radio" data-valor="cap">Sense fons</button>
+              <button role="radio" data-valor="pindola">Píndola</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details class="grup-estil" id="grup-e-detalls">
+        <summary>Detalls de la lletra<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+        <div class="cos-grup">
+          <div class="fila-camps">
+            <select id="e-pes" aria-label="Gruix de la lletra">
+              <option value="400">Normal</option>
+              <option value="600">Seminegreta</option>
+              <option value="700">Negreta</option>
+              <option value="800">Extranegreta</option>
+              <option value="900">Negra</option>
+            </select>
+            <button class="interruptor" id="e-majuscules" role="switch" aria-checked="false">
+              <span class="pista" aria-hidden="true"><span class="bola"></span></span>Majúscules
+            </button>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="e-espaiat">Espai entre lletres</label>
+            <input type="range" id="e-espaiat" min="-0.1" max="0.2" step="0.005">
+            <div class="extrems" aria-hidden="true"><span>Juntes</span><span>Separades</span></div>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="e-interlineat">Espai entre línies</label>
+            <input type="range" id="e-interlineat" min="0.8" max="1.5" step="0.01">
+            <div class="extrems" aria-hidden="true"><span>Juntes</span><span>Separades</span></div>
+          </div>
+          <div class="camp">
+            <label class="etiqueta" for="e-gruix">Gruix del contorn</label>
+            <input type="range" id="e-gruix" min="0" max="0.12" step="0.005">
+            <div class="extrems" aria-hidden="true"><span>Sense</span><span>Gruixut</span></div>
+          </div>
+          <button class="interruptor" id="e-ombra" role="switch" aria-checked="true">
+            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Ombra
+          </button>
+        </div>
+      </details>
+
+      <button class="enllac" id="restableix-estil">Torna a l'estil de tallat</button>
+      <p class="detall" id="fitxer-estil"></p>
+    </div>
+    </div>
+
+    <div class="pestanya" id="pestanya-so" role="tabpanel" aria-labelledby="tab-so" hidden>
+    <section class="seccio" data-seccio="veu">
+      <h2>La veu</h2>
+      <button class="interruptor" id="s-neteja" role="switch" aria-checked="true">
+        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Neteja la veu
+      </button>
+      <p class="detall">Treu el soroll de fons, suavitza les «s» i iguala el volum al de les xarxes. Ho sentiràs a l'esborrany i al vídeo final; aquí sota en pots escoltar deu segons.</p>
+      <div class="camp" id="camp-s-soroll">
+        <span class="etiqueta" id="et-s-soroll">Soroll de fons que es treu</span>
+        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-s-soroll" id="s-soroll">
+          <button role="radio" data-valor="suau">Poc</button>
+          <button role="radio" data-valor="mitja">Mitjà</button>
+          <button role="radio" data-valor="fort" title="Si la veu sona estranya, torna a «Poc»">Molt</button>
+        </div>
+      </div>
+      <div class="abans-despres" id="s-mostres">
+        <div><span class="etiqueta">Abans</span><audio id="s-abans" controls preload="none"></audio></div>
+        <div id="s-despres-caixa"><span class="etiqueta">Neta</span><audio id="s-despres" controls preload="none"></audio></div>
+      </div>
+      <p class="detall" id="s-preparant" hidden>Preparant les mostres…</p>
+    </section>
+    <section class="seccio" data-seccio="efectes">
+      <h2>Efectes de so <span class="compte" id="compte-efectes"></span></h2>
+      <div class="segmentat ample" role="radiogroup" aria-label="Quants efectes de so" id="s-efectes">
+        <button role="radio" data-valor="cap">Cap</button>
+        <button role="radio" data-valor="pocs" title="B-roll, stickers i títol">Pocs</button>
+        <button role="radio" data-valor="molts" title="També les paraules destacades">Molts</button>
+      </div>
+      <div class="camp" id="camp-s-volum">
+        <label class="etiqueta" for="s-volum">Volum dels efectes</label>
+        <input type="range" id="s-volum" min="0" max="1" step="0.05">
+      </div>
+      <div id="llista-efectes"></div>
+      <p class="detall">Els sons els fa tallat. Si vols els teus, posa'ls a <code id="s-carpeta"></code> amb el nom del so que substitueixen (whoosh, pop, tecla, brill o tic).</p>
     </section>
     </div>
 
@@ -299,178 +509,6 @@
       <button class="enllac" id="restableix-broll">Torna a l'estil de tallat</button>
     </div>
 
-    <div class="panell-estil" id="panell-estil" hidden>
-      <button class="enllac tornar" id="tanca-estil">‹ Enrere</button>
-      <h2 class="titol-panell">Subtítols</h2>
-      <p class="detall">Es desa al kit «<span id="nom-kit-panell"></span>»: canvia tots els vídeos que el fan servir.</p>
-      <button class="interruptor" id="subtitols" role="switch" aria-checked="true">
-        <span class="pista" aria-hidden="true"><span class="bola"></span></span>Posa subtítols al vídeo
-      </button>
-
-      <div class="estils" id="estils" role="radiogroup" aria-label="Estils predefinits"></div>
-      <button class="enllac mes-estils" id="mes-estils" aria-expanded="false" aria-controls="estils">Més estils</button>
-
-      <div class="camp">
-        <label class="etiqueta" for="e-font">Lletra</label>
-        <select id="e-font"></select>
-        <button class="enllac puja-font" id="puja-font">Puja una font teva…</button>
-        <p class="detall avis-lletra" id="avis-lletra" hidden>Les gratuïtes es baixen al kit el primer cop que les tries (cal internet).</p>
-      </div>
-      <div class="camp">
-        <label class="etiqueta" for="e-mida">Mida</label>
-        <input type="range" id="e-mida" min="0.04" max="0.12" step="0.002">
-      </div>
-      <div class="camp">
-        <span class="etiqueta">Colors</span>
-        <div class="colors">
-          <label class="color"><input type="color" id="e-color"><span>Text</span></label>
-          <label class="color" id="camp-actiu"><input type="color" id="e-color-actiu"><span>Destacat</span></label>
-          <label class="color"><input type="color" id="e-contorn"><span>Contorn</span></label>
-          <label class="color" id="camp-fons"><input type="color" id="e-fons-color"><span>Fons</span></label>
-        </div>
-      </div>
-      <div class="camp">
-        <label class="etiqueta" for="e-posicio">Posició</label>
-        <input type="range" id="e-posicio" min="0.05" max="0.95" step="0.01">
-        <div class="extrems" aria-hidden="true"><span>Dalt</span><span>Baix</span></div>
-      </div>
-
-      <details class="grup-estil" id="grup-e-destacades">
-        <summary>Paraules destacades<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
-        <div class="cos-grup">
-          <button class="interruptor" id="e-clau" role="switch" aria-checked="false">
-            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Més grans i d'un altre color
-          </button>
-          <div class="sub-camps" id="camps-clau">
-            <label class="etiqueta" for="e-clau-mida">Quant més grans</label>
-            <input type="range" id="e-clau-mida" min="1" max="3.5" step="0.05">
-            <div class="fila-camps">
-              <label class="color"><input type="color" id="e-clau-color"><span>Color</span></label>
-              <button class="interruptor" id="e-clau-sola" role="switch" aria-checked="false">
-                <span class="pista" aria-hidden="true"><span class="bola"></span></span>Soles a la seva línia
-              </button>
-            </div>
-            <p class="detall">Tria quines són amb «Destaca», a dalt del text. Les que no triïs, les tria tallat.</p>
-          </div>
-          <button class="interruptor" id="e-emojis" role="switch" aria-checked="false">
-            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Amb un emoji
-          </button>
-        </div>
-      </details>
-
-      <details class="grup-estil" id="grup-e-disposicio">
-        <summary>Disposició i animació<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
-        <div class="cos-grup">
-          <div class="camp">
-            <span class="etiqueta" id="et-paraules">Paraules a la pantalla</span>
-            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-paraules" id="e-paraules">
-              <button role="radio" data-valor="una">Una</button>
-              <button role="radio" data-valor="poques">2 o 3</button>
-              <button role="radio" data-valor="frase">Frase</button>
-            </div>
-          </div>
-          <div class="camp">
-            <span class="etiqueta" id="et-disposicio">Les línies</span>
-            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-disposicio" id="e-disposicio">
-              <button role="radio" data-valor="linia" title="Cada línia substitueix l'anterior">Una cada cop</button>
-              <button role="radio" data-valor="apilat" title="Les línies d'una frase s'apilen una sota l'altra">S'apilen</button>
-              <button role="radio" data-valor="escampat" title="Les paraules d'una frase surten en llocs i mides diferents">Escampades</button>
-            </div>
-          </div>
-          <div class="camp">
-            <span class="etiqueta" id="et-alineacio">Alineació</span>
-            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-alineacio" id="e-alineacio">
-              <button role="radio" data-valor="esquerra">Esquerra</button>
-              <button role="radio" data-valor="centre">Centre</button>
-              <button role="radio" data-valor="dreta">Dreta</button>
-              <button role="radio" data-valor="esglao" title="Una línia a l'esquerra i la següent a la dreta">Esglaó</button>
-            </div>
-          </div>
-          <div class="camp">
-            <span class="etiqueta" id="et-apareixen">Apareixen</span>
-            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-apareixen" id="e-apareixen">
-              <button role="radio" data-valor="paraula">D'una en una</button>
-              <button role="radio" data-valor="linia">Totes de cop</button>
-            </div>
-          </div>
-          <div class="camp">
-            <label class="etiqueta" for="e-animacio">Animació</label>
-            <select id="e-animacio">
-              <option value="pop">Pop · fan un petit salt</option>
-              <option value="fos">Fos · s'encenen suaument</option>
-              <option value="impacte">Impacte · entren grans i de cop</option>
-              <option value="cortina">Cortina · es destapen</option>
-              <option value="pes">Gruix · de fines a gruixudes</option>
-              <option value="cap">Cap · surten i prou</option>
-            </select>
-          </div>
-          <div class="camp">
-            <label class="etiqueta" for="e-destacat">La paraula que sona</label>
-            <select id="e-destacat">
-              <option value="cap">No la destaquis</option>
-              <option value="color">Canvia de color</option>
-              <option value="caixa">Caixa de color al darrere</option>
-              <option value="karaoke">Karaoke · es queden pintades</option>
-              <option value="gran">Es fa més gran</option>
-            </select>
-          </div>
-          <div class="camp">
-            <span class="etiqueta" id="et-aspecte">Aspecte</span>
-            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-aspecte" id="e-aspecte">
-              <button role="radio" data-valor="normal">Normal</button>
-              <button role="radio" data-valor="neo">Neó</button>
-              <button role="radio" data-valor="degradat">Degradat</button>
-            </div>
-          </div>
-          <div class="camp">
-            <span class="etiqueta" id="et-fons">Fons</span>
-            <div class="segmentat ample" role="radiogroup" aria-labelledby="et-fons" id="e-fons">
-              <button role="radio" data-valor="cap">Sense fons</button>
-              <button role="radio" data-valor="pindola">Píndola</button>
-            </div>
-          </div>
-        </div>
-      </details>
-
-      <details class="grup-estil" id="grup-e-detalls">
-        <summary>Detalls de la lletra<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
-        <div class="cos-grup">
-          <div class="fila-camps">
-            <select id="e-pes" aria-label="Gruix de la lletra">
-              <option value="400">Normal</option>
-              <option value="600">Seminegreta</option>
-              <option value="700">Negreta</option>
-              <option value="800">Extranegreta</option>
-              <option value="900">Negra</option>
-            </select>
-            <button class="interruptor" id="e-majuscules" role="switch" aria-checked="false">
-              <span class="pista" aria-hidden="true"><span class="bola"></span></span>Majúscules
-            </button>
-          </div>
-          <div class="camp">
-            <label class="etiqueta" for="e-espaiat">Espai entre lletres</label>
-            <input type="range" id="e-espaiat" min="-0.1" max="0.2" step="0.005">
-            <div class="extrems" aria-hidden="true"><span>Juntes</span><span>Separades</span></div>
-          </div>
-          <div class="camp">
-            <label class="etiqueta" for="e-interlineat">Espai entre línies</label>
-            <input type="range" id="e-interlineat" min="0.8" max="1.5" step="0.01">
-            <div class="extrems" aria-hidden="true"><span>Juntes</span><span>Separades</span></div>
-          </div>
-          <div class="camp">
-            <label class="etiqueta" for="e-gruix">Gruix del contorn</label>
-            <input type="range" id="e-gruix" min="0" max="0.12" step="0.005">
-            <div class="extrems" aria-hidden="true"><span>Sense</span><span>Gruixut</span></div>
-          </div>
-          <button class="interruptor" id="e-ombra" role="switch" aria-checked="true">
-            <span class="pista" aria-hidden="true"><span class="bola"></span></span>Ombra
-          </button>
-        </div>
-      </details>
-
-      <button class="enllac" id="restableix-estil">Torna a l'estil de tallat</button>
-      <p class="detall" id="fitxer-estil"></p>
-    </div>
   </aside>
 
   <main class="text" aria-label="Transcripció">
@@ -514,6 +552,7 @@
     <div class="pantalla">
       <video id="video-a" preload="auto" playsinline></video>
       <video id="video-esborrany" preload="auto" playsinline class="amagat"></video>
+      <audio id="audio-efectes" preload="auto"></audio>
       <div class="capa-broll" id="capa-broll" aria-hidden="true"><div id="br-host"></div></div>
       <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><div id="ts-host"></div><div id="tt-host"></div></div>
       <div class="capa-stickers" id="capa-stickers" aria-hidden="true"></div>

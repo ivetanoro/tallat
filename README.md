@@ -75,7 +75,7 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | reproduir o aturar | espai |
    | amagar la columna de l'esquerra o la del vídeo | ⌃⌘S / ⌥⌘V |
 
-3. A la pestanya **Estil** de l'esquerra, tria el kit, l'estil dels subtítols i, si vols, escriu el títol del ganxo.
+3. A dalt de la columna de l'esquerra tria el kit; a les pestanyes **Subtítols**, **Gràfics** (el títol del ganxo i el b-roll) i **So** (la neteja de la veu i els efectes de so), com vols que quedi.
 4. Clica **Esborrany** (a dalt) i mira'l. El que vulguis canviar, digues-ho a Claude amb el segon, que veus sota el vídeo: «al segon 12, el b-roll és massa llarg». Els vídeos que exportes, a la pestanya **Vídeos**.
 5. Quan t'agradi, **Final…** → 4K o 1080. O, si el vols acabar en un altre editor, **Projecte per a Premiere, Final Cut o DaVinci** o **Trossos per a CapCut o iMovie**.
 

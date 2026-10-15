@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from motor import broll, edicio, editors, exporta, marca, muntatge, stickers, targetes
+from motor import broll, edicio, editors, exporta, marca, muntatge, so, stickers, targetes
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -28,7 +28,10 @@ RUTES_DEL_PROJECTE = {"/api/estat", "/api/neteja", "/api/instruccio", "/api/brol
                       "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
-                      "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa"}
+                      "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
+                      "/api/so/mostres"}
+mimetypes.add_type("audio/mp4", ".m4a")  # Python diu «audio/mp4a-latm», que els navegadors no reprodueixen
+mimetypes.add_type("audio/wav", ".wav")
 RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa"}  # el cos és el fitxer mateix
 
 
@@ -80,7 +83,8 @@ class Feina:
             self._actualitza(fase="video", progres=0)
             exporta.exporta(projecte.font(qualitat), trams, sortida, qualitat,
                             progres=lambda pct: self._actualitza(progres=pct), capa=capa,
-                            zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams))
+                            zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
+                            **projecte.opcions_so(trams))
             projecte.desa_talls(sortida, trams)
             self._actualitza(estat="fet", progres=100, fitxer=sortida.name)
         except Exception as e:  # el missatge arriba a la pàgina
@@ -132,7 +136,19 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                              for st in projecte.stickers(trams)],
                 "subtitols": projecte.linies_subtitols(trams),
                 "titol": projecte.titol(trams),
+                **info_efectes(projecte, trams),
                 "paragrafs": projecte.paragrafs()}
+
+    def info_efectes(projecte, trams) -> dict:
+        """Els efectes de so (per a la llista de la pestanya So) i la pista que sona a la vista prèvia."""
+        try:
+            efectes = projecte.efectes(trams)
+            pista = projecte.pista_efectes(trams)
+        except Exception:  # un so propi que no es pot llegir, per exemple: la pàgina ha de funcionar igual
+            traceback.print_exc()
+            return {"efectes": [], "pista_efectes": None}
+        return {"efectes": [{k: e[k] for k in ("clau", "nom", "so", "t", "actiu")} for e in efectes],
+                "pista_efectes": f"/so/{pista.name}" if pista else None}
 
     def versio_estil(projecte) -> str:
         """Canvia quan canvia el kit del vídeo o el seu fitxer (o les seves lletres)."""
@@ -150,6 +166,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                   "url": f"/marca/fonts/{quote(f['fitxer'].name)}?v={int(f['fitxer'].stat().st_mtime)}"}
                  for f in marca.fonts_del_kit(kit) if f["fitxer"].parent == marca.ruta(kit).parent / "fonts"]
         return {"estil_subtitols": estil, "estil_titol": obert["p"].estil().get("titol", {}),
+                "estil_so": obert["p"].estil_so(), "sons_propis": str(so.SONS_PROPIS),
                 "estils_titol": marca.estils_titol(), "estil_broll": broll_estil,
                 "mostra_broll": targetes.mostra(broll_estil, accent),
                 "estils_broll": [{**e, "mostra": targetes.mostra({**broll_estil, **e["valors"]}, accent)}
@@ -281,6 +298,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
             if ruta.startswith("/stickers/"):
                 return self._segur(projecte.carpeta_instruccions() / stickers.CARPETA, ruta[len("/stickers/"):])
+            if ruta.startswith("/so/"):  # la pista d'efectes, les mostres de la veu i cada so
+                return self._segur(projecte.carpeta / "so", ruta[len("/so/"):])
             if ruta.startswith("/marca/fonts/"):  # les lletres del kit, per a la vista prèvia
                 return self._segur(marca.ruta(projecte.kit()).parent / "fonts", ruta[len("/marca/fonts/"):])
             if ruta == "/api/biblioteca":
@@ -427,16 +446,26 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     try:
                         if ruta.endswith("restableix"):
                             seccio = cos.get("seccio") or "subtitols"
-                            if seccio not in ("subtitols", "titol", "broll"):
+                            if seccio not in ("subtitols", "titol", "broll", "so"):
                                 raise ValueError("Secció desconeguda")
                             marca.restableix(seccio, kit=projecte.kit())
                         else:
-                            for seccio in ("subtitols", "titol", "broll"):
+                            for seccio in ("subtitols", "titol", "broll", "so"):
                                 if isinstance(cos.get(seccio), dict):
                                     marca.desa(seccio, cos[seccio], kit=projecte.kit())
                     except ValueError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                     return self._json({**info_marca(), **instantania()})
+                if ruta == "/api/so/mostres":  # la veu abans i després de netejar-la, i cada efecte
+                    try:
+                        veu = projecte.mostres_veu()
+                        sons = {}
+                        for nom in so.NOMS:
+                            sons[nom] = f"/so/{so.mostra_efecte(nom, projecte.carpeta / 'so').name}"
+                    except (OSError, RuntimeError, subprocess.CalledProcessError) as e:
+                        return self._json({"error": f"No he pogut preparar les mostres: {e}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+                    return self._json({"abans": f"/so/{veu['abans'].name}", "despres": f"/so/{veu['despres'].name}",
+                                       "sons": sons})
                 if ruta == "/api/marca/lletra":  # una lletra de la biblioteca (es baixa al kit el primer cop)
                     try:
                         marca.baixa_lletra(str(cos.get("id", "")), kit=projecte.kit(),
@@ -600,6 +629,8 @@ def _estat_de_json(cos: dict) -> dict:
         estat[clau] = {int(k): v for k, v in (estat[clau] or {}).items()}
     estat["destacades"] = {k: bool(v) for k, v in estat["destacades"].items()}
     estat["titol"] = edicio.titol_net(estat.get("titol"))
+    apagats = estat.get("sons_apagats") if isinstance(estat.get("sons_apagats"), list) else []
+    estat["sons_apagats"] = sorted({c for c in apagats if isinstance(c, str) and 0 < len(c) <= 60})[:500]
     for clau in ("mantingudes", "pauses_mantingudes"):
         estat[clau] = [int(i) for i in (estat[clau] or [])]
     return estat

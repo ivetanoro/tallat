@@ -16,7 +16,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import broll, edicio, instruccions, marca, neteja, stickers, subtitols, targetes
+from motor import broll, edicio, instruccions, marca, neteja, so, stickers, subtitols, targetes
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -194,6 +194,64 @@ class Projecte:
                                     self.carpeta, qualitat, avis, stickers=enganxines,
                                     estil_stickers=estil.get("stickers", {}), fonts=self.fonts_subtitols(),
                                     titol=titol, estil_titol=estil.get("titol"))
+
+    # --- So --------------------------------------------------------------------
+
+    def estil_so(self) -> dict:
+        return self.estil().get("so", {})
+
+    def neteja_veu(self) -> str | None:
+        """El nivell de la neteja de la veu (suau, mitja o fort), o None si està apagada."""
+        e = self.estil_so()
+        return (e.get("soroll") or "suau") if e.get("neteja", True) else None
+
+    def efectes(self, trams) -> list[dict]:
+        """Els efectes de so d'aquest vídeo (motor/so.py), amb «actiu» false els que s'han apagat."""
+        e = self.estil_so()
+        titol = self.titol(trams)
+        linies = self.linies_subtitols(trams) if self.estat.get("subtitols", True) else []
+        llista = so.esdeveniments(self.brolls(trams), self.stickers(trams), titol,
+                                  self.estil().get("titol", {}).get("animacio", "puja"), linies,
+                                  e.get("efectes", "pocs"))
+        apagats = set(self.estat.get("sons_apagats") or [])
+        return [dict(x, actiu=x["clau"] not in apagats) for x in llista]
+
+    def pista_efectes(self, trams) -> Path | None:
+        """La pista amb els efectes actius (es refà només si canvia), o None si no n'hi ha cap."""
+        actius = [x for x in self.efectes(trams) if x["actiu"]]
+        if not actius:
+            return None
+        durada = sum(b - a for a, b in trams)
+        volum = float(self.estil_so().get("volum_efectes", 0.5))
+        carpeta = self.carpeta / "so"
+        desti = carpeta / f"efectes-{so.empremta(actius, durada, volum)}.wav"
+        if not desti.exists():
+            for vell in carpeta.glob("efectes-*.wav") if carpeta.is_dir() else []:
+                vell.unlink(missing_ok=True)
+            so.pista(actius, durada, volum, desti)
+        return desti
+
+    def mostres_veu(self) -> dict:
+        """Deu segons de la veu, abans i després de la neteja (per escoltar-los a la pàgina)."""
+        trams = self.trams()
+        inici = trams[0][0] if trams else 0.0
+        nivell = self.estil_so().get("soroll") or "suau"
+        carpeta = self.carpeta / "so"
+        abans = carpeta / f"veu-abans-{inici:.1f}.m4a"
+        despres = carpeta / f"veu-neta-{nivell}-{inici:.1f}.m4a"
+        if not abans.exists():
+            for vell in carpeta.glob("veu-abans-*.m4a") if carpeta.is_dir() else []:
+                vell.unlink(missing_ok=True)
+            so.mostra(self.video, inici, abans, None)
+        if not despres.exists():
+            for vell in carpeta.glob("veu-neta-*.m4a") if carpeta.is_dir() else []:
+                vell.unlink(missing_ok=True)
+            so.mostra(self.video, inici, despres, nivell)
+        return {"abans": abans, "despres": despres}
+
+    def opcions_so(self, trams) -> dict:
+        """El que necessita l'export: la neteja de la veu i la pista d'efectes."""
+        return {"neteja": self.neteja_veu(), "efectes": self.pista_efectes(trams)}
 
     # --- Instruccions de veu ------------------------------------------------------
 

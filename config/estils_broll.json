@@ -1,5 +1,5 @@
 {
-  "_info": "Maneres de posar el b-roll que surten a la pàgina de revisió (pestanya Estil › B-roll). Cada una parteix de «comu».",
+  "_info": "Maneres de posar el b-roll que surten a la pàgina de revisió (pestanya Gràfics › B-roll). Cada una parteix de «comu».",
   "comu": {"mida": 0.82, "posicio_x": 0.5, "posicio_y": 0.38, "proporcio": "4:5", "radi": 0.06, "vora": 0.0,
            "vora_color": null, "ombra": true, "rotacio": 0, "animacio": "cap"},
   "estils": [

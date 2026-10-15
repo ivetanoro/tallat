@@ -135,5 +135,15 @@
     "corba": 0.0,
     "_corba_linies": "Quines línies es corben: «primera», «totes» o «darrera».",
     "corba_linies": "primera"
+  },
+  "so": {
+    "_neteja": "Neteja la veu a l'esborrany i al vídeo final: treu el soroll de fons, suavitza les «s» i iguala el volum al de les xarxes (-14 LUFS).",
+    "neteja": true,
+    "_soroll": "Quant soroll de fons es treu: «suau», «mitja» o «fort» (com més fort, més risc que la veu soni estranya).",
+    "soroll": "suau",
+    "_efectes": "Efectes de so: «cap», «pocs» (b-roll, stickers i títol) o «molts» (també les paraules destacades). Els fa tallat; els pots canviar pels teus a ~/.tallat/sons/.",
+    "efectes": "pocs",
+    "_volum_efectes": "Volum dels efectes, de 0 a 1.",
+    "volum_efectes": 0.5
   }
 }
