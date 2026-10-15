@@ -1,6 +1,6 @@
 """Primer muntatge automàtic: d'una gravació llarga en surten diversos reels.
 
-El «cervell» és Claude, dins de Claude Code (vegeu skill/SKILL.md):
+El «cervell» és l'assistent (Claude Code, Codex…), seguint skills/tallat/SKILL.md:
 1. `guio()` escriu la transcripció per paràgrafs, amb números i temps, perquè Claude la llegeixi.
 2. Claude escriu `reels.json` al projecte: per a cada reel, quins trossos de paraules es queden.
 3. `llegeix_reels()` ho valida i en calcula la durada.

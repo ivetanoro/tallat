@@ -2,7 +2,7 @@
 
 **Edites el reel en el que dura un tallat.**
 
-tallat és un editor de reels en català que funciona dins de [Claude](https://claude.com/download). Et graves parlant a càmera, li dius a Claude «edita aquest vídeo» i el retalles com si retallessis un text: les paraules que treus desapareixen del vídeo. Després hi poses subtítols animats, b-roll i stickers, i l'exportes en vertical, a punt per a Instagram, TikTok o YouTube Shorts.
+tallat és un editor de reels en català que funciona dins de [Claude](https://claude.com/download) o de [Codex](https://openai.com/codex) (el de ChatGPT). Et graves parlant a càmera, li dius «edita aquest vídeo» i el retalles com si retallessis un text: les paraules que treus desapareixen del vídeo. Després hi poses subtítols animats, b-roll i stickers, i l'exportes en vertical, a punt per a Instagram, TikTok o YouTube Shorts.
 
 És gratuït, de codi obert i tot passa al teu ordinador.
 
@@ -10,7 +10,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 
 - **Edites el vídeo tocant les paraules.** tallat transcriu el que dius en català i et mostra el text en una pàgina del teu ordinador. Un clic dret en una paraula la treu del vídeo; un altre la recupera.
 - **Neteja sola.** Treu els «eh» i els «mmm», et proposa els «vale» i els «o sigui» perquè decideixis tu, i escurça els silencis llargs.
-- **Instruccions de veu mentre graves.** «Claude, torno a començar», «Claude, zoom aquí», «Claude, aquí un b-roll d'un vinil girant», «Claude, sticker d'un cor». tallat les troba a la gravació, les treu del vídeo i les aplica.
+- **Instruccions de veu mentre graves.** «Claude, torno a començar», «tallat, zoom aquí», «Claude, aquí un b-roll d'un vinil girant», «tallat, sticker d'un cor». tallat les troba a la gravació, les treu del vídeo i les aplica.
 - **Primer muntatge.** D'una gravació llarga, Claude et proposa entre un i cinc reels, cadascun amb el seu ganxo i el seu final.
 - **Subtítols animats.** Tretze estils per començar (Clàssic, Karaoke, Impacte, Neó…), amb la teva lletra i els teus colors. El que veus a la pàgina és el que surt al vídeo.
 - **B-roll i stickers.** Fitxers teus, o generats amb la intel·ligència artificial d'imatge o vídeo que tinguis connectada a Claude.
@@ -21,7 +21,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 ## Què necessites
 
 - **Un Mac.** De moment tallat només funciona en Mac. S'ha provat en un Mac amb processador Intel; en els Mac nous (M1, M2, M3…) hauria de funcionar igual, però encara no s'hi ha provat.
-- **L'app de Claude**, amb un pla que inclogui Claude Code (la pestanya **Code**).
+- **L'app de Claude**, amb un pla que inclogui Claude Code (la pestanya **Code**; el més barat és el Pro). **O bé Codex**, d'OpenAI, amb un pla de ChatGPT que l'inclogui.
 - **Uns 5 GB lliures** per a la instal·lació, i espai per als teus vídeos.
 - **Opcional:** [Descript](https://www.descript.com) connectat a Claude. Transcriu millor i conserva el farciment perquè el puguis treure tu. Sense Descript, tallat transcriu al teu ordinador amb WhisperX (més lent).
 - **Opcional:** una intel·ligència artificial d'imatge o vídeo connectada a Claude (Krea, Higgsfield, OpenArt, Adobe Firefly…), si vols que et generi el b-roll. Abans de gastar-ne crèdits, Claude sempre t'ho pregunta.
@@ -44,6 +44,14 @@ Després escriu **«instal·la tallat»**.
 1. En aquesta pàgina de GitHub, clica el botó verd **Code** i després **Download ZIP**. Fes doble clic al fitxer per descomprimir-lo.
 2. A l'app de Claude, ves a la pestanya **Code** i obre la carpeta `tallat` que acabes de descomprimir. La primera vegada et pregunta si confies en aquesta carpeta: digues que sí.
 3. Escriu **«instal·la tallat»**.
+
+### Amb Codex (ChatGPT)
+
+1. Baixa la carpeta com a l'opció 2 (botó **Code** → **Download ZIP**) i descomprimeix-la.
+2. Obre la carpeta `tallat` amb Codex.
+3. Escriu **«instal·la tallat»**.
+
+Tot funciona igual que amb Claude. Només canvien els connectors opcionals (Descript i les IA per al b-roll): depèn de si aquests serveis en tenen per a Codex.
 
 ### Què fa la instal·lació
 
@@ -72,16 +80,16 @@ En qualsevol moment pots demanar canvis a Claude amb paraules: «treu la primera
 
 ## Instruccions de veu
 
-Mentre graves, comença la frase amb «Claude» i digues què vols:
+Mentre graves, comença la frase amb «Claude» (o amb «tallat», si fas servir Codex o un altre assistent) i digues què vols:
 
 | Dius | Què passa |
 |---|---|
-| «Claude, torno a començar» | La presa bona comença aquí: es treu l'intent d'abans. |
+| «Claude, torno a començar» o «tallat, torno a començar» | La presa bona comença aquí: es treu l'intent d'abans. |
 | «Claude, zoom aquí» | El tros que ve s'apropa una mica. |
 | «Claude, aquí un b-roll d'un vinil girant» | Queda apuntat a la pàgina perquè hi posis (o generis) aquella imatge. |
 | «Claude, sticker d'un cor» | Igual, amb un sticker. |
 
-Les instruccions es treuen soles del vídeo, i a la pàgina decideixes si les acceptes.
+Les instruccions es treuen soles del vídeo, i a la pàgina decideixes si les acceptes. Amb «tallat» només compten les ordres d'aquesta taula: si dius «un tallat amb llet», no passa res.
 
 ## On es guarda cada cosa
 

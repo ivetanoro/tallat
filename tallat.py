@@ -6,7 +6,7 @@
   python tallat.py revisa --projecte CARPETA          (obre la pàgina de revisió)
   python tallat.py neteja --projecte CARPETA [--pausa 0.35]
   python tallat.py estat --projecte CARPETA
-  python tallat.py guio --projecte CARPETA            (text per paràgrafs perquè Claude proposi reels)
+  python tallat.py guio --projecte CARPETA            (text per paràgrafs perquè l'assistent proposi reels)
   python tallat.py reels --projecte CARPETA           (valida reels.json i en mostra la durada)
   python tallat.py reel ID --projecte CARPETA         (crea el projecte d'un reel proposat)
   python tallat.py afegeix TIPUS --paraula ID --projecte CARPETA [--text "…"]   (instrucció a mà)
@@ -157,7 +157,7 @@ def ordre_instruccions(args) -> None:
     projecte = _carrega(args)
     trobades = projecte.detecta_instruccions()
     projecte.desa()
-    _mostra_instruccions(trobades) if trobades else print("No he trobat cap instrucció «Claude, …».")
+    _mostra_instruccions(trobades) if trobades else print("No he trobat cap instrucció «Claude, …» ni «tallat, …».")
 
 
 def ordre_afegeix(args) -> None:
@@ -296,7 +296,7 @@ def main() -> None:
     e.add_argument("--projecte", required=True)
     e.set_defaults(func=ordre_estat)
 
-    ins = sub.add_parser("instruccions", help="Detecta les instruccions de veu «Claude, …»")
+    ins = sub.add_parser("instruccions", help="Detecta les instruccions de veu «Claude, …» o «tallat, …»")
     ins.add_argument("--projecte", required=True)
     ins.set_defaults(func=ordre_instruccions)
 

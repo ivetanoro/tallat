@@ -1,7 +1,10 @@
-"""Instruccions de veu: frases que comencen per «Claude, …» dites durant la gravació.
+"""Instruccions de veu: frases que comencen per «Claude, …» o «tallat, …» dites durant la gravació.
 
 - Es detecten a la transcripció (també quan el transcriptor ha entès «Clot», «Cloud», «Clau»…),
-  però només si «Claude» obre una frase: «si Claude detecta…» no és una instrucció.
+  però només si la paraula obre una frase: «si Claude detecta…» no és una instrucció.
+- «tallat» (i «Codex») també serveixen, perquè no tothom fa servir Claude. Com que «tallat» és una
+  paraula normal («un tallat, si us plau»), amb aquestes només compta si la frase és una ordre
+  coneguda (torno a començar, zoom, b-roll, sticker).
 - Les paraules de la instrucció es treuen soles del vídeo (motiu «instruccio»).
 - Cada instrucció queda com a proposta en el moment exacte on s'ha dit, per acceptar-la o
   descartar-la a la pàgina de revisió. Es desen a `instruccions.json`.
@@ -23,7 +26,9 @@ from pathlib import Path
 from motor.neteja import normalitza
 
 FITXER = "instruccions.json"
-DESPERTA = {"claude", "claud", "clod", "clot", "cloud", "clau", "glod", "klaud"}
+# Passades per normalitza(), com les paraules de la transcripció (que, per exemple, fa «tallat» → «talat»).
+DESPERTA = {normalitza(w) for w in ("claude", "claud", "clod", "clot", "cloud", "clau", "glod", "klaud")}
+DESPERTA_AMB_ORDRE = {normalitza(w) for w in ("tallat", "tayat", "codex", "còdex", "códex", "codecs")}  # només amb una ordre coneguda
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_INICI = 0.6      # un silenci així abans de «Claude» també compta com a inici de frase
 PAUSA_FINAL = 0.45     # la instrucció acaba en un final de frase seguit d'una pausa així
@@ -86,7 +91,8 @@ def detecta(paraules: list[dict]) -> list[dict]:
     instruccions = []
     i = 0
     while i < len(paraules):
-        if normalitza(paraules[i]["text"]) in DESPERTA and _obre_frase(paraules, i):
+        paraula = normalitza(paraules[i]["text"])
+        if (paraula in DESPERTA or paraula in DESPERTA_AMB_ORDRE) and _obre_frase(paraules, i):
             fi = i
             while fi + 1 < len(paraules) and fi - i < MAX_PARAULES:
                 actual, seguent = paraules[fi], paraules[fi + 1]
@@ -95,6 +101,9 @@ def detecta(paraules: list[dict]) -> list[dict]:
                 fi += 1
             text = " ".join(p["text"] for p in paraules[i + 1:fi + 1]).strip(" ,")
             tipus = tipus_de(text)
+            if paraula in DESPERTA_AMB_ORDRE and tipus == "altre":  # «Tallat amb llet, si us plau»
+                i += 1
+                continue
             ancora = fi + 1 if fi + 1 < len(paraules) else None
             ins = {"id": f"i{paraules[i]['id']}", "tipus": tipus, "text": text,
                    "paraules": [paraules[i]["id"], paraules[fi]["id"]],
@@ -103,7 +112,7 @@ def detecta(paraules: list[dict]) -> list[dict]:
                    "estat": "pendent"}
             if tipus == "talla":
                 tros = _represa(paraules, fi)
-                if tros:  # treiem des del primer intent fins just abans de «Claude»
+                if tros:  # treiem des del primer intent fins just abans de «Claude» (o «tallat»)
                     ins["treure"] = [paraules[tros[0]]["id"], paraules[i - 1]["id"]] if i > tros[0] else None
             instruccions.append(ins)
             i = fi + 1

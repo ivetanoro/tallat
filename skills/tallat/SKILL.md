@@ -7,19 +7,21 @@ description: Editor de reels en català, per paraules. Fes-la servir quan algú 
 
 Tot en català, amb paraules senzilles: la majoria de persones que el fan servir no són programadores.
 
+Aquestes instruccions serveixen per a qualsevol assistent que pugui fer servir el terminal (Claude Code, Codex…): on diu «l'assistent», ets tu.
+
 ## Instal·lació (la primera vegada)
 
 Quan la persona digui «instal·la tallat», o una ordre falli perquè falta una eina (ffmpeg, WhisperX, Node…):
-1. Explica-li en una frase què passarà: es baixen uns 2-3 GB (ffmpeg, Node, Python, WhisperX, el navegador de HyperFrames i el model de veu català), triga 10-20 minuts, tot va a la seva carpeta d'usuari (`~/.tallat` i `.venv`) i no demana mai la contrasenya.
+1. Explica-li en una frase què passarà: es baixen uns 2-3 GB (ffmpeg, Node, Python, WhisperX, el navegador de HyperFrames i el model de veu català), triga 10-20 minuts, tot va a la seva carpeta d'usuari (`~/.tallat`) i no demana mai la contrasenya.
 2. Si no fa servir Descript per transcriure, afegeix `--amb-whisper` (baixa 3 GB més, el model de transcripció).
 3. Executa `./prepara.sh` des de la carpeta de tallat. És llarg: fes-ho en una pestanya del terminal on la persona ho vegi, o en segon pla, i ves-li dient com va. Es pot tornar a executar sense por: només fa el que falta.
 4. En acabar, `prepara.sh` mateix executa `tallat.py comprova`. Si hi ha cap ✗, llegeix el missatge, torna a executar `./prepara.sh` i, si continua, explica-li què passa amb paraules senzilles.
 
-`tallat.py comprova` revisa en qualsevol moment que tot hi sigui (✓ bé, ! avís, ✗ cal arreglar). Descript és opcional: es connecta a Claude des de la configuració de connectors de claude.ai.
+`tallat.py comprova` revisa en qualsevol moment que tot hi sigui (✓ bé, ! avís, ✗ cal arreglar). Descript és opcional: es connecta des de la configuració de connectors de l'assistent (a Claude, la de claude.ai).
 
 ## Ordres
 
-Des de la carpeta de tallat (si s'ha instal·lat com a connector de Claude, és `${CLAUDE_PLUGIN_ROOT}`), amb l'entorn `.venv`. Si `.venv` no hi és (la primera vegada, o després d'actualitzar el connector), executa `./prepara.sh`: si ja està tot instal·lat, només refà l'enllaç i triga uns segons.
+Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre d'aquest `SKILL.md` (si s'ha instal·lat com a connector, és la carpeta del connector; a Claude Code, `${CLAUDE_PLUGIN_ROOT}`), amb l'entorn `.venv`. Si `.venv` no hi és (la primera vegada, o després d'actualitzar el connector), executa `./prepara.sh`: si ja està tot instal·lat, només refà l'enllaç i triga uns segons.
 
 ```bash
 .venv/bin/python tallat.py transcriu VIDEO --projecte CARPETA [--srt FITXER.srt]
@@ -75,10 +77,11 @@ La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que 
 - **Entre 1 i 5 reels** per gravació. Millor pocs i bons.
 - Deixa el farciment («eh», «mmm») dins dels trossos: la neteja automàtica ja el treu i la persona el pot recuperar.
 
-## Instruccions de veu («Claude, …»)
+## Instruccions de veu («Claude, …» o «tallat, …»)
 
 - `transcriu` les detecta sola; `instruccions` les torna a detectar en un projecte que ja existeix.
-- Només compten si «Claude» obre una frase (després d'un punt o d'una pausa). El transcriptor de vegades escriu «Clot», «Cloud» o «Clau»: també compten.
+- Només compten si la paraula obre una frase (després d'un punt o d'una pausa). El transcriptor de vegades escriu «Clot», «Cloud» o «Clau»: també compten.
+- «tallat, …» i «Codex, …» també serveixen (no tothom fa servir Claude), però només si el que ve després és una ordre coneguda (torno a començar, zoom, b-roll, sticker): «un tallat amb llet» no és cap instrucció.
 - Les paraules de la instrucció es treuen del vídeo (motiu «instruccio») i queden a `instruccions.json` per decidir a la pàgina:
   - **talla** («torno a començar», «talla des d'aquí»): la presa bona comença aquí. Si en acceptar-la es troba el primer intent de la frase que ve després, es treu.
   - **zoom**: s'apropa el tros que comença just després de la instrucció.
@@ -90,7 +93,7 @@ La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que 
 tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció acceptada.
 
 - **Fitxers propis**: a la pàgina de revisió, cada instrucció de b-roll o de sticker acceptada té «Puja un fitxer…» (o s'hi pot arrossegar) i, si n'hi ha, un desplegable amb la biblioteca (`~/.tallat/broll/`, `~/.tallat/stickers/`). Els stickers de la biblioteca s'assignen sols si el nom del fitxer surt a la instrucció («sticker d'un cor» → `cor.png`).
-- **Generats amb IA (opcional)**: si la persona té connectada a Claude una IA d'imatge o vídeo (Krea, Higgsfield, OpenArt, Adobe Firefly…), ofereix-li generar-los. Abans de generar, digues-li quin model faràs servir i que gastarà crèdits del seu compte, i espera que ho confirmi.
+- **Generats amb IA (opcional)**: si la persona té connectada a l'assistent una IA d'imatge o vídeo (Krea, Higgsfield, OpenArt, Adobe Firefly…), ofereix-li generar-los. Abans de generar, digues-li quin model faràs servir i que gastarà crèdits del seu compte, i espera que ho confirmi.
   - B-roll: vídeo vertical 9:16, el més curt que permeti el model (tallat n'agafa 1-1,5 s); o una imatge (tallat hi fa un zoom lent). Escriu la descripció en anglès, concreta i visual, sense text ni cares de persones reals.
   - Stickers: imatge PNG amb el fons transparent (si la IA no en sap fer, treu-ne el fons amb una altra eina o demana-li a la persona).
   - Baixa el fitxer a la carpeta del projecte i registra'l: `tallat.py broll ID FITXER` o `tallat.py sticker ID FITXER`.
@@ -105,14 +108,14 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 
 ## Acabar-lo en un altre editor
 
-Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o CapCut: `tallat.py editors` (o, a la pàgina, Final… → «Prepara el projecte»). Escriu a `exports/` una carpeta amb el projecte (`.fcpxml` per a Final Cut i DaVinci, `.xml` per a Premiere), els subtítols en `.srt`, el b-roll i els stickers a `recursos/`, i un `LLEGEIX-ME.txt` amb els passos de cada editor. CapCut i iMovie no importen projectes: per a ells, `tallat.py editors --trossos` (a la pàgina, «Trossos per a CapCut o iMovie») treu cada tros com un clip numerat (01.mp4, 02.mp4…) amb el zoom aplicat, el b-roll i els stickers amb el moment al nom, i el `.srt`; arrossegats tots alhora a la línia de temps queden en ordre (es poden escurçar, no allargar). Amb `--amb-subtitols` hi afegeix els subtítols animats de tallat com a capa transparent (tarda uns minuts). Els talls apunten al vídeo original: que no el mogui.
+Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o CapCut: `tallat.py editors` (o, a la pàgina, Final… → «Projecte per a Premiere, Final Cut o DaVinci»). Escriu a `exports/` una carpeta amb el projecte (`.fcpxml` per a Final Cut i DaVinci, `.xml` per a Premiere), els subtítols en `.srt`, el b-roll i els stickers a `recursos/`, i un `LLEGEIX-ME.txt` amb els passos de cada editor. CapCut i iMovie no importen projectes: per a ells, `tallat.py editors --trossos` (a la pàgina, «Trossos per a CapCut o iMovie») treu cada tros com un clip numerat (01.mp4, 02.mp4…) amb el zoom aplicat, el b-roll i els stickers amb el moment al nom, i el `.srt`; arrossegats tots alhora a la línia de temps queden en ordre (es poden escurçar, no allargar). Amb `--amb-subtitols` hi afegeix els subtítols animats de tallat com a capa transparent (tarda uns minuts). Els talls apunten al vídeo original: que no el mogui.
 
 ## El teu gust (regles per als vídeos següents)
 
 - **Abans de decidir res** (neteja, primer muntatge i reels, instruccions, b-roll i stickers, estil), llegeix les regles amb `tallat.py gust` i segueix-les. Les que porten un ajust ja s'apliquen soles.
 - **Quan la persona reacciona a un resultat** («massa lent», «els subtítols són petits», «no em treguis els vale»):
   1. Busca el comportament que hi ha darrere, no només el cas concret: «aquest b-roll és massa llarg» vol dir «b-roll més curt», no «treu aquest b-roll».
-  2. Pregunta-li (amb les opcions de resposta) si és **per a aquest vídeo** o **per sempre** (recomana «per sempre»). Si ja ho ha dit («sempre», «només aquí»), no ho preguntis.
+  2. Pregunta-li (amb opcions de resposta si en pots fer; si no, amb una pregunta curta) si és **per a aquest vídeo** o **per sempre** (recomana «per sempre»). Si ja ho ha dit («sempre», «només aquí»), no ho preguntis.
   3. Si és per sempre, desa-ho: `tallat.py gust afegeix SECCIO "la regla en paraules de la persona" [--ajust clau=valor]`. Si és només per a aquest vídeo, fes-ho al projecte i prou.
 - Seccions: `talls`, `subtitols`, `broll`, `stickers`, `reels`, `altres`.
 - Ajustos (si n'hi ha un que encaixa, posa'l; si no, la regla només amb text):

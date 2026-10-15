@@ -30,6 +30,15 @@ class TestDeteccio(unittest.TestCase):
         trobades = instruccions.detecta(p)
         self.assertEqual([t["tipus"] for t in trobades], ["zoom"])
 
+    def test_tallat_i_codex_tambe_serveixen(self):
+        p = paraules("Fins aquí. Tallat, zoom aquí. Ara sí. Codex, sticker d'un cor. Seguim.", {4: 0.8, 11: 0.8})
+        self.assertEqual([t["tipus"] for t in instruccions.detecta(p)], ["zoom", "sticker"])
+
+    def test_un_tallat_qualsevol_no_es_instruccio(self):
+        # «tallat» és una paraula normal: sense una ordre coneguda no compta (amb «Claude» sí, com a «altre»)
+        p = paraules("Bon dia. Tallat amb llet, si us plau. Claude, recorda-ho.", {6: 0.8})
+        self.assertEqual([t["tipus"] for t in instruccions.detecta(p)], ["altre"])
+
     def test_torno_a_comencar_troba_el_primer_intent(self):
         text = ("Us heu fixat mai que les idees venen tard? Exemple el cotxe "
                 "Claude, torno a començar. Us heu fixat mai que les millors idees venen tard?")

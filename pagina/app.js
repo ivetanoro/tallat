@@ -1415,7 +1415,7 @@ function pintaGust() {
   const cont = $("#gust");
   cont.textContent = "";
   if (!gust.length) {
-    cont.innerHTML = '<p class="buit">Quan diguis a Claude una correcció «per sempre», sortirà aquí.</p>';
+    cont.innerHTML = '<p class="buit">Quan diguis a l\'assistent una correcció «per sempre», sortirà aquí.</p>';
     return;
   }
   for (const r of gust) {
