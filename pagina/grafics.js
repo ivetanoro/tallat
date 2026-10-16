@@ -540,5 +540,5 @@
     return tl;
   }
 
-  global.TallatGrafics = { construeix };
+  global.TallatGrafics = { construeix, formata };
 })(typeof window !== "undefined" ? window : globalThis);

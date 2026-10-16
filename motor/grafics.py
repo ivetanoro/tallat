@@ -191,9 +191,13 @@ def fusiona(actuals: list[dict], pla: list, paraules: int | None = None, manera:
         raise ValueError(f"Manera desconeguda: {manera}")
     if not isinstance(pla, list):
         raise ValueError("El pla ha de ser una llista de gràfics: [{…}, {…}]")
-    actuals = [] if manera == "de-nou" else neteja_llista(actuals, paraules)
+    # Els que ja hi eren no es comproven amb les paraules d'ara: un gràfic que la persona ha mantingut
+    # no s'ha de perdre perquè la transcripció hagi canviat (si la seva paraula ja no hi és, no surt).
+    tots = neteja_llista(actuals)
+    actuals = [] if manera == "de-nou" else tots
     per_id = {g["id"]: g for g in actuals}
-    ids = set(per_id)
+    # Un id no es torna a fer servir (tampoc el dels que se'n van): els sons apagats van per id.
+    ids = {g["id"] for g in tots}
     nous, tocats = [], set()
     for k, g in enumerate(pla):
         try:
@@ -218,57 +222,108 @@ def fusiona(actuals: list[dict], pla: list, paraules: int | None = None, manera:
 
 # --- On van, al muntatge -------------------------------------------------------------------------
 
-def temps_paraules(blocs: list[list[dict]], al_muntatge) -> tuple[dict, dict]:
+def temps_paraules(blocs: list[list[dict]], al_muntatge) -> tuple[dict, dict, dict]:
     """Per a cada paraula: on comença al muntatge la primera que es queda a partir d'ella (dins del
-    seu bloc), i on acaba al muntatge l'última que es queda fins a ella. {id: segons}."""
-    inicis, finals = {}, {}
-    for bloc in blocs:
+    seu bloc), on acaba al muntatge l'última que es queda fins a ella ({id: segons}) i el seu bloc
+    ({id: número}: en un reel, els trossos de la gravació que sonen en un altre ordre)."""
+    inicis, finals, bloc_de = {}, {}, {}
+    for n, bloc in enumerate(blocs):
+        temps = {p["id"]: al_muntatge(p["inici"]) for p in bloc if p["conservada"]}  # un sol cop per paraula
         seguent = None
         for p in reversed(bloc):
-            if p["conservada"]:
-                m = al_muntatge(p["inici"])
-                seguent = m if m is not None else seguent
+            bloc_de[p["id"]] = n
+            if temps.get(p["id"]) is not None:
+                seguent = temps[p["id"]]
             if seguent is not None:
                 inicis[p["id"]] = seguent
         darrer = None
         for p in bloc:
-            if p["conservada"]:
-                m = al_muntatge(p["inici"])
-                if m is not None:
-                    darrer = m + max(0.0, p["final"] - p["inici"])
+            if temps.get(p["id"]) is not None:
+                darrer = temps[p["id"]] + max(0.0, p["final"] - p["inici"])
             if darrer is not None:
                 finals[p["id"]] = darrer
-    return inicis, finals
+    return inicis, finals, bloc_de
 
 
-def limits(subtitols: dict | None, amaga: bool) -> list[int]:
+def alcada_subtitols(estil: dict, linies: list[dict] | None) -> float:
+    """Quant d'alt (px) pot fer, com a molt, un bloc de subtítols: una línia, o les que s'apilen (apilat)
+    o les files curtes del collage (escampat) de la frase més llarga d'aquest vídeo."""
+    linia = float(estil.get("mida", 0.075)) * 1080 * float(estil.get("interlineat", 1.12))
+    if estil.get("clau_grans"):
+        linia *= 1 + (float(estil.get("clau_mida", 1.4)) - 1) / 2  # les destacades, més altes
+    disposicio = estil.get("disposicio")
+    if disposicio not in ("apilat", "escampat") or not linies:
+        return linia
+    per_bloc: dict = {}
+    for l in linies:
+        per_bloc.setdefault(l.get("bloc"), []).append(l)
+    if disposicio == "apilat":
+        files = max(len(b) for b in per_bloc.values())
+        files = min(files, int(estil.get("linies_max", 4)))
+    else:  # files de dues paraules, més o menys (pagina/subtitols.js, filesEscampades)
+        files = max(math.ceil(sum(len(l["paraules"]) for l in b) / 2) for b in per_bloc.values())
+    return linia * max(1, files)
+
+
+def limits(subtitols: dict | None, amaga: bool, alcada: float | None = None) -> list[int]:
     """Entre quines alçades (px) pot anar un gràfic: dins la zona segura i sense tapar els subtítols.
     Si el gràfic amaga els subtítols, pot ocupar el seu lloc (si s'hi veuen els subtítols, s'hi veu el
     gràfic): els de baix fan baixar el límit de baix fins on acaben. Si no, el gràfic s'hi queda a
-    sobre (o a sota, si els subtítols són a dalt)."""
+    sobre (o a sota, si els subtítols són a dalt). `alcada`: la del bloc de subtítols més alt
+    (alcada_subtitols); si no se sap, una línia."""
     dalt, baix = ZONA_SEGURA[0] * ALCADA, ZONA_SEGURA[1] * ALCADA
     if subtitols:
-        y = float(subtitols.get("posicio_y", 0.7)) * ALCADA
-        mitja = float(subtitols.get("mida", 0.075)) * 1080 * 0.75  # mitja línia, més o menys
+        f = float(subtitols.get("posicio_y", 0.7))
+        y = f * ALCADA
+        h = alcada or alcada_subtitols(subtitols, None)
+        # Com a pagina/subtitols.js: una línia va centrada a `posicio_y`; un bloc apilat o escampat hi
+        # queda penjat per la mateixa proporció (a baix creix cap amunt, a dalt cap avall).
+        sobre, sota = (f * h, (1 - f) * h) if subtitols.get("disposicio") in ("apilat", "escampat") else (h / 2, h / 2)
         if y >= ALCADA / 2:
-            baix = max(baix, min(y + mitja, 0.8 * ALCADA)) if amaga else min(baix, y - mitja - MARGE_SUBTITOLS)
+            baix = max(baix, min(y + sota, 0.8 * ALCADA)) if amaga else min(baix, y - sobre - MARGE_SUBTITOLS)
         elif not amaga:
-            dalt = max(dalt, y + mitja + MARGE_SUBTITOLS)
+            dalt = max(dalt, y + sota + MARGE_SUBTITOLS)
     return [round(dalt), round(max(baix, dalt + 200))]
 
 
+def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alcada: float | None = None) -> dict | None:
+    """El que cal per dibuixar un gràfic, sense els temps: {id, tipus, nom, text, punts, estil, posicio,
+    amaga_subtitols, limits, i de, xifra o forma i costat}. None si no té res a dir (una crida sense text
+    ni crida a la marca). També el fa servir la pàgina per a les miniatures (dels trets, per exemple)."""
+    estils = [estils] if isinstance(estils, str) else (estils or [])  # els kits d'abans: un sol estil
+    text = g["text"] or (crida.strip()[:MIDA_TEXT["crida"]] if g["tipus"] == "crida" else "")
+    if not (text or g["punts"] or g.get("xifra")):
+        return None
+    amaga = AMAGA[g["tipus"]] if g.get("amaga_subtitols") is None else g["amaga_subtitols"]
+    d = {"id": g["id"], "tipus": g["tipus"], "nom": NOMS[g["tipus"]], "text": text,
+         "punts": [{c: v for c, v in p.items() if c != "paraula"} for p in g["punts"]],
+         "estil": g.get("estil") or next((e for e in estils if e in ESTILS), "net"),
+         "posicio": POSICIO[g["tipus"]] if g.get("posicio") is None else g["posicio"],
+         "amaga_subtitols": amaga, "limits": limits(subtitols, amaga, alcada)}
+    if g["tipus"] == "notificacio":
+        d["de"] = g.get("de") or ""
+    elif g["tipus"] == "numero":
+        d["xifra"] = llegeix_xifra(g["xifra"])
+    elif g["tipus"] == "anotacio":
+        d.update(forma=g.get("forma") or "fletxa", costat=g.get("costat") or "esquerra")
+    return d
+
+
 def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils: list[str],
-          crida: str = "", subtitols: dict | None = None) -> list[dict]:
+          crida: str = "", subtitols: dict | None = None, bloc_de: dict | None = None,
+          alcada: float | None = None) -> list[dict]:
     """Els gràfics que surten al vídeo (no els trets), a punt per dibuixar, en temps del muntatge:
-    [{id, tipus, inici, final, text, punts: [{text, t}], estil, posicio, amaga_subtitols, limits}].
-    Els que són d'una frase que ja no surt al vídeo no hi són. Una crida sense text diu la de la marca.
-    `subtitols`: l'estil dels subtítols, si el vídeo en porta (perquè els gràfics no els tapin)."""
-    estil_marca = next((e for e in estils if e in ESTILS), "net")
+    el `dibuix` de cadascun amb `inici`, `final` i, als punts, `t`. Els que són d'una frase que ja no
+    surt al vídeo no hi són. `subtitols`: l'estil dels subtítols, si el vídeo en porta (perquè els
+    gràfics no els tapin), i `alcada`, la del seu bloc més alt. `bloc_de`: el bloc de cada paraula
+    (temps_paraules): el final i els punts d'un gràfic han de ser del mateix bloc que el començament."""
     llista = []
     for g in grafics:
-        text = g["text"] or (crida.strip()[:MIDA_TEXT["crida"]] if g["tipus"] == "crida" else "")
-        if g.get("estat") == "tret" or not (text or g["punts"] or g.get("xifra")):
+        situat = dibuix(g, estils, crida, subtitols, alcada) if g.get("estat") != "tret" else None
+        if situat is None:
             continue
+        mateix_bloc = (lambda p: bloc_de is None or g["paraula"] is None or
+                       bloc_de.get(p) == bloc_de.get(g["paraula"]))
         durada = g.get("durada") or DURADES[g["tipus"]]
         if g["paraula"] is None:  # una crida sense lloc: al final del vídeo
             inici = max(0.0, total - durada)
@@ -279,30 +334,18 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
         if inici >= total - 0.3:
             continue
         final = inici + durada
-        if g.get("fins") is not None and g["fins"] in finals and finals[g["fins"]] > inici:
+        if g.get("fins") is not None and g["fins"] in finals and finals[g["fins"]] > inici and mateix_bloc(g["fins"]):
             final = finals[g["fins"]] + 0.3
         final = round(min(total, max(inici + MINIM, final)), 3)
-        punts = []
         if g["tipus"] in AMB_PUNTS:
             n = len(g["punts"])
             pas = min(0.9 if g["tipus"] == "xat" else 0.7, max(0.2, (final - inici - 0.8) / max(1, n)))
-            for k, p in enumerate(g["punts"]):
-                t = inicis.get(p["paraula"]) if p.get("paraula") is not None else None
+            for k, (p, punt) in enumerate(zip(g["punts"], situat["punts"])):
+                paraula = p.get("paraula")
+                t = inicis.get(paraula) if paraula is not None and mateix_bloc(paraula) else None
                 t = inici + ENTRADA_PUNT + k * pas if t is None else t
-                punts.append({**{c: v for c, v in p.items() if c != "paraula"},
-                              "t": round(min(max(t, inici + 0.15), final - 0.3), 3)})
-        amaga = AMAGA[g["tipus"]] if g.get("amaga_subtitols") is None else g["amaga_subtitols"]
-        posicio = g.get("posicio")
-        situat = {"id": g["id"], "tipus": g["tipus"], "inici": round(inici, 3), "final": final,
-                  "text": text, "punts": punts, "estil": g.get("estil") or estil_marca,
-                  "posicio": POSICIO[g["tipus"]] if posicio is None else posicio,
-                  "amaga_subtitols": amaga, "limits": limits(subtitols, amaga)}
-        if g["tipus"] == "notificacio":
-            situat["de"] = g.get("de") or ""
-        elif g["tipus"] == "numero":
-            situat["xifra"] = llegeix_xifra(g["xifra"])
-        elif g["tipus"] == "anotacio":
-            situat.update(forma=g.get("forma") or "fletxa", costat=g.get("costat") or "esquerra")
+                punt["t"] = round(min(max(t, inici + 0.15), final - 0.3), 3)
+        situat.update(inici=round(inici, 3), final=final)
         llista.append(situat)
     return _sense_trepitjar(sorted(llista, key=lambda g: g["inici"]))
 
@@ -316,14 +359,21 @@ def llegeix_xifra(xifra: str) -> dict:
             "valor": float(f"{enter.replace('.', '')}.{decimals or 0}"), "decimals": len(decimals)}
 
 
+def _zona(posicio) -> str:
+    """La zona (dalt, mig o baix) d'un lloc, també si és un número."""
+    if isinstance(posicio, str):
+        return posicio
+    return "dalt" if posicio < 0.36 else "mig" if posicio < 0.56 else "baix"
+
+
 def _sense_trepitjar(llista: list[dict]) -> list[dict]:
     """Si dos gràfics surten alhora al mateix lloc, el segon passa a un lloc lliure (si n'hi ha).
-    Els que porten un lloc exacte (un número) es deixen on són."""
+    Els que porten un lloc exacte (un número) es deixen on són, però els altres no s'hi posen."""
     ocupats: list[dict] = []
     for g in llista:
         ocupats = [o for o in ocupats if o["final"] > g["inici"]]
-        if isinstance(g["posicio"], str) and any(o["posicio"] == g["posicio"] for o in ocupats):
-            lliure = next((p for p in POSICIONS if all(o["posicio"] != p for o in ocupats)), None)
+        if isinstance(g["posicio"], str) and any(_zona(o["posicio"]) == g["posicio"] for o in ocupats):
+            lliure = next((p for p in POSICIONS if all(_zona(o["posicio"]) != p for o in ocupats)), None)
             if lliure:
                 g["posicio"] = lliure
         ocupats.append(g)

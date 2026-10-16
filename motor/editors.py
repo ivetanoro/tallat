@@ -29,7 +29,7 @@ from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape
 
-from motor import exporta, subtitols
+from motor import exporta, grafics, subtitols
 
 AMPLADA, ALCADA = 1080, 1920
 FPS_RECURSOS = 30  # el b-roll (motor/broll.py) i la capa de subtítols (motor/subtitols.py) es fan a 30 fps
@@ -438,10 +438,13 @@ def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
     (desti / f"{nom}.srt").write_text(srt(linies), encoding="utf-8")
     capa = None
     titol = projecte.titol(trams)
-    if amb_capa and (linies or titol):  # els subtítols i el títol del ganxo (els stickers van a part)
-        mov = subtitols.renderitza(linies, projecte.estil_subtitols(), sum(b - a for a, b in trams),
+    situats = projecte.grafics(trams, linies)
+    if amb_capa and (linies or titol or situats):  # subtítols, títol del ganxo i gràfics (els stickers van a part)
+        estil = projecte.estil()
+        mov = subtitols.renderitza(linies, estil["subtitols"], sum(b - a for a, b in trams),
                                    projecte.carpeta, "1080", avis, fonts=projecte.fonts_subtitols(),
-                                   titol=titol, estil_titol=projecte.estil().get("titol"))  # només els subtítols: els stickers van a part
+                                   titol=titol, estil_titol=estil.get("titol"),
+                                   grafics=situats, paleta=grafics.paleta(estil))
         capa = desti / "subtitols.mov"
         shutil.copy(mov, capa)
     (desti / f"{nom}.fcpxml").write_text(fcpxml(nom, projecte.video, pla, capa), encoding="utf-8")

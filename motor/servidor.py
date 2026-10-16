@@ -125,7 +125,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         projecte = obert["p"]
         trams = projecte.trams()
         brolls, enganxines = projecte.brolls(trams), projecte.stickers(trams)
-        linies, titol, situats = projecte.linies_subtitols(trams), projecte.titol(trams), projecte.grafics(trams)
+        linies, titol = projecte.linies_subtitols(trams), projecte.titol(trams)
+        situats = projecte.grafics(trams, linies)
         return {"estat": _estat_json(projecte.estat), "trams": trams,
                 "durada_final": round(sum(b - a for a, b in trams), 3),
                 "zooms": projecte.zooms_per_tram(trams), "zoom": exporta.ZOOM,
@@ -137,7 +138,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                               "url": "/stickers/" + st["fitxer"].name + f"?v={int(st['fitxer'].stat().st_mtime)}"}
                              for st in enganxines],
                 "subtitols": linies,
-                "titol": titol, "grafics": situats,
+                "titol": titol, "grafics": situats, "grafics_dibuix": projecte.dibuixos_grafics(linies),
                 **info_efectes(projecte, trams, brolls, enganxines, titol, linies, situats),
                 "paragrafs": projecte.paragrafs()}
 

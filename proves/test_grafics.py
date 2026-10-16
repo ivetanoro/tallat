@@ -2,6 +2,8 @@ import argparse
 import contextlib
 import io
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +11,8 @@ from unittest import mock
 
 from motor import grafics, marca, servidor, so, subtitols
 from motor.projecte import Projecte
+
+ARREL = Path(__file__).resolve().parent.parent
 
 
 def g(**camps):
@@ -102,7 +106,8 @@ class TestFusio(unittest.TestCase):
 
     def test_de_nou(self):
         nou = grafics.fusiona(self.actuals, [g(paraula=9, text="z")], manera="de-nou")
-        self.assertEqual([(x["id"], x["text"]) for x in nou], [("g1", "z")])
+        # Un id no es torna a fer servir: els sons apagats d'un gràfic d'abans no passen a un de nou.
+        self.assertEqual([(x["id"], x["text"]) for x in nou], [("g5", "z")])
         with self.assertRaises(ValueError):
             grafics.fusiona(self.actuals, {"no": "és una llista"})
 
@@ -147,6 +152,82 @@ class TestZonaSegura(unittest.TestCase):
         self.assertGreater(grafics.limits({"posicio_y": 0.2, "mida": 0.075}, False)[0], 0.2 * 1920)  # subtítols a dalt
         net = grafics.net(g(posicio=1.7))
         self.assertEqual(net["posicio"], 1.0)  # un número, de 0 a 1
+
+
+class TestArranjaments(unittest.TestCase):
+    """El que va trobar la revisió del codi."""
+
+    def test_els_subtitols_apilats_ocupen_mes_d_una_linia(self):
+        sub = {"posicio_y": 0.7, "mida": 0.075, "interlineat": 1.12, "disposicio": "apilat", "linies_max": 4}
+        linies = [{"bloc": 1, "paraules": [{"text": "a"}]} for _ in range(5)]
+        alcada = grafics.alcada_subtitols(sub, linies)
+        self.assertAlmostEqual(alcada, 4 * 0.075 * 1080 * 1.12)  # com a molt linies_max
+        self.assertLess(grafics.limits(sub, False, alcada)[1], 0.7 * 1920 - 0.7 * alcada)  # per sobre de tot el bloc
+        escampat = grafics.alcada_subtitols({**sub, "disposicio": "escampat"}, [{"bloc": 1, "paraules": [{}] * 9}])
+        self.assertAlmostEqual(escampat, 5 * 0.075 * 1080 * 1.12)  # files de dues paraules
+
+    def test_un_lloc_exacte_tambe_ocupa_el_seu_lloc(self):
+        pla = grafics.neteja_llista([{"tipus": "anotacio", "paraula": 0, "text": "jo", "posicio": 0.2},
+                                     {"tipus": "etiqueta", "paraula": 0, "text": "pas 1"}])
+        nota, etiqueta = grafics.situa(pla, {0: 0.0}, {}, 10.0, [])
+        self.assertEqual((nota["posicio"], etiqueta["posicio"]), (0.2, "mig"))
+
+    def test_el_final_ha_de_ser_del_mateix_bloc(self):
+        pla = grafics.neteja_llista([g(paraula=1, fins=5)])
+        inicis, finals = {1: 2.0, 5: 9.0}, {1: 2.4, 5: 9.4}
+        self.assertEqual(grafics.situa(pla, inicis, finals, 20.0, [])[0]["final"], 9.7)
+        separats = grafics.situa(pla, inicis, finals, 20.0, [], bloc_de={1: 0, 5: 1})  # en un reel, un altre tros
+        self.assertEqual(separats[0]["final"], 2.0 + grafics.DURADES["frase"])
+
+    def test_els_mantinguts_no_es_perden_si_la_transcripcio_es_mes_curta(self):
+        actuals = [dict(grafics.net(g(paraula=50)), id="g1", estat="mantingut")]
+        nou = grafics.fusiona(actuals, [g(paraula=2, text="nova")], paraules=10, manera="canvia")
+        self.assertEqual([(x["id"], x["estat"]) for x in nou], [("g2", "proposat"), ("g1", "mantingut")])
+
+    def test_un_estil_de_marca_d_abans_en_text(self):
+        self.assertEqual(grafics.dibuix(grafics.net(g()), "mac")["estil"], "mac")
+
+    @unittest.skipUnless(shutil.which("node"), "cal node")
+    def test_el_numero_s_escriu_com_es_llegeix(self):
+        casos = ["73 %", "10.000 €", "2,5 h", "+3 de cada 4", "1.250.000 persones"]
+        xifres = [grafics.llegeix_xifra(c) for c in casos]
+        codi = "".join((ARREL / "pagina" / f).read_text(encoding="utf-8") for f in ("subtitols.js", "grafics.js"))
+        codi += f"\nconsole.log(JSON.stringify({json.dumps(xifres)}.map((x) => TallatGrafics.formata(x, x.valor))));"
+        sortida = subprocess.run(["node", "-e", codi], capture_output=True, text=True, check=True).stdout
+        self.assertEqual(json.loads(sortida), casos)  # el que compta la pàgina acaba igual que s'ha escrit
+
+
+class TestMapaMuntatge(unittest.TestCase):
+    def test_fa_el_mateix_que_abans_pero_rapid(self):
+        import random
+        from motor.projecte import mapa_muntatge
+
+        def com_abans(t, trams):  # l'al_muntatge d'abans, tros a tros
+            acum, posicions = 0.0, []
+            for a, b in trams:
+                posicions.append(acum)
+                acum += b - a
+            for k, (a, b) in enumerate(trams):
+                if a - 0.01 <= t < b:
+                    return posicions[k] + max(0.0, t - a)
+            seguents = [k for k, (a, _) in enumerate(trams) if a > t]
+            return posicions[min(seguents, key=lambda k: trams[k][0])] if seguents else None
+
+        atzar = random.Random(7)
+        for _ in range(200):
+            trams, t = [], 0.0
+            for _ in range(atzar.randint(1, 12)):
+                t += atzar.choice([0.0, 0.005, 0.3, 1.0])
+                d = atzar.uniform(0.2, 3)
+                trams.append((round(t, 3), round(t + d, 3)))
+                t += d
+            if atzar.random() < 0.4:
+                atzar.shuffle(trams)  # un reel: els trossos sonen en un altre ordre
+            mapa = mapa_muntatge(trams)
+            for _ in range(30):
+                x = atzar.uniform(-1, t + 1)
+                antic, nou = com_abans(x, trams), mapa(x)
+                self.assertTrue(antic == nou or abs(antic - nou) < 1e-9, (trams, x, antic, nou))
 
 
 class TestAlProjecte(unittest.TestCase):
@@ -220,6 +301,29 @@ class TestAlProjecte(unittest.TestCase):
         with self.assertRaises(SystemExit) as e, contextlib.redirect_stdout(io.StringIO()):
             tallat.ordre_grafics(argparse.Namespace(accio="canvia", **args))
         self.assertIn("paraula", str(e.exception))
+
+    def test_un_pla_mal_escrit_no_trenca_res(self):
+        (self.carpeta / "edicio.json").write_text(json.dumps({"grafics": [{"tipus": "frase", "paraula": 1},
+                                                                          {"tipus": "llista"}, g(paraula=3)]}),
+                                                  encoding="utf-8")
+        p = Projecte(self.carpeta)
+        self.assertEqual([x["text"] for x in p.grafics()], ["una idea"])  # els que no s'entenen, fora
+
+    def test_el_projecte_per_a_editors_porta_els_grafics(self):
+        from motor import editors
+        p = Projecte(self.carpeta)
+        p.estat["grafics"] = grafics.fusiona([], [g(paraula=2)])
+        with tempfile.TemporaryDirectory() as d:
+            capa = Path(d) / "capa.mov"
+            capa.write_bytes(b"mov")
+            with mock.patch.object(editors, "_plan", return_value={}), mock.patch.object(editors, "_copia_recursos"), \
+                    mock.patch.object(editors, "fcpxml", return_value=""), mock.patch.object(editors, "xmeml", return_value=""), \
+                    mock.patch.object(editors, "_efectes"), \
+                    mock.patch.object(p, "sortida", return_value=Path(d) / "editors.mp4"), \
+                    mock.patch.object(editors.subtitols, "renderitza", return_value=capa) as dibuixa:
+                editors.exporta_editors(p, amb_capa=True)
+        self.assertEqual([x["id"] for x in dibuixa.call_args.kwargs["grafics"]], ["g1"])
+        self.assertIn("principal", dibuixa.call_args.kwargs["paleta"])
 
     def test_la_pagina_no_hi_pot_ficar_brossa(self):
         estat = servidor._estat_de_json({"grafics": [g(estat="canvia", nota="x" * 900), {"tipus": "<script>"}, 5]})

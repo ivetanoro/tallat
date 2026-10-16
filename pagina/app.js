@@ -225,6 +225,7 @@ function aplicaTrams(r) {
   }
   if (r.zooms) zoomsTram = r.zooms;
   if (r.brolls) { brollsMuntatge = r.brolls; pintaResumBroll(); }
+  if (r.grafics_dibuix) dibuixosGrafics = r.grafics_dibuix;
   if (r.grafics) { graficsMuntatge = r.grafics; previaBruta = true; pintaPla(); }
   if (r.efectes) { efectesMuntatge = r.efectes; pintaSo(); }
   if ("pista_efectes" in r) posaPistaEfectes(r.pista_efectes);
@@ -938,6 +939,7 @@ function titolVisible() {
 function refaPrevia() {
   previaBruta = false;
   previaTemps = NaN;
+  for (const anterior of [previa, previaTitol, previaGrafics]) anterior?.kill?.();
   if (!window.TallatSubtitols) { previa = previaTitol = previaGrafics = null; return; }
   const titol = titolVisible();
   const grafics = graficsVisibles();
@@ -2403,15 +2405,12 @@ function pintaStickers() {
 // són a l'estat (es desfan com la resta) i es dibuixen amb pagina/grafics.js, com al vídeo final.
 
 let graficsMuntatge = [];  // els que surten al vídeo, en temps del muntatge (els calcula el servidor)
+let dibuixosGrafics = {};  // com es dibuixa cada gràfic del pla, també els que no surten (per a les miniatures)
 let paletaGrafics = null;  // els colors i les lletres de la marca
 let previaGrafics = null;
 let notaOberta = null;     // l'id del gràfic que té la nota oberta
 const targetesGrafic = new Map();  // id → {el, sig}: només es refà la que canvia
 
-const NOMS_GRAFIC = { frase: "Frase", etiqueta: "Etiqueta", llista: "Llista", crida: "Crida", notificacio: "Notificació",
-  xat: "Xat", numero: "Número", anotacio: "Anotació" };
-const LLOC_GRAFIC = { frase: "dalt", etiqueta: "dalt", llista: "baix", crida: "baix", notificacio: "dalt", xat: "baix",
-  numero: "dalt", anotacio: "mig" };  // com motor/grafics.py
 const ESTATS_GRAFIC = { mantingut: "Mantingut", canvia: "Per canviar" };
 
 const graficDe = (id) => (estat?.grafics || []).find((g) => g.id === id);
@@ -2420,20 +2419,8 @@ const graficsVisibles = () => graficsMuntatge.filter((g) => graficDe(g.id)?.esta
 
 // Per a la miniatura: el gràfic sencer, ja entrat (també els trets i els que ja no surten al vídeo).
 function perDibuixar(g) {
-  const s = graficsMuntatge.find((x) => x.id === g.id) || {
-    ...g, text: g.text || (g.tipus === "crida" ? estilMarca?.crida || "" : ""), xifra: llegeixXifra(g.xifra),
-    estil: g.estil || energies(estilMarca)[0], posicio: g.posicio ?? LLOC_GRAFIC[g.tipus],
-  };
-  return { ...s, inici: 0, final: 1e5, punts: (s.punts || []).map((p) => ({ ...p, t: 0 })) };
-}
-
-// «10.000 €» → el que compta el número (com llegeix_xifra de motor/grafics.py), per a les miniatures
-// dels gràfics que ara no surten al vídeo (els altres ja venen llegits del servidor).
-function llegeixXifra(text) {
-  const m = /(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?/.exec(text || "");
-  if (!m) return null;
-  return { abans: text.slice(0, m.index), despres: text.slice(m.index + m[0].length), milers: m[1].includes("."),
-    valor: Number(`${m[1].replaceAll(".", "")}.${m[2] || 0}`), decimals: (m[2] || "").length };
+  const d = dibuixosGrafics[g.id];
+  return d && { ...d, inici: 0, final: 1e5, punts: (d.punts || []).map((p) => ({ ...p, t: 0 })) };
 }
 
 function textGrafic(g) {
@@ -2466,7 +2453,7 @@ function targetaGrafic(g) {
           <button type="button" class="enllac cancel">Cancel·la</button></div>
       </form>
     </div>`;
-  el.querySelector("strong").textContent = NOMS_GRAFIC[g.tipus];
+  el.querySelector("strong").textContent = dibuixosGrafics[g.id]?.nom || g.tipus;
   el.querySelector(".temps-petit").textContent = s ? fmtSegons(s.inici) : g.estat === "tret" ? "" : "ja no surt al vídeo";
   el.querySelector(".grafic-estat").textContent = ESTATS_GRAFIC[g.estat] || "";
   el.querySelector(".grafic-text").textContent = textGrafic(g);
@@ -2500,14 +2487,17 @@ function targetaGrafic(g) {
   return el;
 }
 
-// La miniatura: el gràfic dibuixat petit, amb el mateix codi que el vídeo.
+// La miniatura: el gràfic dibuixat petit, amb el mateix codi que el vídeo. Torna la seva línia de
+// temps, per esborrar-la quan es refà la targeta.
 function pintaMiniGrafic(el, g) {
   const host = el.querySelector(".mg-host");
-  if (!window.TallatGrafics || !paletaGrafics) return;
+  const dibuix = perDibuixar(g);
+  if (!window.TallatGrafics || !paletaGrafics || !dibuix) return null;
   const arrel = document.createElement("div");
   host.replaceChildren(arrel);
-  TallatGrafics.construeix(arrel, [perDibuixar(g)], paletaGrafics).seek(50, false);
+  const tl = TallatGrafics.construeix(arrel, [dibuix], paletaGrafics).seek(50, false);
   host.style.transform = `scale(${el.querySelector(".mini-grafic").clientWidth / 1080})`;
+  return tl;
 }
 
 function ompleGrafics(cont, llista) {
@@ -2515,19 +2505,21 @@ function ompleGrafics(cont, llista) {
   for (const el of [...cont.children]) if (!ids.has(el.dataset.id)) el.remove();
   for (const g of llista) {
     const s = graficsMuntatge.find((x) => x.id === g.id);
-    const sig = JSON.stringify([g, s, paletaGrafics, notaOberta === g.id, g.tipus === "crida" && estilMarca?.crida]);
+    const sig = JSON.stringify([g, s, dibuixosGrafics[g.id], paletaGrafics, notaOberta === g.id,
+      g.tipus === "crida" && estilMarca?.crida]);
     let fet = targetesGrafic.get(g.id);
     if (!fet || fet.sig !== sig) {
       if (fet && fet.el.querySelector("textarea") === document.activeElement) continue;  // s'hi escriu una nota
       const el = targetaGrafic(g);
       el.dataset.id = g.id;
+      fet?.tl?.kill?.();  // l'animació de la miniatura d'abans
       fet?.el.replaceWith(el);
       fet = { el, sig };
       targetesGrafic.set(g.id, fet);
     }
     cont.append(fet.el);  // en ordre (si ja hi és, només es mou)
     if (!fet.pintada && fet.el.isConnected && fet.el.querySelector(".mini-grafic").clientWidth) {
-      pintaMiniGrafic(fet.el, g);
+      fet.tl = pintaMiniGrafic(fet.el, g);
       fet.pintada = true;
     }
   }
@@ -2546,7 +2538,7 @@ function pintaPla() {
     ? "Encara no hi ha cap pla. Demana'l a Claude, al xat: «proposa'm gràfics»."
     : notes ? `Quan acabis, digues a Claude: «mira les notes dels gràfics» (${notes === 1 ? "n'hi ha una" : `n'hi ha ${notes}`}).`
     : "Toca'n un per veure'l al vídeo. Si en vols canviar algun, toca «Canvia» i escriu-li una nota per a Claude.";
-  for (const id of [...targetesGrafic.keys()]) if (!graficDe(id)) targetesGrafic.delete(id);
+  for (const [id, fet] of targetesGrafic) if (!graficDe(id)) { fet.tl?.kill?.(); targetesGrafic.delete(id); }
   ompleGrafics($("#pla-grafics"), vius);
   ompleGrafics($("#grafics-trets"), trets);
   $("#grup-trets").hidden = !trets.length;
@@ -2830,6 +2822,8 @@ function instalaControls() {
       mostraColumna("reproductor", document.body.classList.contains("sense-reproductor"));
       return;
     }
+    // Amb el teclat, l'espai prem el botó que té el focus (Mantén, Treu…); si no, reprodueix o atura.
+    if (e.key === " " && e.target.closest?.("button") && e.target.matches(":focus-visible")) return;
     if (e.key === " ") { e.preventDefault(); R.aturaA = null; sona() ? atura() : reprodueix(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); vesA(tempsMuntatge() - 5); }
     else if (e.key === "ArrowRight") { e.preventDefault(); vesA(tempsMuntatge() + 5); }
@@ -3057,6 +3051,8 @@ function pintaPanellMarca() {
   const triats = energies(m);
   for (const b of $$("#m-energia button")) b.setAttribute("aria-pressed", String(triats.includes(b.dataset.valor)));
   $("#m-majuscules-ma").setAttribute("aria-checked", String(!!m.majuscules_ma));
+  $("#m-majuscules-ma").disabled = !m.lletra_ma;  // sense lletra de mà, no hi ha res per posar en majúscules
+  $("#m-majuscules-ma").title = m.lletra_ma ? "" : "Tria primer una lletra de mà";
   marcaSegmentat("m-grafics", m.grafics || "normal");
 }
 
@@ -3092,7 +3088,7 @@ function instalaMarca() {
     $(`#${id}`).addEventListener("change", (e) => {
       const v = e.target.value;
       if (v.startsWith("bib:")) baixaLletra(v.slice(4), "marca", clau);
-      else canviaMarca({ [clau]: v || null });
+      else { canviaMarca({ [clau]: v || null }); pintaPanellMarca(); }
     });
   }
   for (const [id, clau] of TEXTOS_MARCA) $(`#${id}`).addEventListener("input", (e) => canviaMarca({ [clau]: e.target.value }));

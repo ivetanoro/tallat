@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import bisect
 import json
 import time
 from collections import Counter
@@ -59,7 +60,10 @@ class Projecte:
 
     def _carrega_estat(self) -> dict:
         if (self.carpeta / EDICIO).exists():
-            return edicio.llegeix_estat(self.carpeta / EDICIO)
+            estat = edicio.llegeix_estat(self.carpeta / EDICIO)
+            # El pla de gràfics també el pot escriure algú a mà: el que no s'entén no ha de trencar res.
+            estat["grafics"] = grafics.neteja_llista(estat.get("grafics"))
+            return estat
         if (self.carpeta / EDICIO_TEXT).exists():
             text = (self.carpeta / EDICIO_TEXT).read_text(encoding="utf-8")
             estat, self.avisos = edicio.importa_text(self.dades["paraules"], text)
@@ -182,19 +186,40 @@ class Projecte:
         durada = titol["durada"] or float(self.estil().get("titol", {}).get("durada", 3.0))
         return {"text": titol["text"], "inici": 0.0, "final": round(min(total, durada), 3)}
 
-    def grafics(self, trams=None) -> list[dict]:
-        """Els gràfics del pla que surten al vídeo, en temps del muntatge (motor/grafics.py)."""
+    def _per_dibuixar(self, linies=None) -> tuple[dict, dict | None, float | None]:
+        """La marca del kit, l'estil dels subtítols (si el vídeo en porta) i l'alçada del seu bloc més alt."""
+        estil = self.estil()
+        sub = estil["subtitols"] if self.estat.get("subtitols", True) else None
+        if sub and linies is None and sub.get("disposicio") in ("apilat", "escampat"):
+            linies = self.linies_subtitols()
+        return estil.get("marca") or {}, sub, grafics.alcada_subtitols(sub, linies) if sub else None
+
+    def grafics(self, trams=None, linies=None) -> list[dict]:
+        """Els gràfics del pla que surten al vídeo, en temps del muntatge (motor/grafics.py). Qui ja té
+        les línies dels subtítols les pot passar (si són apilades, se n'ha de saber l'alçada)."""
+        pla = self.estat.get("grafics")
+        if not pla:
+            return []
         trams = trams if trams is not None else self.trams()
-        marca_kit = self.estil().get("marca") or {}
-        inicis, finals = grafics.temps_paraules(self._blocs(), lambda t: self.al_muntatge(t, trams))
-        return grafics.situa(self.estat.get("grafics") or [], inicis, finals, sum(b - a for a, b in trams),
-                             marca_kit.get("energia") or [], marca_kit.get("crida") or "",
-                             self.estil_subtitols() if self.estat.get("subtitols", True) else None)
+        inicis, finals, bloc_de = grafics.temps_paraules(self._blocs(), mapa_muntatge(trams))
+        marca_kit, sub, alcada = self._per_dibuixar(linies)
+        return grafics.situa(pla, inicis, finals, sum(b - a for a, b in trams), marca_kit.get("energia"),
+                             marca_kit.get("crida") or "", sub, bloc_de, alcada)
+
+    def dibuixos_grafics(self, linies=None) -> dict:
+        """Com es dibuixa cada gràfic del pla, també els trets i els que ara no surten (per a les
+        miniatures de la pàgina): {id: dibuix}."""
+        if not self.estat.get("grafics"):
+            return {}
+        marca_kit, sub, alcada = self._per_dibuixar(linies)
+        dibuixos = {g["id"]: grafics.dibuix(g, marca_kit.get("energia"), marca_kit.get("crida") or "", sub, alcada)
+                    for g in self.estat["grafics"]}
+        return {k: v for k, v in dibuixos.items() if v}
 
     def frases(self, trams=None) -> list[dict]:
         """Les frases del vídeo tal com sonen ara (per fer el pla de gràfics)."""
         trams = trams if trams is not None else self.trams()
-        return grafics.frases(self._blocs(), lambda t: self.al_muntatge(t, trams))
+        return grafics.frases(self._blocs(), mapa_muntatge(trams))
 
     def _blocs(self) -> list[list[dict]]:
         return edicio._blocs(self.paraules(), self.estat.get("ordre"))
@@ -209,7 +234,7 @@ class Projecte:
         linies = self.linies_subtitols(trams) if self.estat.get("subtitols", True) else []
         enganxines = self.stickers(trams)
         titol = self.titol(trams)
-        situats = self.grafics(trams)
+        situats = self.grafics(trams, linies)
         if not linies and not enganxines and not titol and not situats:
             return None
         estil = self.estil()
@@ -395,15 +420,7 @@ class Projecte:
 
     def al_muntatge(self, t: float, trams) -> float | None:
         """Temps del vídeo original → temps del muntatge (si cau en un tall, l'inici del tros següent)."""
-        acum, posicions = 0.0, []
-        for a, b in trams:
-            posicions.append(acum)
-            acum += b - a
-        for k, (a, b) in enumerate(trams):
-            if a - 0.01 <= t < b:
-                return posicions[k] + max(0.0, t - a)
-        seguents = [k for k, (a, _) in enumerate(trams) if a > t]
-        return posicions[min(seguents, key=lambda k: trams[k][0])] if seguents else None
+        return mapa_muntatge(trams)(t)
 
     def stickers(self, trams) -> list[dict]:
         return self._recursos(trams, "sticker")
@@ -498,6 +515,29 @@ class Projecte:
         linies.append(f"Durada: {minuts(self.dades['durada'])} → {minuts(sum(b - a for a, b in trams))} "
                       f"({len(trams)} trossos).")
         return linies
+
+
+def mapa_muntatge(trams):
+    """Una funció temps del vídeo original → temps del muntatge per a moltes crides seguides (cada
+    paraula d'una gravació llarga): es busca el tros amb una cerca binària. Si el temps cau en un tall,
+    l'inici del tros següent; si va més enllà de tot, None."""
+    acum, ordenats = 0.0, []
+    for k, (a, b) in enumerate(trams):
+        ordenats.append((a, b, acum, k))
+        acum += b - a
+    ordenats.sort()
+    inicis = [a for a, _, _, _ in ordenats]
+
+    def mapa(t: float) -> float | None:
+        j = bisect.bisect_right(inicis, t + 0.01)  # els trossos que comencen fins a t (+10 ms)
+        # Al voltant d'un tall, dos trossos poden tocar t: mana el que sona abans (com sempre).
+        candidats = [o for o in ordenats[max(0, j - 2):j] if o[0] - 0.01 <= t < o[1]]
+        if candidats:
+            a, _, posicio, _ = min(candidats, key=lambda o: o[3])
+            return posicio + max(0.0, t - a)
+        seguent = next((o for o in ordenats[j - 1 if j else 0:] if o[0] > t), None)
+        return seguent[2] if seguent else None
+    return mapa
 
 
 def _poda(carpeta: Path, patro: str, guarda: int = 0) -> None:

@@ -9,6 +9,8 @@ Tot en català, amb paraules senzilles: la majoria de persones que el fan servir
 
 Aquestes instruccions serveixen per a qualsevol assistent que pugui fer servir el terminal (Claude Code, Codex…): on diu «l'assistent», ets tu.
 
+**On funciona:** a l'ordinador de la persona (un Mac), des de la pestanya Code de l'app de Claude o des de Codex. Si et trobes en un entorn que no és el seu ordinador (un contenidor al núvol, sense `~/.tallat` ni el seu `$HOME`, amb internet limitat, o el xat normal o Cowork), no improvisis l'edició pel teu compte: digues-li que obri tallat a la pestanya **Code** de l'app de Claude al seu Mac (o amb Codex) i que hi escrigui «instal·la tallat».
+
 ## Instal·lació (la primera vegada)
 
 Quan la persona digui «instal·la tallat», o una ordre falli perquè falta una eina (ffmpeg, WhisperX, Node…):

@@ -866,3 +866,4 @@ input.camp-text { min-height: 0; }
 #grup-trets { margin-top: var(--e3); }
 #grup-trets[hidden] { display: none; }
 #tg-host { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.interruptor:disabled { opacity: 0.45; cursor: default; }
