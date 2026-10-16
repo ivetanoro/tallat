@@ -2832,8 +2832,10 @@ function instalaSo() {
 
 let estilMarca = null;
 let editantMarca = false;
-const COLORS_MARCA = [["m-color-principal", "color_principal"], ["m-color-destacat", "color_destacat"],
-  ["m-color-clar", "color_clar"]];
+const COLORS_MARCA = [["m-color-text", "color_text"], ["m-color-principal", "color_principal"],
+  ["m-color-destacat", "color_destacat"], ["m-color-secundari", "color_secundari"], ["m-color-clar", "color_clar"],
+  ["m-color-fosc", "color_fosc"]];
+const energies = (m) => [].concat(m?.energia || "net");  // un o uns quants estils de gràfics
 const LLETRES_MARCA = [["m-lletra-titols", "lletra_titols"], ["m-lletra-text", "lletra_text"],
   ["m-lletra-accent", "lletra_accent"]];
 const TEXTOS_MARCA = [["m-prohibits", "colors_prohibits"], ["m-crida", "crida"], ["m-compte", "compte"],
@@ -2849,9 +2851,9 @@ function aplicaMarca(r) {
 function pintaResumMarca() {
   const m = estilMarca;
   if (!m) return;
-  const colors = [m.color_principal, m.color_destacat, m.color_clar];
+  const colors = COLORS_MARCA.map(([, clau]) => m[clau]).filter(Boolean);
   $$("#mostra-marca i").forEach((el, k) => { el.style.background = colors[k] || ""; });
-  const feta = colors.some(Boolean) || m.compte;
+  const feta = colors.length || m.compte;
   $("#nom-marca").textContent = feta ? (m.compte || m.crida || "Colors i lletres") : "Encara no: digues a Claude «fem la meva marca»";
 }
 
@@ -2863,7 +2865,8 @@ function pintaPanellMarca() {
     if (document.activeElement !== $(`#${id}`)) ompleLletres($(`#${id}`), m[clau], { buit: "Sense triar" });
   }
   for (const [id, clau] of TEXTOS_MARCA) if (document.activeElement !== $(`#${id}`)) $(`#${id}`).value = m[clau] || "";
-  marcaSegmentat("m-energia", m.energia || "net");
+  const triats = energies(m);
+  for (const b of $$("#m-energia button")) b.setAttribute("aria-pressed", String(triats.includes(b.dataset.valor)));
   marcaSegmentat("m-grafics", m.grafics || "normal");
 }
 
@@ -2903,8 +2906,15 @@ function instalaMarca() {
     });
   }
   for (const [id, clau] of TEXTOS_MARCA) $(`#${id}`).addEventListener("input", (e) => canviaMarca({ [clau]: e.target.value }));
-  for (const [id, clau] of [["m-energia", "energia"], ["m-grafics", "grafics"]]) {
-    for (const b of $$(`#${id} button`)) b.addEventListener("click", () => { canviaMarca({ [clau]: b.dataset.valor }); pintaPanellMarca(); });
+  for (const b of $$("#m-grafics button")) b.addEventListener("click", () => { canviaMarca({ grafics: b.dataset.valor }); pintaPanellMarca(); });
+  for (const b of $$("#m-energia button")) {
+    b.addEventListener("click", () => {
+      const triats = new Set(energies(estilMarca));
+      if (triats.has(b.dataset.valor)) triats.delete(b.dataset.valor); else triats.add(b.dataset.valor);
+      if (!triats.size) return;  // almenys un
+      canviaMarca({ energia: [...triats] });
+      pintaPanellMarca();
+    });
   }
 }
 

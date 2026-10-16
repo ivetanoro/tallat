@@ -38,10 +38,31 @@ class TestMarca(unittest.TestCase):
         self.assertEqual(kit["subtitols"]["color_actiu"], "#FFD60A")
         self.assertEqual((kit["subtitols"]["clau_font"], kit["subtitols"]["clau_cursiva"]), (None, False))
 
+    def test_text_i_fosc_en_lloc_del_blanc_i_el_negre(self):
+        marca.desa("marca", {"color_text": "#F2EEE3", "color_fosc": "#22201C"})
+        kit = marca.carrega()
+        self.assertEqual((kit["subtitols"]["color"], kit["titol"]["color"]), ("#F2EEE3", "#F2EEE3"))
+        self.assertEqual((kit["subtitols"]["contorn"], kit["titol"]["contorn"]), ("#22201C", "#22201C"))
+        # Sense color destacat, les destacades van del color del text (no del groc de sempre).
+        self.assertEqual((kit["subtitols"]["clau_color"], kit["titol"]["clau_color"]), ("#F2EEE3", "#F2EEE3"))
+        marca.desa("marca", {"color_destacat": "#8A1C2B"})
+        self.assertEqual(marca.carrega()["titol"]["clau_color"], "#8A1C2B")
+        marca.desa("marca", {"color_destacat": None})
+        self.assertEqual(marca.carrega()["titol"]["clau_color"], "#F2EEE3")
+
+    def test_una_lletra_propia_amb_el_nom_bo(self):
+        desti = marca.afegeix_font(b"OTTO", "LaMeva-Italic.ttf", "La Meva", "400", cursiva=True)
+        self.assertEqual(desti.name, "La Meva__400-cursiva.ttf")
+        self.assertIn(("La Meva", "400", "italic"), {(f["familia"], f["pes"], f["estil"]) for f in marca.fonts_del_kit()})
+        for dolent in (("x.exe", "X", "400"), ("x.ttf", "  ", "400"), ("x.ttf", "X", "gros")):
+            with self.assertRaises(ValueError):
+                marca.afegeix_font(b"OTTO", *dolent)
+
     def test_textos_i_opcions(self):
-        net = marca.valida("marca", {"crida": "  comenta GUIA  ", "compte": "x" * 900, "energia": "editorial"})
-        self.assertEqual((net["crida"], len(net["compte"]), net["energia"]), ("comenta GUIA", marca.MIDA_TEXT, "editorial"))
-        for dolent in ({"energia": "barroc"}, {"grafics": "tots"}, {"color_clar": "rosa"}, {"lletra_text": "x; }"}):
+        net = marca.valida("marca", {"crida": "  comenta GUIA  ", "compte": "x" * 900, "energia": ["mac", "editorial", "mac"]})
+        self.assertEqual((net["crida"], len(net["compte"]), net["energia"]), ("comenta GUIA", marca.MIDA_TEXT, ["mac", "editorial"]))
+        for dolent in ({"energia": "editorial"}, {"energia": []}, {"energia": ["barroc"]}, {"grafics": "tots"},
+                       {"color_clar": "rosa"}, {"lletra_text": "x; }"}):
             with self.assertRaises(ValueError):
                 marca.valida("marca", dolent)
 

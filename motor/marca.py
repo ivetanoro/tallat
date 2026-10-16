@@ -64,7 +64,7 @@ OPCIONS = {
                   "alineacio": {"centre", "esquerra", "dreta", "esglao"}},
     "stickers": {"animacio": {"pop", "cap"}},
     "so": {"soroll": {"suau", "mitja", "fort"}, "efectes": {"cap", "pocs", "molts"}},
-    "marca": {"energia": {"net", "scrapbook", "editorial"}, "grafics": {"pocs", "normal", "molts"}},
+    "marca": {"grafics": {"pocs", "normal", "molts"}},
     "broll": {"disposicio": {"pantalla", "targeta", "partida", "carrusel"},
               "proporcio": {"9:16", "3:4", "4:5", "1:1", "16:9"},
               "animacio": {"pop", "puja", "llisca", "fos", "cap"}},
@@ -73,10 +73,14 @@ OPCIONS = {
               "corba_linies": {"primera", "totes", "darrera"}},
 }
 COLORS = {"color", "color_actiu", "contorn", "fons_color", "clau_color", "vora_color",
-          "color_principal", "color_destacat", "color_clar"}
+          "color_text", "color_principal", "color_destacat", "color_secundari", "color_clar", "color_fosc"}
+# Opcions que són una llista (se'n pot triar més d'una).
+LLISTES = {"marca": {"energia": {"net", "mac", "scrapbook", "editorial"}}}
 MIDA_TEXT = 600  # els textos de la marca (el compte, la referència…), com a molt
 # La marca s'escampa: cada color i cada lletra fa la seva feina a la resta del kit.
 ENLLACOS_MARCA = {
+    "color_text": [("subtitols", "color"), ("titol", "color")],
+    "color_fosc": [("subtitols", "contorn"), ("titol", "contorn")],  # també el color de les ombres
     "color_destacat": [("subtitols", "color_actiu"), ("subtitols", "clau_color"), ("titol", "clau_color")],
     "color_principal": [("broll", "vora_color")],
     "lletra_text": [("subtitols", "font")],
@@ -354,6 +358,11 @@ def valida(seccio: str, canvis: dict) -> dict:
         elif defecte is None:  # camins de fitxers (font pròpia, LUT): no es posen per aquí
             if valor is not None:
                 raise ValueError(f"{clau} no es pot canviar així")
+        elif isinstance(defecte, list):
+            permesos = LLISTES.get(seccio, {}).get(clau, set())
+            if not isinstance(valor, list) or not valor or any(v not in permesos for v in valor):
+                raise ValueError(f"{clau} ha de ser una llista amb alguna d'aquestes: {', '.join(sorted(permesos))}")
+            valor = list(dict.fromkeys(valor))
         elif isinstance(defecte, bool):
             if not isinstance(valor, bool):
                 raise ValueError(f"{clau} ha de ser sí o no")
@@ -401,9 +410,17 @@ def desa(seccio: str, canvis: dict, path: Path | None = None, kit: str | None = 
 
 def _escampa_marca(dades: dict, canvis: dict) -> None:
     """Posa els colors i les lletres de la marca allà on fan la seva feina (si se'n treu un, hi torna
-    el de l'estil neutre). Després cada opció es pot retocar a part."""
+    el de l'estil neutre). Sense color destacat, les destacades van del color del text. Després cada
+    opció es pot retocar a part."""
     base = _sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8")))
-    for clau, valor in canvis.items():
+    marca_ = dades.get("marca", {})
+    claus = set(canvis)
+    if "color_text" in claus and not marca_.get("color_destacat"):
+        claus.add("color_destacat")
+    for clau in claus:
+        valor = marca_.get(clau)
+        if clau == "color_destacat" and valor is None:
+            valor = marca_.get("color_text")
         for seccio, desti in ENLLACOS_MARCA.get(clau, []):
             dades.setdefault(seccio, {})[desti] = valor if valor is not None else base[seccio][desti]
             if (seccio, desti) == ("subtitols", "font"):
@@ -538,6 +555,28 @@ def desa_font(nom: str, contingut: bytes, path: Path | None = None, kit: str | N
     dades.setdefault("subtitols", {}).update({"font": familia, "font_fitxer": None})
     _escriu(dades, path)
     return carrega(path)["subtitols"]
+
+
+def afegeix_font(contingut: bytes, nom_fitxer: str, familia: str, pes: str = "400", cursiva: bool = False,
+                 path: Path | None = None, kit: str | None = None) -> Path:
+    """Desa una lletra pròpia al kit amb el nom que entén tallat («Família__pes.ttf», amb «-cursiva»),
+    sense fer-la servir enlloc encara (això ho fa la marca o l'estil). Torna el fitxer."""
+    extensio = Path(nom_fitxer).suffix.lower()
+    if extensio not in FORMATS_FONT:
+        raise ValueError("La font ha de ser un fitxer .ttf, .otf, .woff o .woff2")
+    if not contingut:
+        raise ValueError("El fitxer de la font és buit")
+    familia = _nom_familia(familia)
+    if not familia or not NOM_DE_FONT.match(familia):
+        raise ValueError("Aquest nom de lletra no és vàlid")
+    if not re.fullmatch(r"\d{3}|var", str(pes)):
+        raise ValueError("El gruix ha de ser un número com 400 o «var» (una lletra variable)")
+    path = path or ruta(kit)
+    carpeta = path.parent / "fonts"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    desti = carpeta / f"{familia}__{pes}{'-cursiva' if cursiva else ''}{extensio}"
+    desti.write_bytes(contingut)
+    return desti
 
 
 def fitxer_font(estil: dict) -> Path | None:

@@ -40,7 +40,7 @@
       </form>
       <input type="file" id="fitxer-kit" accept=".zip,application/zip" hidden>
       <button class="fila-estil" id="obre-marca" aria-label="La teva marca: colors, lletres i com són els teus vídeos">
-        <span class="mostra-estil mostra-marca" id="mostra-marca" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mostra-estil mostra-marca" id="mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span class="fila-estil-text"><strong>La teva marca</strong><span id="nom-marca"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
@@ -330,10 +330,13 @@
         Es desa al kit «<span id="nom-kit-marca"></span>» i els colors i les lletres s'apliquen sols.</p>
       <div class="camp">
         <span class="etiqueta">Colors</span>
-        <div class="colors">
-          <label class="color" title="Blocs de color i vores del b-roll"><input type="color" id="m-color-principal"><span>Principal</span></label>
-          <label class="color" title="Les paraules destacades i la que sona"><input type="color" id="m-color-destacat"><span>Destacat</span></label>
+        <div class="colors colors-marca">
+          <label class="color" title="El text damunt del vídeo: subtítols i títol"><input type="color" id="m-color-text"><span>Text</span></label>
+          <label class="color" title="Blocs de color, vores del b-roll i etiquetes"><input type="color" id="m-color-principal"><span>Principal</span></label>
+          <label class="color" title="Les paraules destacades i la que sona (si no en tries, el del text)"><input type="color" id="m-color-destacat"><span>Destacat</span></label>
+          <label class="color" title="Un segon color: etiquetes, cortines de color"><input type="color" id="m-color-secundari"><span>Secundari</span></label>
           <label class="color" title="Fons i targetes"><input type="color" id="m-color-clar"><span>Clar</span></label>
+          <label class="color" title="En lloc del negre: contorns i ombres"><input type="color" id="m-color-fosc"><span>Fosc</span></label>
         </div>
       </div>
       <div class="camp">
@@ -353,11 +356,12 @@
         <select id="m-lletra-accent"></select>
       </div>
       <div class="camp">
-        <span class="etiqueta" id="et-m-energia">Estil dels gràfics</span>
-        <div class="segmentat ample" role="radiogroup" aria-labelledby="et-m-energia" id="m-energia">
-          <button role="radio" data-valor="net" title="Net i minimalista">Net</button>
-          <button role="radio" data-valor="scrapbook" title="Juganer, amb stickers i retalls">Scrapbook</button>
-          <button role="radio" data-valor="editorial" title="Titulars grans, com una revista">Editorial</button>
+        <span class="etiqueta" id="et-m-energia">Estil dels gràfics (un o uns quants)</span>
+        <div class="segmentat ample" role="group" aria-labelledby="et-m-energia" id="m-energia">
+          <button aria-pressed="false" data-valor="net" title="Net i minimalista">Net</button>
+          <button aria-pressed="false" data-valor="mac" title="Finestres, menús, carpetes: com l'ordinador">Mac</button>
+          <button aria-pressed="false" data-valor="scrapbook" title="Juganer, amb stickers, retalls i notes">Scrapbook</button>
+          <button aria-pressed="false" data-valor="editorial" title="Titulars grans, com una revista">Editorial</button>
         </div>
       </div>
       <div class="camp">

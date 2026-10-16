@@ -242,8 +242,9 @@
       "--ts-interlineat": Number(estil.interlineat) || 1.12,
       "--ts-clau-mida": Number(estil.clau_mida) || 1.4,
       "--ts-clau-color": colorClau,
-      "--ts-ombra": ombra ? "0 0.06em 0.2em rgba(0, 0, 0, 0.45)" : "none",
-      "--ts-ombra-filtre": ombra ? "drop-shadow(0 0.04em 0.1em rgba(0, 0, 0, 0.5))" : "none",
+      // L'ombra, del color del contorn (el fosc de la marca; si no, negre).
+      "--ts-ombra": ombra ? `0 0.06em 0.2em ${rgba(estil.contorn, 0.45)}` : "none",
+      "--ts-ombra-filtre": ombra ? `drop-shadow(0 0.04em 0.1em ${rgba(estil.contorn, 0.5)})` : "none",
       "--ts-fons": rgba(estil.fons_color, 0.62),
       ...lletraClau(estil, "ts"),
     };
@@ -503,7 +504,7 @@
       "--tt-contorn": estil.contorn, "--tt-gruix": `${(estil.gruix_contorn || 0) * 2}em`,
       "--tt-majuscules": estil.majuscules ? "uppercase" : "none",
       "--tt-espaiat": `${Number(estil.espaiat) || 0}em`, "--tt-interlineat": Number(estil.interlineat) || 1,
-      "--tt-ombra": estil.ombra !== false ? "0 0.05em 0.18em rgba(0, 0, 0, 0.45)" : "none",
+      "--tt-ombra": estil.ombra !== false ? `0 0.05em 0.18em ${rgba(estil.contorn, 0.45)}` : "none",
       "--tt-fons": estil.fons === "enfosquit" ? rgba(estil.fons_color, 0.5) : (estil.fons_color || "#000000"),
       ...lletraClau(estil, "tt"),
     };

@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -371,7 +372,8 @@ def ordre_titol(args) -> None:
 
 
 NOMS_MARCA = {"compte": "El compte", "public": "Qui el mira", "referencia": "Reel de referència",
-              "color_principal": "Color principal", "color_destacat": "Color destacat", "color_clar": "Color clar",
+              "color_text": "Color del text", "color_principal": "Color principal", "color_destacat": "Color destacat",
+              "color_secundari": "Color secundari", "color_clar": "Color clar", "color_fosc": "Color fosc",
               "colors_prohibits": "Mai", "lletra_titols": "Lletra dels títols", "lletra_text": "Lletra del text",
               "lletra_accent": "Lletra d'accent", "energia": "Estil dels gràfics", "grafics": "Quants gràfics",
               "crida": "Crida a l'acció"}
@@ -395,6 +397,9 @@ def ordre_marca(args) -> None:
                 except ConnectionError as e:
                     sys.exit(str(e))
                 continue
+        if clau == "energia":  # un o uns quants, separats amb comes
+            canvis[clau] = [v.strip() for v in valor.split(",") if v.strip()]
+            continue
         canvis[clau] = None if valor.lower() in ("", "null", "cap") and (clau.startswith(("color_", "lletra_"))) else valor
     if canvis:
         try:
@@ -403,13 +408,13 @@ def ordre_marca(args) -> None:
             sys.exit(str(e))
     m = marca.carrega(kit=kit)["marca"]
     nom = next((k["nom"] for k in marca.kits() if k["id"] == kit), kit)
-    if not any(m.get(c) for c in ("compte", "color_principal", "color_destacat", "lletra_text", "lletra_titols")):
+    if not any(m.get(c) for c in NOMS_MARCA if c.startswith(("compte", "color_", "lletra_"))):
         print(f"El kit «{nom}» encara no té marca. Fes l'entrevista de marca (vegeu SKILL.md).")
-    else:
-        print(f"La marca del kit «{nom}» (els colors i les lletres ja s'han posat als subtítols, al títol i al b-roll):")
+        return
+    print(f"La marca del kit «{nom}» (els colors i les lletres ja s'han posat als subtítols, al títol i al b-roll):")
     for clau, etiqueta in NOMS_MARCA.items():
-        if m.get(clau) not in (None, ""):
-            print(f"  {etiqueta}: {m[clau]}")
+        if m.get(clau) not in (None, "", []):
+            print(f"  {etiqueta}: {', '.join(m[clau]) if isinstance(m[clau], list) else m[clau]}")
 
 
 def ordre_destaca(args) -> None:
@@ -436,6 +441,20 @@ def ordre_destaca(args) -> None:
     if not projecte.estil_subtitols().get("clau_grans"):
         print("Avís: el kit d'aquest vídeo no fa més grans les paraules destacades. "
               "S'activa a la pàgina: Subtítols → Estil → Paraules destacades.")
+
+
+PESOS = {"thin": "100", "extralight": "200", "light": "300", "regular": "400", "book": "400", "normal": "400",
+         "medium": "500", "semibold": "600", "bold": "700", "extrabold": "800", "black": "900", "heavy": "900"}
+
+
+def _pes_de(nom: str) -> tuple[str, bool]:
+    """El gruix i si és cursiva, pel nom del fitxer («LaMeva-Italic» → 400 cursiva; «…Var…» → variable)."""
+    baix = nom.lower().replace(" ", "").replace("-", "").replace("_", "")
+    cursiva = "italic" in baix or "oblique" in baix
+    if "var" in baix:
+        return "var", cursiva
+    pes = next((v for k, v in sorted(PESOS.items(), key=lambda x: -len(x[0])) if k in baix), "400")
+    return pes, cursiva
 
 
 def ordre_kit(args) -> None:
@@ -469,6 +488,13 @@ def ordre_kit(args) -> None:
             for grup, nom in biblioteca["grups"].items():
                 print(f"{nom}: " + ", ".join(f"{l['nom']} ({l['id']})" for l in biblioteca["lletres"] if l["grup"] == grup))
             print("\nPer posar-ne una a un kit: tallat.py kit lletra ID [--kit KIT]. Es baixa el primer cop.")
+        elif args.accio == "font":
+            origen = Path(args.fitxer).expanduser()
+            familia = args.familia or re.split(r"[-_ ]", origen.stem)[0]
+            pes, cursiva = _pes_de(origen.stem) if args.pes is None else (args.pes, False)
+            desti = marca.afegeix_font(origen.read_bytes(), origen.name, familia, pes, args.cursiva or cursiva, kit=args.kit)
+            print(f"Lletra «{familia}» afegida al kit {marca.resol(args.kit)} ({desti.name}). "
+                  "Fes-la servir amb tallat.py marca (lletra_text=…, lletra_titols=…) o des de la pàgina.")
         elif args.accio == "lletra":
             if not any(l["id"] == args.id for l in marca.biblioteca_lletres()["lletres"]):
                 sys.exit(f"No conec la lletra «{args.id}». Mira quines hi ha amb: tallat.py kit lletres")
@@ -592,6 +618,12 @@ def main() -> None:
     kb = ks.add_parser("esborra", help="Treu un kit de la llista (es guarda a ~/.tallat/kits-esborrats)")
     kb.add_argument("kit")
     ks.add_parser("lletres", help="Les lletres gratuïtes que es poden posar a un kit")
+    kf = ks.add_parser("font", help="Afegeix al kit una lletra teva (un fitxer .ttf, .otf, .woff o .woff2)")
+    kf.add_argument("fitxer")
+    kf.add_argument("--familia", help="El nom de la lletra (si no, el principi del nom del fitxer)")
+    kf.add_argument("--pes", help="El gruix (400, 700…) o «var» si és variable (si no, pel nom del fitxer)")
+    kf.add_argument("--cursiva", action="store_true", help="És la versió cursiva")
+    kf.add_argument("--kit", help="El kit (si no, el per defecte)")
     kl = ks.add_parser("lletra", help="Posa una lletra gratuïta als subtítols d'un kit (la baixa el primer cop)")
     kl.add_argument("id", help="L'id de la lletra (tallat.py kit lletres)")
     kl.add_argument("--kit", help="El kit (si no, el per defecte)")
