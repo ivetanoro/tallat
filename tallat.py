@@ -343,7 +343,8 @@ def ordre_moment(args) -> None:
         print(f"Hi surt el títol del ganxo: «{titol['text'].replace(chr(10), ' / ')}».")
     for g in projecte.grafics(ara):
         if g["inici"] <= m < g["final"]:
-            print(f"Hi surt el gràfic {g['id']} ({g['tipus']}, {g['estil']}): «{g['text'] or ' / '.join(p['text'] for p in g['punts'])}».")
+            print(f"Hi surt el gràfic {g['id']} ({g['tipus']}, {g['estil']}): "
+                  f"«{g['text'] or ' / '.join(p['text'] for p in g['punts'])}».")
     for nom, recursos in (("B-roll", projecte.brolls(ara)), ("Sticker", projecte.stickers(ara))):
         for r in recursos:
             if r["inici"] <= m < r["inici"] + r["durada"]:
@@ -446,9 +447,11 @@ def ordre_grafics(args) -> None:
         on = (_segons(s["inici"]) if s else "—" if g["estat"] == "tret"
               else "sense text" if g["tipus"] == "crida" and not g["text"] else "fora del vídeo")
         text = g["text"] or ("(la crida de la marca)" if g["tipus"] == "crida" else "")
-        punts = " / ".join(p["text"] for p in g["punts"])
+        text = " · ".join(x for x in (g.get("de"), g.get("xifra"), text) if x)
+        punts = " / ".join(("→ " if p.get("costat") == "enviat" else "") + p["text"] for p in g["punts"])
+        punts = f"{g['forma']}, {g['costat']}" if g["tipus"] == "anotacio" else punts
         estat = {"canvia": "CANVIA", "mantingut": "mantingut", "tret": "tret"}.get(g["estat"], "proposat")
-        print(f"  {g['id']:>4}  {g['tipus']:<8} {on:>14}  paraula {g['paraula'] if g['paraula'] is not None else 'final'}"
+        print(f"  {g['id']:>4}  {g['tipus']:<11} {on:>14}  paraula {g['paraula'] if g['paraula'] is not None else 'final'}"
               f"  {g.get('estil') or '(marca)'}  {estat}  «{text}»" + (f" [{punts}]" if punts else ""))
         if g["nota"]:
             print(f"        nota: «{g['nota']}»")
@@ -458,7 +461,8 @@ NOMS_MARCA = {"compte": "El compte", "public": "Qui el mira", "referencia": "Ree
               "color_text": "Color del text", "color_principal": "Color principal", "color_destacat": "Color destacat",
               "color_secundari": "Color secundari", "color_clar": "Color clar", "color_fosc": "Color fosc",
               "colors_prohibits": "Mai", "lletra_titols": "Lletra dels títols", "lletra_text": "Lletra del text",
-              "lletra_accent": "Lletra d'accent", "energia": "Estil dels gràfics", "grafics": "Quants gràfics",
+              "lletra_accent": "Lletra d'accent", "lletra_ma": "Lletra de mà",
+              "majuscules_ma": "Lletra de mà en majúscules", "energia": "Estil dels gràfics", "grafics": "Quants gràfics",
               "crida": "Crida a l'acció"}
 
 
@@ -483,6 +487,11 @@ def ordre_marca(args) -> None:
         if clau == "energia":  # un o uns quants, separats amb comes
             canvis[clau] = [v.strip() for v in valor.split(",") if v.strip()]
             continue
+        if clau == "majuscules_ma":  # sí o no
+            if valor.lower() not in ("sí", "si", "no", "true", "false", "1", "0"):
+                sys.exit("majuscules_ma ha de ser sí o no")
+            canvis[clau] = valor.lower() in ("sí", "si", "true", "1")
+            continue
         canvis[clau] = None if valor.lower() in ("", "null", "cap") and (clau.startswith(("color_", "lletra_"))) else valor
     if canvis:
         try:
@@ -496,8 +505,9 @@ def ordre_marca(args) -> None:
         return
     print(f"La marca del kit «{nom}» (els colors i les lletres ja s'han posat als subtítols, al títol i al b-roll):")
     for clau, etiqueta in NOMS_MARCA.items():
-        if m.get(clau) not in (None, "", []):
-            print(f"  {etiqueta}: {', '.join(m[clau]) if isinstance(m[clau], list) else m[clau]}")
+        if m.get(clau) not in (None, "", [], False):
+            valor = m[clau]
+            print(f"  {etiqueta}: {', '.join(valor) if isinstance(valor, list) else 'sí' if valor is True else valor}")
 
 
 def ordre_destaca(args) -> None:

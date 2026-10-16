@@ -491,7 +491,7 @@ def fonts_de(estil: dict, kit: str | None = None, path: Path | None = None, tito
 
 # On es pot posar una lletra de la biblioteca: (secció del kit, clau).
 LLOCS_LLETRA = {("subtitols", "font"), ("titol", "font"), ("subtitols", "clau_font"), ("titol", "clau_font"),
-                ("marca", "lletra_titols"), ("marca", "lletra_text"), ("marca", "lletra_accent")}
+                ("marca", "lletra_titols"), ("marca", "lletra_text"), ("marca", "lletra_accent"), ("marca", "lletra_ma")}
 
 
 def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = None, seccio: str = "subtitols",

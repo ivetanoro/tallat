@@ -25,7 +25,7 @@ class TestUnGrafic(unittest.TestCase):
         self.assertIsNone(grafics.net({"tipus": "crida"})["paraula"])  # la crida pot anar al final, sense paraula
 
     def test_el_que_no_s_enten_es_diu_en_catala(self):
-        for dolent, paraula in (({"tipus": "notificacio", "paraula": 0}, "Tipus"), ({"tipus": "frase", "text": "x"}, "paraula"),
+        for dolent, paraula in (({"tipus": "pantalla", "paraula": 0}, "Tipus"), ({"tipus": "frase", "text": "x"}, "paraula"),
                                 (g(text=""), "text"), ({"tipus": "llista", "paraula": 0}, "punts"),
                                 (g(paraula=12), "12"), (g(paraula=True), "paraula"), (g(durada="llarg"), "durada"),
                                 ({"tipus": "etiqueta", "paraula": 0, "text": "x" * 41}, "massa llarg")):
@@ -37,6 +37,46 @@ class TestUnGrafic(unittest.TestCase):
         llista = grafics.neteja_llista([g(id="g1"), {"tipus": "res"}, g(id="g1"), "brossa"])
         self.assertEqual([x["id"] for x in llista], ["g1", "g2"])  # l'id repetit en rep un de nou
         self.assertEqual(grafics.neteja_llista(None), [])
+
+
+class TestTipusNous(unittest.TestCase):
+    def test_notificacio_xat_numero_i_anotacio(self):
+        notif = grafics.net({"tipus": "notificacio", "paraula": 0, "de": "mama", "text": "on ets?"})
+        self.assertEqual((notif["de"], notif["forma"]), ("mama", None))
+        xat = grafics.net({"tipus": "xat", "paraula": 0, "punts": ["hola", "què tal", {"text": "bé", "costat": "enviat"}]})
+        self.assertEqual([p["costat"] for p in xat["punts"]], ["rebut", "enviat", "enviat"])  # per torns, si no es diu
+        nota = grafics.net({"tipus": "anotacio", "paraula": 0, "text": "jo, fa 3 anys", "forma": "estrella"})
+        self.assertEqual((nota["forma"], nota["costat"]), ("fletxa", "esquerra"))
+        for dolent, paraula in (({"tipus": "numero", "paraula": 0, "xifra": "molts"}, "xifra"),
+                                ({"tipus": "xat", "paraula": 0}, "punts"), ({"tipus": "notificacio", "paraula": 0}, "text")):
+            with self.assertRaises(ValueError) as e:
+                grafics.net(dolent)
+            self.assertIn(paraula, str(e.exception))
+
+    def test_la_lletra_de_ma_pot_anar_sempre_en_majuscules(self):
+        self.assertFalse(grafics.paleta({"marca": {"majuscules_ma": True}})["majuscules_ma"])  # sense lletra de mà, res
+        paleta = grafics.paleta({"marca": {"lletra_ma": "La Meva Mà", "majuscules_ma": True}})
+        self.assertEqual((paleta["lletra_ma"], paleta["majuscules_ma"]), ("La Meva Mà", True))
+        self.assertEqual(marca.valida("marca", {"majuscules_ma": True}), {"majuscules_ma": True})
+        with self.assertRaises(ValueError):
+            marca.valida("marca", {"majuscules_ma": "sí"})
+
+    def test_la_xifra_es_llegeix_com_s_escriu(self):
+        self.assertEqual(grafics.llegeix_xifra("10.000 €"),
+                         {"abans": "", "despres": " €", "milers": True, "valor": 10000.0, "decimals": 0})
+        self.assertEqual(grafics.llegeix_xifra("+2,5 h")["abans"], "+")
+        self.assertEqual(grafics.llegeix_xifra("2,5 h")[("valor")], 2.5)
+        self.assertEqual(grafics.llegeix_xifra("3 de cada 4")["despres"], " de cada 4")
+
+    def test_situats_porten_el_que_cal_per_dibuixar(self):
+        pla = grafics.neteja_llista([{"tipus": "numero", "paraula": 0, "xifra": "73 %", "text": "de mares"},
+                                     {"tipus": "xat", "paraula": 1, "punts": [{"text": "hola", "paraula": 2}, "adeu"]},
+                                     {"tipus": "anotacio", "paraula": 3, "text": "jo", "forma": "cercle", "costat": "dreta"}])
+        numero, xat, nota = grafics.situa(pla, {0: 0.0, 1: 1.0, 2: 1.5, 3: 2.0}, {}, 10.0, [])
+        self.assertEqual(numero["xifra"]["valor"], 73.0)
+        self.assertEqual([(p["costat"], p["t"]) for p in xat["punts"]], [("rebut", 1.5), ("enviat", 2.25)])
+        self.assertTrue(xat["amaga_subtitols"])
+        self.assertEqual((nota["forma"], nota["costat"], nota["posicio"]), ("cercle", "dreta", "mig"))
 
 
 class TestFusio(unittest.TestCase):

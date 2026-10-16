@@ -8,11 +8,16 @@ transcripció: si es mouen els talls, el gràfic segueix la seva frase.
    "amaga_subtitols": null, "motiu": "la idea central", "estat": "proposat", "nota": ""}
 
 Tipus (tots de text: no cal cap fitxer):
-  frase     una frase clau en gran (*entre asteriscs*, la part destacada); amaga els subtítols
-  etiqueta  una paraula o dues en una etiqueta petita («mite», «pas 1»)
-  llista    una targeta amb uns quants punts, que surten un a un (cadascun quan es diu); amaga els
-            subtítols i va a baix, al seu lloc
-  crida     la crida a l'acció del final (si no té text, la de la marca)
+  frase        una frase clau en gran (*entre asteriscs*, la part destacada); amaga els subtítols
+  etiqueta     una paraula o dues en una etiqueta petita («mite», «pas 1»)
+  llista       una targeta amb uns quants punts, que surten un a un (cadascun quan es diu); amaga els
+               subtítols i va a baix, al seu lloc
+  crida        la crida a l'acció del final (si no té text, la de la marca)
+  notificacio  una notificació del mòbil: qui l'envia («de») i el missatge («text»)
+  xat          una conversa: els «punts» són els missatges (rebuts o enviats, «costat»), que surten
+               un a un; amaga els subtítols
+  numero       una xifra que compta des de zero («xifra»: «73 %», «10.000 €»), amb un text a sota
+  anotacio     una nota escrita a mà amb un cercle, un subratllat o una fletxa («forma») que es dibuixa
 
 L'estil de cada gràfic (net, mac, scrapbook o editorial) és un dels de la marca. Estats:
 proposat (el veus al vídeo), mantingut (t'agrada: Claude no el toca), canvia (amb una nota per
@@ -26,8 +31,12 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-TIPUS = ("frase", "etiqueta", "llista", "crida")
-NOMS = {"frase": "Frase", "etiqueta": "Etiqueta", "llista": "Llista", "crida": "Crida"}
+TIPUS = ("frase", "etiqueta", "llista", "crida", "notificacio", "xat", "numero", "anotacio")
+NOMS = {"frase": "Frase", "etiqueta": "Etiqueta", "llista": "Llista", "crida": "Crida",
+        "notificacio": "Notificació", "xat": "Xat", "numero": "Número", "anotacio": "Anotació"}
+AMB_PUNTS = ("llista", "xat")  # els que tenen punts que surten un a un
+FORMES = ("cercle", "subratllat", "fletxa")  # de l'anotació
+COSTATS = ("esquerra", "dreta")
 ESTILS = ("net", "mac", "scrapbook", "editorial")
 POSICIONS = ("dalt", "mig", "baix")  # o un número de 0 (dalt) a 1 (baix): on va el centre del gràfic
 # La zona segura d'Instagram (i TikTok) en un vídeo de 1080 × 1920: el 14 % de dalt i el 35 % de baix
@@ -36,11 +45,18 @@ ALCADA = 1920
 ZONA_SEGURA = (0.14, 0.65)
 MARGE_SUBTITOLS = 28  # px entre un gràfic i els subtítols
 ESTATS = ("proposat", "mantingut", "canvia", "tret")
-DURADES = {"frase": 2.8, "etiqueta": 2.2, "llista": 4.5, "crida": 3.5}
+DURADES = {"frase": 2.8, "etiqueta": 2.2, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "xat": 5.0,
+           "numero": 2.8, "anotacio": 2.5}
 # On va cada tipus si no es diu: en un vídeo de cap parlant, la cara sol omplir el mig.
-POSICIO = {"frase": "dalt", "etiqueta": "dalt", "llista": "baix", "crida": "baix"}
-AMAGA = {"frase": True, "llista": True, "etiqueta": False, "crida": False}  # els subtítols, mentre surten
-MIDA_TEXT = {"frase": 140, "etiqueta": 40, "llista": 80, "crida": 90}
+POSICIO = {"frase": "dalt", "etiqueta": "dalt", "llista": "baix", "crida": "baix", "notificacio": "dalt",
+           "xat": "baix", "numero": "dalt", "anotacio": "mig"}
+# Els que amaguen els subtítols mentre surten (el que hi diu és el que se sent).
+AMAGA = {"frase": True, "llista": True, "etiqueta": False, "crida": False, "notificacio": False, "xat": True,
+         "numero": False, "anotacio": False}
+MIDA_TEXT = {"frase": 140, "etiqueta": 40, "llista": 80, "crida": 90, "notificacio": 120, "xat": 30,
+             "numero": 60, "anotacio": 40}
+CAL_TEXT = ("frase", "etiqueta", "notificacio", "anotacio")
+XIFRA = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?")  # «10.000», «2,5», «73»
 DENSITAT = {"pocs": "un cada 8-12 s", "normal": "un cada 4-6 s", "molts": "un cada 2-4 s"}  # com la marca
 MAX_PUNTS = 6
 MIDA_PUNT = 80
@@ -49,8 +65,8 @@ MINIM = 0.8         # segons: cap gràfic dura menys
 ENTRADA_PUNT = 0.35  # quan surt el primer punt d'una llista sense paraules (després de la targeta)
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_FRASE = 0.7    # un silenci així també tanca una frase
-CAMPS = ("id", "tipus", "paraula", "fins", "durada", "text", "punts", "estil", "posicio", "amaga_subtitols",
-         "motiu", "estat", "nota")
+CAMPS = ("id", "tipus", "paraula", "fins", "durada", "text", "punts", "de", "xifra", "forma", "costat", "estil",
+         "posicio", "amaga_subtitols", "motiu", "estat", "nota")
 
 
 def _enter(valor, nom: str) -> int | None:
@@ -96,21 +112,31 @@ def net(g: dict, paraules: int | None = None) -> dict:
         raise ValueError("«durada» ha de ser un número de segons")
     sortida["durada"] = round(min(15.0, max(MINIM, float(durada))), 2) if durada is not None else None
     sortida["text"] = _text(g.get("text"), "text", MIDA_TEXT[tipus])
-    if tipus in ("frase", "etiqueta") and not sortida["text"]:
-        raise ValueError(f"Una {NOMS[tipus].lower()} necessita «text»")
+    if tipus in CAL_TEXT and not sortida["text"]:
+        raise ValueError(f"Al gràfic {NOMS[tipus].lower()} li falta «text»")
     punts = []
-    if tipus == "llista":
-        for p in g.get("punts") or []:
+    if tipus in AMB_PUNTS:
+        for k, p in enumerate(g.get("punts") or []):
             p = p if isinstance(p, dict) else {"text": p}
             text = _text(p.get("text"), "punts", MIDA_PUNT)
             if text:
                 paraula = _enter(p.get("paraula"), "punts.paraula")
                 if paraules is not None and paraula is not None and paraula >= paraules:
                     raise ValueError(f"No hi ha cap paraula amb el número {paraula}")
-                punts.append({"text": text, "paraula": paraula})
+                punt = {"text": text, "paraula": paraula}
+                if tipus == "xat":  # els missatges: rebuts (a l'esquerra) o enviats (a la dreta), per torns si no es diu
+                    punt["costat"] = p.get("costat") if p.get("costat") in ("rebut", "enviat") else \
+                        ("rebut" if k % 2 == 0 else "enviat")
+                punts.append(punt)
         if not punts:
-            raise ValueError("Una llista necessita «punts»: [\"un\", \"dos\"…]")
+            raise ValueError(f"{'Una llista' if tipus == 'llista' else 'Un xat'} necessita «punts»: [\"un\", \"dos\"…]")
     sortida["punts"] = punts[:MAX_PUNTS]
+    sortida["de"] = _text(g.get("de"), "de", 30) if tipus == "notificacio" else ""
+    sortida["xifra"] = _text(g.get("xifra"), "xifra", 24) if tipus == "numero" else ""
+    if tipus == "numero" and not XIFRA.search(sortida["xifra"]):
+        raise ValueError("Un número necessita «xifra», amb un número a dins («73 %», «10.000 €», «3 de cada 4»)")
+    sortida["forma"] = (g.get("forma") if g.get("forma") in FORMES else "fletxa") if tipus == "anotacio" else None
+    sortida["costat"] = (g.get("costat") if g.get("costat") in COSTATS else "esquerra") if tipus == "anotacio" else None
     sortida["estil"] = g.get("estil") if g.get("estil") in ESTILS else None
     posicio = g.get("posicio")
     if isinstance(posicio, (int, float)) and not isinstance(posicio, bool):
@@ -241,7 +267,7 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
     llista = []
     for g in grafics:
         text = g["text"] or (crida.strip()[:MIDA_TEXT["crida"]] if g["tipus"] == "crida" else "")
-        if g.get("estat") == "tret" or not (text or g["punts"]):
+        if g.get("estat") == "tret" or not (text or g["punts"] or g.get("xifra")):
             continue
         durada = g.get("durada") or DURADES[g["tipus"]]
         if g["paraula"] is None:  # una crida sense lloc: al final del vídeo
@@ -257,20 +283,37 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
             final = finals[g["fins"]] + 0.3
         final = round(min(total, max(inici + MINIM, final)), 3)
         punts = []
-        if g["tipus"] == "llista":
+        if g["tipus"] in AMB_PUNTS:
             n = len(g["punts"])
-            pas = min(0.7, max(0.2, (final - inici - 0.8) / max(1, n)))
+            pas = min(0.9 if g["tipus"] == "xat" else 0.7, max(0.2, (final - inici - 0.8) / max(1, n)))
             for k, p in enumerate(g["punts"]):
                 t = inicis.get(p["paraula"]) if p.get("paraula") is not None else None
                 t = inici + ENTRADA_PUNT + k * pas if t is None else t
-                punts.append({"text": p["text"], "t": round(min(max(t, inici + 0.15), final - 0.3), 3)})
+                punts.append({**{c: v for c, v in p.items() if c != "paraula"},
+                              "t": round(min(max(t, inici + 0.15), final - 0.3), 3)})
         amaga = AMAGA[g["tipus"]] if g.get("amaga_subtitols") is None else g["amaga_subtitols"]
         posicio = g.get("posicio")
-        llista.append({"id": g["id"], "tipus": g["tipus"], "inici": round(inici, 3), "final": final,
-                       "text": text, "punts": punts, "estil": g.get("estil") or estil_marca,
-                       "posicio": POSICIO[g["tipus"]] if posicio is None else posicio,
-                       "amaga_subtitols": amaga, "limits": limits(subtitols, amaga)})
+        situat = {"id": g["id"], "tipus": g["tipus"], "inici": round(inici, 3), "final": final,
+                  "text": text, "punts": punts, "estil": g.get("estil") or estil_marca,
+                  "posicio": POSICIO[g["tipus"]] if posicio is None else posicio,
+                  "amaga_subtitols": amaga, "limits": limits(subtitols, amaga)}
+        if g["tipus"] == "notificacio":
+            situat["de"] = g.get("de") or ""
+        elif g["tipus"] == "numero":
+            situat["xifra"] = llegeix_xifra(g["xifra"])
+        elif g["tipus"] == "anotacio":
+            situat.update(forma=g.get("forma") or "fletxa", costat=g.get("costat") or "esquerra")
+        llista.append(situat)
     return _sense_trepitjar(sorted(llista, key=lambda g: g["inici"]))
+
+
+def llegeix_xifra(xifra: str) -> dict:
+    """«10.000 €» → {abans: "", valor: 10000, decimals: 0, despres: " €", milers: True}: el que compta
+    el número i el que l'envolta (el primer número del text)."""
+    m = XIFRA.search(xifra)
+    enter, decimals = m.group(1), m.group(2) or ""
+    return {"abans": xifra[:m.start()], "despres": xifra[m.end():], "milers": "." in enter,
+            "valor": float(f"{enter.replace('.', '')}.{decimals or 0}"), "decimals": len(decimals)}
 
 
 def _sense_trepitjar(llista: list[dict]) -> list[dict]:
@@ -336,11 +379,13 @@ def paleta(estil: dict) -> dict:
             "clar": m.get("color_clar") or "#FFFFFF",
             "fosc": m.get("color_fosc") or sub.get("contorn") or "#111111",
             "lletra_titols": lletra_titols, "lletra_text": lletra_text,
-            "lletra_accent": m.get("lletra_accent") or sub.get("clau_font") or lletra_titols}
+            "lletra_accent": m.get("lletra_accent") or sub.get("clau_font") or lletra_titols,
+            "lletra_ma": m.get("lletra_ma") or m.get("lletra_accent") or sub.get("clau_font") or lletra_titols,
+            "majuscules_ma": bool(m.get("majuscules_ma")) and bool(m.get("lletra_ma"))}
 
 
 def families(p: dict) -> set[str]:
-    return {p["lletra_titols"], p["lletra_text"], p["lletra_accent"]}
+    return {p["lletra_titols"], p["lletra_text"], p["lletra_accent"], p["lletra_ma"]}
 
 
 # --- Perquè l'assistent vegi on van --------------------------------------------------------------

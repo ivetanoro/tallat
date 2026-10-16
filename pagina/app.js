@@ -2408,8 +2408,10 @@ let previaGrafics = null;
 let notaOberta = null;     // l'id del gràfic que té la nota oberta
 const targetesGrafic = new Map();  // id → {el, sig}: només es refà la que canvia
 
-const NOMS_GRAFIC = { frase: "Frase", etiqueta: "Etiqueta", llista: "Llista", crida: "Crida" };
-const LLOC_GRAFIC = { frase: "dalt", etiqueta: "dalt", llista: "mig", crida: "baix" };  // com motor/grafics.py
+const NOMS_GRAFIC = { frase: "Frase", etiqueta: "Etiqueta", llista: "Llista", crida: "Crida", notificacio: "Notificació",
+  xat: "Xat", numero: "Número", anotacio: "Anotació" };
+const LLOC_GRAFIC = { frase: "dalt", etiqueta: "dalt", llista: "baix", crida: "baix", notificacio: "dalt", xat: "baix",
+  numero: "dalt", anotacio: "mig" };  // com motor/grafics.py
 const ESTATS_GRAFIC = { mantingut: "Mantingut", canvia: "Per canviar" };
 
 const graficDe = (id) => (estat?.grafics || []).find((g) => g.id === id);
@@ -2419,16 +2421,28 @@ const graficsVisibles = () => graficsMuntatge.filter((g) => graficDe(g.id)?.esta
 // Per a la miniatura: el gràfic sencer, ja entrat (també els trets i els que ja no surten al vídeo).
 function perDibuixar(g) {
   const s = graficsMuntatge.find((x) => x.id === g.id) || {
-    tipus: g.tipus, text: g.text || (g.tipus === "crida" ? estilMarca?.crida || "" : ""),
-    punts: g.punts || [], estil: g.estil || energies(estilMarca)[0], posicio: g.posicio ?? LLOC_GRAFIC[g.tipus],
+    ...g, text: g.text || (g.tipus === "crida" ? estilMarca?.crida || "" : ""), xifra: llegeixXifra(g.xifra),
+    estil: g.estil || energies(estilMarca)[0], posicio: g.posicio ?? LLOC_GRAFIC[g.tipus],
   };
-  return { ...s, inici: 0, final: 1e5, punts: (s.punts || []).map((p) => ({ text: p.text, t: 0 })) };
+  return { ...s, inici: 0, final: 1e5, punts: (s.punts || []).map((p) => ({ ...p, t: 0 })) };
+}
+
+// «10.000 €» → el que compta el número (com llegeix_xifra de motor/grafics.py), per a les miniatures
+// dels gràfics que ara no surten al vídeo (els altres ja venen llegits del servidor).
+function llegeixXifra(text) {
+  const m = /(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?/.exec(text || "");
+  if (!m) return null;
+  return { abans: text.slice(0, m.index), despres: text.slice(m.index + m[0].length), milers: m[1].includes("."),
+    valor: Number(`${m[1].replaceAll(".", "")}.${m[2] || 0}`), decimals: (m[2] || "").length };
 }
 
 function textGrafic(g) {
   const text = (g.text || (g.tipus === "crida" ? estilMarca?.crida || "La crida de la teva marca" : "")).replaceAll("*", "");
-  if (g.tipus !== "llista") return `«${text}»`;
-  return [text, ...g.punts.map((p) => `· ${p.text}`)].filter(Boolean).join("  ");
+  if (g.tipus === "llista") return [text, ...g.punts.map((p) => `· ${p.text}`)].filter(Boolean).join("  ");
+  if (g.tipus === "xat") return [text, ...g.punts.map((p) => `${p.costat === "enviat" ? "→" : "←"} ${p.text}`)].filter(Boolean).join("  ");
+  if (g.tipus === "notificacio") return `${g.de ? `${g.de}: ` : ""}«${text}»`;
+  if (g.tipus === "numero") return `${g.xifra}${text ? ` · ${text}` : ""}`;
+  return `«${text}»`;
 }
 
 function targetaGrafic(g) {
@@ -3010,7 +3024,7 @@ const COLORS_MARCA = [["m-color-text", "color_text"], ["m-color-principal", "col
   ["m-color-fosc", "color_fosc"]];
 const energies = (m) => [].concat(m?.energia || "net");  // un o uns quants estils de gràfics
 const LLETRES_MARCA = [["m-lletra-titols", "lletra_titols"], ["m-lletra-text", "lletra_text"],
-  ["m-lletra-accent", "lletra_accent"]];
+  ["m-lletra-accent", "lletra_accent"], ["m-lletra-ma", "lletra_ma"]];
 const TEXTOS_MARCA = [["m-prohibits", "colors_prohibits"], ["m-crida", "crida"], ["m-compte", "compte"],
   ["m-public", "public"], ["m-referencia", "referencia"]];
 
@@ -3042,6 +3056,7 @@ function pintaPanellMarca() {
   for (const [id, clau] of TEXTOS_MARCA) if (document.activeElement !== $(`#${id}`)) $(`#${id}`).value = m[clau] || "";
   const triats = energies(m);
   for (const b of $$("#m-energia button")) b.setAttribute("aria-pressed", String(triats.includes(b.dataset.valor)));
+  $("#m-majuscules-ma").setAttribute("aria-checked", String(!!m.majuscules_ma));
   marcaSegmentat("m-grafics", m.grafics || "normal");
 }
 
@@ -3081,6 +3096,7 @@ function instalaMarca() {
     });
   }
   for (const [id, clau] of TEXTOS_MARCA) $(`#${id}`).addEventListener("input", (e) => canviaMarca({ [clau]: e.target.value }));
+  $("#m-majuscules-ma").addEventListener("click", () => { canviaMarca({ majuscules_ma: !estilMarca?.majuscules_ma }); pintaPanellMarca(); });
   for (const b of $$("#m-grafics button")) b.addEventListener("click", () => { canviaMarca({ grafics: b.dataset.valor }); pintaPanellMarca(); });
   for (const b of $$("#m-energia button")) {
     b.addEventListener("click", () => {

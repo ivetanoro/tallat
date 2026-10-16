@@ -219,9 +219,12 @@ def _lletres_titol(titol: dict, animacio: str) -> list[float]:
     return moments
 
 
-# El so de cada gràfic del pla. Amb «pocs», els de l'etiqueta i els de cada punt de la llista no hi són.
-SONS_GRAFICS = {"frase": ("whoosh", "Frase"), "llista": ("pop", "Llista"), "etiqueta": ("pop", "Etiqueta"),
-                "crida": ("brill", "Crida")}
+# El so de cada gràfic del pla: (so, nom, si també hi és amb «pocs»). Amb «pocs», els de cada punt d'una
+# llista o d'un xat tampoc no hi són.
+SONS_GRAFICS = {"frase": ("whoosh", "Frase", True), "llista": ("pop", "Llista", True),
+                "etiqueta": ("pop", "Etiqueta", False), "crida": ("brill", "Crida", True),
+                "notificacio": ("brill", "Notificació", True), "xat": ("pop", "Xat", True),
+                "numero": ("tic", "Número", True), "anotacio": ("tic", "Anotació", False)}
 
 
 def esdeveniments(brolls: list[dict], stickers: list[dict], titol: dict | None, animacio_titol: str,
@@ -246,11 +249,12 @@ def esdeveniments(brolls: list[dict], stickers: list[dict], titol: dict | None, 
         llista.append({"clau": f"sticker:{st['id']}", "nom": "Sticker", "so": "pop", "t": st["inici"],
                        "moments": [st["inici"]]})
     for g in grafics or []:
-        if g["tipus"] == "etiqueta" and quants != "molts":
+        nom_so, nom, amb_pocs = SONS_GRAFICS[g["tipus"]]
+        if not amb_pocs and quants != "molts":
             continue
-        nom_so, nom = SONS_GRAFICS[g["tipus"]]
-        # El whoosh arriba al màxim quan el gràfic ja ha entrat (com al b-roll).
-        t = round(max(0.0, g["inici"] - 0.2), 3) if nom_so == "whoosh" else g["inici"]
+        # El whoosh arriba al màxim quan el gràfic ja ha entrat (com al b-roll); el número, quan acaba de comptar.
+        t = round(max(0.0, g["inici"] - 0.2), 3) if nom_so == "whoosh" else \
+            round(g["inici"] + 1.15, 3) if g["tipus"] == "numero" else g["inici"]
         moments = [t] + ([p["t"] for p in g["punts"]] if quants == "molts" else [])
         llista.append({"clau": f"grafic:{g['id']}", "nom": f"{nom} «{(g['text'] or '')[:24]}»".replace(" «»", ""),
                        "so": nom_so, "t": g["inici"], "moments": moments})
