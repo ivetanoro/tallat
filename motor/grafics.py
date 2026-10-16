@@ -19,6 +19,10 @@ Tipus (tots de text: no cal cap fitxer):
   numero       una xifra que compta des de zero («xifra»: «73 %», «10.000 €»), amb un text a sota
   anotacio     una nota escrita a mà amb un cercle, un subratllat o una fletxa («forma») que es dibuixa
 
+Amb `bloc: true`, mentre surt el gràfic el fons es fa d'un color de la marca, el vídeo es fa petit (amb
+una animació suau) dins d'una targeta a baix, on s'hi continua veient la cara, i el gràfic té tot l'espai
+de dalt.
+
 L'estil de cada gràfic (net, mac, scrapbook o editorial) és un dels de la marca. Estats:
 proposat (el veus al vídeo), mantingut (t'agrada: Claude no el toca), canvia (amb una nota per
 a Claude) i tret (no surt, però es guarda perquè Claude no el torni a proposar).
@@ -66,7 +70,12 @@ ENTRADA_PUNT = 0.35  # quan surt el primer punt d'una llista sense paraules (des
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_FRASE = 0.7    # un silenci així també tanca una frase
 CAMPS = ("id", "tipus", "paraula", "fins", "durada", "text", "punts", "de", "xifra", "forma", "costat", "estil",
-         "posicio", "amaga_subtitols", "motiu", "estat", "nota")
+         "posicio", "amaga_subtitols", "bloc", "motiu", "estat", "nota")
+# El bloc de color, en px de 1080 × 1920: la targeta on va el vídeo (4:5, a baix i centrada) i el tros del
+# vídeo que s'hi veu (de dalt, on sol haver-hi la cara). El vídeo s'hi encongeix i en torna a sortir en
+# ANIMACIO_BLOC segons. La mateixa geometria a l'export (motor/exporta.py) i a la pàgina (app.js).
+BLOC = {"x": 151, "y": 838, "w": 778, "h": 972, "retall_y": 160}
+ANIMACIO_BLOC = 0.45
 
 
 def _enter(valor, nom: str) -> int | None:
@@ -145,6 +154,7 @@ def net(g: dict, paraules: int | None = None) -> dict:
         sortida["posicio"] = posicio if posicio in POSICIONS else None
     amaga = g.get("amaga_subtitols")
     sortida["amaga_subtitols"] = amaga if isinstance(amaga, bool) else None
+    sortida["bloc"] = g.get("bloc") is True
     sortida["motiu"] = _text(g.get("motiu"), "motiu", 200, retalla=True)
     sortida["estat"] = g.get("estat") if g.get("estat") in ESTATS else "proposat"
     sortida["nota"] = _text(g.get("nota"), "nota", MIDA_NOTA, retalla=True)
@@ -294,12 +304,19 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
     text = g["text"] or (crida.strip()[:MIDA_TEXT["crida"]] if g["tipus"] == "crida" else "")
     if not (text or g["punts"] or g.get("xifra")):
         return None
-    amaga = AMAGA[g["tipus"]] if g.get("amaga_subtitols") is None else g["amaga_subtitols"]
+    # Amb el bloc de color, el gràfic fa de diapositiva: per defecte, sense subtítols.
+    amaga = (AMAGA[g["tipus"]] or bool(g.get("bloc"))) if g.get("amaga_subtitols") is None else g["amaga_subtitols"]
     d = {"id": g["id"], "tipus": g["tipus"], "nom": NOMS[g["tipus"]], "text": text,
          "punts": [{c: v for c, v in p.items() if c != "paraula"} for p in g["punts"]],
          "estil": g.get("estil") or next((e for e in estils if e in ESTILS), "net"),
          "posicio": POSICIO[g["tipus"]] if g.get("posicio") is None else g["posicio"],
          "amaga_subtitols": amaga, "limits": limits(subtitols, amaga, alcada)}
+    if g.get("bloc"):
+        # El fons: el principal sota les targetes clares (mac, scrapbook); el fosc sota el text clar.
+        d["bloc"] = "principal" if d["estil"] in ("mac", "scrapbook") else "fosc"
+        d["limits"] = [round(ZONA_SEGURA[0] * ALCADA), BLOC["y"] - 40]  # tot l'espai de sobre la targeta
+        if g.get("posicio") is None:
+            d["posicio"] = "mig"
     if g["tipus"] == "notificacio":
         d["de"] = g.get("de") or ""
     elif g["tipus"] == "numero":
@@ -348,6 +365,28 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
         situat.update(inici=round(inici, 3), final=final)
         llista.append(situat)
     return _sense_trepitjar(sorted(llista, key=lambda g: g["inici"]))
+
+
+def blocs(situats: list[dict], paleta: dict) -> list[dict]:
+    """Els blocs de color del vídeo: [{inici, final, color}], en temps del muntatge. Si dos gràfics amb
+    bloc surten seguits (o alhora), és un sol bloc: el vídeo no torna a créixer per encongir-se de nou."""
+    sortida = []
+    for g in sorted((g for g in situats if g.get("bloc")), key=lambda g: g["inici"]):
+        if sortida and g["inici"] - sortida[-1]["final"] < 2 * ANIMACIO_BLOC:
+            sortida[-1]["final"] = max(sortida[-1]["final"], g["final"])
+        else:
+            sortida.append({"inici": g["inici"], "final": g["final"], "color": paleta[g["bloc"]]})
+    return sortida
+
+
+def pas_bloc(t: float, inici: float, final: float) -> float:
+    """Quant s'ha encongit el vídeo en el moment t (en temps del muntatge): 0 fora del bloc, 1 del tot.
+    Entra i surt suau (smoothstep). La pàgina fa el mateix (app.js, pasBloc)."""
+    d = min(ANIMACIO_BLOC, (final - inici) / 2)
+    if d <= 0:
+        return 0.0
+    p = min(1.0, max(0.0, min((t - inici) / d, (final - t) / d)))
+    return p * p * (3 - 2 * p)
 
 
 def llegeix_xifra(xifra: str) -> dict:

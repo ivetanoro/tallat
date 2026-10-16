@@ -85,7 +85,7 @@ class Feina:
             exporta.exporta(projecte.font(qualitat), trams, sortida, qualitat,
                             progres=lambda pct: self._actualitza(progres=pct), capa=capa,
                             zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
-                            **projecte.opcions_so(trams))
+                            blocs=projecte.blocs(trams), **projecte.opcions_so(trams))
             projecte.desa_talls(sortida, trams)
             copia = exporta.copia_a_carpeta(sortida) if qualitat != "esborrany" else None
             self._actualitza(estat="fet", progres=100, fitxer=sortida.name, copia=copia.name if copia else None)
@@ -141,6 +141,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                              for st in enganxines],
                 "subtitols": linies,
                 "titol": titol, "grafics": situats, "grafics_dibuix": projecte.dibuixos_grafics(linies),
+                "blocs": projecte.blocs(trams, situats),
                 **info_efectes(projecte, trams, brolls, enganxines, titol, linies, situats),
                 "paragrafs": projecte.paragrafs()}
 

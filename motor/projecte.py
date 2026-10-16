@@ -206,6 +206,13 @@ class Projecte:
         return grafics.situa(pla, inicis, finals, sum(b - a for a, b in trams), marca_kit.get("energia"),
                              marca_kit.get("crida") or "", sub, bloc_de, alcada)
 
+    def blocs(self, trams, situats=None) -> list[dict]:
+        """Els blocs de color del vídeo final: [{inici, final, color}] (motor/grafics.py, BLOC)."""
+        situats = self.grafics(trams) if situats is None else situats
+        if not any(g.get("bloc") for g in situats):
+            return []
+        return grafics.blocs(situats, grafics.paleta(self.estil()))
+
     def dibuixos_grafics(self, linies=None) -> dict:
         """Com es dibuixa cada gràfic del pla, també els trets i els que ara no surten (per a les
         miniatures de la pàgina): {id: dibuix}."""

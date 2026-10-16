@@ -617,6 +617,12 @@ body.mode-destaca .p.clau.fora { color: var(--tret); box-shadow: none; font-weig
   clip-path: inset(calc(50% - 25% / var(--zoom, 1.15)) calc(50% - 50% / var(--zoom, 1.15))
                    round 0 0 calc(var(--radi-gran) / var(--zoom, 1.15)) calc(var(--radi-gran) / var(--zoom, 1.15)));
 }
+/* Bloc de color: el fons que es veu quan el vídeo s'encongeix (app.js, pintaBloc). Va sota el vídeo. */
+.capa-bloc {
+  grid-area: 1 / 1; width: min(100cqw, calc(100cqh * 9 / 16)); aspect-ratio: 9 / 16;
+  border-radius: var(--radi-gran); box-shadow: var(--ombra);
+}
+.capa-bloc[hidden] { display: none; }
 /* B-roll en directe: treballa a 1080 × 1920 (com l'export) i s'escala a la mida del reproductor. */
 .capa-broll {
   grid-area: 1 / 1; position: relative; z-index: 1; pointer-events: none;
@@ -848,6 +854,7 @@ input.camp-text { min-height: 0; }
 .mini-grafic:active:not(:disabled) { transform: scale(0.96); }
 .mini-grafic:disabled { cursor: default; }
 .mg-host { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
+.mg-targeta { position: absolute; background: linear-gradient(170deg, #5a5a5e, #2c2c2e); }
 .grafic-cos { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--e1); }
 .grafic-cap { display: flex; align-items: baseline; gap: var(--e2); font-size: var(--t-ui); }
 .grafic-cap strong { font-weight: 600; }
@@ -932,6 +939,12 @@ input.camp-text { min-height: 0; }
 .barra-fila .boto.petit { flex: 1; height: 26px; padding: 0 var(--e2); font-size: var(--t-petit); }
 .barra-fila .boto.petit[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .barra-fila .decisio-tret[aria-pressed="true"] { background: var(--auto); }
+.barra-fila .bloc-color { display: inline-flex; align-items: center; justify-content: center; gap: var(--e1); }
+.mostra-bloc {
+  flex: none; position: relative; width: 12px; height: 18px; border-radius: 2px;
+  background: var(--color-bloc, #111);
+}
+.mostra-bloc::after { content: ""; position: absolute; left: 2px; right: 2px; bottom: 2px; height: 8px; background: #fff; opacity: 0.85; }
 .pantalla.editant .gran-play { display: none; }
 
 /* --- La visita guiada -------------------------------------------------------------------------- */

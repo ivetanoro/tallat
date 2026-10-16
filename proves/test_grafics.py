@@ -142,6 +142,82 @@ class TestSituar(unittest.TestCase):
                          [(0, 2, "Hola, món."), (3, 3, "Una"), (4, 5, "altra cosa")])
 
 
+class TestBlocDeColor(unittest.TestCase):
+    """Amb `bloc`, el vídeo s'encongeix a baix sobre el color de la marca i el gràfic té l'espai de dalt."""
+
+    def test_es_desa_nomes_si_es_vol(self):
+        self.assertTrue(grafics.net(g(bloc=True))["bloc"])
+        self.assertFalse(grafics.net(g(bloc="sí"))["bloc"])
+        self.assertFalse(grafics.net(g())["bloc"])
+
+    def test_el_dibuix_va_a_dalt_i_sense_subtitols(self):
+        d = grafics.dibuix(grafics.net({"tipus": "etiqueta", "paraula": 0, "text": "x", "bloc": True}), ["net"])
+        self.assertEqual((d["bloc"], d["posicio"], d["amaga_subtitols"]), ("fosc", "mig", True))
+        self.assertEqual(d["limits"], [269, grafics.BLOC["y"] - 40])  # tot sobre la targeta
+        mac = grafics.dibuix(grafics.net(g(bloc=True, estil="mac", posicio="dalt", amaga_subtitols=False)), [])
+        self.assertEqual((mac["bloc"], mac["posicio"], mac["amaga_subtitols"]), ("principal", "dalt", False))
+        self.assertNotIn("bloc", grafics.dibuix(grafics.net(g()), []))
+
+    def test_els_blocs_seguits_son_un_de_sol(self):
+        paleta = {"fosc": "#111111", "principal": "#5E8B6B"}
+        situats = [{"inici": 5.0, "final": 7.0, "bloc": "principal"}, {"inici": 1.0, "final": 3.0, "bloc": "fosc"},
+                   {"inici": 3.5, "final": 4.0, "bloc": "principal"}, {"inici": 2.0, "final": 9.0}]
+        self.assertEqual(grafics.blocs(situats, paleta),
+                         [{"inici": 1.0, "final": 4.0, "color": "#111111"}, {"inici": 5.0, "final": 7.0, "color": "#5E8B6B"}])
+
+    def test_l_animacio_entra_i_surt_suau(self):
+        a = grafics.ANIMACIO_BLOC
+        self.assertEqual([grafics.pas_bloc(t, 1, 5) for t in (0.5, 1, 3, 5, 6)], [0, 0, 1, 0, 0])
+        self.assertAlmostEqual(grafics.pas_bloc(1 + a / 2, 1, 5), 0.5)
+        self.assertAlmostEqual(grafics.pas_bloc(5 - a / 2, 1, 5), 0.5)
+        self.assertLess(grafics.pas_bloc(1 + a / 4, 1, 5), 0.25)  # comença a poc a poc
+        self.assertAlmostEqual(grafics.pas_bloc(1.25, 1, 1.5), 1)  # un de curt: arriba a baix just al mig
+
+    def test_la_pagina_fa_la_mateixa_animacio(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("cal node")
+        codi = (ARREL / "pagina" / "app.js").read_text(encoding="utf-8")
+        inici = codi.index("const BLOC = ")
+        tros = codi[inici:codi.index("function pintaBloc")]
+        temps = [0.9, 1.1, 1.2, 2.0, 4.8, 4.9, 5.0]
+        sortida = subprocess.run([node, "-e", tros + f"console.log(JSON.stringify([BLOC, ANIMACIO_BLOC, "
+                                  f"{temps}.map((t) => pasBloc(t, 1, 5))]))"],
+                                 capture_output=True, text=True, check=True).stdout
+        bloc, animacio, passos = json.loads(sortida)
+        self.assertEqual(bloc, grafics.BLOC)
+        self.assertEqual(animacio, grafics.ANIMACIO_BLOC)
+        for t, p in zip(temps, passos):
+            self.assertAlmostEqual(p, grafics.pas_bloc(t, 1, 5))
+
+    def test_l_export_hi_posa_el_color_i_encongeix_el_video(self):
+        from motor import exporta
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            video = d / "vermell.mp4"
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=360x640:r=30:d=4",
+                            "-f", "lavfi", "-i", "sine=d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                            "-shortest", str(video)], check=True)
+            sortida = exporta.exporta(video, [(0.0, 4.0)], d / "s.mp4", "esborrany",
+                                      blocs=[{"inici": 1.0, "final": 3.0, "color": "#0000FF"}])
+
+            def pixel(t, x, y):  # en px de 1080 × 1920
+                k = 720 / 1080
+                rgb = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(t), "-i", str(sortida), "-frames:v", "1",
+                                      "-vf", f"format=rgb24,crop=1:1:{round(x * k)}:{round(y * k)}", "-f", "rawvideo",
+                                      "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
+                return "blau" if rgb[2] > 180 and rgb[0] < 80 else "vermell" if rgb[0] > 180 and rgb[2] < 80 else rgb
+
+            b = grafics.BLOC
+            self.assertEqual(pixel(0.5, 540, 300), "vermell")  # abans del bloc, el vídeo sencer
+            self.assertEqual(pixel(2.0, 540, 300), "blau")  # a dalt, el color
+            self.assertEqual(pixel(2.0, 60, b["y"] + 400), "blau")  # al costat de la targeta, també
+            self.assertEqual(pixel(2.0, 540, 1880), "blau")  # i a sota
+            self.assertEqual(pixel(2.0, 540, b["y"] + b["h"] / 2), "vermell")  # i a la targeta, el vídeo
+            self.assertEqual(pixel(3.5, 540, 300), "vermell")  # en acabar, torna a ser sencer
+            self.assertEqual((exporta._color_ffmpeg("#abc"), exporta._color_ffmpeg("vermell")), ("0xAABBCC", "0x111111"))
+
+
 class TestZonaSegura(unittest.TestCase):
     def test_els_grafics_no_tapen_instagram_ni_els_subtitols(self):
         sub = {"posicio_y": 0.7, "mida": 0.075}

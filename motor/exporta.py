@@ -11,7 +11,7 @@ import threading
 from fractions import Fraction
 from pathlib import Path
 
-from motor import so, targetes
+from motor import grafics, so, targetes
 
 QUALITATS = {
     # nom: (amplada, alçada, bitrate de vídeo)
@@ -143,13 +143,15 @@ def _enquadrament(amplada: int, alcada: int, ow: int, oh: int) -> str:
 def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = False,
             zooms: list[bool] | None = None, mida: tuple[int, int] | None = None,
             brolls: list[dict] | None = None, peces: list[dict] | None = None,
-            veu: str | None = None, efectes: bool = False) -> str:
+            veu: str | None = None, efectes: bool = False, blocs: list[dict] | None = None,
+            fps: str = "30") -> str:
     """Cada tros és una entrada pròpia (ja retallada amb -ss/-t); aquí només s'uneixen.
 
     Ordre de les entrades: els trossos, els b-rolls (un per entrada, ja preparats), les imatges
     fixes de les targetes (forma i marc, vegeu `_entrades_peces`) i, al final, la capa de
-    subtítols i, si n'hi ha, la pista d'efectes de so. Les capes s'apilen així: vídeo, b-roll i
-    subtítols a dalt. `veu`: els filtres de la neteja de la veu (motor/so.py), o None."""
+    subtítols i, si n'hi ha, la pista d'efectes de so. Les capes s'apilen així: vídeo (encongit dins
+    del bloc de color, si n'hi ha), b-roll i subtítols a dalt. `veu`: els filtres de la neteja de la veu
+    (motor/so.py), o None. `blocs`: els blocs de color (grafics.blocs); `fps`, els del vídeo."""
     brolls = brolls or []
     parts, entrades = [], []
     for i, (a, b) in enumerate(trams):
@@ -168,6 +170,9 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = Fa
     ow, oh = (int(x) for x in mida_sortida.split(":"))
     parts.append(f"[vc]{enquadrament}[vb0];")
     actual = "vb0"
+    for i, bloc in enumerate(blocs or []):
+        linies, actual = _filtre_bloc(bloc, i, actual, (ow, oh), fps)
+        parts += linies
     if brolls:
         # El b-roll comença a «inici» del muntatge: a pantalla sencera, en targeta, en pantalla
         # partida o en carrusel (motor/targetes.py, la mateixa disposició que la vista prèvia).
@@ -193,6 +198,48 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = Fa
     else:
         parts.append("[aveu]anull[aout]")
     return "\n".join(parts)
+
+
+def _color_ffmpeg(color: str) -> str:
+    """«#5E8B6B» o «#5e8» → «0x5E8B6B» (el que entén ffmpeg); si no és un color així, gairebé negre."""
+    c = str(color).strip().lstrip("#")
+    if len(c) == 3:
+        c = "".join(x * 2 for x in c)
+    return "0x" + c.upper() if len(c) == 6 and all(x in "0123456789abcdefABCDEF" for x in c) else "0x111111"
+
+
+def _filtre_bloc(bloc: dict, i: int, actual: str, mida: tuple[int, int], fps: str) -> tuple[list[str], str]:
+    """Un bloc de color (motor/grafics.py, BLOC): entre `inici` i `final`, el vídeo s'encongeix fins a la
+    targeta de baix sobre el color de la marca i, al final, torna a créixer. Es fa amb una còpia del tros:
+    s'encongeix fotograma a fotograma (scale amb eval=frame), es posa sobre el color i dues franges del
+    mateix color en retallen el que sobresurt per dalt i per baix. La pàgina fa el mateix (app.js, pintaBloc)."""
+    ow, oh = mida
+    k = ow / 1080
+    a, b = bloc["inici"], bloc["final"]
+    llarg = b - a
+    d = min(grafics.ANIMACIO_BLOC, llarg / 2)
+    g = grafics.BLOC
+    s_fi = g["w"] / 1080  # l'escala de la targeta
+    ty_fi = g["y"] - g["retall_y"] * s_fi  # on queda la part de dalt del vídeo encongit
+    franja_dalt = 2 * round(k * g["y"] / 2)
+    franja_baix = 2 * round(k * (1920 - g["y"] - g["h"]) / 2)
+    # Com pas_bloc: 0 → 1 en entrar, 1 → 0 en sortir, suau. Cada expressió el calcula de nou.
+    e = f"(st(1,clip(min(t/{d:.4f},({llarg:.4f}-t)/{d:.4f}),0,1));ld(1)*ld(1)*(3-2*ld(1)))"
+    s = f"(1-{1 - s_fi:.5f}*{e})"
+    color = _color_ffmpeg(bloc["color"])
+    font = f"color=c={color}:r={fps}:d={llarg:.4f}"
+    return [
+        f"[{actual}]split[bm{i}][bc{i}];",
+        f"[bc{i}]trim=start={a:.4f}:end={b:.4f},setpts=PTS-STARTPTS,"
+        f"scale=w='2*trunc({ow}*{s}/2)':h='2*trunc({oh}*{s}/2)':eval=frame[bv{i}];",
+        f"{font}:s={ow}x{oh}[bf{i}];",
+        f"{font}:s={ow}x{franja_dalt}[bd{i}];",
+        f"{font}:s={ow}x{franja_baix}[bb{i}];",
+        f"[bf{i}][bv{i}]overlay=x='{k * g['x']:.3f}*{e}':y='{k * ty_fi:.3f}*{e}':eval=frame[bo{i}];",
+        f"[bo{i}][bd{i}]overlay=x=0:y='{franja_dalt}*{e}-{franja_dalt}':eval=frame[bp{i}];",
+        f"[bp{i}][bb{i}]overlay=x=0:y='{oh}-{franja_baix}*{e}':eval=frame,setpts=PTS+{a:.4f}/TB[bt{i}];",
+        f"[bm{i}][bt{i}]overlay=eof_action=pass[vbl{i}];",
+    ], f"vbl{i}"
 
 
 def _entrades_peces(peces: list[dict], primera: int) -> dict:
@@ -229,10 +276,12 @@ def _executa(ordre: list[str], durada: float, progres) -> None:
 
 def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualitat: str,
             progres=None, capa: Path | None = None, zooms: list[bool] | None = None,
-            brolls: list[dict] | None = None, neteja: str | None = None, efectes: Path | None = None) -> Path:
+            brolls: list[dict] | None = None, neteja: str | None = None, efectes: Path | None = None,
+            blocs: list[dict] | None = None) -> Path:
     """`brolls`: [{"fitxer": Path, "inici": segons del muntatge, "durada": segons}], ja disposats
     amb `targetes.disposa` (si no ho estan, van a pantalla sencera). `neteja`: el nivell de la
-    neteja de la veu (motor/so.py) o None; `efectes`: la pista d'efectes de so (WAV) o None."""
+    neteja de la veu (motor/so.py) o None; `efectes`: la pista d'efectes de so (WAV) o None;
+    `blocs`: els blocs de color dels gràfics (Projecte.blocs) o None."""
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
     ow, oh, bitrate = QUALITATS[qualitat]
@@ -250,7 +299,7 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
         filtre = Path(temporal) / "filtre.txt"
         filtre.write_text(_filtre(trams, enquadrament, capa=capa is not None, zooms=zooms,
                                   mida=(info["amplada"], info["alcada"]), brolls=brolls, peces=peces,
-                                  veu=veu, efectes=efectes is not None),
+                                  veu=veu, efectes=efectes is not None, blocs=blocs, fps=info["fps"]),
                           encoding="utf-8")
         _exporta(video, trams, sortida, qualitat, info, filtre, brolls, peces, capa, progres, efectes)
     return sortida

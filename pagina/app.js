@@ -230,7 +230,8 @@ function aplicaTrams(r) {
   if (r.efectes) { efectesMuntatge = r.efectes; pintaSo(); }
   if ("pista_efectes" in r) posaPistaEfectes(r.pista_efectes);
   if (r.stickers) stickersMuntatge = r.stickers;
-  if (r.zoom) $(".pantalla").style.setProperty("--zoom", r.zoom);
+  if (r.zoom) { zoomVideo = r.zoom; $(".pantalla").style.setProperty("--zoom", r.zoom); }
+  if (r.blocs) blocsMuntatge = r.blocs;
   if (r.instruccions) { instruccions = r.instruccions; if (P) pintaInstruccions(); }
   trams = r.trams;
   duradaFinal = r.durada_final;
@@ -920,6 +921,7 @@ function bucle() {
   paraulaActual();
   pintaSubtitols();
   pintaBroll();
+  pintaBloc();
   pintaStickers();
   sonaEfectes();
   pintaMarcCapa();
@@ -2526,6 +2528,15 @@ function pintaMiniGrafic(el, g) {
   if (!window.TallatGrafics || !paletaGrafics || !dibuix) return null;
   const arrel = document.createElement("div");
   host.replaceChildren(arrel);
+  // Amb bloc de color: el fons de la marca i, a baix, la targeta on va el vídeo.
+  const mini = el.querySelector(".mini-grafic");
+  mini.style.background = dibuix.bloc ? paletaGrafics[dibuix.bloc] || "" : "";
+  if (dibuix.bloc) {
+    const targeta = document.createElement("div");
+    targeta.className = "mg-targeta";
+    Object.assign(targeta.style, { left: `${BLOC.x}px`, top: `${BLOC.y}px`, width: `${BLOC.w}px`, height: `${BLOC.h}px` });
+    host.prepend(targeta);
+  }
   const tl = TallatGrafics.construeix(arrel, [dibuix], paletaGrafics).seek(50, false);
   host.style.transform = `scale(${el.querySelector(".mini-grafic").clientWidth / 1080})`;
   return tl;
@@ -2741,6 +2752,56 @@ function pintaBarraCapa() {
   pintaMarcCapa();
 }
 
+// --- Bloc de color ----------------------------------------------------------------------------------
+// Mentre surt un gràfic amb bloc, el vídeo s'encongeix (suau) fins a una targeta a baix i a sobre hi ha
+// el color de la marca. La mateixa geometria i el mateix ritme que l'export (motor/grafics.py, BLOC i
+// pas_bloc; motor/exporta.py, _filtre_bloc). Tot en px de 1080 × 1920.
+
+const BLOC = { x: 151, y: 838, w: 778, h: 972, retall_y: 160 };
+const ANIMACIO_BLOC = 0.45;
+let blocsMuntatge = [];  // [{inici, final, color}] en temps del muntatge (els calcula el servidor)
+let zoomVideo = 1.15;
+let darrerBloc = "";
+
+function pasBloc(t, inici, final) {
+  const d = Math.min(ANIMACIO_BLOC, (final - inici) / 2);
+  if (d <= 0) return 0;
+  const p = Math.min(1, Math.max(0, Math.min((t - inici) / d, (final - t) / d)));
+  return p * p * (3 - 2 * p);
+}
+
+function pintaBloc() {
+  const m = tempsMuntatge();
+  const bloc = vista === "directe" ? blocsMuntatge.find((b) => m >= b.inici && m < b.final) : null;
+  const e = bloc ? pasBloc(m, bloc.inici, bloc.final) : 0;
+  const v = R.v;
+  const z = v.classList.contains("zoom") ? zoomVideo : 1;
+  const sig = bloc ? `${bloc.color}|${e.toFixed(4)}|${z}` : "";
+  if (sig === darrerBloc) return;
+  darrerBloc = sig;
+  const capa = $("#capa-bloc");
+  capa.hidden = !bloc;
+  if (bloc) capa.style.background = bloc.color;
+  if (!e) {
+    for (const video of $$(".pantalla > video")) {
+      for (const p of ["transform", "clip-path", "box-shadow"]) video.style.removeProperty(p);
+    }
+    return;
+  }
+  // El vídeo (amb el zoom, si en té) s'escala des del centre i baixa; el que surt de la targeta no es veu.
+  const s = 1 - (1 - BLOC.w / 1080) * e;
+  const ty = ((BLOC.y - BLOC.retall_y * BLOC.w / 1080) * e) / 1920 + 0.5 * (s - 1);
+  const sz = s * z;
+  const local = (o, t) => 0.5 + (o - 0.5 - t) / sz;  // d'on es veu a la pantalla a on és dins del vídeo
+  const pc = (x) => `${(x * 100).toFixed(3)}%`;
+  const dalt = local((BLOC.y * e) / 1920, ty);
+  const baix = 1 - local(1 - ((1920 - BLOC.y - BLOC.h) * e) / 1920, ty);
+  const costat = local((BLOC.x * e) / 1080, 0);
+  v.style.transform = `translateY(${pc(ty)}) scale(${sz.toFixed(5)})`;
+  v.style.clipPath = `inset(${pc(dalt)} ${pc(costat)} ${pc(baix)} round calc(var(--radi-gran) * ${((1 - e) / sz).toFixed(4)}))`;
+  v.style.boxShadow = "none";
+}
+
 // La barra d'un gràfic: l'estil (net, mac, scrapbook, editorial) en dibuixos, i Mantén, Canvia, Treu.
 // Si el canvies o el mous, és que t'agrada: queda mantingut (Claude ja no el tocarà).
 function canviaGrafic(id, canvis) {
@@ -2779,6 +2840,20 @@ function pintaBarraGrafic(id) {
       host.style.marginTop = `${(b.firstChild.clientHeight - b.firstChild.clientWidth * 1920 / 1080) / 2}px`;
     }
   }
+  // El bloc de color: el vídeo es fa petit a baix i el gràfic té el fons de la marca.
+  const filaBloc = document.createElement("div");
+  filaBloc.className = "barra-fila";
+  barra.append(filaBloc);
+  const bloc = document.createElement("button");
+  bloc.className = "boto petit bloc-color";
+  bloc.setAttribute("aria-pressed", String(!!g.bloc));
+  bloc.title = "El vídeo es fa petit a baix i el gràfic surt sobre el color de la teva marca";
+  bloc.innerHTML = '<span class="mostra-bloc"></span><span></span>';
+  bloc.lastChild.textContent = g.bloc ? "Amb bloc de color" : "Bloc de color";
+  const rol = ["mac", "scrapbook"].includes(g.estil || d.estil) ? "principal" : "fosc";
+  if (paletaGrafics?.[rol]) bloc.style.setProperty("--color-bloc", paletaGrafics[rol]);
+  bloc.addEventListener("click", () => { canviaGrafic(id, { bloc: !g.bloc }); setTimeout(pintaBarraCapa, 0); });
+  filaBloc.append(bloc);
   const fila = document.createElement("div");
   fila.className = "barra-fila";
   barra.append(fila);
