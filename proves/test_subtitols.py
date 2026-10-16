@@ -206,7 +206,7 @@ class TestTitol(unittest.TestCase):
         estil_titol = dict(marca.carrega(marca.PER_DEFECTE)["titol"], amaga_subtitols=True, font="Fraunces")
         html = subtitols.composicio([], ESTIL, 5.0, titol=titol, estil_titol=estil_titol)
         self.assertIn('TallatSubtitols.titol(document.getElementById("titol")', html)
-        self.assertIn('amaga: [0.0, 3.0]', html)  # sense subtítols mentre surt el títol
+        self.assertIn('amaga: [[0.0, 3.0]]', html)  # sense subtítols mentre surt el títol
         self.assertIn('familia: "\\"Fraunces\\", system-ui', html)  # la lletra del títol, en JSON
         self.assertNotIn("TallatSubtitols.titol(", subtitols.composicio([], ESTIL, 5.0))
 

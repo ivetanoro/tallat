@@ -219,8 +219,13 @@ def _lletres_titol(titol: dict, animacio: str) -> list[float]:
     return moments
 
 
+# El so de cada gràfic del pla. Amb «pocs», els de l'etiqueta i els de cada punt de la llista no hi són.
+SONS_GRAFICS = {"frase": ("whoosh", "Frase"), "llista": ("pop", "Llista"), "etiqueta": ("pop", "Etiqueta"),
+                "crida": ("brill", "Crida")}
+
+
 def esdeveniments(brolls: list[dict], stickers: list[dict], titol: dict | None, animacio_titol: str,
-                  linies_sub: list[dict] | None, quants: str) -> list[dict]:
+                  linies_sub: list[dict] | None, quants: str, grafics: list[dict] | None = None) -> list[dict]:
     """Tots els efectes possibles d'un vídeo: [{clau, nom, so, t, moments}] (sense mirar els apagats).
     `moments`: on sona (el títol a màquina en té un per lletra)."""
     if quants == "cap":
@@ -240,6 +245,15 @@ def esdeveniments(brolls: list[dict], stickers: list[dict], titol: dict | None, 
     for st in stickers:
         llista.append({"clau": f"sticker:{st['id']}", "nom": "Sticker", "so": "pop", "t": st["inici"],
                        "moments": [st["inici"]]})
+    for g in grafics or []:
+        if g["tipus"] == "etiqueta" and quants != "molts":
+            continue
+        nom_so, nom = SONS_GRAFICS[g["tipus"]]
+        # El whoosh arriba al màxim quan el gràfic ja ha entrat (com al b-roll).
+        t = round(max(0.0, g["inici"] - 0.2), 3) if nom_so == "whoosh" else g["inici"]
+        moments = [t] + ([p["t"] for p in g["punts"]] if quants == "molts" else [])
+        llista.append({"clau": f"grafic:{g['id']}", "nom": f"{nom} «{(g['text'] or '')[:24]}»".replace(" «»", ""),
+                       "so": nom_so, "t": g["inici"], "moments": moments})
     if quants == "molts":
         for linia in linies_sub or []:
             for w in linia["paraules"]:

@@ -76,9 +76,10 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | reproduir o aturar | espai |
    | amagar la columna de l'esquerra o la del vídeo | ⌃⌘S / ⌥⌘V |
 
-3. A dalt de la columna de l'esquerra tria el kit; a les pestanyes **Subtítols**, **Gràfics** (el títol del ganxo i el b-roll) i **So** (la neteja de la veu i els efectes de so), com vols que quedi.
-4. Clica **Esborrany** (a dalt) i mira'l. El que vulguis canviar, digues-ho a Claude amb el segon, que veus sota el vídeo: «al segon 12, el b-roll és massa llarg». Els vídeos que exportes, a la pestanya **Vídeos**.
-5. Quan t'agradi, **Final…** → 4K o 1080. O, si el vols acabar en un altre editor, **Projecte per a Premiere, Final Cut o DaVinci** o **Trossos per a CapCut o iMovie**.
+3. A dalt de la columna de l'esquerra tria el kit; a les pestanyes **Subtítols**, **Gràfics** (el pla de gràfics, el títol del ganxo i el b-roll) i **So** (la neteja de la veu i els efectes de so), com vols que quedi.
+4. Si vols gràfics, digues a Claude **«proposa'm gràfics»**: et proposa frases clau, etiquetes, llistes i la crida final, frase a frase i amb els colors i les lletres de la teva marca. A la pestanya **Gràfics** de cada un tries **Mantén**, **Canvia** (i li escrius una nota) o **Treu**. Després digues a Claude «mira les notes dels gràfics» i els canvia.
+5. Clica **Esborrany** (a dalt) i mira'l. El que vulguis canviar, digues-ho a Claude amb el segon, que veus sota el vídeo: «al segon 12, el b-roll és massa llarg». Els vídeos que exportes, a la pestanya **Vídeos**.
+6. Quan t'agradi, **Final…** → 4K o 1080. O, si el vols acabar en un altre editor, **Projecte per a Premiere, Final Cut o DaVinci** o **Trossos per a CapCut o iMovie**.
 
 En qualsevol moment pots demanar canvis a Claude amb paraules: «treu la primera frase», «fes-me tres reels d'aquesta gravació», «posa-hi un sticker d'una estrella quan dic *genial*».
 

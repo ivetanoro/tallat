@@ -17,6 +17,10 @@
   python tallat.py gust afegeix SECCIO "TEXT" [--ajust subtitols.mida=0.09]
   python tallat.py gust treu NUMERO
   python tallat.py marca [--projecte CARPETA] [CLAU=VALOR …]   (la teva marca: colors, lletres, crida a l'acció)
+  python tallat.py grafics --projecte CARPETA [--json]          (les frases, la marca i el pla de gràfics, amb notes)
+  python tallat.py grafics proposa PLA.json --projecte CARPETA  (desa el pla de gràfics que proposa l'assistent)
+  python tallat.py grafics canvia PLA.json --projecte CARPETA   (només els gràfics del fitxer: les notes ateses)
+  python tallat.py grafics fotogrames --projecte CARPETA        (el fotograma de cada gràfic, per triar-ne el lloc)
 
 La carpeta del projecte ha de ser fora del repositori (els vídeos i el que dius no es publiquen).
 """
@@ -32,7 +36,7 @@ import sys
 import time
 from pathlib import Path
 
-from motor import comprova, edicio, editors, entorn, exporta, gust, instruccions, marca, muntatge, transcripcio
+from motor import comprova, edicio, editors, entorn, exporta, grafics, gust, instruccions, marca, muntatge, transcripcio
 from motor.projecte import EXPORTS, ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
 
 
@@ -320,14 +324,9 @@ def ordre_moment(args) -> None:
         trams = [tuple(t) for t in json.loads(talls[-1].read_text(encoding="utf-8"))]
         on = f"l'esborrany {talls[-1].name.removesuffix('.talls.json')}"
         d_on = f"de {on}"
-    acum, original = 0.0, None
-    for a, b in trams:
-        if args.segons < acum + (b - a):
-            original = a + max(0.0, args.segons - acum)
-            break
-        acum += b - a
+    original = projecte.al_original(args.segons, trams)
     if original is None:
-        sys.exit(f"{on[0].upper()}{on[1:]} dura {acum:.1f} s: el segon {args.segons:g} no hi és.")
+        sys.exit(f"{on[0].upper()}{on[1:]} dura {sum(b - a for a, b in trams):.1f} s: el segon {args.segons:g} no hi és.")
     print(f"Segon {args.segons:g} {d_on} = segon {original:.2f} de la gravació.")
     a_prop = [p for p in projecte.paraules() if p["final"] >= original - 2.5 and p["inici"] <= original + 2.5]
     marca_p = lambda p: (("»" if p["inici"] <= original <= p["final"] + 0.15 else "")
@@ -342,6 +341,9 @@ def ordre_moment(args) -> None:
     titol = projecte.titol(ara)
     if titol and titol["inici"] <= m < titol["final"]:
         print(f"Hi surt el títol del ganxo: «{titol['text'].replace(chr(10), ' / ')}».")
+    for g in projecte.grafics(ara):
+        if g["inici"] <= m < g["final"]:
+            print(f"Hi surt el gràfic {g['id']} ({g['tipus']}, {g['estil']}): «{g['text'] or ' / '.join(p['text'] for p in g['punts'])}».")
     for nom, recursos in (("B-roll", projecte.brolls(ara)), ("Sticker", projecte.stickers(ara))):
         for r in recursos:
             if r["inici"] <= m < r["inici"] + r["durada"]:
@@ -369,6 +371,87 @@ def ordre_titol(args) -> None:
     print("\n".join(f"  {l}" for l in titol["text"].split("\n")))
     print(f"Durada: {titol['durada'] or estil['durada']} s · estil del kit: {estil['animacio']}, {estil['alineacio']}"
           + (" · amaga els subtítols mentre surt" if estil.get("amaga_subtitols") else ""))
+
+
+def _segons(t: float) -> str:
+    return f"{t:.1f}".replace(".", ",") + " s"
+
+
+def ordre_grafics(args) -> None:
+    """El pla de gràfics: el que necessita l'assistent per fer-lo (les frases i la marca) i el que hi ha
+    (amb les notes de la persona). `proposa` hi desa un pla nou i `canvia` només toca els gràfics que
+    esmenta (per atendre les notes); motor/grafics.py diu com es fusionen."""
+    projecte = _carrega(args)
+    if args.accio == "fotogrames":
+        trams = projecte.trams()
+        situats = projecte.grafics(trams)
+        if not situats:
+            sys.exit("Aquest vídeo encara no té cap gràfic que surti al vídeo.")
+        proxy = projecte.carpeta / PROXY
+        quadres = [{"t": projecte.al_original(g["inici"] + min(1.0, (g["final"] - g["inici"]) / 2), trams),
+                    "limits": g["limits"]} for g in situats]
+        desti = grafics.full_de_fotogrames(proxy if proxy.exists() else projecte.video, quadres,
+                                           projecte.carpeta / "grafics-fotogrames.png")
+        print(f"Fotogrames: {desti}")
+        print(f"Un per gràfic, en files de {grafics.COLUMNES}, d'esquerra a dreta i de dalt a baix:")
+        print("  " + "  ".join(f"{g['id']} ({_segons(g['inici'])}, {g['posicio']})" for g in situats))
+        print("Enfosquit: on no pot anar cap gràfic (el que tapa Instagram i els subtítols). "
+              "El requadre groc: on pot anar (dalt, mig o baix, o un número de 0 a 1).")
+        return
+    if args.accio:
+        if not args.fitxer:
+            sys.exit(f"Falta el fitxer amb el pla: tallat.py grafics {args.accio} PLA.json --projecte …")
+        try:
+            text = sys.stdin.read() if args.fitxer == "-" else Path(args.fitxer).expanduser().read_text(encoding="utf-8")
+            pla = json.loads(text)
+        except (OSError, json.JSONDecodeError) as e:
+            sys.exit(f"No puc llegir el pla: {e}")
+        pla = pla.get("grafics") if isinstance(pla, dict) else pla
+        try:
+            manera = "de-nou" if args.de_nou else args.accio
+            projecte.estat["grafics"] = grafics.fusiona(projecte.estat.get("grafics") or [], pla,
+                                                        len(projecte.dades["paraules"]), manera)
+        except ValueError as e:
+            sys.exit(str(e))
+        projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1  # la pàgina oberta s'hi posa al dia
+        projecte.desa()
+    trams = projecte.trams()
+    marca_kit = projecte.estil().get("marca") or {}
+    pla = projecte.estat.get("grafics") or []
+    situats = {g["id"]: g for g in projecte.grafics(trams)}
+    frases = projecte.frases(trams)
+    if args.json:
+        print(json.dumps({"marca": {k: marca_kit.get(k) for k in ("compte", "public", "energia", "grafics", "crida",
+                                                                  "colors_prohibits")},
+                          "durada": round(sum(b - a for a, b in trams), 2), "frases": frases,
+                          "grafics": [{**g, **({"inici": situats[g["id"]]["inici"], "final": situats[g["id"]]["final"]}
+                                               if g["id"] in situats else {})} for g in pla]},
+                         ensure_ascii=False, indent=1))
+        return
+    energia = marca_kit.get("energia") or ["net"]
+    energia = ", ".join(energia if isinstance(energia, list) else [energia])
+    quants = marca_kit.get("grafics") or "normal"
+    print(f"Marca: estil dels gràfics «{energia}» · quants: «{quants}» ({grafics.DENSITAT.get(quants, '')})"
+          + (f" · crida: «{marca_kit['crida']}»" if marca_kit.get("crida") else " · sense crida a la marca"))
+    print(f"Vídeo de {_segons(sum(b - a for a, b in trams))}. Frases (on comença · paraules · text):")
+    for f in frases:
+        print(f"  {_segons(f['inici']):>8}  {f['paraula']}–{f['fins']}  {f['text']}")
+    if not pla:
+        print("Encara no hi ha cap pla de gràfics. Per desar-ne un: tallat.py grafics proposa PLA.json --projecte …")
+        return
+    notes = sum(1 for g in pla if g["estat"] == "canvia")
+    print(f"Pla de gràfics ({len(pla)}" + (f"; {notes} amb nota" if notes else "") + "):")
+    for g in pla:
+        s = situats.get(g["id"])
+        on = (_segons(s["inici"]) if s else "—" if g["estat"] == "tret"
+              else "sense text" if g["tipus"] == "crida" and not g["text"] else "fora del vídeo")
+        text = g["text"] or ("(la crida de la marca)" if g["tipus"] == "crida" else "")
+        punts = " / ".join(p["text"] for p in g["punts"])
+        estat = {"canvia": "CANVIA", "mantingut": "mantingut", "tret": "tret"}.get(g["estat"], "proposat")
+        print(f"  {g['id']:>4}  {g['tipus']:<8} {on:>14}  paraula {g['paraula'] if g['paraula'] is not None else 'final'}"
+              f"  {g.get('estil') or '(marca)'}  {estat}  «{text}»" + (f" [{punts}]" if punts else ""))
+        if g["nota"]:
+            print(f"        nota: «{g['nota']}»")
 
 
 NOMS_MARCA = {"compte": "El compte", "public": "Qui el mira", "referencia": "Reel de referència",
@@ -583,7 +666,7 @@ def main() -> None:
 
     ed = sub.add_parser("editors", help="Prepara el muntatge per acabar-lo a Premiere, Final Cut, DaVinci o CapCut")
     ed.add_argument("--projecte", required=True)
-    ed.add_argument("--amb-subtitols", action="store_true", help="Inclou-hi els subtítols animats (capa transparent)")
+    ed.add_argument("--amb-subtitols", action="store_true", help="Inclou-hi els subtítols, el títol i els gràfics animats (capa transparent)")
     ed.add_argument("--trossos", action="store_true", help="Cada tros com un clip a part (per a CapCut o iMovie)")
     ed.set_defaults(func=ordre_editors)
 
@@ -649,6 +732,16 @@ def main() -> None:
     ma.add_argument("valors", nargs="*", metavar="CLAU=VALOR",
                     help="p. ex. color_destacat=#FF7DB8 lletra_accent=Fraunces crida=\"comenta GUIA\"")
     ma.set_defaults(func=ordre_marca)
+
+    gr = sub.add_parser("grafics", help="El pla de gràfics: frases, marca, gràfics i notes (proposa o canvia: el desa)")
+    gr.add_argument("accio", nargs="?", choices=["proposa", "canvia", "fotogrames"],
+                    help="proposa: un pla nou (substitueix els proposats); canvia: només els gràfics que hi ha a FITXER; "
+                         "fotogrames: una imatge amb el moment de cada gràfic, per veure on queden")
+    gr.add_argument("fitxer", nargs="?", help="El pla en JSON (una llista de gràfics), o «-» per llegir-lo de l'entrada")
+    gr.add_argument("--projecte", required=True)
+    gr.add_argument("--de-nou", action="store_true", help="El pla nou substitueix tots els d'abans (també els mantinguts)")
+    gr.add_argument("--json", action="store_true", help="Ho mostra en JSON")
+    gr.set_defaults(func=ordre_grafics)
 
     de = sub.add_parser("destaca", help="Les paraules destacades dels subtítols (més grans i d'un altre color)")
     de.add_argument("--projecte", required=True)

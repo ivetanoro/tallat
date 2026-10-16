@@ -23,8 +23,8 @@ from pathlib import Path
 from motor import marca, neteja
 
 FITXER = Path.home() / ".tallat" / "gust.json"
-SECCIONS = {"talls": "Talls", "subtitols": "Subtítols", "broll": "B-roll", "stickers": "Stickers", "so": "So",
-            "reels": "Reels i muntatge", "altres": "Altres"}
+SECCIONS = {"talls": "Talls", "subtitols": "Subtítols", "grafics": "Gràfics", "broll": "B-roll", "stickers": "Stickers",
+            "so": "So", "reels": "Reels i muntatge", "altres": "Altres"}
 FARCIMENT = {"treu": "treu", "proposa": "proposa", "deixa": None}
 
 

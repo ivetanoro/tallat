@@ -188,6 +188,7 @@ function canvia(fn, { repinta = false } = {}) {
 function refresca(repinta) {
   if (repinta) pintaText(); else actualitzaParaules();
   pintaTitol();
+  pintaPla();
   actualitzaPropostes();
   actualitzaPauses();
   $("#desfes").disabled = !desfer.length;
@@ -224,6 +225,7 @@ function aplicaTrams(r) {
   }
   if (r.zooms) zoomsTram = r.zooms;
   if (r.brolls) { brollsMuntatge = r.brolls; pintaResumBroll(); }
+  if (r.grafics) { graficsMuntatge = r.grafics; previaBruta = true; pintaPla(); }
   if (r.efectes) { efectesMuntatge = r.efectes; pintaSo(); }
   if ("pista_efectes" in r) posaPistaEfectes(r.pista_efectes);
   if (r.stickers) stickersMuntatge = r.stickers;
@@ -936,38 +938,42 @@ function titolVisible() {
 function refaPrevia() {
   previaBruta = false;
   previaTemps = NaN;
-  if (!window.TallatSubtitols) { previa = previaTitol = null; return; }
+  if (!window.TallatSubtitols) { previa = previaTitol = previaGrafics = null; return; }
   const titol = titolVisible();
-  const amaga = titol && estilTitol?.amaga_subtitols ? [titol.inici, titol.final] : null;
+  const grafics = graficsVisibles();
+  // Com al vídeo final: mentre hi ha el títol (si l'estil ho diu) o una frase clau, sense subtítols.
+  const amaga = [...(titol && estilTitol?.amaga_subtitols ? [[titol.inici, titol.final]] : []),
+    ...grafics.filter((g) => g.amaga_subtitols).map((g) => [g.inici, g.final])];
   previa = estilSub ? TallatSubtitols.construeix($("#ts-host"), liniesSub, estilSub, { familia: familiaCss(estilSub), amaga }) : null;
   previaTitol = estilTitol ? TallatSubtitols.titol($("#tt-host"), titol, estilTitol,
     { familia: familiaCss({ font: estilTitol.font || estilSub?.font }) }) : null;
+  previaGrafics = window.TallatGrafics && paletaGrafics ? TallatGrafics.construeix($("#tg-host"), grafics, paletaGrafics) : null;
 }
 
 function pintaSubtitols() {
   const capa = $("#capa-subtitols");
   const ambSubtitols = (estat?.subtitols !== false || editantEstil) && liniesSub.length > 0;
   const titol = titolVisible();
-  const visible = vista === "directe" && (ambSubtitols || !!titol);
+  const visible = vista === "directe" && (ambSubtitols || !!titol || graficsMuntatge.length > 0);
   capa.hidden = !visible;
   if (!visible) return;
   $("#ts-host").hidden = !ambSubtitols;
   if (previaBruta) refaPrevia();
   let m = tempsMuntatge();
-  // Mentre es tria l'estil del títol amb el vídeo aturat, el títol sempre es veu (ja escrit).
   if (editantTitol && !sona() && titol && !(m >= titol.inici && m < titol.final)) {
+    // Mentre es tria l'estil del títol amb el vídeo aturat, el títol sempre es veu (ja escrit).
     m = Math.max(titol.inici, titol.final - 0.35);
-    if (m !== previaTemps) { previa?.seek(m, false); previaTitol?.seek(m, false); previaTemps = m; }
-    return;
-  }
-  if (!previa) { if (m !== previaTemps) { previaTitol?.seek(m, false); previaTemps = m; } return; }
-  // Mentre es tria l'estil amb el vídeo aturat, sempre hi ha una línia d'exemple a la vista.
-  if (editantEstil && !sona() && liniesSub.length && !liniesSub.some((l) => m >= l.inici && m < l.final)) {
+  } else if (previa && editantEstil && !sona() && liniesSub.length && !liniesSub.some((l) => m >= l.inici && m < l.final)) {
+    // Mentre es tria l'estil amb el vídeo aturat, sempre hi ha una línia d'exemple a la vista.
     const l = liniesSub.find((x) => x.inici >= m) || liniesSub[liniesSub.length - 1];
     const w = l.paraules[Math.min(1, l.paraules.length - 1)];
     m = Math.min(l.final - 0.01, w.inici + 0.45);
   }
-  if (m !== previaTemps) { previa.seek(m, false); previaTitol?.seek(m, false); previaTemps = m; }
+  if (m === previaTemps) return;
+  previa?.seek(m, false);
+  previaTitol?.seek(m, false);
+  previaGrafics?.seek(m, false);
+  previaTemps = m;
 }
 
 const escapaFont = (f) => (/^[\w-]+$/.test(f) ? f : `"${String(f).replace(/["\\]/g, "")}"`);
@@ -1460,6 +1466,7 @@ function triaPestanya(nom, { focus = false } = {}) {
     }
   }
   if (nom === "so" && typeof pintaSo === "function") pintaSo();
+  if (nom === "grafics" && estat) pintaPla();
 }
 
 function actualitzaPestanyes() {
@@ -1807,9 +1814,10 @@ function instalaEstil() {
   // La capa de subtítols treballa a 1080 px d'amplada: l'escalem a la mida del reproductor.
   const capa = $("#capa-subtitols");
   new ResizeObserver(() => {
-    for (const host of ["#ts-host", "#tt-host"]) $(host).style.transform = `scale(${capa.clientWidth / 1080})`;
+    for (const host of ["#ts-host", "#tg-host", "#tt-host"]) $(host).style.transform = `scale(${capa.clientWidth / 1080})`;
   }).observe(capa);
   if (!window.gsap) registre("sense-gsap", {});  // sense internet: subtítols sense animacions
+  $("#grup-trets").addEventListener("toggle", pintaPla);  // les miniatures, quan es veuen
 
   $("#mes-estils").addEventListener("click", () => { estilsMostrats = !$("#estils").classList.contains("tots"); pintaPanellEstil(); });
   const segmentat = (id, aplica, mostra) => {
@@ -2389,6 +2397,171 @@ function pintaStickers() {
   for (const [id, img] of stickersVius) if (!actius.has(id)) { img.remove(); stickersVius.delete(id); }
 }
 
+// --- El pla de gràfics ---------------------------------------------------------------------------
+// Claude els proposa frase a frase des del xat (`tallat.py grafics proposa`) i aquí es revisen:
+// Mantén (t'agrada: Claude no el tocarà), Canvia (amb una nota per a Claude) o Treu. Les decisions
+// són a l'estat (es desfan com la resta) i es dibuixen amb pagina/grafics.js, com al vídeo final.
+
+let graficsMuntatge = [];  // els que surten al vídeo, en temps del muntatge (els calcula el servidor)
+let paletaGrafics = null;  // els colors i les lletres de la marca
+let previaGrafics = null;
+let notaOberta = null;     // l'id del gràfic que té la nota oberta
+const targetesGrafic = new Map();  // id → {el, sig}: només es refà la que canvia
+
+const NOMS_GRAFIC = { frase: "Frase", etiqueta: "Etiqueta", llista: "Llista", crida: "Crida" };
+const LLOC_GRAFIC = { frase: "dalt", etiqueta: "dalt", llista: "mig", crida: "baix" };  // com motor/grafics.py
+const ESTATS_GRAFIC = { mantingut: "Mantingut", canvia: "Per canviar" };
+
+const graficDe = (id) => (estat?.grafics || []).find((g) => g.id === id);
+// Els trets desapareixen de seguida, sense esperar el servidor.
+const graficsVisibles = () => graficsMuntatge.filter((g) => graficDe(g.id)?.estat !== "tret");
+
+// Per a la miniatura: el gràfic sencer, ja entrat (també els trets i els que ja no surten al vídeo).
+function perDibuixar(g) {
+  const s = graficsMuntatge.find((x) => x.id === g.id) || {
+    tipus: g.tipus, text: g.text || (g.tipus === "crida" ? estilMarca?.crida || "" : ""),
+    punts: g.punts || [], estil: g.estil || energies(estilMarca)[0], posicio: g.posicio ?? LLOC_GRAFIC[g.tipus],
+  };
+  return { ...s, inici: 0, final: 1e5, punts: (s.punts || []).map((p) => ({ text: p.text, t: 0 })) };
+}
+
+function textGrafic(g) {
+  const text = (g.text || (g.tipus === "crida" ? estilMarca?.crida || "La crida de la teva marca" : "")).replaceAll("*", "");
+  if (g.tipus !== "llista") return `«${text}»`;
+  return [text, ...g.punts.map((p) => `· ${p.text}`)].filter(Boolean).join("  ");
+}
+
+function targetaGrafic(g) {
+  const s = graficsMuntatge.find((x) => x.id === g.id);
+  const el = document.createElement("div");
+  el.className = `grafic ${g.estat}${s || g.estat === "tret" ? "" : " fora"}`;
+  el.innerHTML = `<button class="mini-grafic"><span class="mg-host"></span></button>
+    <div class="grafic-cos">
+      <div class="grafic-cap"><strong></strong><span class="temps-petit"></span><span class="grafic-estat"></span></div>
+      <p class="grafic-text"></p>
+      <p class="grafic-nota" hidden></p>
+      <p class="grafic-motiu" hidden></p>
+      <div class="segmentat ample decisio" role="group" aria-label="Què en fem">
+        <button data-estat="mantingut">Mantén</button><button data-estat="canvia">Canvia</button><button data-estat="tret">Treu</button>
+      </div>
+      <button class="enllac torna" hidden>Torna'l a posar</button>
+      <form class="nota-grafic" hidden>
+        <textarea class="camp-text" rows="2" maxlength="600" aria-label="Què hi vols diferent"
+                  placeholder="Què hi vols diferent? Ho llegirà Claude."></textarea>
+        <div class="nota-accions"><button type="submit" class="boto principal">Desa la nota</button>
+          <button type="button" class="enllac cancel">Cancel·la</button></div>
+      </form>
+    </div>`;
+  el.querySelector("strong").textContent = NOMS_GRAFIC[g.tipus];
+  el.querySelector(".temps-petit").textContent = s ? fmtSegons(s.inici) : g.estat === "tret" ? "" : "ja no surt al vídeo";
+  el.querySelector(".grafic-estat").textContent = ESTATS_GRAFIC[g.estat] || "";
+  el.querySelector(".grafic-text").textContent = textGrafic(g);
+  if (g.nota) Object.assign(el.querySelector(".grafic-nota"), { hidden: false, textContent: `Nota: ${g.nota}` });
+  if (g.motiu) Object.assign(el.querySelector(".grafic-motiu"), { hidden: false, textContent: g.motiu });
+  const mini = el.querySelector(".mini-grafic");
+  mini.setAttribute("aria-label", s ? `Mira'l al vídeo (${fmtSegons(s.inici)})` : "Miniatura");
+  mini.disabled = !s;
+  for (const b of el.querySelectorAll(".decisio button")) b.setAttribute("aria-pressed", String(b.dataset.estat === g.estat));
+  el.querySelector(".decisio").hidden = g.estat === "tret";
+  el.querySelector(".torna").hidden = g.estat !== "tret";
+  const form = el.querySelector(".nota-grafic");
+  form.hidden = notaOberta !== g.id;
+  form.querySelector("textarea").value = g.nota || "";
+
+  el.addEventListener("click", (e) => {
+    const boto = e.target.closest(".decisio button");
+    if (boto) return decideixGrafic(g.id, boto.dataset.estat);
+    if (e.target.closest(".torna")) return decideixGrafic(g.id, "proposat");
+    if (e.target.closest(".cancel")) { notaOberta = null; form.hidden = true; return; }
+    if (e.target.closest(".mini-grafic, .grafic-text") && s) vesA(s.inici + Math.min(0.8, (s.final - s.inici) / 2));
+  });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    desaNotaGrafic(g.id, form.querySelector("textarea").value);
+  });
+  form.querySelector("textarea").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.requestSubmit(); }
+    if (e.key === "Escape") { notaOberta = null; form.hidden = true; }
+  });
+  return el;
+}
+
+// La miniatura: el gràfic dibuixat petit, amb el mateix codi que el vídeo.
+function pintaMiniGrafic(el, g) {
+  const host = el.querySelector(".mg-host");
+  if (!window.TallatGrafics || !paletaGrafics) return;
+  const arrel = document.createElement("div");
+  host.replaceChildren(arrel);
+  TallatGrafics.construeix(arrel, [perDibuixar(g)], paletaGrafics).seek(50, false);
+  host.style.transform = `scale(${el.querySelector(".mini-grafic").clientWidth / 1080})`;
+}
+
+function ompleGrafics(cont, llista) {
+  const ids = new Set(llista.map((g) => g.id));
+  for (const el of [...cont.children]) if (!ids.has(el.dataset.id)) el.remove();
+  for (const g of llista) {
+    const s = graficsMuntatge.find((x) => x.id === g.id);
+    const sig = JSON.stringify([g, s, paletaGrafics, notaOberta === g.id, g.tipus === "crida" && estilMarca?.crida]);
+    let fet = targetesGrafic.get(g.id);
+    if (!fet || fet.sig !== sig) {
+      if (fet && fet.el.querySelector("textarea") === document.activeElement) continue;  // s'hi escriu una nota
+      const el = targetaGrafic(g);
+      el.dataset.id = g.id;
+      fet?.el.replaceWith(el);
+      fet = { el, sig };
+      targetesGrafic.set(g.id, fet);
+    }
+    cont.append(fet.el);  // en ordre (si ja hi és, només es mou)
+    if (!fet.pintada && fet.el.isConnected && fet.el.querySelector(".mini-grafic").clientWidth) {
+      pintaMiniGrafic(fet.el, g);
+      fet.pintada = true;
+    }
+  }
+}
+
+function pintaPla() {
+  if (!estat) return;
+  const tots = estat.grafics || [];
+  const vius = tots.filter((g) => g.estat !== "tret");
+  const trets = tots.filter((g) => g.estat === "tret");
+  const perRevisar = vius.filter((g) => g.estat === "proposat").length;
+  const notes = vius.filter((g) => g.estat === "canvia").length;
+  $("#compte-grafics").textContent = perRevisar ? `${perRevisar} per revisar` : vius.length ? String(vius.length) : "";
+  $("#punt-grafics").hidden = !perRevisar;
+  $("#ajuda-grafics").textContent = !tots.length
+    ? "Encara no hi ha cap pla. Demana'l a Claude, al xat: «proposa'm gràfics»."
+    : notes ? `Quan acabis, digues a Claude: «mira les notes dels gràfics» (${notes === 1 ? "n'hi ha una" : `n'hi ha ${notes}`}).`
+    : "Toca'n un per veure'l al vídeo. Si en vols canviar algun, toca «Canvia» i escriu-li una nota per a Claude.";
+  for (const id of [...targetesGrafic.keys()]) if (!graficDe(id)) targetesGrafic.delete(id);
+  ompleGrafics($("#pla-grafics"), vius);
+  ompleGrafics($("#grafics-trets"), trets);
+  $("#grup-trets").hidden = !trets.length;
+  $("#compte-trets").textContent = String(trets.length);
+}
+
+function decideixGrafic(id, nou) {
+  const g = graficDe(id);
+  if (!g) return;
+  if (nou === "canvia") {  // primer s'escriu la nota; l'estat canvia en desar-la
+    notaOberta = notaOberta === id ? null : id;
+    pintaPla();
+    if (notaOberta) targetesGrafic.get(id)?.el.querySelector("textarea").focus();
+    return;
+  }
+  if (g.estat === nou) nou = "proposat";  // tornar a tocar el botó el desfà
+  notaOberta = null;
+  canvia((e) => { Object.assign(e.grafics.find((x) => x.id === id), { estat: nou, nota: "" }); });
+  previaBruta = true;
+  if (nou === "tret") avis("Tret. El trobaràs a «Trets», a sota, si el vols tornar a posar.");
+}
+
+function desaNotaGrafic(id, text) {
+  const nota = text.trim();
+  notaOberta = null;
+  canvia((e) => { Object.assign(e.grafics.find((x) => x.id === id), { estat: nota ? "canvia" : "proposat", nota }); });
+  if (nota) avis("Nota desada. Quan acabis, digues a Claude: «mira les notes dels gràfics».", 4000);
+}
+
 let instruccioPerPujar = null;
 async function pujaBroll(iid, fitxer) {
   avis(`Pujant «${fitxer.name}»…`, 20000);
@@ -2842,8 +3015,10 @@ const TEXTOS_MARCA = [["m-prohibits", "colors_prohibits"], ["m-crida", "crida"],
   ["m-public", "public"], ["m-referencia", "referencia"]];
 
 function aplicaMarca(r) {
+  if (r.paleta_grafics) { paletaGrafics = r.paleta_grafics; previaBruta = true; }
   if (!r.estil_marca) return;
   estilMarca = { ...r.estil_marca, ...pendents.marca };
+  pintaPla();
   pintaResumMarca();
   pintaPanellMarca();
 }

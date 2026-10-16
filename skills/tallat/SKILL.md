@@ -37,13 +37,16 @@ Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre 
 .venv/bin/python tallat.py destaca --projecte CARPETA [--si ID…] [--no ID…] [--automatic]
 .venv/bin/python tallat.py titol --projecte CARPETA ["LÍNIA | *DESTACAT* | LÍNIA"] [--durada S] [--treu]
 .venv/bin/python tallat.py marca [--projecte CARPETA | --kit ID] [CLAU=VALOR …]
+.venv/bin/python tallat.py grafics --projecte CARPETA [--json]
+.venv/bin/python tallat.py grafics proposa|canvia PLA.json --projecte CARPETA [--de-nou]
+.venv/bin/python tallat.py grafics fotogrames --projecte CARPETA
 ```
 
 La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que diu la persona no es publiquen mai).
 
 ## La teva marca (entrevista)
 
-La marca diu com són els vídeos de la persona: els seus colors i lletres (cadascun amb una feina), l'estil i la quantitat de gràfics, i la seva crida a l'acció. Viu al kit (secció `marca`), i en desar-la els colors i les lletres s'escampen sols: el **text** al text dels subtítols i del títol, el **fosc** (en lloc del negre) als contorns i a les ombres, el **destacat** a la paraula que sona i a les destacades (subtítols i títol; si no n'hi ha, el del text), el **principal** a les vores del b-roll (i als gràfics que vindran), el **secundari** i el **clar** als gràfics que vindran, la lletra de **text** als subtítols, la de **títols** al títol del ganxo, i la d'**accent** a les paraules destacades, en cursiva. Els estils fets de la pàgina en respecten els colors.
+La marca diu com són els vídeos de la persona: els seus colors i lletres (cadascun amb una feina), l'estil i la quantitat de gràfics, i la seva crida a l'acció. Viu al kit (secció `marca`), i en desar-la els colors i les lletres s'escampen sols: el **text** al text dels subtítols i del títol, el **fosc** (en lloc del negre) als contorns i a les ombres, el **destacat** a la paraula que sona i a les destacades (subtítols i títol; si no n'hi ha, el del text), el **principal** a les vores del b-roll i als gràfics (etiquetes, llistes, la crida), el **secundari** i el **clar** als gràfics (notes, cintes, targetes), la lletra de **text** als subtítols, la de **títols** al títol del ganxo, i la d'**accent** a les paraules destacades, en cursiva. Els estils fets de la pàgina en respecten els colors.
 
 **Quan:** si `tallat.py marca` diu que el kit no té marca, ofereix l'entrevista abans del primer muntatge (no l'imposis). També quan la persona digui «fem la meva marca», «vull el meu estil» o similar.
 
@@ -142,7 +145,7 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 
 ## Estil dels subtítols
 
-- Es tria a la pàgina de revisió: pestanya **Subtítols** (la columna de l'esquerra té el kit a dalt i cinc pestanyes: **Edita** —reels, instruccions de veu, propostes i silencis—, **Subtítols**, **Gràfics** —el títol del ganxo i el b-roll—, **So** —la neteja de la veu i els efectes— i **Vídeos** —els exportats). Hi ha 18 estils predefinits (Clàssic, Net, Una paraula, Frase, Caixa, Karaoke, Impacte, Elegant, Cortina, Revista, Neó, Degradat, Emojis, i els dissenyats: Apilat, Escampat, Esglaó, Titular, Rètol) i es pot ajustar tot: quantes paraules surten, si apareixen d'una en una o totes de cop, l'animació (pop, fos, impacte, cortina, gruix o cap), com es destaca la paraula que sona (color, caixa, karaoke o més gran), l'aspecte (normal, neó o degradat), una píndola de fons, emojis, la lletra, la mida, la posició i els colors.
+- Es tria a la pàgina de revisió: pestanya **Subtítols** (la columna de l'esquerra té el kit a dalt i cinc pestanyes: **Edita** —reels, instruccions de veu, propostes i silencis—, **Subtítols**, **Gràfics** —el pla de gràfics, el títol del ganxo i el b-roll—, **So** —la neteja de la veu i els efectes— i **Vídeos** —els exportats). Hi ha 18 estils predefinits (Clàssic, Net, Una paraula, Frase, Caixa, Karaoke, Impacte, Elegant, Cortina, Revista, Neó, Degradat, Emojis, i els dissenyats: Apilat, Escampat, Esglaó, Titular, Rètol) i es pot ajustar tot: quantes paraules surten, si apareixen d'una en una o totes de cop, l'animació (pop, fos, impacte, cortina, gruix o cap), com es destaca la paraula que sona (color, caixa, karaoke o més gran), l'aspecte (normal, neó o degradat), una píndola de fons, emojis, la lletra, la mida, la posició i els colors.
 - **Disposició** (`disposicio`): `linia` (cada línia substitueix l'anterior), `apilat` (les línies d'una frase s'apilen una sota l'altra fins que la frase acaba o n'hi ha `linies_max`) o `escampat` (com un collage: les paraules de la frase surten en files curtes a llocs, mides i inclinacions diferents; les destacades, soles i grans; les curtes, més petites. La mateixa frase fa sempre el mateix collage, i l'alineació no hi compta). **Alineació** (`alineacio`): `centre`, `esquerra`, `dreta` o `esglao` (per torns a l'esquerra i a la dreta; les línies que només tenen paraules destacades, al mig, com un títol). `espaiat` (entre lletres; negatiu = juntes, com als títols de revista) i `interlineat` (entre línies).
 - **Paraules destacades** (`clau_grans`): surten `clau_mida` vegades més grans i amb `clau_color` (null: el color del destacat), amb la lletra `clau_font` (null: la mateixa; la marca hi posa la d'accent) i en cursiva amb `clau_cursiva`; amb `clau_sola`, cada una va sola a la seva línia (amb `apilat` fa el look de títol: «és tan / AMBICIÓS / o / EMPRENEDOR»). tallat en tria soles (els números i la paraula llarga més important de cada línia). La persona les pot canviar al mode **Destaca** de la pàgina, i tu amb `tallat.py destaca --projecte X --si ID… --no ID…` (sense opcions, et diu quines surten ara, amb el seu número). Quan la persona vulgui subtítols dissenyats, revisa-les: una per idea, les que porten el pes del missatge (substantius, xifres, adjectius forts), mai paraules pont. La pàgina oberta es posa al dia sola en uns segons.
 - **Lletres**: les del Mac, 18 de gratuïtes (Inter, Inter Tight, Archivo, Anton, Bebas Neue, Montserrat, Poppins, Fraunces, Playfair Display, Caveat…; `tallat.py kit lletres`) que es baixen dins del kit el primer cop que es trien (`tallat.py kit lletra ID`, o a la pàgina), i les que puja la persona. Totes les lletres que no són del Mac viuen a la carpeta `fonts/` del kit i viatgen amb ell.
@@ -155,11 +158,46 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 - A la pàgina: pestanya **Gràfics** → **Títol del ganxo** (el text, la durada i l'estil, en un sol panell). Al xat: `tallat.py titol`.
 - Quan facis el primer muntatge o la persona demani un títol, proposa-n'hi un i ensenya-l'hi abans de posar-lo: 2-4 línies curtes, en la seva veu, amb una sola part destacada (la idea que fa quedar-se a mirar), sense paraules buides ni promeses que el vídeo no compleix. Si el títol repeteix el que es diu, recomana «sense subtítols mentre surt el títol».
 
+## Pla de gràfics
+
+Gràfics de text que proposes tu, frase a frase, i que la persona revisa a la pestanya **Gràfics** de la pàgina: cada un té una miniatura, el segon on surt i tres botons, **Mantén** (li agrada: no el toquis), **Canvia** (amb una nota per a tu) i **Treu**. Els proposats ja surten a la vista prèvia i al vídeo; els trets, no. Es desen a l'estat del vídeo (`grafics`), lligats a paraules (si es mouen els talls, segueixen la seva frase), i es dibuixen amb `pagina/grafics.js`, el mateix codi a la vista prèvia i al vídeo final.
+
+**Tipus** (cap no necessita fitxers):
+- `frase`: una frase clau en gran (com a molt 140 lletres; millor menys de 60). El que va `*entre asteriscs*` surt amb la lletra d'accent i el color destacat. Mentre surt, els subtítols s'amaguen (`amaga_subtitols: false` si no ho vols).
+- `etiqueta`: una o dues paraules en una etiqueta petita, per marcar l'estructura («mite», «pas 1», «el truc», «error»).
+- `llista`: una targeta amb un títol curt (opcional, a `text`) i 2-5 `punts` que surten un a un: posa a cada punt la `paraula` on es diu, i fes que la llista duri fins a l'últim (`fins`). Com la frase, amaga els subtítols mentre surt.
+- `crida`: la crida a l'acció, al final i un sol cop. Sense `paraula`, va als últims segons; sense `text`, diu la de la marca.
+
+**Estils** (`estil`): `net`, `mac` (targetes i finestres d'interfície), `scrapbook` (paper, cinta, lletra d'accent) o `editorial` (titulars, ratlles, números). Fes servir només els de la marca (`energia`); si n'hi ha uns quants, barreja'ls amb criteri (per exemple, mac per a llistes i crides, scrapbook per a frases emotives, editorial per a etiquetes). Si no en poses, va el primer de la marca. **Lloc** (`posicio`): `dalt`, `mig`, `baix` o un número de 0 (dalt) a 1 (baix), on va el centre del gràfic (per defecte: frase i etiqueta a dalt, llista i crida a baix; si dos gràfics coincideixen al mateix lloc, tallat en mou un). Mai no en surten de la **zona segura d'Instagram** (el 14 % de dalt i el 35 % de baix queden lliures, i 120 px a cada costat, pels botons): tallat els hi fa cabre sols. Tampoc no tapen els subtítols; els que els amaguen (`amaga_subtitols`) poden ocupar el seu lloc. **Durada**: frase 2,8 s, etiqueta 2,2, llista 4,5, crida 3,5; amb `fins` (una paraula), dura fins que s'acaba aquella paraula.
+
+**Quan:** quan la persona digui «proposa'm gràfics», «posa-hi gràfics» o similar. En acabar el primer muntatge, ofereix-l'hi (no l'imposis).
+
+**Com:**
+1. `tallat.py grafics --projecte X` et dona la marca (l'estil i quants gràfics, la crida), les frases del vídeo tal com sonen ara (el segon i el número de la primera i l'última paraula) i el pla que hi ha. Llegeix també `tallat.py gust`.
+2. Fes el pla:
+   - Quants: els de la marca (`pocs`, un cada 8-12 s; `normal`, cada 4-6 s; `molts`, cada 2-4 s).
+   - Un gràfic per idea, on ajudi a entendre o a quedar-se: la frase que porta el pes del missatge (`frase`), l'estructura (`etiqueta`), les enumeracions (`llista`) i la crida al final.
+   - No tapis el títol del ganxo (els primers segons) ni posis dos gràfics al mateix lloc alhora.
+   - **On queda millor:** després de desar-lo, fes `tallat.py grafics fotogrames --projecte X` i mira la imatge que et diu (un fotograma per gràfic, en ordre; enfosquit, on no pot anar res; el requadre groc, on sí). Tria el lloc de cada un segons el que hi ha al fotograma: que no tapi els ulls ni la boca, ni el que s'ensenya (un objecte, una pantalla). Si la cara omple el requadre, els petits (etiquetes, frases d'una línia) a dalt, sobre el front, i els grans (llistes, targetes) a baix, en lloc dels subtítols. Desa els llocs amb `grafics canvia`.
+   - En la veu de la persona i amb el seu gust (minúscules, sense paraules prohibides, sense prometre res que el vídeo no compleix). Escurça: un gràfic no és el subtítol.
+3. Escriu-lo en un fitxer JSON (fora del repositori de tallat, per exemple a la carpeta del projecte) i desa'l amb `tallat.py grafics proposa PLA.json --projecte X`. És una llista:
+   ```json
+   [{"tipus": "etiqueta", "paraula": 3, "text": "3 coses", "estil": "editorial", "motiu": "anuncia l'estructura"},
+    {"tipus": "llista", "paraula": 10, "fins": 36, "text": "abans de començar", "estil": "mac",
+     "punts": [{"text": "no cal tenir-ho clar", "paraula": 14}, {"text": "constància > talent", "paraula": 23}]},
+    {"tipus": "frase", "paraula": 37, "fins": 41, "text": "no és mandra, és *cansament*", "estil": "scrapbook"},
+    {"tipus": "crida", "estil": "mac"}]
+   ```
+   `motiu` (opcional) és una frase curta que la persona veu a la pestanya: per què hi va. Un pla nou substitueix els proposats que hi havia; els mantinguts, els que tenen una nota i els trets es queden (amb `--de-nou`, tot de nou).
+4. Explica-li en dues o tres frases què hi has posat i que ho revisi a la pestanya Gràfics (la pàgina es posa al dia sola).
+
+**Les notes:** quan digui «mira les notes» (o similar), `tallat.py grafics --projecte X`: els que diuen `CANVIA` porten la nota a sota. Si una nota parla del lloc («més avall», «em tapa la cara»), mira'n el fotograma (`grafics fotogrames`) abans de triar-ne un altre. Fes el que demana cada nota i desa només aquells gràfics, amb el mateix `id` i sencers (tipus, paraula, text…), amb `tallat.py grafics canvia NOTES.json --projecte X`: la resta del pla no es toca. Un gràfic canviat torna a «proposat» i perd la nota. Si una nota demana un gràfic que encara no existeix (una notificació, un xat…), digues-li que de moment n'hi ha de quatre tipus i proposa-li el més semblant.
+
 ## So
 
 - Pestanya **So** de la pàgina; es desa al kit, secció `so`.
 - **Neteja de la veu** (`neteja`, sí per defecte): treu el brunzit greu i el soroll de fons (`soroll`: `suau`, `mitja` o `fort`), dona claredat, suavitza les «s», comprimeix una mica i iguala el volum a -14 LUFS (el de les xarxes), en dues passades. S'aplica a l'esborrany i al vídeo final; a la vista prèvia sona la veu original, però la pàgina en deixa escoltar deu segons abans i després. Si la persona diu que la veu sona estranya o «enllaunada», baixa el `soroll` a `suau` o apaga la neteja.
-- **Efectes de so** (`efectes`: `cap`, `pocs` —whoosh al b-roll, pop als stickers, campaneta al títol o teclat si el títol és a màquina d'escriure— o `molts` —també un tic a les paraules destacades; `volum_efectes` de 0 a 1). Els fabrica tallat amb codi (`motor/so.py`): sense fitxers de fora ni llicències. Cada efecte d'un vídeo es pot apagar a la llista de la pestanya So (queda a l'estat, `sons_apagats`). La persona hi pot posar els seus sons a `~/.tallat/sons/` amb el nom del que substitueixen (whoosh, pop, tecla, brill o tic; WAV, MP3, M4A o AIFF).
+- **Efectes de so** (`efectes`: `cap`, `pocs` —whoosh al b-roll i a la frase clau, pop als stickers i a la llista, campaneta al títol i a la crida, o teclat si el títol és a màquina d'escriure— o `molts` —també un pop a cada etiqueta i a cada punt de la llista i un tic a les paraules destacades; `volum_efectes` de 0 a 1). Els fabrica tallat amb codi (`motor/so.py`): sense fitxers de fora ni llicències. Cada efecte d'un vídeo es pot apagar a la llista de la pestanya So (queda a l'estat, `sons_apagats`). La persona hi pot posar els seus sons a `~/.tallat/sons/` amb el nom del que substitueixen (whoosh, pop, tecla, brill o tic; WAV, MP3, M4A o AIFF).
 - Tots els efectes es barregen en una sola pista: la mateixa sona a la vista prèvia i va al vídeo final. Al projecte per a Premiere o Final Cut i als trossos per a CapCut va a part (`efectes-de-so.wav`, a posar a l'inici); allà la veu no va neta.
 
 ## Kits d'estil
@@ -173,16 +211,16 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 
 ## Acabar-lo en un altre editor
 
-Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o CapCut: `tallat.py editors` (o, a la pàgina, Final… → «Projecte per a Premiere, Final Cut o DaVinci»). Escriu a `exports/` una carpeta amb el projecte (`.fcpxml` per a Final Cut i DaVinci, `.xml` per a Premiere), els subtítols en `.srt`, el b-roll i els stickers a `recursos/`, i un `LLEGEIX-ME.txt` amb els passos de cada editor. CapCut i iMovie no importen projectes: per a ells, `tallat.py editors --trossos` (a la pàgina, «Trossos per a CapCut o iMovie») treu cada tros com un clip numerat (01.mp4, 02.mp4…) amb el zoom aplicat, el b-roll i els stickers amb el moment al nom, i el `.srt`; arrossegats tots alhora a la línia de temps queden en ordre (es poden escurçar, no allargar). Amb `--amb-subtitols` hi afegeix els subtítols animats de tallat com a capa transparent (tarda uns minuts). Els talls apunten al vídeo original: que no el mogui.
+Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o CapCut: `tallat.py editors` (o, a la pàgina, Final… → «Projecte per a Premiere, Final Cut o DaVinci»). Escriu a `exports/` una carpeta amb el projecte (`.fcpxml` per a Final Cut i DaVinci, `.xml` per a Premiere), els subtítols en `.srt`, el b-roll i els stickers a `recursos/`, i un `LLEGEIX-ME.txt` amb els passos de cada editor. CapCut i iMovie no importen projectes: per a ells, `tallat.py editors --trossos` (a la pàgina, «Trossos per a CapCut o iMovie») treu cada tros com un clip numerat (01.mp4, 02.mp4…) amb el zoom aplicat, el b-roll i els stickers amb el moment al nom, i el `.srt`; arrossegats tots alhora a la línia de temps queden en ordre (es poden escurçar, no allargar). Amb `--amb-subtitols` hi afegeix els subtítols, el títol del ganxo i els gràfics de tallat com a capa transparent (tarda uns minuts); sense, el títol i els gràfics no hi són. Els talls apunten al vídeo original: que no el mogui.
 
 ## El teu gust (regles per als vídeos següents)
 
-- **Abans de decidir res** (neteja, primer muntatge i reels, instruccions, b-roll i stickers, estil), llegeix les regles amb `tallat.py gust` i segueix-les. Les que porten un ajust ja s'apliquen soles.
+- **Abans de decidir res** (neteja, primer muntatge i reels, instruccions, b-roll i stickers, gràfics, estil), llegeix les regles amb `tallat.py gust` i segueix-les. Les que porten un ajust ja s'apliquen soles.
 - **Quan la persona reacciona a un resultat** («massa lent», «els subtítols són petits», «no em treguis els vale»):
   1. Busca el comportament que hi ha darrere, no només el cas concret: «aquest b-roll és massa llarg» vol dir «b-roll més curt», no «treu aquest b-roll».
   2. Pregunta-li (amb opcions de resposta si en pots fer; si no, amb una pregunta curta) si és **per a aquest vídeo** o **per sempre** (recomana «per sempre»). Si ja ho ha dit («sempre», «només aquí»), no ho preguntis.
   3. Si és per sempre, desa-ho: `tallat.py gust afegeix SECCIO "la regla en paraules de la persona" [--ajust clau=valor]`. Si és només per a aquest vídeo, fes-ho al projecte i prou.
-- Seccions: `talls`, `subtitols`, `broll`, `stickers`, `so`, `reels`, `altres`.
+- Seccions: `talls`, `subtitols`, `grafics`, `broll`, `stickers`, `so`, `reels`, `altres`.
 - Els ajustos d'estil es fan al **kit per defecte**. Si el vídeo fa servir un altre kit i la persona vol el canvi també allà, fes-lo al seu `kit.json` (o a la pàgina, amb aquell kit triat).
 - Ajustos (si n'hi ha un que encaixa, posa'l; si no, la regla només amb text):
 
@@ -204,7 +242,7 @@ Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o Cap
 ## Revisar l'esborrany
 
 - La pàgina no té notes: la persona mira l'esborrany (o el muntatge En directe) i et diu al xat què vol canviar, amb el segon que veu sota el vídeo («al segon 12, el b-roll és massa llarg»).
-- Per saber què hi ha en aquell moment, `tallat.py moment SEGONS --projecte X` (amb `--esborrany` si parla de l'esborrany: si ha canviat coses després, els temps no coincideixen amb el muntatge d'ara). Et diu el segon de la gravació, les paraules del voltant amb el seu número (» la que sona, [entre claudàtors] les tretes) i si hi surt el títol, un b-roll o un sticker. Si no està clar de quina vista parla, pregunta-l'hi.
+- Per saber què hi ha en aquell moment, `tallat.py moment SEGONS --projecte X` (amb `--esborrany` si parla de l'esborrany: si ha canviat coses després, els temps no coincideixen amb el muntatge d'ara). Et diu el segon de la gravació, les paraules del voltant amb el seu número (» la que sona, [entre claudàtors] les tretes) i si hi surt el títol, un gràfic del pla, un b-roll o un sticker. Si no està clar de quina vista parla, pregunta-l'hi.
 - Fes el canvi i explica-li què has fet. Si la correcció sembla «per sempre» (el b-roll sempre és massa llarg), segueix el que diu «El teu gust».
 
 ## Regles

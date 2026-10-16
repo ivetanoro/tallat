@@ -52,7 +52,7 @@
       <button role="tab" id="tab-subtitols" data-pestanya="subtitols" aria-controls="pestanya-subtitols" aria-selected="false"
               title="Com són els subtítols: l'estil, la lletra, els colors i les paraules destacades">Subtítols</button>
       <button role="tab" id="tab-grafics" data-pestanya="grafics" aria-controls="pestanya-grafics" aria-selected="false"
-              title="El títol del ganxo i el b-roll">Gràfics</button>
+              title="El pla de gràfics que proposa Claude, el títol del ganxo i el b-roll">Gràfics<span class="punt" id="punt-grafics" hidden></span></button>
       <button role="tab" id="tab-so" data-pestanya="so" aria-controls="pestanya-so" aria-selected="false"
               title="La neteja de la veu i els efectes de so">So</button>
       <button role="tab" id="tab-videos" data-pestanya="videos" aria-controls="pestanya-videos" aria-selected="false"
@@ -86,8 +86,17 @@
 
     <div class="pestanya" id="pestanya-grafics" role="tabpanel" aria-labelledby="tab-grafics" hidden>
 
+    <section class="seccio" data-seccio="pla-grafics">
+      <h2>Pla de gràfics <span class="compte" id="compte-grafics"></span></h2>
+      <p class="detall" id="ajuda-grafics"></p>
+      <div id="pla-grafics"></div>
+      <details class="grup-estil" id="grup-trets" hidden>
+        <summary>Trets <span class="compte" id="compte-trets"></span></summary>
+        <div id="grafics-trets"></div>
+      </details>
+    </section>
     <section class="seccio" data-seccio="grafics">
-      <h2>Gràfics</h2>
+      <h2>Títol i b-roll</h2>
       <button class="fila-estil" id="obre-estil-titol" aria-label="Títol del ganxo: escriu-lo i canvia'n l'estil">
         <span class="mostra-estil" id="mostra-titol" aria-hidden="true">Aa</span>
         <span class="fila-estil-text"><strong>Títol del ganxo</strong><span id="nom-estil-titol"></span></span>
@@ -643,7 +652,7 @@
       <video id="video-esborrany" preload="auto" playsinline class="amagat"></video>
       <audio id="audio-efectes" preload="auto"></audio>
       <div class="capa-broll" id="capa-broll" aria-hidden="true"><div id="br-host"></div></div>
-      <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><div id="ts-host"></div><div id="tt-host"></div></div>
+      <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><div id="ts-host"></div><div id="tg-host"></div><div id="tt-host"></div></div>
       <div class="capa-stickers" id="capa-stickers" aria-hidden="true"></div>
       <button class="gran-play" id="gran-play" aria-label="Reprodueix">
         <svg viewBox="0 0 40 40"><path d="M15 11.5v17l13-8.5z"/></svg>
@@ -694,7 +703,7 @@
       <h3>O acaba'l en un altre editor</h3>
       <p class="detall">Amb els talls, els zooms, el b-roll, els stickers i els subtítols (.srt), per retocar-los allà.</p>
       <button class="boto" id="exporta-editors">Projecte per a Premiere, Final Cut o DaVinci</button>
-      <label class="opcio-check"><input type="checkbox" id="editors-capa"> Inclou-hi els subtítols animats de tallat (tarda uns minuts)</label>
+      <label class="opcio-check"><input type="checkbox" id="editors-capa"> Inclou-hi els subtítols i els gràfics de tallat (tarda uns minuts)</label>
       <button class="boto" id="exporta-trossos">Trossos per a CapCut o iMovie</button>
     </div>
   </div>
@@ -704,6 +713,7 @@
   <div class="avis-flotant" id="avis-flotant" role="status" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
   <script src="/pagina/subtitols.js"></script>
+  <script src="/pagina/grafics.js"></script>
   <script src="/pagina/app.js"></script>
 </body>
 </html>

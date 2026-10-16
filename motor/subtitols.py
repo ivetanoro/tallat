@@ -21,6 +21,7 @@ from pathlib import Path
 VERSIO_HYPERFRAMES = "0.8.154"
 VERSIO_GSAP = "3.14.2"
 CODI_ANIMACIO = Path(__file__).resolve().parent.parent / "pagina" / "subtitols.js"
+CODI_GRAFICS = CODI_ANIMACIO.with_name("grafics.js")  # els gràfics del pla (fa servir subtitols.js)
 AMPLADA, ALCADA = 1080, 1920
 FPS = 30
 FI_DE_FRASE = re.compile(r"[.?!…»\"]$")
@@ -239,16 +240,21 @@ def _js(dades) -> str:
 
 def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict] | None = None,
                stickers: list[dict] | None = None, estil_stickers: dict | None = None,
-               escala: float = 1.0, titol: dict | None = None, estil_titol: dict | None = None) -> str:
-    """HTML d'una composició HyperFrames transparent amb els subtítols i els stickers.
+               escala: float = 1.0, titol: dict | None = None, estil_titol: dict | None = None,
+               grafics: list[dict] | None = None, paleta: dict | None = None) -> str:
+    """HTML d'una composició HyperFrames transparent amb els subtítols, el títol, els gràfics i els stickers.
 
-    Els subtítols els dibuixa `subtitols.js`, el mateix codi que fa servir la vista prèvia de la
-    pàgina de revisió (s'ha de copiar al costat d'aquest index.html).
+    Els subtítols i el títol els dibuixa `subtitols.js`, i els gràfics, `grafics.js`: el mateix codi que
+    fa servir la vista prèvia de la pàgina de revisió (s'han de copiar al costat d'aquest index.html).
     `stickers`: [{"src": nom del fitxer dins la composició, "inici": s, "durada": s}]."""
     es = estil_stickers or {}
     et = estil_titol or {}
     amplada, alcada = round(AMPLADA * escala), round(ALCADA * escala)
-    amaga = [titol["inici"], titol["final"]] if titol and et.get("amaga_subtitols") else None
+    # Mentre hi ha el títol (si l'estil ho diu) o una frase clau, els subtítols no es veuen.
+    amaga = ([[titol["inici"], titol["final"]]] if titol and et.get("amaga_subtitols") else []) + \
+        [[g["inici"], g["final"]] for g in grafics or [] if g.get("amaga_subtitols")]
+    grafics_js = (f'TallatGrafics.construeix(document.getElementById("grafics"), {_js(grafics)}, {_js(paleta or {})}, '
+                  f'{{ tl }});' if grafics else "")
     titol_js = (f'TallatSubtitols.titol(document.getElementById("titol"), {_js(titol)}, {_js(et)}, '
                 f'{{ tl, familia: {_js(familia_css({"font": et.get("font") or estil.get("font")}))} }});'
                 if titol else "")
@@ -285,11 +291,12 @@ def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict]
     <title>Subtítols · tallat</title>
     <script src="https://cdn.jsdelivr.net/npm/gsap@{VERSIO_GSAP}/dist/gsap.min.js"></script>
     <script src="subtitols.js"></script>
+    <script src="grafics.js"></script>
     <style>
       {font_face}
       html, body {{ margin: 0; background: transparent; }}
       #root {{ position: relative; width: 100%; height: 100%; overflow: hidden; background: transparent; }}
-      #subtitols, #titol {{ transform: scale({escala}); transform-origin: 0 0; }}
+      #subtitols, #grafics, #titol {{ transform: scale({escala}); transform-origin: 0 0; }}
       .enganxina {{ position: absolute; inset: 0; }}
       .sticker {{ position: absolute; height: auto; {ombra_sticker} }}
     </style>
@@ -298,6 +305,7 @@ def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict]
     <div id="root" data-composition-id="subtitols" data-start="0"
          data-width="{amplada}" data-height="{alcada}" data-duration="{durada:.3f}">
       <div id="subtitols"></div>
+      <div id="grafics"></div>
       <div id="titol"></div>
 {chr(10).join(blocs)}
     </div>
@@ -305,6 +313,7 @@ def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict]
       const tl = gsap.timeline({{ paused: true }});
       TallatSubtitols.construeix(document.getElementById("subtitols"), {_js(linies)}, {_js(estil)},
                                  {{ tl, familia: {_js(familia_css(estil))}, amaga: {_js(amaga)} }});
+      {grafics_js}
       {titol_js}
 {chr(10).join(passos)}
       window.__timelines["subtitols"] = tl;
@@ -322,20 +331,23 @@ def _empremta(fitxer) -> str | None:
 
 def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qualitat: str,
                avis=None, stickers: list[dict] | None = None, estil_stickers: dict | None = None,
-               fonts: list[dict] | None = None, titol: dict | None = None, estil_titol: dict | None = None) -> Path:
+               fonts: list[dict] | None = None, titol: dict | None = None, estil_titol: dict | None = None,
+               grafics: list[dict] | None = None, paleta: dict | None = None) -> Path:
     """Dibuixa subtítols i stickers amb HyperFrames en un .mov transparent (reaprofita el darrer si no ha canviat).
 
     `stickers`: [{"fitxer": Path, "inici": s, "durada": s}].
     `fonts`: les lletres del kit que fan servir els subtítols, [{familia, pes, fitxer}] (marca.fonts_de).
-    `titol`: el títol del ganxo, {text, inici, final}, amb el seu estil (`estil_titol`)."""
+    `titol`: el títol del ganxo, {text, inici, final}, amb el seu estil (`estil_titol`).
+    `grafics`: els gràfics del pla situats al muntatge (motor/grafics.py), amb els colors de `paleta`."""
     # L'esborrany es dibuixa a mitja mida (unes 3-4 vegades més ràpid); l'export final, a 1080 o en 4K.
     escala = {"4k": "4k", "esborrany": "540"}.get(qualitat, "1080")
     fonts = fonts or []
     empremta_st = [[str(st["fitxer"]), _empremta(st["fitxer"]), st["inici"], st["durada"]] for st in stickers or []]
-    codi = _empremta(CODI_ANIMACIO)  # si canvien les animacions, cal tornar a dibuixar
+    codi = [_empremta(CODI_ANIMACIO), _empremta(CODI_GRAFICS)]  # si canvien les animacions, cal tornar a dibuixar
     empremta_fonts = [[f["familia"], f["pes"], f.get("estil", "normal"), _empremta(f["fitxer"])] for f in fonts]
     clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers, codi,
-                       empremta_fonts, titol, estil_titol if titol else None], sort_keys=True)
+                       empremta_fonts, titol, estil_titol if titol else None, grafics or [],
+                       paleta if grafics else None], sort_keys=True)
     nom = hashlib.sha1(clau.encode()).hexdigest()[:12]
     base = carpeta / "subtitols"
     sortida = base / f"subtitols_{escala}_{nom}.mov"
@@ -350,6 +362,7 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
         shutil.copy(f["fitxer"], projecte / src)
         fonts_locals.append({"familia": f["familia"], "pes": f["pes"], "estil": f.get("estil", "normal"), "src": src})
     shutil.copy(CODI_ANIMACIO, projecte / "subtitols.js")
+    shutil.copy(CODI_GRAFICS, projecte / "grafics.js")
     locals_st = []
     for k, st in enumerate(stickers or []):
         nom = f"sticker{k}{Path(st['fitxer']).suffix.lower()}"
@@ -357,7 +370,8 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
         locals_st.append({"src": nom, "inici": st["inici"], "durada": st["durada"]})
     (projecte / "index.html").write_text(composicio(linies, estil, durada, fonts_locals, locals_st, estil_stickers,
                                                     escala=0.5 if escala == "540" else 1.0,
-                                                    titol=titol, estil_titol=estil_titol), encoding="utf-8")
+                                                    titol=titol, estil_titol=estil_titol,
+                                                    grafics=grafics, paleta=paleta), encoding="utf-8")
 
     temporal = sortida.with_suffix(".tmp.mov")
     ordre = ["npx", "--yes", f"hyperframes@{VERSIO_HYPERFRAMES}", "render", str(projecte),
@@ -365,7 +379,7 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     if escala == "4k":
         ordre += ["--resolution", "portrait-4k"]
     if avis:
-        avis("Dibuixant subtítols i stickers amb HyperFrames…")
+        avis("Dibuixant subtítols, gràfics i stickers amb HyperFrames…")
     r = subprocess.run(ordre, capture_output=True, text=True)
     if r.returncode != 0 or not temporal.exists():
         raise RuntimeError("HyperFrames no ha pogut dibuixar els subtítols:\n" + (r.stderr or r.stdout)[-2000:])

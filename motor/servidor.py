@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from motor import broll, edicio, editors, exporta, marca, muntatge, so, stickers, targetes
+from motor import broll, edicio, editors, exporta, grafics, marca, muntatge, so, stickers, targetes
 from motor.projecte import EXPORTS, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -125,7 +125,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         projecte = obert["p"]
         trams = projecte.trams()
         brolls, enganxines = projecte.brolls(trams), projecte.stickers(trams)
-        linies, titol = projecte.linies_subtitols(trams), projecte.titol(trams)
+        linies, titol, situats = projecte.linies_subtitols(trams), projecte.titol(trams), projecte.grafics(trams)
         return {"estat": _estat_json(projecte.estat), "trams": trams,
                 "durada_final": round(sum(b - a for a, b in trams), 3),
                 "zooms": projecte.zooms_per_tram(trams), "zoom": exporta.ZOOM,
@@ -137,14 +137,14 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                               "url": "/stickers/" + st["fitxer"].name + f"?v={int(st['fitxer'].stat().st_mtime)}"}
                              for st in enganxines],
                 "subtitols": linies,
-                "titol": titol,
-                **info_efectes(projecte, trams, brolls, enganxines, titol, linies),
+                "titol": titol, "grafics": situats,
+                **info_efectes(projecte, trams, brolls, enganxines, titol, linies, situats),
                 "paragrafs": projecte.paragrafs()}
 
-    def info_efectes(projecte, trams, brolls, enganxines, titol, linies) -> dict:
+    def info_efectes(projecte, trams, brolls, enganxines, titol, linies, situats) -> dict:
         """Els efectes de so (per a la llista de la pestanya So) i la pista que sona a la vista prèvia."""
         try:
-            efectes = projecte.efectes(trams, brolls, enganxines, titol, linies)
+            efectes = projecte.efectes(trams, brolls, enganxines, titol, linies, situats)
             pista = projecte.pista_efectes(trams, efectes)
         except Exception:  # un so propi que no es pot llegir, per exemple: la pàgina ha de funcionar igual
             traceback.print_exc()
@@ -170,6 +170,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         return {"estil_subtitols": estil, "estil_titol": obert["p"].estil().get("titol", {}),
                 "estil_so": obert["p"].estil_so(), "sons_propis": str(so.SONS_PROPIS),
                 "estil_marca": obert["p"].estil().get("marca", {}),
+                "paleta_grafics": grafics.paleta(obert["p"].estil()),
                 "estils_titol": marca.estils_titol(), "estil_broll": broll_estil,
                 "mostra_broll": targetes.mostra(broll_estil, accent),
                 "estils_broll": [{**e, "mostra": targetes.mostra({**broll_estil, **e["valors"]}, accent)}
@@ -639,6 +640,7 @@ def _estat_de_json(cos: dict) -> dict:
         estat[clau] = {int(k): v for k, v in (estat[clau] or {}).items()}
     estat["destacades"] = {k: bool(v) for k, v in estat["destacades"].items()}
     estat["titol"] = edicio.titol_net(estat.get("titol"))
+    estat["grafics"] = grafics.neteja_llista(estat.get("grafics"))
     apagats = estat.get("sons_apagats") if isinstance(estat.get("sons_apagats"), list) else []
     estat["sons_apagats"] = sorted({c for c in apagats if isinstance(c, str) and 0 < len(c) <= 60})[:500]
     for clau in ("mantingudes", "pauses_mantingudes"):

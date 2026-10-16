@@ -16,7 +16,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import broll, edicio, instruccions, marca, neteja, so, stickers, subtitols, targetes
+from motor import broll, edicio, grafics, instruccions, marca, neteja, so, stickers, subtitols, targetes
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -162,9 +162,13 @@ class Projecte:
         return self.estil()["subtitols"]
 
     def fonts_subtitols(self) -> list[dict]:
-        """Les lletres del kit que fan servir els subtítols (i el títol) d'aquest vídeo."""
+        """Les lletres del kit que fan servir els subtítols, el títol i els gràfics d'aquest vídeo."""
         estil = self.estil()
-        return marca.fonts_de(estil["subtitols"], kit=self.kit(), titol=estil.get("titol"))
+        fonts = marca.fonts_de(estil["subtitols"], kit=self.kit(), titol=estil.get("titol"))
+        if self.estat.get("grafics"):
+            families = grafics.families(grafics.paleta(estil))
+            fonts += [f for f in marca.fonts_del_kit(self.kit()) if f["familia"] in families and f not in fonts]
+        return fonts
 
     def titol(self, trams=None) -> dict | None:
         """El títol del ganxo, a punt per dibuixar: {text, inici, final} en temps del muntatge (o None)."""
@@ -178,22 +182,42 @@ class Projecte:
         durada = titol["durada"] or float(self.estil().get("titol", {}).get("durada", 3.0))
         return {"text": titol["text"], "inici": 0.0, "final": round(min(total, durada), 3)}
 
+    def grafics(self, trams=None) -> list[dict]:
+        """Els gràfics del pla que surten al vídeo, en temps del muntatge (motor/grafics.py)."""
+        trams = trams if trams is not None else self.trams()
+        marca_kit = self.estil().get("marca") or {}
+        inicis, finals = grafics.temps_paraules(self._blocs(), lambda t: self.al_muntatge(t, trams))
+        return grafics.situa(self.estat.get("grafics") or [], inicis, finals, sum(b - a for a, b in trams),
+                             marca_kit.get("energia") or [], marca_kit.get("crida") or "",
+                             self.estil_subtitols() if self.estat.get("subtitols", True) else None)
+
+    def frases(self, trams=None) -> list[dict]:
+        """Les frases del vídeo tal com sonen ara (per fer el pla de gràfics)."""
+        trams = trams if trams is not None else self.trams()
+        return grafics.frases(self._blocs(), lambda t: self.al_muntatge(t, trams))
+
+    def _blocs(self) -> list[list[dict]]:
+        return edicio._blocs(self.paraules(), self.estat.get("ordre"))
+
     def linies_subtitols(self, trams=None) -> list[dict]:
         return subtitols.grups(self.paraules(), trams if trams is not None else self.trams(),
                                self.estil_subtitols())
 
     def capa_subtitols(self, trams, qualitat: str, avis=None) -> Path | None:
-        """Capa transparent amb els subtítols (si estan activats) i els stickers; None si no n'hi ha cap."""
+        """Capa transparent amb els subtítols (si estan activats), el títol, els gràfics i els stickers;
+        None si no n'hi ha cap."""
         linies = self.linies_subtitols(trams) if self.estat.get("subtitols", True) else []
         enganxines = self.stickers(trams)
         titol = self.titol(trams)
-        if not linies and not enganxines and not titol:
+        situats = self.grafics(trams)
+        if not linies and not enganxines and not titol and not situats:
             return None
         estil = self.estil()
         return subtitols.renderitza(linies, estil["subtitols"], sum(b - a for a, b in trams),
                                     self.carpeta, qualitat, avis, stickers=enganxines,
                                     estil_stickers=estil.get("stickers", {}), fonts=self.fonts_subtitols(),
-                                    titol=titol, estil_titol=estil.get("titol"))
+                                    titol=titol, estil_titol=estil.get("titol"),
+                                    grafics=situats, paleta=grafics.paleta(estil))
 
     # --- So --------------------------------------------------------------------
 
@@ -205,9 +229,9 @@ class Projecte:
         e = self.estil_so()
         return (e.get("soroll") or "suau") if e.get("neteja", True) else None
 
-    def efectes(self, trams, brolls=None, stickers=None, titol=False, linies=None) -> list[dict]:
+    def efectes(self, trams, brolls=None, stickers=None, titol=False, linies=None, situats=None) -> list[dict]:
         """Els efectes de so d'aquest vídeo (motor/so.py), amb «actiu» false els que s'han apagat.
-        Qui ja té calculats els b-rolls, els stickers, el títol o les línies els pot passar."""
+        Qui ja té calculats els b-rolls, els stickers, el títol, les línies o els gràfics els pot passar."""
         estil = self.estil()
         quants = estil.get("so", {}).get("efectes", "pocs")
         if quants == "cap":
@@ -220,7 +244,8 @@ class Projecte:
             linies = self.linies_subtitols(trams)
         llista = so.esdeveniments(self.brolls(trams) if brolls is None else brolls,
                                   self.stickers(trams) if stickers is None else stickers, titol,
-                                  estil.get("titol", {}).get("animacio", "puja"), linies, quants)
+                                  estil.get("titol", {}).get("animacio", "puja"), linies, quants,
+                                  self.grafics(trams) if situats is None else situats)
         apagats = set(self.estat.get("sons_apagats") or [])
         return [dict(x, actiu=x["clau"] not in apagats) for x in llista]
 
@@ -359,6 +384,15 @@ class Projecte:
                     n += 1
         return n
 
+    def al_original(self, m: float, trams) -> float | None:
+        """Temps del muntatge → temps del vídeo original (None si el muntatge no dura tant)."""
+        acum = 0.0
+        for a, b in trams:
+            if m < acum + (b - a):
+                return a + max(0.0, m - acum)
+            acum += b - a
+        return None
+
     def al_muntatge(self, t: float, trams) -> float | None:
         """Temps del vídeo original → temps del muntatge (si cau en un tall, l'inici del tros següent)."""
         acum, posicions = 0.0, []
@@ -386,8 +420,7 @@ class Projecte:
         base = self.carpeta_instruccions()
         total = sum(b - a for a, b in trams)
         # Cada paraula, amb el bloc on sona (en un reel, cada tros triat de la gravació és un bloc).
-        blocs = edicio._blocs(self.paraules(), self.estat.get("ordre"))
-        bloc_de = {p["id"]: bloc for bloc in blocs for p in bloc}
+        bloc_de = {p["id"]: bloc for bloc in self._blocs() for p in bloc}
         resultat = []
         for ins in self.instruccions():
             if ins.get("tipus") != tipus or ins.get("estat") != "acceptada" or not ins.get("fitxer"):

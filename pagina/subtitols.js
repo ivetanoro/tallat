@@ -172,6 +172,17 @@
     }
   }
 
+  // Els moments en què no es veuen els subtítols, ordenats i sense trepitjar-se: [[a, b], …].
+  function franges(llista) {
+    const sortida = [];
+    const parells = (Array.isArray(llista) ? llista : []).filter((x) => Array.isArray(x) && x[1] > x[0]);
+    for (const [a, b] of parells.map(([a, b]) => [Number(a), Number(b)]).sort((x, y) => x[0] - y[0])) {
+      const darrer = sortida[sortida.length - 1];
+      if (darrer && a <= darrer[1]) darrer[1] = Math.max(darrer[1], b); else sortida.push([a, b]);
+    }
+    return sortida;
+  }
+
   // Un número entre 0 i 1 que sembla a l'atzar però que sempre és el mateix per a cada n.
   function atzar(n) {
     const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
@@ -323,13 +334,13 @@
       return { el, files, seq, inici: b.linies[0].inici, final: b.linies[b.linies.length - 1].final };
     });
 
-    const amaga = Array.isArray(op.amaga) ? op.amaga : null;  // [inici, final]: el títol hi és, ells no
+    const amaga = franges(op.amaga);  // [[inici, final], …]: hi ha el títol o una frase clau, i ells no
     if (!gsap) return senseAnimacions(construides, estil, destacat, apilat, arrel, amaga);
 
     const tl = op.tl || gsap.timeline({ paused: true });
-    if (amaga) {
-      tl.set(arrel, { opacity: 0 }, amaga[0]);
-      tl.set(arrel, { opacity: 1 }, amaga[1]);
+    for (const [a, b] of amaga) {
+      tl.set(arrel, { opacity: 0 }, a);
+      tl.set(arrel, { opacity: 1 }, b);
     }
     let n = 0;  // línia de tot el vídeo (per alternar d'on entren)
     for (const b of construides) {
@@ -379,7 +390,7 @@
   function senseAnimacions(construides, estil, destacat, apilat, arrel, amaga) {
     return {
       seek(t) {
-        if (amaga) arrel.style.opacity = t >= amaga[0] && t < amaga[1] ? 0 : 1;
+        arrel.style.opacity = amaga.some(([a, b]) => t >= a && t < b) ? 0 : 1;
         for (const b of construides) {
           const visible = t >= b.inici && t < b.final;
           b.el.style.visibility = visible ? "visible" : "hidden";
@@ -589,5 +600,5 @@
     return tl;
   }
 
-  global.TallatSubtitols = { construeix, titol, llegeixTitol, AMPLADA };
+  global.TallatSubtitols = { construeix, titol, llegeixTitol, AMPLADA, rgba, familiaDe };
 })(typeof window !== "undefined" ? window : globalThis);

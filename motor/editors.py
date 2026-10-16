@@ -4,7 +4,7 @@ Escriu una carpeta a exports/ amb:
   NOM.fcpxml      Final Cut Pro (10.6 o més nou) i DaVinci Resolve (18 o més nou)
   NOM.xml         Premiere Pro (format XML de Final Cut 7, que Premiere importa)
   NOM.srt         els subtítols, en temps del muntatge
-  subtitols.mov   (opcional) els subtítols animats de tallat, amb el fons transparent
+  subtitols.mov   (opcional) els subtítols, el títol i els gràfics de tallat, amb el fons transparent
   LLEGEIX-ME.txt  com obrir-ho a cada editor, i a CapCut (que no importa projectes)
 
 Per a CapCut o iMovie, que no importen projectes d'altres editors, `exporta_trossos()` treu cada
@@ -395,14 +395,15 @@ CapCut
   Final… → «Trossos per a CapCut o iMovie»: tindràs cada tros com un clip a part, en ordre.
 {capa}
 Els subtítols animats de tallat (estil, colors, animacions) no passen a cap editor amb el
-.srt: només el text i els temps.
+.srt: només el text i els temps. El títol del ganxo i els gràfics del pla només hi van amb
+la capa animada (a la pàgina, «Inclou-hi els subtítols i els gràfics de tallat»).
 """
 
 AMB_CAPA = """
-Subtítols animats («subtitols.mov»)
-  Són els subtítols de tallat tal com surten al vídeo final, amb el fons transparent. Ja
-  són a la pista de dalt de tot del projecte. Si no els vols, esborra aquesta pista; si
-  fas servir el .srt, no posis tots dos alhora.
+Subtítols i gràfics animats («subtitols.mov»)
+  Són els subtítols, el títol del ganxo i els gràfics de tallat tal com surten al vídeo
+  final, amb el fons transparent. Ja són a la pista de dalt de tot del projecte. Si no els
+  vols, esborra aquesta pista; si fas servir el .srt, no posis tots dos alhora.
 """
 
 

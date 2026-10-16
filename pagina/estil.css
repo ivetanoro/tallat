@@ -188,11 +188,13 @@ kbd {
 
 .tornar { display: block; margin: 0 0 var(--e3); }
 
-/* Tres pestanyes: Edita (què queda), Estil (com es veu) i Revisa (notes, versions i el teu gust). */
-.pestanyes { margin-top: var(--e5); }
-.pestanyes [role="tab"] { position: relative; }
+/* Cinc pestanyes per tasques: Edita, Subtítols, Gràfics, So i Vídeos. Han de cabre a la columna més
+   estreta: cada una fa l'amplada del seu nom, i el punt («hi ha coses per decidir») no n'ocupa. */
+.pestanyes { margin-top: var(--e5); overflow-x: auto; scrollbar-width: none; }  /* si la columna és molt estreta, llisquen */
+.pestanyes::-webkit-scrollbar { display: none; }
+.pestanyes [role="tab"] { position: relative; flex: 1 0 auto; padding: 0 3px; font-size: var(--t-petit); }
 .pestanyes [role="tab"][aria-selected="true"] { background: var(--superficie); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
-.pestanyes .punt { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--auto); vertical-align: middle; }
+.pestanyes .punt { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--auto); }
 .pestanyes .compte-pestanya { margin-left: 4px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .pestanyes .compte-pestanya:empty { display: none; }
 .pestanya > .seccio:first-child { margin-top: var(--e5); }
@@ -820,3 +822,47 @@ input.camp-text { min-height: 0; }
 #panell-marca select, #e-clau-font, #t-clau-font { width: 100%; }
 /* El resum de la marca, a la fila: com a molt dues línies. */
 #nom-marca { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* --- El pla de gràfics --------------------------------------------------------- */
+
+#pla-grafics, #grafics-trets { display: flex; flex-direction: column; margin-top: var(--e2); }
+.grafic { display: flex; gap: var(--e3); padding: var(--e3) 0; border-top: 0.5px solid var(--linia); }
+.grafic:first-child { border-top: 0; }
+.mini-grafic {
+  flex: none; position: relative; width: 54px; height: 96px; padding: 0; border: 0; border-radius: var(--radi);
+  overflow: hidden; cursor: pointer; background: linear-gradient(170deg, #5a5a5e, #2c2c2e);
+  transition: transform 100ms ease-out, box-shadow 120ms;
+}
+.mini-grafic:hover:not(:disabled) { box-shadow: 0 0 0 2px var(--accent); }
+.mini-grafic:active:not(:disabled) { transform: scale(0.96); }
+.mini-grafic:disabled { cursor: default; }
+.mg-host { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
+.grafic-cos { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--e1); }
+.grafic-cap { display: flex; align-items: baseline; gap: var(--e2); font-size: var(--t-ui); }
+.grafic-cap strong { font-weight: 600; }
+.grafic-cap .temps-petit { color: var(--text-2); font-size: var(--t-petit); font-variant-numeric: tabular-nums; }
+.grafic-estat { margin-left: auto; font-size: var(--t-peu); font-weight: 600; }
+.grafic.mantingut .grafic-estat { color: var(--accent); }
+.grafic.canvia .grafic-estat { color: var(--proposta); }
+.grafic-text {
+  margin: 0; font-size: var(--t-petit); color: var(--text); cursor: pointer;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.grafic-nota { margin: 0; font-size: var(--t-petit); color: var(--proposta); }
+.grafic-motiu { margin: 0; font-size: var(--t-peu); color: var(--text-2); }
+.grafic .decisio { margin-top: var(--e1); }
+.segmentat button[aria-pressed="true"] {
+  background: var(--superficie); color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+}
+.decisio button[data-estat="mantingut"][aria-pressed="true"] { color: var(--accent); }
+.decisio button[data-estat="canvia"][aria-pressed="true"] { color: var(--proposta); }
+.grafic .torna { align-self: flex-start; margin: var(--e1) 0 0; font-size: var(--t-petit); }
+.grafic.fora .mini-grafic, .grafic.fora .grafic-text, .grafic.tret .mini-grafic, .grafic.tret .grafic-text { opacity: 0.5; }
+.nota-grafic { display: flex; flex-direction: column; gap: var(--e2); margin-top: var(--e1); }
+.nota-grafic[hidden] { display: none; }
+.nota-accions { display: flex; align-items: center; gap: var(--e3); }
+.nota-accions .enllac { margin: 0; }
+#grup-trets { margin-top: var(--e3); }
+#grup-trets[hidden] { display: none; }
+#tg-host { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
