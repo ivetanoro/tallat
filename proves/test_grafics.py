@@ -302,6 +302,18 @@ class TestAlProjecte(unittest.TestCase):
             tallat.ordre_grafics(argparse.Namespace(accio="canvia", **args))
         self.assertIn("paraula", str(e.exception))
 
+    def test_un_sticker_amb_imatge_surt_encara_que_estigui_pendent(self):
+        # Del feedback: s'havien pujat les imatges, s'havia tocat el ✓ (que desmarca) i no van sortir al vídeo.
+        (self.carpeta / "stickers").mkdir()
+        for k in range(3):
+            (self.carpeta / "stickers" / f"s{k}.png").write_bytes(b"png")
+        (self.carpeta / "instruccions.json").write_text(json.dumps([
+            {"id": f"s{k}", "tipus": "sticker", "text": "sticker", "paraules": None, "inici": k, "final": k,
+             "ancora": k + 1, "estat": estat, "manual": True, "fitxer": f"stickers/s{k}.png"}
+            for k, estat in enumerate(("acceptada", "pendent", "descartada"))]), encoding="utf-8")
+        p = Projecte(self.carpeta)
+        self.assertEqual([x["id"] for x in p.stickers(p.trams())], ["s0", "s1"])  # el descartat, no
+
     def test_un_pla_mal_escrit_no_trenca_res(self):
         (self.carpeta / "edicio.json").write_text(json.dumps({"grafics": [{"tipus": "frase", "paraula": 1},
                                                                           {"tipus": "llista"}, g(paraula=3)]}),

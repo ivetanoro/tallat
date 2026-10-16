@@ -57,7 +57,7 @@ class Feina:
             if self.estat and self.estat["estat"] == "treballant":
                 return False
             self.estat = {"estat": "treballant", "qualitat": qualitat, "fase": "video", "progres": 0,
-                          "fitxer": None, "error": None}
+                          "fitxer": None, "copia": None, "error": None}
         threading.Thread(target=self._fes, args=(projecte, qualitat, capa, trossos), daemon=True).start()
         return True
 
@@ -74,7 +74,8 @@ class Feina:
                 else:
                     self._actualitza(fase="subtitols" if capa else "editors")
                     carpeta = editors.exporta_editors(projecte, amb_capa=capa)
-                self._actualitza(estat="fet", progres=100, fitxer=carpeta.name)
+                copia = exporta.copia_a_carpeta(carpeta)
+                self._actualitza(estat="fet", progres=100, fitxer=carpeta.name, copia=copia.name if copia else None)
                 return
             sortida = projecte.sortida(qualitat)
             trams = projecte.trams()
@@ -86,7 +87,8 @@ class Feina:
                             zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
                             **projecte.opcions_so(trams))
             projecte.desa_talls(sortida, trams)
-            self._actualitza(estat="fet", progres=100, fitxer=sortida.name)
+            copia = exporta.copia_a_carpeta(sortida) if qualitat != "esborrany" else None
+            self._actualitza(estat="fet", progres=100, fitxer=sortida.name, copia=copia.name if copia else None)
         except Exception as e:  # el missatge arriba a la pàgina
             traceback.print_exc()
             self._actualitza(estat="error", error=str(e))
@@ -152,6 +154,13 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             return {"efectes": [], "pista_efectes": None}
         return {"efectes": [{k: e[k] for k in ("clau", "nom", "so", "t", "actiu")} for e in efectes],
                 "pista_efectes": f"/so/{pista.name}" if pista else None}
+
+    def info_carpeta(projecte) -> dict:
+        """On es desen els vídeos exportats: la carpeta de la persona, si n'ha triat una (també hi
+        van, a més de la del projecte)."""
+        propia = exporta.carpeta_exports()
+        carpeta = propia or projecte.carpeta / EXPORTS
+        return {"carpeta_exports": str(carpeta).replace(str(Path.home()), "~", 1), "carpeta_propia": bool(propia)}
 
     def versio_estil(projecte) -> str:
         """Canvia quan canvia el kit del vídeo o el seu fitxer (o les seves lletres)."""
@@ -322,13 +331,13 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         "font": projecte.dades.get("font"), "origen": info,
                         "paraules": projecte.dades["paraules"],
                         "paragrafs": projecte.paragrafs(),
-                        "exports": projecte.exports(), "feina": feina.info(),
+                        "exports": projecte.exports(), "feina": feina.info(), **info_carpeta(projecte),
                         "estil_stickers": projecte.estil().get("stickers", {}),
                         **info_marca(),
                         **info_reels(),
                         **instantania()})
             if ruta == "/api/feina":
-                return self._json({"feina": feina.info(), "exports": projecte.exports()})
+                return self._json({"feina": feina.info(), "exports": projecte.exports(), **info_carpeta(projecte)})
             if ruta == "/api/novetats":  # la pàgina hi pregunta sovint: hi ha canvis fets des del xat?
                 with bloqueig:
                     projecte.al_dia()
@@ -357,6 +366,23 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return
             self.send_error(HTTPStatus.NOT_FOUND)
 
+        def _carpeta_exports(self, projecte):
+            """Tria la carpeta dels vídeos amb el diàleg del Mac, o torna a la del projecte."""
+            try:
+                cos = self._cos()
+            except (ValueError, json.JSONDecodeError):
+                return self._json({"error": "Petició no vàlida"}, HTTPStatus.BAD_REQUEST)
+            if cos.get("accio") == "projecte":
+                exporta.tria_carpeta_exports(None)
+            else:
+                r = subprocess.run(["osascript", "-e", 'POSIX path of (choose folder with prompt '
+                                    '"On vols desar els vídeos que exportis amb tallat?")'],
+                                   capture_output=True, text=True)
+                if r.returncode != 0 or not r.stdout.strip():  # ha cancel·lat
+                    return self._json({"cancel·lat": True, **info_carpeta(projecte)})
+                exporta.tria_carpeta_exports(Path(r.stdout.strip()))
+            return self._json(info_carpeta(projecte))
+
         def do_POST(self):
             ruta = urlparse(self.path).path
             fitxer = ruta in RUTES_DE_FITXER
@@ -369,6 +395,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return
             if ruta == "/api/broll/puja":
                 return self._puja_broll(projecte)
+            if ruta == "/api/exports/carpeta":
+                return self._carpeta_exports(projecte)
             if ruta == "/api/marca/font":
                 return self._puja_font()
             if ruta == "/api/kit/importa":
@@ -514,8 +542,11 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         return self._json({"error": "Ja hi ha un render en marxa"}, HTTPStatus.CONFLICT)
                     return self._json({"feina": feina.info()})
                 if ruta == "/api/mostra":  # obre el Finder amb el fitxer seleccionat
-                    path = (projecte.carpeta / EXPORTS / cos.get("nom", "")).resolve()
-                    if path.parent != (projecte.carpeta / EXPORTS).resolve() or not path.exists():
+                    # el de la carpeta de la persona (copia) o el del projecte
+                    carpeta = exporta.carpeta_exports() if cos.get("copia") else None
+                    carpeta = (carpeta or projecte.carpeta / EXPORTS).resolve()
+                    path = (carpeta / str(cos.get("copia") or cos.get("nom", ""))).resolve()
+                    if path.parent != carpeta or not path.exists():
                         return self._json({"error": "No trobo aquest fitxer"}, HTTPStatus.NOT_FOUND)
                     subprocess.run(["open", "-R", str(path)], check=False)
                     return self._json({"ok": True})

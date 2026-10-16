@@ -162,7 +162,7 @@ def ordre_revisa(args) -> None:
         sys.exit("No trobo cap port lliure per obrir la pàgina.")
 
     adreca = f"http://127.0.0.1:{servidor.server_port}/"
-    print(f"Pàgina de revisió de «{projecte.nom}»: {adreca}")
+    print(f"Pàgina de revisió de «{projecte.nom}»: {adreca}", flush=True)  # també si no és un terminal
     print("Deixa aquesta finestra oberta mentre revises. Per tancar: Control + C.")
     if not args.sense_navegador:
         subprocess.run(["open", adreca], check=False)
@@ -272,7 +272,8 @@ def ordre_exporta(args) -> None:
                     zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
                     **projecte.opcions_so(trams))
     projecte.desa_talls(sortida, trams)
-    print(f"\nFet en {minuts(time.time() - t0)}:\n  {sortida}")
+    copia = exporta.copia_a_carpeta(sortida) if args.qualitat != "esborrany" else None
+    print(f"\nFet en {minuts(time.time() - t0)}:\n  {copia or sortida}")
 
 
 def ordre_comprova(args) -> None:

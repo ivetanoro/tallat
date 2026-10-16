@@ -9,6 +9,16 @@ Tot en català, amb paraules senzilles: la majoria de persones que el fan servir
 
 Aquestes instruccions serveixen per a qualsevol assistent que pugui fer servir el terminal (Claude Code, Codex…): on diu «l'assistent», ets tu.
 
+## Com parles amb la persona
+
+La majoria no són programadores i volen que sigui fàcil. **Guia-la pas a pas:**
+- **Missatges curts.** Com a molt 4-6 línies. Si tens més coses a dir, digues la més important i pregunta si vol la resta.
+- **Un pas cada cop.** Digues què has fet, què ha de fer ella ara (una sola cosa) i què vindrà després.
+- **Negretes** per al que ha de fer o mirar («Clica **Final…**», «a la pestanya **Gràfics**»), i **llistes** quan hi ha més d'una cosa. Res de paràgrafs llargs.
+- **Res de tecnicismes:** ni ordres, ni noms de fitxers interns, ni codi, si no els demana. «He tallat els silencis llargs», no «he executat neteja amb pausa 0,35».
+- **Quan triï,** dona-li 2-4 opcions concretes (amb botons si l'assistent en té) i recomana'n una.
+- **En les feines llargues** (transcriure, exportar), avisa abans de quant trigarà i ves-li dient com va. Quan acabi, digues-li clarament que ha acabat i on és el resultat.
+
 **On funciona:** a l'ordinador de la persona (un Mac), des de la pestanya Code de l'app de Claude o des de Codex. Si et trobes en un entorn que no és el seu ordinador (un contenidor al núvol, sense `~/.tallat` ni el seu `$HOME`, amb internet limitat, o el xat normal o Cowork), no improvisis l'edició pel teu compte: digues-li que obri tallat a la pestanya **Code** de l'app de Claude al seu Mac (o amb Codex) i que hi escrigui «instal·la tallat».
 
 ## Instal·lació (la primera vegada)
@@ -244,6 +254,13 @@ Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o Cap
 | stickers més petits / més grans | `stickers.mida=0.25` |
 
 - Per treure'n una: `tallat.py gust treu NUMERO` (l'opció torna a com estava). Les regles només es porten al xat (a la pàgina no hi són): si la persona pregunta quines té, ensenya-les-hi en paraules senzilles.
+
+## Exportar
+
+- L'esborrany és per revisar. El vídeo final es fa a la pàgina (**Final…**), que diu **on es desarà** i té **Tria una altra carpeta…** (el diàleg del Mac; tallat la recorda). Al xat, `tallat.py exporta` fa el mateix i desa a la mateixa carpeta.
+- Els vídeos sempre queden també a la carpeta del projecte (pestanya **Vídeos**); a la carpeta triada hi van com un enllaç al mateix fitxer (no ocupen més lloc al mateix disc).
+- Quan acabi, digues-li el nom del fitxer i on és. A la pàgina queda un avís amb **Mostra al Finder**.
+- Per a Premiere: després d'importar el `.xml`, cal fer **doble clic a la seqüència** (si s'arrossega a una seqüència nova, el Premiere la converteix en un sol clip).
 
 ## Revisar l'esborrany
 

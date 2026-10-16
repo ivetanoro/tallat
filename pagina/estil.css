@@ -867,3 +867,19 @@ input.camp-text { min-height: 0; }
 #grup-trets[hidden] { display: none; }
 #tg-host { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .interruptor:disabled { opacity: 0.45; cursor: default; }
+
+/* --- On es desa l'export, i l'avís de «fet» ------------------------------------ */
+
+.carpeta-final { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--e1) var(--e2); margin: var(--e3) 0 var(--e1); font-size: var(--t-petit); }
+.carpeta-final code { min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+.accions-carpeta { display: flex; gap: var(--e3); }
+.accions-carpeta .enllac { margin: 0; font-size: var(--t-petit); }
+.fet-export {
+  display: flex; align-items: center; gap: var(--e2); min-width: 0; padding: 0 var(--e1) 0 var(--e3);
+  height: 28px; border-radius: var(--radi); background: var(--accent-suau); font-size: var(--t-petit); color: var(--text);
+}
+.fet-export[hidden] { display: none; }
+.fet-export #fet-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fet-export .fet-marca { color: var(--accent); font-weight: 700; }
+.fet-export .enllac { margin: 0; font-size: var(--t-petit); white-space: nowrap; }
+.fet-export .icona { width: 22px; height: 22px; }

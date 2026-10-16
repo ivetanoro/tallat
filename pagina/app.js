@@ -2091,14 +2091,15 @@ async function consultaFeina() {
     if (feina?.estat === "fet" && feina.fitxer && feina.fitxer !== consultaFeina.darrer) {
       consultaFeina.darrer = feina.fitxer;
       pintaVersions(r.exports);
+      pintaCarpeta(r);
       if (feina.qualitat === "editors") {
-        avis("A punt. T'obro la carpeta: hi ha un LLEGEIX-ME amb els passos.", 6000);
-        api("/api/mostra", { nom: feina.fitxer }).catch(() => {});
+        mostraFet(feina, "Projecte per a altres editors a punt (hi ha un LLEGEIX-ME amb els passos)");
+        mostraAlFinder(feina);
       } else if (feina.qualitat === "esborrany") {
         avis("L'esborrany és a punt. Mira'l i digues a Claude què vols canviar (amb el segon, que veus sota el vídeo).", 6000);
         carregaVersio(feina.fitxer);
       } else {
-        avis(`Versió final en ${QUALITATS[feina.qualitat]} a punt.`);
+        mostraFet(feina, `Vídeo en ${QUALITATS[feina.qualitat]} a punt`);
       }
     } else if (feina?.estat === "error") {
       avis("El render ha fallat: " + feina.error, 6000);
@@ -2107,6 +2108,32 @@ async function consultaFeina() {
     avis("He perdut el contacte amb tallat. Torna a obrir la pàgina de revisió.", 6000);
     seguimentFeina(null);
   }
+}
+
+// Quan s'acaba un export, l'avís es queda (fins que es tanca): què s'ha fet, on és i un botó per veure'l.
+let darrerFet = null;
+function mostraFet(feina, text) {
+  darrerFet = feina;
+  $("#fet-text").textContent = `${text}: ${feina.copia || feina.fitxer}`;
+  $("#fet-export").hidden = false;
+}
+
+function mostraAlFinder(feina) {
+  return api("/api/mostra", feina.copia ? { copia: feina.copia } : { nom: feina.fitxer }).catch((e) => avis(e.message));
+}
+
+function pintaCarpeta(r) {
+  if (!r?.carpeta_exports) return;
+  $("#final-carpeta").textContent = r.carpeta_exports;
+  $("#carpeta-projecte").hidden = !r.carpeta_propia;
+  $("#final-carpeta").title = r.carpeta_propia ? "I també a la carpeta del projecte (pestanya Vídeos)" : "";
+}
+
+async function triaCarpeta(accio) {
+  try {
+    const r = await api("/api/exports/carpeta", { accio });
+    pintaCarpeta(r);
+  } catch (e) { avis(e.message); }
 }
 
 async function comencaRender(qualitat) {
@@ -2121,6 +2148,7 @@ async function comencaRender(qualitat) {
 
 function obreFinal() {
   const o = P.origen || {};
+  $("#fet-export").hidden = true;
   $("#final-durada").textContent = `Durada: ${fmt(duradaFinal)} · ${trams.length} trossos`;
   const avisFinal = $("#final-avis");
   if (o.amplada && o.amplada * 16 > o.alcada * 9) {
@@ -2595,7 +2623,8 @@ async function accioBroll(ruta, dades, missatge) {
 }
 
 function accionsBroll(ins, item) {
-  if (!["broll", "sticker"].includes(ins.tipus) || ins.estat !== "acceptada") return null;
+  // Amb fitxer, surt al vídeo encara que estigui pendent (motor/projecte.py, _recursos): que es vegi.
+  if (!["broll", "sticker"].includes(ins.tipus) || !(ins.estat === "acceptada" || (ins.fitxer && ins.estat !== "descartada"))) return null;
   const nom = ins.tipus === "sticker" ? "Sticker" : "B-roll";
   const llista = biblioteca[ins.tipus] || [];
   const fila = document.createElement("span");
@@ -2790,6 +2819,10 @@ function instalaControls() {
   $("#esborrany").addEventListener("click", () => comencaRender("esborrany"));
   $("#final").addEventListener("click", obreFinal);
   $("#cancella-final").addEventListener("click", tancaFinal);
+  $("#canvia-carpeta").addEventListener("click", () => triaCarpeta("tria"));
+  $("#carpeta-projecte").addEventListener("click", () => triaCarpeta("projecte"));
+  $("#fet-mostra").addEventListener("click", () => darrerFet && mostraAlFinder(darrerFet));
+  $("#fet-tanca").addEventListener("click", () => { $("#fet-export").hidden = true; });
   $("#velo").addEventListener("click", tancaFinal);
   const perAEditors = async (dades) => {
     tancaFinal();
@@ -2875,6 +2908,7 @@ async function inicia() {
   aplicaEstilSubtitols(P.estil_subtitols);
   pintaPanellEstil();
   pintaVersions(P.exports || []);
+  pintaCarpeta(P);
   pintaReels();
   try { biblioteca = await api("/api/biblioteca"); } catch { biblioteca = { broll: [], sticker: [] }; }
   pintaInstruccions();

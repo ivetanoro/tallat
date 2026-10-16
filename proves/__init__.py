@@ -5,9 +5,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from motor import marca
+from motor import exporta, marca
 
 _CASA = Path(tempfile.mkdtemp(prefix="tallat-proves-"))
 marca.KITS = _CASA / "kits"
 marca.USUARI = _CASA / "brand.json"
+exporta.PREFERENCIES = _CASA / "preferencies.json"
 atexit.register(shutil.rmtree, _CASA, True)

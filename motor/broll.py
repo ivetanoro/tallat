@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from motor.exporta import info_video
+from motor.exporta import info_video, treu_rotacio
 
 AMPLADA, ALCADA, FPS = 1080, 1920, 30
 BIBLIOTECA = Path.home() / ".tallat" / "broll"
@@ -73,6 +73,7 @@ def prepara(origen: Path, desti: Path, durada: float = 1.5, lut: str | None = No
         ordre = ["ffmpeg", "-v", "error", "-y", "-ss", f"{inici:.2f}", "-i", str(origen),
                  "-t", f"{durada:.3f}", "-map", "0:v:0", "-vf", _cobreix() + _lut(lut), *comu]
     subprocess.run(ordre, check=True, capture_output=True)
+    treu_rotacio(temporal)  # un clip de l'iPhone: que no surti de costat
     temporal.replace(desti)
     return desti
 

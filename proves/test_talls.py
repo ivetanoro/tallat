@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 import sys
@@ -143,3 +144,59 @@ class TestTempsExactes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+class TestVideosDeLiPhone(unittest.TestCase):
+    """L'iPhone desa el vertical com a horitzontal amb l'etiqueta «gira'l 90°». Amb l'ffmpeg 7.1, el
+    vídeo exportat sortia dret però amb l'etiqueta, i els reproductors el tornaven a girar."""
+
+    def rotacio(self, video):
+        s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
+                                       "-of", "json", str(video)], capture_output=True, text=True).stdout)
+        return exporta._rotacio(s["streams"][0])
+
+    def test_l_export_no_porta_l_etiqueta_de_girar(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=30:d=3",
+                            "-f", "lavfi", "-i", "sine=d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                            "-shortest", str(d / "pla.mp4")], check=True)
+            subprocess.run(["ffmpeg", "-v", "error", "-display_rotation:v:0", "-90", "-i", str(d / "pla.mp4"),
+                            "-c", "copy", str(d / "iphone.mov")], check=True)
+            self.assertEqual(self.rotacio(d / "iphone.mov"), -90)
+            self.assertEqual(exporta.info_video(d / "iphone.mov")["alcada"], 320)  # es veu vertical
+            sortida = exporta.exporta(d / "iphone.mov", [(0.2, 1.0), (1.5, 2.5)], d / "s.mp4", "esborrany")
+            self.assertEqual(self.rotacio(sortida), 0)
+            # i el que la treu, sense tornar a codificar res
+            exporta.treu_rotacio(d / "iphone.mov")
+            self.assertEqual(self.rotacio(d / "iphone.mov"), 0)
+
+
+class TestCarpetaDelsVideos(unittest.TestCase):
+    """La persona pot triar on van els vídeos exportats (a més de la carpeta del projecte)."""
+
+    def test_sense_carpeta_triada_no_es_copia_res(self):
+        exporta.tria_carpeta_exports(None)
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "v.mp4").write_bytes(b"video")
+            self.assertIsNone(exporta.copia_a_carpeta(Path(d) / "v.mp4"))
+
+    def test_hi_va_un_enllac_i_no_trepitja_res(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as meva:
+            exporta.tria_carpeta_exports(Path(meva))
+            try:
+                self.assertEqual(exporta.carpeta_exports(), Path(meva).resolve())
+                video = Path(d) / "v.mp4"
+                video.write_bytes(b"video")
+                (Path(meva) / "v.mp4").write_bytes(b"un altre")  # ja n'hi ha un amb aquest nom
+                copia = exporta.copia_a_carpeta(video)
+                self.assertEqual((copia.name, copia.read_bytes()), ("v-2.mp4", b"video"))
+                self.assertEqual(copia.stat().st_ino, video.stat().st_ino)  # el mateix fitxer: no ocupa més
+                carpeta = Path(d) / "projecte_editors"
+                carpeta.mkdir()
+                (carpeta / "LLEGEIX-ME.txt").write_text("hola")
+                self.assertEqual((exporta.copia_a_carpeta(carpeta) / "LLEGEIX-ME.txt").read_text(), "hola")
+            finally:
+                exporta.tria_carpeta_exports(None)
+        self.assertIsNone(exporta.carpeta_exports())  # si la carpeta ja no hi és, la del projecte

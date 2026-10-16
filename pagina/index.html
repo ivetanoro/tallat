@@ -639,6 +639,14 @@
         <span id="feina-text">Construint…</span>
         <span class="barra-progres"><span id="feina-progres"></span></span>
       </div>
+      <div class="fet-export" id="fet-export" role="status" hidden>
+        <span class="fet-marca" aria-hidden="true">✓</span>
+        <span id="fet-text"></span>
+        <button class="enllac" id="fet-mostra">Mostra al Finder</button>
+        <button class="icona" id="fet-tanca" title="Tanca" aria-label="Tanca">
+          <svg viewBox="0 0 20 20"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg>
+        </button>
+      </div>
       <button class="boto" id="esborrany" title="Construeix una versió ràpida per revisar-la i deixar-hi notes">Esborrany</button>
       <button class="boto principal" id="final">Final…</button>
       <button class="icona" id="commuta-reproductor" title="Amaga el vídeo (⌥⌘V)" aria-label="Columna del vídeo" aria-pressed="true">
@@ -702,6 +710,14 @@
     <label class="opcio"><input type="radio" name="qualitat" value="4k" checked> <span><strong>4K</strong> · 2160 × 3840</span></label>
     <label class="opcio"><input type="radio" name="qualitat" value="1080"> <span><strong>1080</strong> · 1080 × 1920</span></label>
     <p class="avis" id="final-avis" hidden></p>
+    <div class="carpeta-final">
+      <span class="etiqueta">Es desarà a</span>
+      <code id="final-carpeta"></code>
+      <span class="accions-carpeta">
+        <button class="enllac" id="canvia-carpeta">Tria una altra carpeta…</button>
+        <button class="enllac" id="carpeta-projecte" hidden>Només a la del projecte</button>
+      </span>
+    </div>
     <div class="botons">
       <button class="boto" id="cancella-final">Cancel·la</button>
       <button class="boto principal" id="confirma-final">Exporta</button>

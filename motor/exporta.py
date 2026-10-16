@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import collections
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -18,6 +19,7 @@ QUALITATS = {
     "1080": (1080, 1920, "16M"),
     "4k": (2160, 3840, "45M"),
 }
+PREFERENCIES = Path.home() / ".tallat" / "preferencies.json"  # la carpeta on la persona vol els vídeos
 FOS_AUDIO = 0.01  # segons de fos a cada tall, perquè no se sentin clics
 ZOOM = 1.15       # apropament dels trossos amb zoom (instrucció de veu «Claude, zoom aquí»)
 
@@ -31,13 +33,86 @@ def info_video(video: Path) -> dict:
     d = json.loads(sortida)
     s = d["streams"][0]
     amplada, alcada = s["width"], s["height"]
-    # Les versions noves de ffprobe la donen a side_data_list; les antigues, a tags.rotate.
-    rotacio = next((int(float(x["rotation"])) for x in s.get("side_data_list", []) if "rotation" in x),
-                   int(float(s.get("tags", {}).get("rotate", 0) or 0)))
-    if abs(rotacio) % 180 == 90:  # l'iPhone desa el vertical com a horitzontal + «gira'l 90°»
+    if abs(_rotacio(s)) % 180 == 90:  # l'iPhone desa el vertical com a horitzontal + «gira'l 90°»
         amplada, alcada = alcada, amplada
     return {"amplada": amplada, "alcada": alcada,
             "fps": str(Fraction(s["r_frame_rate"])), "durada": float(d["format"]["duration"])}
+
+
+def _rotacio(stream: dict) -> int:
+    """L'etiqueta «gira'l» d'un vídeo, en graus. Les versions noves de ffprobe la donen a
+    side_data_list; les antigues, a tags.rotate."""
+    return next((int(float(x["rotation"])) for x in stream.get("side_data_list", []) if "rotation" in x),
+                int(float(stream.get("tags", {}).get("rotate", 0) or 0)))
+
+
+def treu_rotacio(fitxer: Path) -> None:
+    """Els fotogrames que fa tallat ja surten drets, però l'ffmpeg 7.1 hi copia l'etiqueta «gira'l 90°»
+    del vídeo de l'iPhone, i els reproductors el tornaven a girar (el vídeo sortia de costat). Si hi
+    és, es treu, sense tornar a codificar res."""
+    fitxer = Path(fitxer)
+    s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams", "-of", "json",
+                                   str(fitxer)], capture_output=True, text=True, check=True).stdout)["streams"]
+    if not s or _rotacio(s[0]) == 0:
+        return
+    temporal = fitxer.with_name(f".{fitxer.stem}.dret{fitxer.suffix}")
+    try:
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-display_rotation:v:0", "0", "-i", str(fitxer),
+                        "-map", "0", "-c", "copy", "-movflags", "+faststart", str(temporal)],
+                       check=True, capture_output=True)
+        temporal.replace(fitxer)
+    finally:
+        temporal.unlink(missing_ok=True)
+
+
+# --- On es desen els vídeos -----------------------------------------------------------------------
+# Cada export es fa a la carpeta del projecte (exports/), on el troba la pestanya Vídeos. Si la
+# persona ha triat una carpeta seva, també hi va: com un enllaç al mateix fitxer (no ocupa més lloc
+# si és al mateix disc) o, si és en un altre disc, com una còpia.
+
+def _preferencies() -> dict:
+    try:
+        dades = json.loads(PREFERENCIES.read_text(encoding="utf-8"))
+        return dades if isinstance(dades, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def carpeta_exports() -> Path | None:
+    """La carpeta que ha triat la persona per als vídeos exportats (None: només la del projecte)."""
+    carpeta = _preferencies().get("carpeta_exports")
+    return Path(carpeta) if isinstance(carpeta, str) and Path(carpeta).is_dir() else None
+
+
+def tria_carpeta_exports(carpeta: Path | None) -> None:
+    dades = _preferencies()
+    dades["carpeta_exports"] = str(Path(carpeta).expanduser().resolve()) if carpeta else None
+    PREFERENCIES.parent.mkdir(parents=True, exist_ok=True)
+    PREFERENCIES.write_text(json.dumps(dades, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+
+
+def _enllaca(origen, desti) -> None:
+    try:
+        os.link(origen, desti)
+    except OSError:  # un altre disc (o un sistema que no en fa): una còpia
+        shutil.copy2(origen, desti)
+
+
+def copia_a_carpeta(fitxer: Path) -> Path | None:
+    """Posa un export (un vídeo o una carpeta) a la carpeta de la persona, si n'ha triat una."""
+    carpeta = carpeta_exports()
+    if carpeta is None:
+        return None
+    desti = carpeta / fitxer.name
+    n = 2
+    while desti.exists():  # no en trepitgem cap
+        desti = carpeta / f"{fitxer.stem}-{n}{fitxer.suffix}"
+        n += 1
+    if fitxer.is_dir():
+        shutil.copytree(fitxer, desti, copy_function=_enllaca)
+    else:
+        _enllaca(fitxer, desti)
+    return desti
 
 
 def temps_exactes(a: float, b: float, fps: str) -> tuple[str, str]:
@@ -230,6 +305,7 @@ def _exporta(video, trams, sortida, qualitat, info, filtre, brolls, peces, capa,
         "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(sortida),
     ]
     _executa(ordre, sum(b - a for a, b in trams), progres)
+    treu_rotacio(sortida)
 
 
 def fes_proxy(video: Path, sortida: Path, progres=None) -> Path:
@@ -247,5 +323,6 @@ def fes_proxy(video: Path, sortida: Path, progres=None) -> Path:
         "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(temporal),
     ]
     _executa(ordre, info["durada"], progres)
+    treu_rotacio(temporal)
     temporal.replace(sortida)
     return sortida

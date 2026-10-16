@@ -379,8 +379,11 @@ No el moguis ni li canviïs el nom. Si l'has de moure, l'editor et demanarà on 
 («tornar a enllaçar» o «relink»).
 
 Premiere Pro
-  1. Fitxer → Importa… → tria «{nom}.xml». Surt una seqüència vertical amb el muntatge.
-  2. Subtítols: Fitxer → Importa… → «{nom}.srt», i arrossega'l a la seqüència.
+  1. Fitxer → Importa… → tria «{nom}.xml».
+  2. Al panell Projecte surt la seqüència «{nom}». Fes-hi DOBLE CLIC per obrir-la: cada tall és un
+     clip a part, i el pots allargar o escurçar (el vídeo original hi és sencer).
+     No l'arrosseguis a una seqüència nova: el Premiere la convertiria en un sol clip.
+  3. Subtítols: Fitxer → Importa… → «{nom}.srt», i arrossega'l a la seqüència.
 
 Final Cut Pro
   1. Fitxer → Importa → XML… → tria «{nom}.fcpxml».

@@ -433,14 +433,16 @@ class Projecte:
         return targetes.disposa(self._recursos(trams, "broll"), estil.get("broll", {}), accent)
 
     def _recursos(self, trams, tipus: str) -> list[dict]:
-        """B-rolls o stickers acceptats amb fitxer, situats al muntatge: [{id, fitxer, inici, durada}]."""
+        """B-rolls o stickers amb fitxer, situats al muntatge: [{id, fitxer, inici, durada}]. Hi van tots
+        els que tenen fitxer i no s'han descartat: qui hi ha posat una imatge, la vol al vídeo (també si
+        després ha tocat el ✓ i la instrucció ha tornat a «pendent»)."""
         base = self.carpeta_instruccions()
         total = sum(b - a for a, b in trams)
         # Cada paraula, amb el bloc on sona (en un reel, cada tros triat de la gravació és un bloc).
         bloc_de = {p["id"]: bloc for bloc in self._blocs() for p in bloc}
         resultat = []
         for ins in self.instruccions():
-            if ins.get("tipus") != tipus or ins.get("estat") != "acceptada" or not ins.get("fitxer"):
+            if ins.get("tipus") != tipus or ins.get("estat") == "descartada" or not ins.get("fitxer"):
                 continue
             if ins.get("ancora") is None or not (base / ins["fitxer"]).exists():
                 continue
