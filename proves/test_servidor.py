@@ -75,6 +75,23 @@ class TestServidor(unittest.TestCase):
         return {"X-Tallat-Token": self.token, "X-Tallat-Projecte": self.clau,
                 "Content-Type": "application/json", "Origin": f"http://127.0.0.1:{self.port}", **mes}
 
+    def test_les_imatges_dels_grafics(self):
+        from motor import grafics
+        p = Projecte(self.carpeta)
+        p.estat["grafics"] = grafics.fusiona([], [{"tipus": "ventall", "paraula": 1}, {"tipus": "frase", "paraula": 2, "text": "x"}])
+        p.estat["revisio"] = 5
+        p.desa()
+        bones = {k: v for k, v in self.bones().items() if k != "Content-Type"}
+        self.assertEqual(self.peticio("POST", "/api/grafics/imatge?grafic=g1&nom=x.exe", b"hola", bones)[0], 400)
+        self.assertEqual(self.peticio("POST", "/api/grafics/imatge?grafic=g2&nom=x.png", b"hola", bones)[0], 404)
+        estat, cos = self.peticio("POST", "/api/grafics/imatge?grafic=g1&nom=foto.png", b"una foto", bones)
+        self.assertEqual(estat, 200)
+        g1 = json.loads(cos)["estat"]["grafics"][0]
+        self.assertEqual((len(g1["punts"]), g1["estat"]), (1, "mantingut"))
+        nom = g1["punts"][0]["imatge"]
+        self.assertEqual(self.peticio("GET", f"/imatges-grafics/{nom}")[1], "una foto")
+        self.assertEqual(self.peticio("GET", "/imatges-grafics/../transcripcio.json")[0], 403)
+
     def test_nomes_amb_el_nom_d_aquest_mac(self):
         self.assertEqual(self.peticio("GET", "/api/projecte", host="dolenta.example")[0], 403)
 

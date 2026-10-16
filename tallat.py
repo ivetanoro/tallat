@@ -9,7 +9,7 @@
   python tallat.py guio --projecte CARPETA            (text per paràgrafs perquè l'assistent proposi reels)
   python tallat.py reels --projecte CARPETA           (valida reels.json i en mostra la durada)
   python tallat.py reel ID --projecte CARPETA         (crea el projecte d'un reel proposat)
-  python tallat.py afegeix TIPUS --paraula ID --projecte CARPETA [--text "…"]   (instrucció a mà)
+  python tallat.py afegeix TIPUS --paraula ID --projecte CARPETA [--text "…"] [--treu A-B]   (instrucció a mà)
   python tallat.py broll ID_INSTRUCCIO FITXER --projecte CARPETA [--durada 1.5]
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
   python tallat.py editors --projecte CARPETA [--amb-subtitols] [--trossos]   (Premiere, Final Cut, DaVinci / CapCut)
@@ -21,6 +21,7 @@
   python tallat.py grafics proposa PLA.json --projecte CARPETA  (desa el pla de gràfics que proposa l'assistent)
   python tallat.py grafics canvia PLA.json --projecte CARPETA   (només els gràfics del fitxer: les notes ateses)
   python tallat.py grafics fotogrames --projecte CARPETA        (el fotograma de cada gràfic, per triar-ne el lloc)
+  python tallat.py grafics captura URL [--grafic g3] --projecte CARPETA  (la captura d'una web, per al gràfic «web»)
 
 La carpeta del projecte ha de ser fora del repositori (els vídeos i el que dius no es publiquen).
 """
@@ -33,6 +34,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -194,9 +196,11 @@ NOMS_INSTRUCCIO = {"talla": "torna a començar", "zoom": "zoom", "broll": "b-rol
 def _mostra_instruccions(llista: list[dict]) -> None:
     if not llista:
         return
-    print(f"\nInstruccions de veu: {len(llista)} (tretes del vídeo; decideix-les a la pàgina de revisió)")
+    print(f"\nInstruccions de veu: {len(llista)} (decideix-les a la pàgina de revisió)")
     for i in llista:
-        print(f"  · {minuts(i['inici'])} · {NOMS_INSTRUCCIO.get(i['tipus'], i['tipus'])}: «{i['text']}»")
+        dubte = " · sense «Claude»: no s'ha tret res, sembla una ordre" if i.get("sense_paraula") else \
+            " · no se sap on acaba: no s'ha tret res" if i.get("dubtosa") else ""
+        print(f"  · {minuts(i['inici'])} · {NOMS_INSTRUCCIO.get(i['tipus'], i['tipus'])}: «{i['text']}»{dubte}")
 
 
 def ordre_instruccions(args) -> None:
@@ -211,9 +215,19 @@ def ordre_afegeix(args) -> None:
     n = len(projecte.dades["paraules"])
     if not 0 <= args.paraula < n:
         sys.exit(f"La paraula ha de ser un número entre 0 i {n - 1} (mira'ls al guió: tallat.py guio).")
-    ins = projecte.afegeix_instruccio(args.tipus, args.paraula, args.text or "")
+    treu = None
+    if args.treu:
+        try:
+            a, b = (int(x) for x in args.treu.replace("–", "-").split("-"))
+        except ValueError:
+            sys.exit("--treu vol dues paraules: la primera i l'última de la instrucció (p. ex. --treu 40-51).")
+        if not (0 <= a <= b < n):
+            sys.exit(f"--treu: les paraules han de ser entre 0 i {n - 1}, i la primera abans que l'última.")
+        treu = (a, b)
+    ins = projecte.afegeix_instruccio(args.tipus, args.paraula, args.text or "", treu)
     p = projecte.dades["paraules"][args.paraula]
-    print(f"Instrucció {ins['id']} ({args.tipus}) a «{p['text']}» ({minuts(p['inici'])}).")
+    print(f"Instrucció {ins['id']} ({args.tipus}) a «{p['text']}» ({minuts(p['inici'])})."
+          + (f" He tret del vídeo les paraules {treu[0]}–{treu[1]} (on la deies)." if treu else ""))
 
 
 def ordre_broll(args) -> None:
@@ -384,6 +398,28 @@ def ordre_grafics(args) -> None:
     (amb les notes de la persona). `proposa` hi desa un pla nou i `canvia` només toca els gràfics que
     esmenta (per atendre les notes); motor/grafics.py diu com es fusionen."""
     projecte = _carrega(args)
+    if args.accio == "captura":
+        if not args.fitxer:
+            sys.exit("Falta l'adreça: tallat.py grafics captura https://… --projecte …")
+        print(f"Fent la captura de {args.fitxer}…", flush=True)
+        try:
+            with tempfile.TemporaryDirectory() as temporal:
+                nom = projecte.importa_imatge(grafics.captura_web(args.fitxer, Path(temporal) / "captura.png"))
+        except (RuntimeError, ValueError, subprocess.TimeoutExpired) as e:
+            sys.exit(f"No he pogut fer la captura: {e}")
+        if args.grafic:
+            g = next((x for x in projecte.estat.get("grafics") or [] if x["id"] == args.grafic), None)
+            if g is None or g["tipus"] != "web":
+                sys.exit(f"No hi ha cap gràfic web «{args.grafic}» al pla (la captura és a {projecte.carpeta_imatges / nom}).")
+            g["imatge"] = nom
+            g["text"] = g["text"] or grafics.adreca_curta(args.fitxer)
+            projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
+            projecte.desa()
+            print(f"Fet: la captura ja és al gràfic {args.grafic}.")
+        else:
+            print(f"Fet. Al pla, posa-hi \"imatge\": \"{nom}\" (i \"text\": \"{grafics.adreca_curta(args.fitxer)}\").")
+        print(f"Per veure-la: {projecte.carpeta_imatges / nom}")
+        return
     if args.accio == "fotogrames":
         trams = projecte.trams()
         situats = projecte.grafics(trams)
@@ -410,6 +446,7 @@ def ordre_grafics(args) -> None:
             sys.exit(f"No puc llegir el pla: {e}")
         pla = pla.get("grafics") if isinstance(pla, dict) else pla
         try:
+            pla = projecte.importa_imatges(pla)  # les imatges que són camins de fitxers, al projecte
             manera = "de-nou" if args.de_nou else args.accio
             projecte.estat["grafics"] = grafics.fusiona(projecte.estat.get("grafics") or [], pla,
                                                         len(projecte.dades["paraules"]), manera)
@@ -642,6 +679,7 @@ def main() -> None:
     af.add_argument("tipus", choices=["broll", "sticker", "zoom"])
     af.add_argument("--paraula", type=int, required=True, help="Número de paraula (el del guió)")
     af.add_argument("--text", help="Descripció (p. ex. «una rentadora»)")
+    af.add_argument("--treu", metavar="A-B", help="Les paraules on es deia la instrucció, per treure-les del vídeo (p. ex. 40-51)")
     af.add_argument("--projecte", required=True)
     af.set_defaults(func=ordre_afegeix)
 
@@ -745,10 +783,13 @@ def main() -> None:
     ma.set_defaults(func=ordre_marca)
 
     gr = sub.add_parser("grafics", help="El pla de gràfics: frases, marca, gràfics i notes (proposa o canvia: el desa)")
-    gr.add_argument("accio", nargs="?", choices=["proposa", "canvia", "fotogrames"],
+    gr.add_argument("accio", nargs="?", choices=["proposa", "canvia", "fotogrames", "captura"],
                     help="proposa: un pla nou (substitueix els proposats); canvia: només els gràfics que hi ha a FITXER; "
-                         "fotogrames: una imatge amb el moment de cada gràfic, per veure on queden")
-    gr.add_argument("fitxer", nargs="?", help="El pla en JSON (una llista de gràfics), o «-» per llegir-lo de l'entrada")
+                         "fotogrames: una imatge amb el moment de cada gràfic, per veure on queden; "
+                         "captura: fa la captura de la web URL (per al gràfic «web»)")
+    gr.add_argument("fitxer", nargs="?", help="El pla en JSON (una llista de gràfics), o «-» per llegir-lo de l'entrada; "
+                                              "amb «captura», l'adreça de la web")
+    gr.add_argument("--grafic", help="Amb «captura»: el gràfic web on va la captura")
     gr.add_argument("--projecte", required=True)
     gr.add_argument("--de-nou", action="store_true", help="El pla nou substitueix tots els d'abans (també els mantinguts)")
     gr.add_argument("--json", action="store_true", help="Ho mostra en JSON")

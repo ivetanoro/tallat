@@ -8,6 +8,7 @@ import mimetypes
 import secrets
 import subprocess
 import sys
+import tempfile
 import threading
 import traceback
 import uuid
@@ -23,16 +24,17 @@ PAGINA = Path(__file__).resolve().parent.parent / "pagina"
 MIDA_MAXIMA_FONT = 20 * 1024 * 1024  # una font no passa mai d'uns quants MB
 MIDA_MAXIMA_JSON = 10 * 1024 * 1024  # l'estat d'un projecte llarg no arriba ni a 1 MB
 MIDA_MAXIMA_PUJADA = 2 * 1024 ** 3   # un b-roll o un sticker
+MIDA_MAXIMA_IMATGE = 60 * 1024 ** 2  # una captura o una foto d'un gràfic
 # Les peticions que canvien el projecte obert: han de dir a quin projecte van (dues pestanyes).
 RUTES_DEL_PROJECTE = {"/api/estat", "/api/neteja", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
-                      "/api/so/mostres"}
+                      "/api/so/mostres", "/api/grafics/imatge"}
 mimetypes.add_type("audio/mp4", ".m4a")  # Python diu «audio/mp4a-latm», que els navegadors no reprodueixen
 mimetypes.add_type("audio/wav", ".wav")
-RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa"}  # el cos és el fitxer mateix
+RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge"}  # el cos és el fitxer mateix
 
 
 def clau_de(projecte: Projecte) -> str:
@@ -313,6 +315,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
             if ruta.startswith("/stickers/"):
                 return self._segur(projecte.carpeta_instruccions() / stickers.CARPETA, ruta[len("/stickers/"):])
+            if ruta.startswith("/imatges-grafics/"):  # les captures i les fotos dels gràfics
+                return self._segur(projecte.carpeta_imatges, ruta[len("/imatges-grafics/"):])
             if ruta.startswith("/so/"):  # la pista d'efectes, les mostres de la veu i cada so
                 return self._segur(projecte.carpeta / "so", ruta[len("/so/"):])
             if ruta.startswith("/marca/fonts/"):  # les lletres del kit, per a la vista prèvia
@@ -396,6 +400,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return
             if ruta == "/api/broll/puja":
                 return self._puja_broll(projecte)
+            if ruta == "/api/grafics/imatge":
+                return self._puja_imatge_grafic(projecte)
             if ruta == "/api/exports/carpeta":
                 return self._carpeta_exports(projecte)
             if ruta == "/api/marca/font":
@@ -605,6 +611,44 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     return self._json(instantania())
             finally:
                 temporal.unlink(missing_ok=True)
+
+        def _puja_imatge_grafic(self, projecte):
+            """Rep una imatge per a un gràfic: la captura de la web (la canvia) o una foto més del ventall."""
+            consulta = parse_qs(urlparse(self.path).query)
+            gid = (consulta.get("grafic") or [""])[0]
+            nom = Path((consulta.get("nom") or ["imatge"])[0]).name
+            mida = int(self.headers.get("Content-Length") or 0)
+            if Path(nom).suffix.lower() not in grafics.FORMATS_IMATGE:
+                return self._no_permesa(HTTPStatus.BAD_REQUEST, "Ha de ser una imatge PNG, JPG, WebP o GIF")
+            if not 0 < mida <= MIDA_MAXIMA_IMATGE:
+                return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "La imatge és buida o massa gran (60 MB com a màxim)")
+            contingut = self.rfile.read(mida)
+            if len(contingut) != mida:
+                self.close_connection = True
+                return
+            with bloqueig:
+                projecte = obert["p"]
+                if self.headers.get("X-Tallat-Projecte") != clau_de(projecte):
+                    return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
+                projecte.al_dia()
+                g = next((x for x in projecte.estat.get("grafics") or [] if x["id"] == gid), None)
+                if g is None or g["tipus"] not in grafics.AMB_IMATGE:
+                    return self._json({"error": "No trobo aquest gràfic"}, HTTPStatus.NOT_FOUND)
+                if g["tipus"] == "ventall" and len(g["punts"]) >= grafics.MAX_PUNTS:
+                    return self._json({"error": f"Hi caben {grafics.MAX_PUNTS} fotos com a molt"}, HTTPStatus.BAD_REQUEST)
+                with tempfile.TemporaryDirectory() as temporal:
+                    fitxer = Path(temporal) / f"imatge{Path(nom).suffix.lower()}"
+                    fitxer.write_bytes(contingut)
+                    nom_imatge = projecte.importa_imatge(fitxer)
+                if g["tipus"] == "web":
+                    g["imatge"] = nom_imatge
+                else:
+                    g["punts"].append({"imatge": nom_imatge, "text": "", "paraula": None})
+                if g["estat"] == "proposat":  # si hi poses la imatge, és que t'agrada
+                    g["estat"] = "mantingut"
+                projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
+                projecte.desa()
+                return self._json(instantania())
 
         def _puja_font(self):
             """Rep una font (.ttf, .otf, .woff o .woff2) i la fa servir per als subtítols."""

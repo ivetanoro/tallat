@@ -952,7 +952,7 @@ function refaPrevia() {
   previa = estilSub ? TallatSubtitols.construeix($("#ts-host"), liniesSub, estilSub, { familia: familiaCss(estilSub), amaga }) : null;
   previaTitol = estilTitol ? TallatSubtitols.titol($("#tt-host"), titol, estilTitol,
     { familia: familiaCss({ font: estilTitol.font || estilSub?.font }) }) : null;
-  previaGrafics = window.TallatGrafics && paletaGrafics ? TallatGrafics.construeix($("#tg-host"), grafics, paletaGrafics) : null;
+  previaGrafics = window.TallatGrafics && paletaGrafics ? TallatGrafics.construeix($("#tg-host"), grafics, paletaGrafics, OP_GRAFICS) : null;
   // Com al vídeo final: mentre surt el títol, els subtítols que el toquen s'aparten.
   if (titol && previa && previaTitol && !estilTitol?.amaga_subtitols) TallatSubtitols.aparta($("#ts-host"), $("#tt-host"), titol, previa);
 }
@@ -2440,6 +2440,7 @@ function pintaStickers() {
 let graficsMuntatge = [];  // els que surten al vídeo, en temps del muntatge (els calcula el servidor)
 let dibuixosGrafics = {};  // com es dibuixa cada gràfic del pla, també els que no surten (per a les miniatures)
 let paletaGrafics = null;  // els colors i les lletres de la marca
+const OP_GRAFICS = { imatges: "/imatges-grafics/" };  // on són les captures i les fotos dels gràfics
 let previaGrafics = null;
 let notaOberta = null;     // l'id del gràfic que té la nota oberta
 const targetesGrafic = new Map();  // id → {el, sig}: només es refà la que canvia
@@ -2462,17 +2463,24 @@ function textGrafic(g) {
   if (g.tipus === "xat") return [text, ...g.punts.map((p) => `${p.costat === "enviat" ? "→" : "←"} ${p.text}`)].filter(Boolean).join("  ");
   if (g.tipus === "notificacio") return `${g.de ? `${g.de}: ` : ""}«${text}»`;
   if (g.tipus === "numero") return `${g.xifra}${text ? ` · ${text}` : ""}`;
+  if (g.tipus === "web") return text ? `Web: ${text}` : "Captura d'una web";
+  if (g.tipus === "ventall") {
+    const n = g.punts.length;
+    return [text, n ? `${n} ${n === 1 ? "foto" : "fotos"}` : "Encara sense fotos"].filter(Boolean).join(" · ");
+  }
   return `«${text}»`;
 }
 
 function targetaGrafic(g) {
   const s = graficsMuntatge.find((x) => x.id === g.id);
+  const falta = !!dibuixosGrafics[g.id]?.falta;  // la web o el ventall sense imatges: no surt fins que n'hi hagi
   const el = document.createElement("div");
-  el.className = `grafic ${g.estat}${s || g.estat === "tret" ? "" : " fora"}`;
+  el.className = `grafic ${g.estat}${s || g.estat === "tret" || falta ? "" : " fora"}`;
   el.innerHTML = `<button class="mini-grafic"><span class="mg-host"></span></button>
     <div class="grafic-cos">
       <div class="grafic-cap"><strong></strong><span class="temps-petit"></span><span class="grafic-estat"></span></div>
       <p class="grafic-text"></p>
+      <div class="grafic-imatges" hidden></div>
       <p class="grafic-nota" hidden></p>
       <p class="grafic-motiu" hidden></p>
       <div class="segmentat ample decisio" role="group" aria-label="Què en fem">
@@ -2487,7 +2495,9 @@ function targetaGrafic(g) {
       </form>
     </div>`;
   el.querySelector("strong").textContent = dibuixosGrafics[g.id]?.nom || g.tipus;
-  el.querySelector(".temps-petit").textContent = s ? fmtSegons(s.inici) : g.estat === "tret" ? "" : "ja no surt al vídeo";
+  el.querySelector(".temps-petit").textContent = s ? fmtSegons(s.inici) : g.estat === "tret" ? ""
+    : falta ? (g.tipus === "web" ? "falta la captura" : "falta alguna foto") : "ja no surt al vídeo";
+  if (g.tipus === "web" || g.tipus === "ventall") pintaImatgesGrafic(el.querySelector(".grafic-imatges"), g);
   el.querySelector(".grafic-estat").textContent = ESTATS_GRAFIC[g.estat] || "";
   el.querySelector(".grafic-text").textContent = textGrafic(g);
   if (g.nota) Object.assign(el.querySelector(".grafic-nota"), { hidden: false, textContent: `Nota: ${g.nota}` });
@@ -2503,6 +2513,9 @@ function targetaGrafic(g) {
   form.querySelector("textarea").value = g.nota || "";
 
   el.addEventListener("click", (e) => {
+    if (e.target.closest(".puja-imatge")) return triaImatgesGrafic(g);
+    const treu = e.target.closest(".treu-foto");
+    if (treu) return canviaGrafic(g.id, { punts: g.punts.filter((_, k) => k !== Number(treu.dataset.k)) });
     const boto = e.target.closest(".decisio button");
     if (boto) return decideixGrafic(g.id, boto.dataset.estat);
     if (e.target.closest(".torna")) return decideixGrafic(g.id, "proposat");
@@ -2518,6 +2531,59 @@ function targetaGrafic(g) {
     if (e.key === "Escape") { notaOberta = null; form.hidden = true; }
   });
   return el;
+}
+
+// Les imatges de la web (la captura) i del ventall (les fotos, que es poden treure una a una).
+function pintaImatgesGrafic(cont, g) {
+  cont.hidden = false;
+  const fotos = g.tipus === "web" ? (g.imatge ? [g.imatge] : []) : g.punts.map((p) => p.imatge);
+  fotos.forEach((nom, k) => {
+    const foto = document.createElement("span");
+    foto.className = "foto-grafic";
+    const img = document.createElement("img");
+    Object.assign(img, { src: OP_GRAFICS.imatges + encodeURIComponent(nom), alt: "" });
+    foto.append(img);
+    if (g.tipus === "ventall") {
+      const treu = document.createElement("button");
+      Object.assign(treu, { className: "treu-foto", title: "Treu aquesta foto" });
+      treu.dataset.k = k;
+      treu.setAttribute("aria-label", "Treu aquesta foto");
+      treu.innerHTML = '<svg viewBox="0 0 20 20"><path d="m6 6 8 8m0-8-8 8"/></svg>';
+      foto.append(treu);
+    }
+    cont.append(foto);
+  });
+  if (g.tipus === "ventall" && fotos.length >= 6) return;
+  const puja = document.createElement("button");
+  puja.className = `boto petit puja-imatge${fotos.length ? "" : " principal"}`;
+  puja.textContent = g.tipus === "web" ? (fotos.length ? "Canvia la captura" : "Puja la captura")
+    : fotos.length ? "Afegeix fotos" : "Puja les fotos";
+  cont.append(puja);
+}
+
+function triaImatgesGrafic(g) {
+  const tria = document.createElement("input");
+  Object.assign(tria, { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", multiple: g.tipus === "ventall" });
+  tria.addEventListener("change", () => pujaImatgesGrafic(g.id, [...tria.files]));
+  tria.click();
+}
+
+async function pujaImatgesGrafic(id, fitxers) {
+  if (!fitxers.length) return;
+  avis(fitxers.length > 1 ? `Pujant ${fitxers.length} imatges…` : "Pujant la imatge…", 20000);
+  try {
+    await cua;
+    let json = null;
+    for (const fitxer of fitxers) {
+      json = await resposta(await fetch(
+        `/api/grafics/imatge?grafic=${encodeURIComponent(id)}&nom=${encodeURIComponent(fitxer.name)}`,
+        { method: "POST", headers: capcaleres(), body: fitxer }));
+    }
+    estat = json.estat;
+    aplicaTrams(json);
+    refresca(true);
+    avis("Fet. Mira-ho al vídeo.");
+  } catch (e) { avis(e.message, 6000); }
 }
 
 // La miniatura: el gràfic dibuixat petit, amb el mateix codi que el vídeo. Torna la seva línia de
@@ -2537,7 +2603,7 @@ function pintaMiniGrafic(el, g) {
     Object.assign(targeta.style, { left: `${BLOC.x}px`, top: `${BLOC.y}px`, width: `${BLOC.w}px`, height: `${BLOC.h}px` });
     host.prepend(targeta);
   }
-  const tl = TallatGrafics.construeix(arrel, [dibuix], paletaGrafics).seek(50, false);
+  const tl = TallatGrafics.construeix(arrel, [dibuix], paletaGrafics, OP_GRAFICS).seek(50, false);
   host.style.transform = `scale(${el.querySelector(".mini-grafic").clientWidth / 1080})`;
   return tl;
 }
@@ -2834,7 +2900,7 @@ function pintaBarraGrafic(id) {
       b.firstChild.append(host);
       const mostra = { ...d, estil, posicio: "mig", limits: [0, 1920], inici: 0, final: 1e5,
         punts: (d.punts || []).map((p) => ({ ...p, t: 0 })) };
-      TallatGrafics.construeix(host, [mostra], paletaGrafics).seek(50, false);
+      TallatGrafics.construeix(host, [mostra], paletaGrafics, OP_GRAFICS).seek(50, false);
       host.style.transform = `scale(${b.firstChild.clientWidth / 1080})`;
       host.style.transformOrigin = "0 0";
       host.style.marginTop = `${(b.firstChild.clientHeight - b.firstChild.clientWidth * 1920 / 1080) / 2}px`;
@@ -2846,13 +2912,14 @@ function pintaBarraGrafic(id) {
   barra.append(filaBloc);
   const bloc = document.createElement("button");
   bloc.className = "boto petit bloc-color";
-  bloc.setAttribute("aria-pressed", String(!!g.bloc));
+  const ambBloc = !!d.bloc;  // si no s'ha dit, el de cada tipus (la web i les fotos, amb bloc)
+  bloc.setAttribute("aria-pressed", String(ambBloc));
   bloc.title = "El vídeo es fa petit a baix i el gràfic surt sobre el color de la teva marca";
   bloc.innerHTML = '<span class="mostra-bloc"></span><span></span>';
-  bloc.lastChild.textContent = g.bloc ? "Amb bloc de color" : "Bloc de color";
+  bloc.lastChild.textContent = ambBloc ? "Amb bloc de color" : "Bloc de color";
   const rol = ["mac", "scrapbook"].includes(g.estil || d.estil) ? "principal" : "fosc";
   if (paletaGrafics?.[rol]) bloc.style.setProperty("--color-bloc", paletaGrafics[rol]);
-  bloc.addEventListener("click", () => { canviaGrafic(id, { bloc: !g.bloc }); setTimeout(pintaBarraCapa, 0); });
+  bloc.addEventListener("click", () => { canviaGrafic(id, { bloc: !ambBloc }); setTimeout(pintaBarraCapa, 0); });
   filaBloc.append(bloc);
   const fila = document.createElement("div");
   fila.className = "barra-fila";
@@ -3170,7 +3237,7 @@ function pintaAssistent() {
           inici: 0, final: 1e5, text: estil === "editorial" ? "una *idea* clara" : "3 coses",
           punts: estil === "editorial" ? [] : [{ text: "una", t: 0 }, { text: "dues", t: 0 }] };
         requestAnimationFrame(() => {
-          TallatGrafics.construeix(host, [mostra], paleta).seek(50, false);
+          TallatGrafics.construeix(host, [mostra], paleta, OP_GRAFICS).seek(50, false);
           const caixa = b.querySelector(".mostra-grafic");
           host.style.transform = `scale(${caixa.clientWidth / 1080})`;
           host.style.marginTop = `${(caixa.clientHeight - caixa.clientWidth * 1920 / 1080) / 2}px`;
@@ -3330,20 +3397,26 @@ function pintaInstruccions() {
         <span class="ins-tipus"><span class="nom"></span><span class="temps-petit">${fmt(ins.inici)}</span></span>
         <span class="ins-text"></span>
         <span class="ins-estat"></span></span>
-      <button class="mini deixa ${ins.estat === "acceptada" ? "actiu" : ""}" title="Accepta-la" aria-label="Accepta-la">${ICONES.deixa}</button>
+      ${ins.manual  // les que afegeix Claude ja hi són: no cal acceptar-les (es poden treure)
+        ? (ins.estat === "descartada" ? '<button class="enllac torna-ins">Torna-la a posar</button>' : '<span class="al-video">Al vídeo</span>')
+        : `<button class="mini deixa ${ins.estat === "acceptada" ? "actiu" : ""}" title="Accepta-la" aria-label="Accepta-la">${ICONES.deixa}</button>`}
       <button class="mini treu" title="Descarta-la" aria-label="Descarta-la">${ICONES.esborra}</button>`;
     item.querySelector(".nom").textContent = nom;
     item.querySelector(".ins-text").textContent = `«${ins.text}»`;
     item.querySelector(".ins-estat").classList.toggle("important", !!ins.dubtosa && ins.estat === "pendent");
     item.querySelector(".ins-estat").textContent =
-      ins.estat === "acceptada" ? (["broll", "sticker"].includes(ins.tipus) ? "" : `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}`)
+      ins.estat === "acceptada" ? (["broll", "sticker"].includes(ins.tipus) || ins.manual ? "" : `Acceptada. ${ajuda.replace(/^En acceptar-la, /, "")}`)
         : ins.estat === "descartada" ? "Descartada"
+        : ins.sense_paraula ? "Sembla una instrucció, però no has dit «Claude». Si l'acceptes, en trec les paraules del vídeo."
         : ins.dubtosa ? "No he sabut on acaba: no he tret res del vídeo. Treu-ne tu les paraules." : "";
     const accions = accionsBroll(ins, item);
     if (accions) item.querySelector(".reel-text").append(accions);
     item.addEventListener("click", (e) => {
       if (e.target.closest(".deixa")) return decideixInstruccio(ins, ins.estat === "acceptada" ? "pendent" : "acceptada");
-      if (e.target.closest(".treu")) return decideixInstruccio(ins, ins.estat === "descartada" ? "pendent" : "descartada");
+      if (e.target.closest(".torna-ins")) return decideixInstruccio(ins, "acceptada");
+      if (e.target.closest(".treu")) {
+        return decideixInstruccio(ins, ins.estat === "descartada" ? (ins.manual ? "acceptada" : "pendent") : "descartada");
+      }
       const ancora = ins.ancora ?? ins.paraules[1];
       mostraParaula(ancora);
       if (vista === "directe") vesAOriginal(P.paraules[ancora].inici - 1.5);
@@ -3362,6 +3435,7 @@ async function decideixInstruccio(ins, nou) {
     aplicaTrams(r);
     refresca(true);
     if (nou === "acceptada" && ins.tipus === "talla") avis("Primer intent tret. El pots recuperar tocant-ne les paraules.");
+    else if (nou === "acceptada" && ins.sense_paraula) avis("Fet: he tret la instrucció del vídeo.");
   } catch (e) { avis(e.message); }
 }
 

@@ -1,4 +1,5 @@
-/* tallat · els gràfics del pla: frase clau, etiqueta, llista i crida.
+/* tallat · els gràfics del pla: frase clau, etiqueta, llista, crida, notificació, xat, número, anotació,
+ * web (una captura dins d'una finestra) i ventall (unes quantes fotos).
  *
  * Com els subtítols, el mateix codi els dibuixa a la vista prèvia i al vídeo final (dins de la
  * composició de HyperFrames). Treballa sobre una caixa de 1080 × 1920 px; qui el fa servir l'escala.
@@ -16,6 +17,8 @@
  * (`de`), el xat els missatges a `punts` (cadascun amb `costat`: rebut o enviat), el número la `xifra`
  * ({abans, valor, decimals, despres, milers}) i l'anotació la `forma` (cercle, subratllat o fletxa) i el
  * `costat` on va. L'anotació s'escriu amb la lletra de mà i el color secundari de la marca.
+ * La web porta la captura a `imatge` (i l'adreça de la barra a `text`); el ventall, les fotos als `punts`
+ * (cadascuna amb `imatge` i un peu, `text`). `op.imatges`: on són les imatges (per defecte, «imatges/»).
  * Sense GSAP (sense internet), els gràfics surten sencers mentre duren.
  */
 (function (global) {
@@ -47,7 +50,7 @@
 }
 .tg-scrapbook .tg-clau { font-style: normal; }
 .tg-scrapbook.tg-frase .tg-cos::before, .tg-scrapbook.tg-llista .tg-cos::before, .tg-scrapbook.tg-crida .tg-cos::before,
-.tg-scrapbook.tg-notificacio .tg-cos::before {
+.tg-scrapbook.tg-notificacio .tg-cos::before, .tg-scrapbook.tg-web .tg-cos::before {
   content: ""; position: absolute; left: 50%; top: -24px; width: 190px; height: 48px; margin-left: -95px;
   background: var(--tg-cinta); rotate: 3deg;
 }
@@ -232,6 +235,79 @@
 .tg-traca path {
   fill: none; stroke: var(--tg-tinta); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round;
   stroke-dasharray: 1; stroke-dashoffset: 0;
+}
+
+/* La web: una finestra de navegador amb la captura, que baixa a poc a poc si és llarga. */
+.tg-web .tg-cos {
+  --tg-rf: 26px; width: 840px; border-radius: var(--tg-rf); background: var(--tg-clar);
+  box-shadow: 0 34px 80px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia);
+}
+.tg-adreca {
+  flex: 1; min-width: 0; margin-left: 14px; padding: 0 24px; height: 46px; line-height: 46px; border-radius: 999px;
+  background: var(--tg-linia); color: var(--tg-fosc); font-family: var(--tg-f-text); font-size: 26px; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tg-pantalla { position: relative; height: 460px; overflow: hidden; background: #FFFFFF; border-radius: 0 0 var(--tg-rf) var(--tg-rf); }
+.tg-pantalla img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0%; }
+.tg-falta {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 30px;
+  font-family: var(--tg-f-text); font-size: 44px; font-weight: 600; text-align: center; color: var(--tg-fosc);
+  background: repeating-linear-gradient(-45deg, var(--tg-linia) 0 22px, transparent 22px 44px);
+}
+.tg-mac.tg-web .tg-barra i:nth-child(1) { background: #FF5F57; }
+.tg-mac.tg-web .tg-barra i:nth-child(2) { background: #FEBC2E; }
+.tg-mac.tg-web .tg-barra i:nth-child(3) { background: #28C840; }
+.tg-net.tg-web .tg-cos { --tg-rf: 22px; box-shadow: 0 26px 60px var(--tg-ombra); }
+.tg-net.tg-web .tg-barra { background: var(--tg-principal); border-bottom: 0; border-radius: var(--tg-rf) var(--tg-rf) 0 0; }
+.tg-net.tg-web .tg-barra i { background: var(--tg-sobre-principal); opacity: 0.45; }
+.tg-net.tg-web .tg-adreca { background: var(--tg-sobre-principal); color: var(--tg-principal); }
+.tg-scrapbook.tg-web .tg-cos { --tg-rf: 3px; padding: 14px 14px 18px; rotate: -1.5deg; box-shadow: 8px 10px 0 var(--tg-ombra-suau); }
+.tg-scrapbook.tg-web .tg-adreca { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); font-size: 32px; background: none; }
+.tg-editorial.tg-web .tg-cos { --tg-rf: 0px; background: var(--tg-vel); box-shadow: none; border: 3px solid var(--tg-text); }
+.tg-editorial.tg-web .tg-barra { height: 64px; border-bottom: 3px solid var(--tg-text); }
+.tg-editorial.tg-web .tg-barra i { display: none; }
+.tg-editorial.tg-web .tg-adreca {
+  margin: 0; background: none; color: var(--tg-text); font-size: 24px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.16em; text-shadow: 0 2px 10px var(--tg-ombra);
+}
+
+/* El ventall: les fotos obertes com cartes, que surten una a una. */
+.tg-ventall .tg-cos { width: 840px; text-align: center; }
+.tg-ventall h3 {
+  margin: 0 0 10px; font-family: var(--tg-f-titols); font-size: 64px; font-weight: 700; line-height: 1.05;
+  color: var(--tg-text); text-shadow: 0 3px 18px var(--tg-ombra);
+}
+.tg-ventall h3 .tg-clau { color: var(--tg-destacat); }  /* el títol va damunt del fons, no d'una targeta */
+.tg-cartes { position: relative; height: 540px; }
+.tg-carta {
+  position: absolute; left: 50%; top: 40px; width: 300px; margin: 0 0 0 -150px; box-sizing: border-box; padding: 14px;
+  border-radius: 24px; background: var(--tg-clar); box-shadow: 0 26px 60px var(--tg-ombra-suau); opacity: 0;
+  transform-origin: 50% 90%;
+}
+.tg-carta.tg-buida { opacity: 1; }
+.tg-carta img, .tg-falta-foto { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 12px; }
+.tg-falta-foto { background: repeating-linear-gradient(-45deg, var(--tg-linia) 0 22px, transparent 22px 44px); }
+/* El peu, a l'esquerra: la foto següent tapa la dreta de l'anterior. */
+.tg-carta figcaption {
+  margin-top: 12px; padding-left: 4px; font-family: var(--tg-f-text); font-size: 32px; font-weight: 600; line-height: 1.1;
+  color: var(--tg-fosc); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tg-mac.tg-ventall .tg-carta { padding: 0; border-radius: 30px; overflow: hidden; box-shadow: 0 30px 70px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia); }
+.tg-mac.tg-ventall .tg-carta img, .tg-mac.tg-ventall .tg-falta-foto { border-radius: 0; }
+.tg-mac.tg-ventall figcaption { margin: 0; padding: 18px 24px 22px; }
+.tg-scrapbook.tg-ventall h3 { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); font-weight: 400; }
+.tg-scrapbook.tg-ventall .tg-carta { padding: 16px 16px 22px; border-radius: 3px; box-shadow: 6px 8px 0 var(--tg-ombra-suau); }
+.tg-scrapbook.tg-ventall .tg-carta::before {
+  content: ""; position: absolute; left: 50%; top: -20px; width: 150px; height: 40px; margin-left: -75px;
+  background: var(--tg-cinta); rotate: -4deg;
+}
+.tg-scrapbook.tg-ventall .tg-carta img, .tg-scrapbook.tg-ventall .tg-falta-foto { border-radius: 0; }
+.tg-scrapbook.tg-ventall figcaption { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); font-weight: 400; font-size: 42px; }
+.tg-editorial.tg-ventall h3 { font-weight: 400; letter-spacing: -0.02em; }
+.tg-editorial.tg-ventall .tg-carta { padding: 0; border-radius: 0; background: none; box-shadow: 0 20px 50px var(--tg-ombra-suau); }
+.tg-editorial.tg-ventall .tg-carta img, .tg-editorial.tg-ventall .tg-falta-foto { border-radius: 0; border: 3px solid var(--tg-text); box-sizing: border-box; }
+.tg-editorial.tg-ventall figcaption {
+  font-size: 24px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--tg-text); text-shadow: 0 2px 10px var(--tg-ombra);
 }`;
 
   const { rgba, familiaDe } = global.TallatSubtitols;
@@ -298,7 +374,23 @@
     return `${x.abans || ""}${enter}${dec ? `,${dec}` : ""}${x.despres || ""}`;
   }
 
-  function cos(doc, g) {
+  // Les fotos del ventall, obertes: girades i esteses, les de les puntes una mica més avall.
+  function obreVentall(cartes, g) {
+    const n = cartes.length;
+    const mig = (n - 1) / 2;
+    const angle = n > 1 ? Math.min(12, 30 / (n - 1)) : 0;
+    const pas = n > 1 ? Math.min(230, 540 / (n - 1)) : 0;
+    cartes.forEach((carta, k) => {
+      const d = k - mig;
+      const tremolor = g.estil === "scrapbook" ? (atzar(g.id || g.text, k + 1) - 0.5) * 6 : 0;
+      carta.style.left = `calc(50% + ${(d * pas).toFixed(1)}px)`;
+      carta.style.top = `${(40 + Math.abs(d) * 22).toFixed(1)}px`;
+      carta.style.rotate = `${(d * angle + tremolor).toFixed(2)}deg`;
+    });
+  }
+
+  function cos(doc, g, op) {
+    const imatge = (nom) => (op.imatges ?? "imatges/") + encodeURIComponent(nom);
     const c = element(doc, "div", "tg-cos");
     if (g.tipus === "frase") {
       const n = String(g.text || "").length;
@@ -351,6 +443,36 @@
     } else if (g.tipus === "numero") {
       c.append(element(doc, "span", "tg-xifra", formata(g.xifra, g.xifra?.valor ?? 0)));
       if (g.text) { const t = element(doc, "span", "tg-xifra-text"); ambDestacat(doc, t, g.text); c.append(t); }
+    } else if (g.tipus === "web") {
+      const barra = element(doc, "div", "tg-barra");
+      barra.append(element(doc, "i"), element(doc, "i"), element(doc, "i"), element(doc, "span", "tg-adreca", g.text || ""));
+      const pantalla = element(doc, "div", "tg-pantalla");
+      if (g.imatge) {
+        const img = element(doc, "img");
+        Object.assign(img, { src: imatge(g.imatge), alt: "" });
+        pantalla.append(img);
+      } else {
+        pantalla.append(element(doc, "div", "tg-falta", "Falta la captura"));
+      }
+      c.append(barra, pantalla);
+    } else if (g.tipus === "ventall") {
+      if (g.text) { const h = element(doc, "h3"); ambDestacat(doc, h, g.text); c.append(h); }
+      const cartes = element(doc, "div", "tg-cartes");
+      const fotos = (g.punts || []).length ? g.punts : [{}, {}, {}];  // sense fotos: on aniran
+      for (const p of fotos) {
+        const carta = element(doc, "figure", p.imatge ? "tg-carta" : "tg-carta tg-buida");
+        if (p.imatge) {
+          const img = element(doc, "img");
+          Object.assign(img, { src: imatge(p.imatge), alt: "" });
+          carta.append(img);
+        } else {
+          carta.append(element(doc, "div", "tg-falta-foto"));
+        }
+        if (p.text) carta.append(element(doc, "figcaption", null, p.text));
+        cartes.append(carta);
+      }
+      obreVentall([...cartes.children], g);
+      c.append(cartes);
     } else if (g.tipus === "anotacio") {
       const NS = "http://www.w3.org/2000/svg";
       const svg = doc.createElementNS(NS, "svg");
@@ -394,10 +516,11 @@
 
   // Si un gràfic és massa alt (un text llarg, una lletra ampla), es fa més petit fins que hi cap: la
   // frase, amb la lletra (el text torna a repartir-se en línies); la llista i la crida, senceres.
-  const ALCADA_MAXIMA = { frase: 330, llista: 470, crida: 230, notificacio: 300, xat: 560, numero: 400 };
+  // Mai més alt que l'espai que té (amb el bloc de color, el de sobre la targeta).
+  const ALCADA_MAXIMA = { frase: 330, llista: 470, crida: 230, notificacio: 300, xat: 560, numero: 400, web: 700, ventall: 680 };
   function encaixa({ g, lloc, c }) {
-    const maxima = ALCADA_MAXIMA[g.tipus];
-    if (!maxima) return;
+    if (!ALCADA_MAXIMA[g.tipus]) return;
+    const maxima = Math.min(ALCADA_MAXIMA[g.tipus], g.limits ? g.limits[1] - g.limits[0] : Infinity);
     const frase = g.tipus === "frase";
     const base = frase ? Number(c.dataset.escala) : 1;
     const posa = (k) => (frase ? c.style.setProperty("--tg-escala", (base * k).toFixed(3)) : (c.style.zoom = k === 1 ? "" : k.toFixed(2)));
@@ -472,10 +595,10 @@
       const costat = g.tipus === "anotacio" && g.costat === "dreta" ? " tg-a-dreta" : "";
       const lloc = element(doc, "div", `tg-lloc tg-${g.tipus} tg-${g.estil || "net"}${costat}`);
       if (g.id) lloc.dataset.id = g.id;  // la pàgina hi troba el que es toca al vídeo
-      const c = cos(doc, g);
+      const c = cos(doc, g, op);
       lloc.append(c);
       arrel.append(lloc);
-      return { g, lloc, c, punts: [...c.querySelectorAll("li, .tg-fila-xat")] };
+      return { g, lloc, c, punts: [...c.querySelectorAll("li, .tg-fila-xat, .tg-carta:not(.tg-buida)")] };
     });
     const mesura = () => { for (const f of fets) { encaixa(f); colloca(f); traca(f); } };
     mesura();
@@ -489,7 +612,7 @@
             f.lloc.style.visibility = t >= f.g.inici && t < f.g.final ? "visible" : "hidden";
             f.punts.forEach((el, k) => {
               const surt = t >= (f.g.punts[k]?.t ?? 0) ? 1 : 0;
-              if (el.matches("li")) el.style.opacity = surt; else el.querySelector(".tg-bombolla").style.opacity = surt;
+              if (el.matches("li, .tg-carta")) el.style.opacity = surt; else el.querySelector(".tg-bombolla").style.opacity = surt;
             });
           }
           return this;
@@ -516,9 +639,18 @@
           onUpdate: () => { xifra.textContent = formata(g.xifra, compte.v); },
         }, g.inici + 0.15);
       }
+      const img = g.tipus === "web" && c.querySelector(".tg-pantalla img");
+      if (img) {  // si la captura és més llarga que la finestra, baixa a poc a poc (com quan es llegeix)
+        tl.fromTo(img, { objectPosition: "50% 0%" }, { objectPosition: "50% 100%", ease: "sine.inOut",
+          duration: Math.max(0.5, g.final - g.inici - 1.6) }, g.inici + 0.8);
+      }
       let abans = g.inici;
       punts.forEach((el, k) => {
         const t = g.punts[k].t;
+        if (el.matches(".tg-carta")) {  // cada foto arriba de sota i es posa al seu lloc del ventall
+          tl.fromTo(el, { opacity: 0, y: 170, scale: 0.86 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.5)" }, t);
+          return;
+        }
         if (el.matches("li")) {
           tl.fromTo(el, { opacity: 0, x: -26 }, { opacity: 1, x: 0, duration: 0.35, ease: "power3.out" }, t);
           return;

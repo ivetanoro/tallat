@@ -79,7 +79,7 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | amagar la columna de l'esquerra o la del vídeo | ⌃⌘S / ⌥⌘V |
 
 3. A dalt de la columna de l'esquerra tria el kit; a les pestanyes **Subtítols**, **Gràfics** (el pla de gràfics, el títol del ganxo i el b-roll) i **So** (la neteja de la veu i els efectes de so), com vols que quedi.
-4. Si vols gràfics, digues a Claude **«proposa'm gràfics»**: et proposa frases clau, etiquetes, llistes, notificacions, xats, números que compten, notes escrites a mà i la crida final, frase a frase i amb els colors i les lletres de la teva marca. A la pestanya **Gràfics** de cada un tries **Mantén**, **Canvia** (i li escrius una nota) o **Treu**. Després digues a Claude «mira les notes dels gràfics» i els canvia.
+4. Si vols gràfics, digues a Claude **«proposa'm gràfics»**: et proposa frases clau, etiquetes, llistes, notificacions, xats, números que compten, notes escrites a mà, captures de webs, fotos en ventall i la crida final, frase a frase i amb els colors i les lletres de la teva marca. A la pestanya **Gràfics** de cada un tries **Mantén**, **Canvia** (i li escrius una nota) o **Treu**. Després digues a Claude «mira les notes dels gràfics» i els canvia. Si un gràfic té el **bloc de color**, el vídeo es fa petit a baix i el gràfic surt a dalt sobre el color de la teva marca: l'actives o el treus tocant el gràfic al vídeo.
 5. Clica **Esborrany** (a dalt) i mira'l. El que vulguis canviar, digues-ho a Claude amb el segon, que veus sota el vídeo: «al segon 12, el b-roll és massa llarg». Els vídeos que exportes, a la pestanya **Vídeos**.
 6. Quan t'agradi, **Final…** → 4K o 1080. O, si el vols acabar en un altre editor, **Projecte per a Premiere, Final Cut o DaVinci** o **Trossos per a CapCut o iMovie**.
 
@@ -97,6 +97,8 @@ Mentre graves, comença la frase amb «Claude» (o amb «tallat», si fas servir
 | «Claude, sticker d'un cor» | Igual, amb un sticker. |
 
 Les instruccions es treuen soles del vídeo, i a la pàgina decideixes si les acceptes. Amb «tallat» només compten les ordres d'aquesta taula: si dius «un tallat amb llet», no passa res.
+
+**Consell:** fes una petita pausa abans de «Claude» i digues l'ordre d'una tirada. Si te n'oblides i dius només «sticker d'un cor» o «tallem aquí», tallat també ho troba, però com a dubte: no en treu res fins que a la pàgina hi dius que sí.
 
 ## On es guarda cada cosa
 

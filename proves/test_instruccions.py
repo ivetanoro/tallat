@@ -109,3 +109,58 @@ class TestDeteccio(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSenseClaude(unittest.TestCase):
+    """Si la persona s'oblida de dir «Claude» (o el transcriptor no l'entén), la frase surt com a dubte."""
+
+    def test_les_de_la_prova_de_debo(self):
+        p = paraules("Ja ho veus. Mira, un sticker d'un mosquit i un sticker d'un núvol de pluja, mentre parlo del següent. "
+                     "Seguim. sticker de RAP4, si em sents, plot. I ara. Llavors tallem abans i aquí continuo. Adéu.")
+        trobades = instruccions.detecta(p)
+        self.assertEqual([(t["tipus"], t["text"].split()[0]) for t in trobades],
+                         [("sticker", "Mira,"), ("sticker", "sticker"), ("talla", "Llavors")])
+        self.assertTrue(all(t["dubtosa"] and t["sense_paraula"] and t["estat"] == "pendent" for t in trobades))
+        self.assertEqual(trobades[0]["paraules"], [3, 18])  # la frase sencera
+        self.assertEqual(trobades[0]["id"], "s3")
+        self.assertEqual(instruccions.aplica_a_estat(edicio.estat_buit(), trobades)["esborrades"], {})  # no es treu res
+
+    def test_en_acceptar_se_treuen_les_paraules(self):
+        p = paraules("Hola. Sticker d'un cor. Seguim parlant.")
+        ins = instruccions.detecta(p)[0]
+        estat = edicio.estat_buit()
+        ins["estat"] = "acceptada"
+        estat = instruccions.aplica_decisio(estat, ins)
+        self.assertEqual(estat["esborrades"], {1: "instruccio", 2: "instruccio", 3: "instruccio"})
+        ins["estat"] = "pendent"
+        self.assertEqual(instruccions.aplica_decisio(estat, ins)["esborrades"], {})  # si es desfà, hi tornen
+
+    def test_parlar_d_una_altra_cosa_no_compta(self):
+        for text in ("La talla de la samarreta era petita.",  # «talla» sola no és cap ordre
+                     "M'encanten els stickers de la papereria.",
+                     "Ahir vaig veure un vídeo on parlaven de com fer un sticker per a la botiga.",  # no al començament
+                     "Sticker és una paraula que fem servir molt però que en català podríem dir adhesiu o enganxina "
+                     "i ningú no se n'adonaria gens ni mica de la diferència entre totes dues coses."):  # massa llarga
+            self.assertEqual(instruccions.detecta(paraules(text)), [], text)
+
+    def test_amb_claude_no_surt_dos_cops(self):
+        p = paraules("Hola. Claude, sticker d'un cor. Adéu.", {5: 0.8})
+        trobades = instruccions.detecta(p)
+        self.assertEqual([(t["id"], t.get("sense_paraula", False)) for t in trobades], [("i1", False)])
+
+
+class TestAfegeixAMa(unittest.TestCase):
+    def test_treu_les_paraules_on_es_deia(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from motor.projecte import Projecte
+        with tempfile.TemporaryDirectory() as d:
+            carpeta = Path(d)
+            (carpeta / "transcripcio.json").write_text(json.dumps(
+                {"video": str(carpeta / "no-hi-es.mov"), "fps": "30", "durada": 4.0,
+                 "paraules": paraules("Hola. Mira un estiquer de cor. Seguim.")}), encoding="utf-8")
+            projecte = Projecte(carpeta)
+            ins = projecte.afegeix_instruccio("sticker", 6, "un cor", treu=(1, 5))
+            self.assertEqual((ins["paraules"], ins["estat"], ins["manual"]), ([1, 5], "acceptada", True))
+            self.assertEqual(sorted(Projecte(carpeta).estat["esborrades"]), [1, 2, 3, 4, 5])  # desat

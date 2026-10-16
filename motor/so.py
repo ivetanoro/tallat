@@ -224,7 +224,8 @@ def _lletres_titol(titol: dict, animacio: str) -> list[float]:
 SONS_GRAFICS = {"frase": ("whoosh", "Frase", True), "llista": ("pop", "Llista", True),
                 "etiqueta": ("pop", "Etiqueta", False), "crida": ("brill", "Crida", True),
                 "notificacio": ("brill", "Notificació", True), "xat": ("pop", "Xat", True),
-                "numero": ("tic", "Número", True), "anotacio": ("tic", "Anotació", False)}
+                "numero": ("tic", "Número", True), "anotacio": ("tic", "Anotació", False),
+                "web": ("whoosh", "Web", True), "ventall": ("pop", "Fotos", True)}
 
 
 def esdeveniments(brolls: list[dict], stickers: list[dict], titol: dict | None, animacio_titol: str,

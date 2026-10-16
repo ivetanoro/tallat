@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 import time
 from collections import Counter
@@ -204,7 +205,53 @@ class Projecte:
         inicis, finals, bloc_de = grafics.temps_paraules(self._blocs(), mapa_muntatge(trams))
         marca_kit, sub, alcada = self._per_dibuixar(linies)
         return grafics.situa(pla, inicis, finals, sum(b - a for a, b in trams), marca_kit.get("energia"),
-                             marca_kit.get("crida") or "", sub, bloc_de, alcada)
+                             marca_kit.get("crida") or "", sub, bloc_de, alcada, self.imatges_grafics())
+
+    # --- Les imatges dels gràfics (la web i el ventall) ------------------------------------------------
+
+    @property
+    def carpeta_imatges(self) -> Path:
+        return self.carpeta / grafics.CARPETA_IMATGES
+
+    def imatges_grafics(self) -> set[str]:
+        carpeta = self.carpeta_imatges
+        return {p.name for p in carpeta.iterdir() if p.is_file()} if carpeta.is_dir() else set()
+
+    def importa_imatge(self, origen: Path) -> str:
+        """Copia una imatge a la carpeta dels gràfics i en torna el nom (fet del contingut: la mateixa
+        imatge, el mateix nom; si se'n canvia una, el vídeo es torna a dibuixar)."""
+        origen = Path(origen).expanduser()
+        extensio = origen.suffix.lower()
+        if extensio not in grafics.FORMATS_IMATGE:
+            raise ValueError(f"«{origen.name}» no és una imatge que es pugui fer servir (PNG, JPG, WebP o GIF)")
+        if not origen.is_file():
+            raise ValueError(f"No trobo la imatge «{origen}»")
+        contingut = origen.read_bytes()
+        nom = hashlib.sha1(contingut).hexdigest()[:16] + (".jpg" if extensio == ".jpeg" else extensio)
+        desti = self.carpeta_imatges / nom
+        if not desti.exists():
+            desti.parent.mkdir(parents=True, exist_ok=True)
+            temporal = desti.with_name(f".{nom}.copiant")
+            temporal.write_bytes(contingut)
+            temporal.replace(desti)
+        return nom
+
+    def importa_imatges(self, pla: list) -> list:
+        """Al pla que envia Claude, les imatges que són camins de fitxers es copien al projecte i s'hi
+        posa el seu nom (les que ja hi són es queden igual)."""
+        def nom(valor):
+            if not isinstance(valor, str) or not valor.strip() or grafics.imatge_valida(valor.strip()):
+                return valor
+            return self.importa_imatge(Path(valor.strip()))
+        sortida = []
+        for g in pla if isinstance(pla, list) else []:
+            if isinstance(g, dict) and g.get("tipus") == "web" and g.get("imatge"):
+                g = {**g, "imatge": nom(g["imatge"])}
+            elif isinstance(g, dict) and g.get("tipus") == "ventall" and isinstance(g.get("punts"), list):
+                g = {**g, "punts": [{**p, "imatge": nom(p.get("imatge"))} if isinstance(p, dict) else nom(p)
+                                    for p in g["punts"]]}
+            sortida.append(g)
+        return sortida
 
     def blocs(self, trams, situats=None) -> list[dict]:
         """Els blocs de color del vídeo final: [{inici, final, color}] (motor/grafics.py, BLOC)."""
@@ -219,7 +266,8 @@ class Projecte:
         if not self.estat.get("grafics"):
             return {}
         marca_kit, sub, alcada = self._per_dibuixar(linies)
-        dibuixos = {g["id"]: grafics.dibuix(g, marca_kit.get("energia"), marca_kit.get("crida") or "", sub, alcada)
+        imatges = self.imatges_grafics()
+        dibuixos = {g["id"]: grafics.dibuix(g, marca_kit.get("energia"), marca_kit.get("crida") or "", sub, alcada, imatges)
                     for g in self.estat["grafics"]}
         return {k: v for k, v in dibuixos.items() if v}
 
@@ -249,7 +297,7 @@ class Projecte:
                                     self.carpeta, qualitat, avis, stickers=enganxines,
                                     estil_stickers=estil.get("stickers", {}), fonts=self.fonts_subtitols(),
                                     titol=titol, estil_titol=estil.get("titol"),
-                                    grafics=situats, paleta=grafics.paleta(estil))
+                                    grafics=situats, paleta=grafics.paleta(estil), imatges=self.carpeta_imatges)
 
     # --- So --------------------------------------------------------------------
 
@@ -344,13 +392,17 @@ class Projecte:
         path = self.carpeta / instruccions.FITXER
         return path.resolve().parent if path.exists() else self.carpeta
 
-    def afegeix_instruccio(self, tipus: str, paraula: int, text: str = "") -> dict:
-        """Una instrucció afegida a mà en una paraula (no treu cap paraula del vídeo)."""
+    def afegeix_instruccio(self, tipus: str, paraula: int, text: str = "", treu: tuple[int, int] | None = None) -> dict:
+        """Una instrucció afegida a mà en una paraula. `treu`: les paraules on es deia la instrucció
+        (de la primera a l'última), que es treuen del vídeo (es poden recuperar, com les altres)."""
         llista = self.instruccions()
         p = self.dades["paraules"][paraula]
         n = sum(1 for i in llista if i["id"].startswith("m"))
-        ins = {"id": f"m{paraula}-{n + 1}", "tipus": tipus, "text": text or tipus, "paraules": None,
+        ins = {"id": f"m{paraula}-{n + 1}", "tipus": tipus, "text": text or tipus, "paraules": list(treu) if treu else None,
                "inici": p["inici"], "final": p["inici"], "ancora": paraula, "estat": "acceptada", "manual": True}
+        if treu:
+            self.estat = instruccions.aplica_a_estat(self.estat, [ins])
+            self.desa()
         llista.append(ins)
         llista.sort(key=lambda i: i["inici"])
         instruccions.desa(self.carpeta_instruccions(), llista)

@@ -147,8 +147,8 @@ class TestBlocDeColor(unittest.TestCase):
 
     def test_es_desa_nomes_si_es_vol(self):
         self.assertTrue(grafics.net(g(bloc=True))["bloc"])
-        self.assertFalse(grafics.net(g(bloc="sí"))["bloc"])
-        self.assertFalse(grafics.net(g())["bloc"])
+        self.assertIsNone(grafics.net(g(bloc="sí"))["bloc"])  # el de cada tipus
+        self.assertIsNone(grafics.net(g())["bloc"])
 
     def test_el_dibuix_va_a_dalt_i_sense_subtitols(self):
         d = grafics.dibuix(grafics.net({"tipus": "etiqueta", "paraula": 0, "text": "x", "bloc": True}), ["net"])
@@ -216,6 +216,39 @@ class TestBlocDeColor(unittest.TestCase):
             self.assertEqual(pixel(2.0, 540, b["y"] + b["h"] / 2), "vermell")  # i a la targeta, el vídeo
             self.assertEqual(pixel(3.5, 540, 300), "vermell")  # en acabar, torna a ser sencer
             self.assertEqual((exporta._color_ffmpeg("#abc"), exporta._color_ffmpeg("vermell")), ("0xAABBCC", "0x111111"))
+
+
+class TestWebIVentall(unittest.TestCase):
+    """La captura d'una web en una finestra i les fotos en ventall: gràfics amb imatges del projecte."""
+
+    def test_es_comproven(self):
+        web = grafics.net({"tipus": "web", "paraula": 1, "imatge": "~/Desktop/captura.png", "text": "elmeuweb.cat"})
+        self.assertEqual((web["imatge"], web["text"], web["bloc"]), ("~/Desktop/captura.png", "elmeuweb.cat", None))
+        ventall = grafics.net({"tipus": "ventall", "paraula": 1, "punts": ["a.png", {"imatge": "b.jpg", "text": "abans", "paraula": 3}, {"text": "sense foto"}]})
+        self.assertEqual(ventall["punts"], [{"imatge": "a.png", "text": "", "paraula": None},
+                                            {"imatge": "b.jpg", "text": "abans", "paraula": 3}])
+        self.assertEqual(grafics.net({"tipus": "ventall", "paraula": 1})["punts"], [])  # les fotos es poden pujar després
+        with self.assertRaises(ValueError):
+            grafics.net({"tipus": "web", "paraula": 1, "imatge": 3})
+
+    def test_sense_imatge_no_surten_al_video(self):
+        pla = grafics.neteja_llista([{"tipus": "web", "paraula": 0, "imatge": "abc.png"},
+                                     {"tipus": "ventall", "paraula": 1, "punts": ["f1.jpg", "../fora.png", "f2.webp"]}])
+        dibuix = grafics.dibuix(pla[0], [], imatges=set())
+        self.assertEqual((dibuix["imatge"], dibuix["falta"], dibuix["bloc"], dibuix["amaga_subtitols"]), ("", True, "fosc", True))
+        self.assertNotIn("falta", grafics.dibuix(pla[0], [], imatges={"abc.png"}))
+        inicis, finals = {0: 0.0, 1: 2.0, 2: 3.0}, {0: 0.5, 1: 2.5, 2: 3.5}
+        situats = grafics.situa(pla, inicis, finals, 10.0, [], imatges={"f2.webp", "fora.png"})
+        self.assertEqual([g["tipus"] for g in situats], ["ventall"])  # la web no té la captura
+        self.assertEqual([p["imatge"] for p in situats[0]["punts"]], ["f2.webp"])  # ni camins ni les que no hi són
+        self.assertEqual(situats[0]["posicio"], "mig")
+
+    def test_sense_bloc_si_es_diu(self):
+        g = grafics.net({"tipus": "ventall", "paraula": 0, "punts": ["a.png"], "bloc": False})
+        self.assertNotIn("bloc", grafics.dibuix(g, []))
+
+    def test_la_web_curta(self):
+        self.assertEqual(grafics.adreca_curta("https://www.elmeuweb.cat/curs/?ref=ig#a"), "elmeuweb.cat/curs")
 
 
 class TestZonaSegura(unittest.TestCase):
@@ -357,6 +390,37 @@ class TestAlProjecte(unittest.TestCase):
         self.assertIn("TallatGrafics.construeix", html)
         self.assertIn('"principal": "#8A1C2B"', html)
         self.assertIn(f"amaga: [[{situats[0]['inici']}, {situats[0]['final']}]]", html)
+
+    def test_les_imatges_del_pla_es_copien_al_projecte(self):
+        p = Projecte(self.carpeta)
+        foto = Path(self.dir.name) / "La meva foto.JPEG"
+        foto.write_bytes(b"\xff\xd8 una foto")
+        pla = p.importa_imatges([{"tipus": "ventall", "paraula": 1, "punts": [str(foto), {"imatge": str(foto), "text": "x"}]},
+                                 {"tipus": "web", "paraula": 2, "imatge": "ja-hi-es.png"}, g(paraula=3)])
+        nom = pla[0]["punts"][0]
+        self.assertRegex(nom, r"^[0-9a-f]{16}\.jpg$")
+        self.assertEqual(pla[0]["punts"][1], {"imatge": nom, "text": "x"})  # la mateixa foto, el mateix nom
+        self.assertEqual(pla[1]["imatge"], "ja-hi-es.png")
+        self.assertTrue((p.carpeta_imatges / nom).is_file())
+        with self.assertRaises(ValueError):
+            p.importa_imatges([{"tipus": "web", "paraula": 1, "imatge": "/no/hi/es.png"}])
+        p.estat["grafics"] = grafics.fusiona([], pla)
+        self.assertEqual([x["tipus"] for x in p.grafics()], ["ventall", "frase"])  # la web: no hi ha la captura
+        dibuixos = p.dibuixos_grafics()
+        self.assertTrue(dibuixos["g2"]["falta"])
+
+    def test_la_composicio_porta_les_imatges(self):
+        p = Projecte(self.carpeta)
+        foto = Path(self.dir.name) / "foto.png"
+        foto.write_bytes(b"png")
+        p.estat["grafics"] = grafics.fusiona([], p.importa_imatges([{"tipus": "web", "paraula": 1, "imatge": str(foto)}]))
+        situats = p.grafics()
+        with mock.patch.object(subtitols.subprocess, "run", side_effect=RuntimeError("prou")):
+            with self.assertRaises(RuntimeError):
+                subtitols.renderitza([], p.estil_subtitols(), 8.0, p.carpeta, "esborrany", grafics=situats,
+                                     paleta=grafics.paleta(p.estil()), imatges=p.carpeta_imatges)
+        copiades = list((p.carpeta / "subtitols").glob("*/imatges/*.png"))
+        self.assertEqual([c.name for c in copiades], [situats[0]["imatge"]])
 
     def test_l_ordre_del_xat(self):
         import tallat

@@ -7,7 +7,7 @@ transcripció: si es mouen els talls, el gràfic segueix la seva frase.
    "text": "no és mandra, és *cansament*", "punts": [], "estil": "mac", "posicio": "dalt",
    "amaga_subtitols": null, "motiu": "la idea central", "estat": "proposat", "nota": ""}
 
-Tipus (tots de text: no cal cap fitxer):
+Tipus:
   frase        una frase clau en gran (*entre asteriscs*, la part destacada); amaga els subtítols
   etiqueta     una paraula o dues en una etiqueta petita («mite», «pas 1»)
   llista       una targeta amb uns quants punts, que surten un a un (cadascun quan es diu); amaga els
@@ -18,8 +18,16 @@ Tipus (tots de text: no cal cap fitxer):
                un a un; amaga els subtítols
   numero       una xifra que compta des de zero («xifra»: «73 %», «10.000 €»), amb un text a sota
   anotacio     una nota escrita a mà amb un cercle, un subratllat o una fletxa («forma») que es dibuixa
+  web          una captura de pantalla dins d'una finestra de navegador («imatge»; «text»: l'adreça que
+               surt a la barra), que baixa a poc a poc si la captura és llarga; amaga els subtítols
+  ventall      unes quantes fotos obertes en ventall (els «punts», cadascun amb la seva «imatge» i, si
+               es vol, un peu de foto a «text»), que surten una a una; «text»: un títol; amaga els subtítols
 
-Amb `bloc: true`, mentre surt el gràfic el fons es fa d'un color de la marca, el vídeo es fa petit (amb
+Les imatges (de la web i del ventall) es desen al projecte, a CARPETA_IMATGES, amb un nom fet del seu
+contingut. Al pla, «imatge» és aquest nom (o, quan Claude envia el pla, el camí d'un fitxer, que tallat
+copia al projecte). Mentre no tenen imatge, la web i el ventall no surten al vídeo.
+
+Amb `bloc: true` (per defecte, a la web i al ventall), mentre surt el gràfic el fons es fa d'un color de la marca, el vídeo es fa petit (amb
 una animació suau) dins d'una targeta a baix, on s'hi continua veient la cara, i el gràfic té tot l'espai
 de dalt.
 
@@ -35,10 +43,16 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-TIPUS = ("frase", "etiqueta", "llista", "crida", "notificacio", "xat", "numero", "anotacio")
+TIPUS = ("frase", "etiqueta", "llista", "crida", "notificacio", "xat", "numero", "anotacio", "web", "ventall")
 NOMS = {"frase": "Frase", "etiqueta": "Etiqueta", "llista": "Llista", "crida": "Crida",
-        "notificacio": "Notificació", "xat": "Xat", "numero": "Número", "anotacio": "Anotació"}
-AMB_PUNTS = ("llista", "xat")  # els que tenen punts que surten un a un
+        "notificacio": "Notificació", "xat": "Xat", "numero": "Número", "anotacio": "Anotació",
+        "web": "Web", "ventall": "Fotos"}
+AMB_PUNTS = ("llista", "xat", "ventall")  # els que tenen punts que surten un a un
+AMB_IMATGE = ("web", "ventall")
+BLOC_PER_DEFECTE = ("web", "ventall")  # els grans: amb el bloc de color si no es diu el contrari
+CARPETA_IMATGES = "imatges-grafics"  # dins del projecte
+FORMATS_IMATGE = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+NOM_IMATGE = re.compile(r"[A-Za-z0-9_-]{1,80}\.(?:png|jpe?g|webp|gif)")  # el nom d'una imatge ja copiada
 FORMES = ("cercle", "subratllat", "fletxa")  # de l'anotació
 COSTATS = ("esquerra", "dreta")
 ESTILS = ("net", "mac", "scrapbook", "editorial")
@@ -50,15 +64,16 @@ ZONA_SEGURA = (0.14, 0.65)
 MARGE_SUBTITOLS = 28  # px entre un gràfic i els subtítols
 ESTATS = ("proposat", "mantingut", "canvia", "tret")
 DURADES = {"frase": 2.8, "etiqueta": 2.2, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "xat": 5.0,
-           "numero": 2.8, "anotacio": 2.5}
+           "numero": 2.8, "anotacio": 2.5, "web": 4.0, "ventall": 4.5}
 # On va cada tipus si no es diu: en un vídeo de cap parlant, la cara sol omplir el mig.
 POSICIO = {"frase": "dalt", "etiqueta": "dalt", "llista": "baix", "crida": "baix", "notificacio": "dalt",
-           "xat": "baix", "numero": "dalt", "anotacio": "mig"}
+           "xat": "baix", "numero": "dalt", "anotacio": "mig", "web": "mig", "ventall": "mig"}
 # Els que amaguen els subtítols mentre surten (el que hi diu és el que se sent).
 AMAGA = {"frase": True, "llista": True, "etiqueta": False, "crida": False, "notificacio": False, "xat": True,
-         "numero": False, "anotacio": False}
+         "numero": False, "anotacio": False, "web": True, "ventall": True}
 MIDA_TEXT = {"frase": 140, "etiqueta": 40, "llista": 80, "crida": 90, "notificacio": 120, "xat": 30,
-             "numero": 60, "anotacio": 40}
+             "numero": 60, "anotacio": 40, "web": 60, "ventall": 60}
+MIDA_PEU = 30  # el peu de cada foto del ventall
 CAL_TEXT = ("frase", "etiqueta", "notificacio", "anotacio")
 XIFRA = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?")  # «10.000», «2,5», «73»
 DENSITAT = {"pocs": "un cada 8-12 s", "normal": "un cada 4-6 s", "molts": "un cada 2-4 s"}  # com la marca
@@ -69,8 +84,8 @@ MINIM = 0.8         # segons: cap gràfic dura menys
 ENTRADA_PUNT = 0.35  # quan surt el primer punt d'una llista sense paraules (després de la targeta)
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_FRASE = 0.7    # un silenci així també tanca una frase
-CAMPS = ("id", "tipus", "paraula", "fins", "durada", "text", "punts", "de", "xifra", "forma", "costat", "estil",
-         "posicio", "amaga_subtitols", "bloc", "motiu", "estat", "nota")
+CAMPS = ("id", "tipus", "paraula", "fins", "durada", "text", "punts", "de", "xifra", "forma", "costat", "imatge",
+         "estil", "posicio", "amaga_subtitols", "bloc", "motiu", "estat", "nota")
 # El bloc de color, en px de 1080 × 1920: la targeta on va el vídeo (4:5, a baix i centrada) i el tros del
 # vídeo que s'hi veu (de dalt, on sol haver-hi la cara). El vídeo s'hi encongeix i en torna a sortir en
 # ANIMACIO_BLOC segons. La mateixa geometria a l'export (motor/exporta.py) i a la pàgina (app.js).
@@ -96,6 +111,20 @@ def _text(valor, nom: str, mida: int, retalla: bool = False) -> str:
     if len(text) > mida and not retalla:
         raise ValueError(f"«{nom}» és massa llarg: com a molt {mida} lletres («{text[:30]}…»)")
     return text[:mida]
+
+
+def _imatge(valor) -> str:
+    """El nom d'una imatge del projecte o, al pla que envia Claude, el camí d'un fitxer."""
+    if valor is None:
+        return ""
+    if not isinstance(valor, str) or len(valor) > 500:
+        raise ValueError("«imatge» ha de ser el camí d'una imatge")
+    return valor.strip()
+
+
+def imatge_valida(nom, imatges=None) -> bool:
+    """Si `nom` és una imatge ja copiada al projecte (i, si es diu quines hi ha, que hi sigui)."""
+    return isinstance(nom, str) and bool(NOM_IMATGE.fullmatch(nom)) and (imatges is None or nom in imatges)
 
 
 def net(g: dict, paraules: int | None = None) -> dict:
@@ -124,7 +153,16 @@ def net(g: dict, paraules: int | None = None) -> dict:
     if tipus in CAL_TEXT and not sortida["text"]:
         raise ValueError(f"Al gràfic {NOMS[tipus].lower()} li falta «text»")
     punts = []
-    if tipus in AMB_PUNTS:
+    if tipus == "ventall":  # les fotos: cadascuna amb la seva imatge (un text sol és el camí de la imatge)
+        for p in g.get("punts") or []:
+            p = p if isinstance(p, dict) else {"imatge": p}
+            imatge = _imatge(p.get("imatge"))
+            if imatge:
+                paraula = _enter(p.get("paraula"), "punts.paraula")
+                if paraules is not None and paraula is not None and paraula >= paraules:
+                    raise ValueError(f"No hi ha cap paraula amb el número {paraula}")
+                punts.append({"imatge": imatge, "text": _text(p.get("text"), "punts.text", MIDA_PEU), "paraula": paraula})
+    elif tipus in AMB_PUNTS:
         for k, p in enumerate(g.get("punts") or []):
             p = p if isinstance(p, dict) else {"text": p}
             text = _text(p.get("text"), "punts", MIDA_PUNT)
@@ -146,6 +184,7 @@ def net(g: dict, paraules: int | None = None) -> dict:
         raise ValueError("Un número necessita «xifra», amb un número a dins («73 %», «10.000 €», «3 de cada 4»)")
     sortida["forma"] = (g.get("forma") if g.get("forma") in FORMES else "fletxa") if tipus == "anotacio" else None
     sortida["costat"] = (g.get("costat") if g.get("costat") in COSTATS else "esquerra") if tipus == "anotacio" else None
+    sortida["imatge"] = _imatge(g.get("imatge")) if tipus == "web" else ""
     sortida["estil"] = g.get("estil") if g.get("estil") in ESTILS else None
     posicio = g.get("posicio")
     if isinstance(posicio, (int, float)) and not isinstance(posicio, bool):
@@ -154,7 +193,8 @@ def net(g: dict, paraules: int | None = None) -> dict:
         sortida["posicio"] = posicio if posicio in POSICIONS else None
     amaga = g.get("amaga_subtitols")
     sortida["amaga_subtitols"] = amaga if isinstance(amaga, bool) else None
-    sortida["bloc"] = g.get("bloc") is True
+    bloc = g.get("bloc")
+    sortida["bloc"] = bloc if isinstance(bloc, bool) else None  # None: el de cada tipus (BLOC_PER_DEFECTE)
     sortida["motiu"] = _text(g.get("motiu"), "motiu", 200, retalla=True)
     sortida["estat"] = g.get("estat") if g.get("estat") in ESTATS else "proposat"
     sortida["nota"] = _text(g.get("nota"), "nota", MIDA_NOTA, retalla=True)
@@ -296,22 +336,33 @@ def limits(subtitols: dict | None, amaga: bool, alcada: float | None = None) -> 
     return [round(dalt), round(max(baix, dalt + 200))]
 
 
-def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alcada: float | None = None) -> dict | None:
+def _punts_visibles(g: dict, imatges) -> list[dict]:
+    """Els punts que es veuen: al ventall, només les fotos que ja són al projecte."""
+    if g["tipus"] != "ventall":
+        return g["punts"]
+    return [p for p in g["punts"] if imatge_valida(p.get("imatge"), imatges)]
+
+
+def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alcada: float | None = None,
+           imatges=None) -> dict | None:
     """El que cal per dibuixar un gràfic, sense els temps: {id, tipus, nom, text, punts, estil, posicio,
-    amaga_subtitols, limits, i de, xifra o forma i costat}. None si no té res a dir (una crida sense text
-    ni crida a la marca). També el fa servir la pàgina per a les miniatures (dels trets, per exemple)."""
+    amaga_subtitols, limits, i de, xifra, forma i costat o imatge}. None si no té res a dir (una crida
+    sense text ni crida a la marca). La web i el ventall sense imatges porten `falta`: a la pàgina es
+    veuen (per pujar-les-hi), però no surten al vídeo. `imatges`: els noms de les que hi ha al projecte
+    (si no es diu, no es comprova). També el fa servir la pàgina per a les miniatures (dels trets, per exemple)."""
     estils = [estils] if isinstance(estils, str) else (estils or [])  # els kits d'abans: un sol estil
     text = g["text"] or (crida.strip()[:MIDA_TEXT["crida"]] if g["tipus"] == "crida" else "")
-    if not (text or g["punts"] or g.get("xifra")):
+    if g["tipus"] not in AMB_IMATGE and not (text or g["punts"] or g.get("xifra")):
         return None
     # Amb el bloc de color, el gràfic fa de diapositiva: per defecte, sense subtítols.
-    amaga = (AMAGA[g["tipus"]] or bool(g.get("bloc"))) if g.get("amaga_subtitols") is None else g["amaga_subtitols"]
+    bloc = g["tipus"] in BLOC_PER_DEFECTE if g.get("bloc") is None else g["bloc"]
+    amaga = (AMAGA[g["tipus"]] or bloc) if g.get("amaga_subtitols") is None else g["amaga_subtitols"]
     d = {"id": g["id"], "tipus": g["tipus"], "nom": NOMS[g["tipus"]], "text": text,
-         "punts": [{c: v for c, v in p.items() if c != "paraula"} for p in g["punts"]],
+         "punts": [{c: v for c, v in p.items() if c != "paraula"} for p in _punts_visibles(g, imatges)],
          "estil": g.get("estil") or next((e for e in estils if e in ESTILS), "net"),
          "posicio": POSICIO[g["tipus"]] if g.get("posicio") is None else g["posicio"],
          "amaga_subtitols": amaga, "limits": limits(subtitols, amaga, alcada)}
-    if g.get("bloc"):
+    if bloc:
         # El fons: el principal sota les targetes clares (mac, scrapbook); el fosc sota el text clar.
         d["bloc"] = "principal" if d["estil"] in ("mac", "scrapbook") else "fosc"
         d["limits"] = [round(ZONA_SEGURA[0] * ALCADA), BLOC["y"] - 40]  # tot l'espai de sobre la targeta
@@ -323,21 +374,26 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
         d["xifra"] = llegeix_xifra(g["xifra"])
     elif g["tipus"] == "anotacio":
         d.update(forma=g.get("forma") or "fletxa", costat=g.get("costat") or "esquerra")
+    elif g["tipus"] == "web":
+        d["imatge"] = g["imatge"] if imatge_valida(g.get("imatge"), imatges) else ""
+    if g["tipus"] in AMB_IMATGE and not (d.get("imatge") or d["punts"]):
+        d["falta"] = True
     return d
 
 
 def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils: list[str],
           crida: str = "", subtitols: dict | None = None, bloc_de: dict | None = None,
-          alcada: float | None = None) -> list[dict]:
+          alcada: float | None = None, imatges=None) -> list[dict]:
     """Els gràfics que surten al vídeo (no els trets), a punt per dibuixar, en temps del muntatge:
     el `dibuix` de cadascun amb `inici`, `final` i, als punts, `t`. Els que són d'una frase que ja no
     surt al vídeo no hi són. `subtitols`: l'estil dels subtítols, si el vídeo en porta (perquè els
     gràfics no els tapin), i `alcada`, la del seu bloc més alt. `bloc_de`: el bloc de cada paraula
-    (temps_paraules): el final i els punts d'un gràfic han de ser del mateix bloc que el començament."""
+    (temps_paraules): el final i els punts d'un gràfic han de ser del mateix bloc que el començament.
+    `imatges`: les que hi ha al projecte (la web i el ventall sense imatge no surten)."""
     llista = []
     for g in grafics:
-        situat = dibuix(g, estils, crida, subtitols, alcada) if g.get("estat") != "tret" else None
-        if situat is None:
+        situat = dibuix(g, estils, crida, subtitols, alcada, imatges) if g.get("estat") != "tret" else None
+        if situat is None or situat.get("falta"):
             continue
         mateix_bloc = (lambda p: bloc_de is None or g["paraula"] is None or
                        bloc_de.get(p) == bloc_de.get(g["paraula"]))
@@ -355,9 +411,9 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
             final = finals[g["fins"]] + 0.3
         final = round(min(total, max(inici + MINIM, final)), 3)
         if g["tipus"] in AMB_PUNTS:
-            n = len(g["punts"])
+            n = len(situat["punts"])
             pas = min(0.9 if g["tipus"] == "xat" else 0.7, max(0.2, (final - inici - 0.8) / max(1, n)))
-            for k, (p, punt) in enumerate(zip(g["punts"], situat["punts"])):
+            for k, (p, punt) in enumerate(zip(_punts_visibles(g, imatges), situat["punts"])):
                 paraula = p.get("paraula")
                 t = inicis.get(paraula) if paraula is not None and mateix_bloc(paraula) else None
                 t = inici + ENTRADA_PUNT + k * pas if t is None else t
@@ -510,4 +566,49 @@ def full_de_fotogrames(video: Path, quadres: list[dict], desti: Path) -> Path:
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "1", "-i", str(tmp / "q%03d.png"),
                         "-vf", f"tile={COLUMNES}x{files}:padding=8:margin=8:color=white", "-frames:v", "1",
                         str(desti)], check=True)
+    return desti
+
+
+# --- La captura d'una web (per al gràfic «web») ----------------------------------------------------
+
+# El Chrome sense finestra que ja fa servir HyperFrames per dibuixar (o el que hi hagi al Mac).
+CHROMES = ("~/.cache/hyperframes/chrome/chrome-headless-shell/*/*/chrome-headless-shell",
+           "~/.cache/puppeteer/chrome-headless-shell/*/*/chrome-headless-shell",
+           "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+MIDA_CAPTURA = (1280, 1950)  # com una pantalla d'ordinador, i una mica més de llarg perquè baixi
+
+
+def troba_chrome() -> Path | None:
+    for patro in CHROMES:
+        patro = str(Path(patro).expanduser())
+        trobats = sorted(Path("/").glob(patro.lstrip("/"))) if "*" in patro else [Path(patro)]
+        trobats = [p for p in trobats if p.is_file()]
+        if trobats:
+            return trobats[-1]
+    return None
+
+
+def adreca_curta(url: str) -> str:
+    """«https://www.elmeuweb.cat/curs/?ref=x» → «elmeuweb.cat/curs»: el que surt a la barra."""
+    text = re.sub(r"^[a-z]+://", "", url.strip(), flags=re.I)
+    text = re.sub(r"^www\.", "", text).split("?")[0].split("#")[0].rstrip("/")
+    return text[:MIDA_TEXT["web"]]
+
+
+def captura_web(url: str, desti: Path) -> Path:
+    """Fa una captura de la web (la part de dalt, com es veu a l'ordinador) amb Chrome sense finestra."""
+    if not re.match(r"^https?://", url.strip(), flags=re.I):
+        url = "https://" + url.strip()
+    chrome = troba_chrome()
+    if chrome is None:
+        raise RuntimeError("No trobo cap Chrome per fer la captura. Fes-la tu i puja-la a la pàgina.")
+    desti.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as perfil:
+        # Sense el clauer del Mac: així no demana cap contrasenya.
+        r = subprocess.run([str(chrome), "--headless", "--use-mock-keychain", "--password-store=basic",
+                            "--hide-scrollbars", "--no-first-run", "--disable-gpu", f"--user-data-dir={perfil}",
+                            f"--window-size={MIDA_CAPTURA[0]},{MIDA_CAPTURA[1]}", "--virtual-time-budget=8000",
+                            f"--screenshot={desti}", url], capture_output=True, text=True, timeout=90)
+    if not desti.is_file() or desti.stat().st_size == 0:
+        raise RuntimeError(f"No he pogut fer la captura de {url}:\n{(r.stderr or r.stdout)[-500:]}")
     return desti

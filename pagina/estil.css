@@ -256,6 +256,12 @@ kbd {
 .item.instruccio.acceptada .ins-tipus { color: var(--accent); }
 .item.instruccio.descartada { opacity: 0.55; }
 .item.instruccio .mini.actiu { background: var(--accent); color: #fff; box-shadow: none; }
+/* Les que afegeix Claude ja són al vídeo: una etiqueta en lloc del botó d'acceptar. */
+.item.instruccio .al-video {
+  flex: none; align-self: center; padding: 2px var(--e2); border-radius: 999px; font-size: var(--t-peu); font-weight: 500;
+  color: var(--accent); background: var(--accent-suau); white-space: nowrap;
+}
+.item.instruccio .torna-ins { flex: none; align-self: center; margin: 0; font-size: var(--t-peu); }
 /* Les instruccions, d'una línia: el detall i les accions secundàries surten en passar-hi el ratolí. */
 .item.instruccio .ins-text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item.instruccio .ins-estat { display: none; }
@@ -855,6 +861,17 @@ input.camp-text { min-height: 0; }
 .mini-grafic:disabled { cursor: default; }
 .mg-host { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
 .mg-targeta { position: absolute; background: linear-gradient(170deg, #5a5a5e, #2c2c2e); }
+.grafic-imatges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e1); }
+.grafic-imatges[hidden] { display: none; }
+.foto-grafic { position: relative; width: 32px; height: 40px; }
+.foto-grafic img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--linia); }
+.treu-foto {
+  position: absolute; top: -5px; right: -5px; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  background: var(--text); color: var(--superficie); box-shadow: 0 0 0 2px var(--superficie);
+}
+.treu-foto svg { width: 10px; height: 10px; stroke: currentColor; stroke-width: 2.4; fill: none; stroke-linecap: round; }
+.grafic-imatges .boto.petit { height: 28px; padding: 0 var(--e3); font-size: var(--t-petit); }
 .grafic-cos { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--e1); }
 .grafic-cap { display: flex; align-items: baseline; gap: var(--e2); font-size: var(--t-ui); }
 .grafic-cap strong { font-weight: 600; }

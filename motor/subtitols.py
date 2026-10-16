@@ -335,13 +335,14 @@ def _empremta(fitxer) -> str | None:
 def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qualitat: str,
                avis=None, stickers: list[dict] | None = None, estil_stickers: dict | None = None,
                fonts: list[dict] | None = None, titol: dict | None = None, estil_titol: dict | None = None,
-               grafics: list[dict] | None = None, paleta: dict | None = None) -> Path:
+               grafics: list[dict] | None = None, paleta: dict | None = None, imatges: Path | None = None) -> Path:
     """Dibuixa subtítols i stickers amb HyperFrames en un .mov transparent (reaprofita el darrer si no ha canviat).
 
     `stickers`: [{"fitxer": Path, "inici": s, "durada": s}].
     `fonts`: les lletres del kit que fan servir els subtítols, [{familia, pes, fitxer}] (marca.fonts_de).
     `titol`: el títol del ganxo, {text, inici, final}, amb el seu estil (`estil_titol`).
-    `grafics`: els gràfics del pla situats al muntatge (motor/grafics.py), amb els colors de `paleta`."""
+    `grafics`: els gràfics del pla situats al muntatge (motor/grafics.py), amb els colors de `paleta`;
+    les seves imatges (la web i el ventall) són a la carpeta `imatges`."""
     # L'esborrany es dibuixa a mitja mida (unes 3-4 vegades més ràpid); l'export final, a 1080 o en 4K.
     escala = {"4k": "4k", "esborrany": "540"}.get(qualitat, "1080")
     fonts = fonts or []
@@ -366,6 +367,11 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
         fonts_locals.append({"familia": f["familia"], "pes": f["pes"], "estil": f.get("estil", "normal"), "src": src})
     shutil.copy(CODI_ANIMACIO, projecte / "subtitols.js")
     shutil.copy(CODI_GRAFICS, projecte / "grafics.js")
+    # Les imatges dels gràfics, a imatges/ (grafics.js les hi busca). El nom ja diu el contingut.
+    noms = {g.get("imatge") for g in grafics or []} | {p.get("imatge") for g in grafics or [] for p in g.get("punts", [])}
+    for nom_imatge in filter(None, noms) if imatges else ():
+        (projecte / "imatges").mkdir(exist_ok=True)
+        shutil.copy(Path(imatges) / nom_imatge, projecte / "imatges" / nom_imatge)
     locals_st = []
     for k, st in enumerate(stickers or []):
         nom = f"sticker{k}{Path(st['fitxer']).suffix.lower()}"
