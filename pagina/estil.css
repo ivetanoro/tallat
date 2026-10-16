@@ -11,8 +11,8 @@
   --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 20px; --e6: 24px; --e7: 28px; --e8: 32px;
 
   /* Mides de lletra (com les de macOS) */
-  --t-peu: 0.6875rem;     /* 11 */
-  --t-petit: 0.75rem;     /* 12 */
+  --t-peu: 0.75rem;       /* 12: el més petit que es llegeix bé */
+  --t-petit: 0.8125rem;   /* 13 */
   --t-ui: 0.8125rem;      /* 13: controls i llistes */
   --t-cos: 0.9375rem;     /* 15 */
   --t-lectura: 1.1875rem; /* 19: el text que s'edita */
@@ -166,12 +166,12 @@ kbd {
 .item .context b { color: var(--proposta); font-weight: 600; }
 .item .temps-petit { color: var(--text-2); font-size: var(--t-petit); font-variant-numeric: tabular-nums; }
 .mini {
-  flex: none; width: 24px; height: 24px; border-radius: 50%;
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
   border: 0; background: var(--superficie); box-shadow: 0 0 0 1px var(--linia);
   display: grid; place-items: center; cursor: pointer; color: var(--text-2);
   transition: transform 100ms ease-out, background-color 120ms, color 120ms;
 }
-.mini svg { width: 12px; height: 12px; stroke-width: 2.2; }
+.mini svg { width: 13px; height: 13px; stroke-width: 2.2; }
 .mini:hover { color: var(--text); }
 .mini:active { transform: scale(0.88); }
 .mini.treu:hover { background: var(--auto-suau); color: var(--auto); }
@@ -216,8 +216,9 @@ kbd {
 
 /* El kit: el desplegable i un menú «…» amb les accions (com els menús del Mac). */
 .fila-kit { display: flex; align-items: center; gap: var(--e1); position: relative; }
-.fila-kit .tria-kit { flex: 1; min-width: 0; }
-.tria-kit { width: 100%; }
+.fila-kit .fila-estil { flex: 1; min-width: 0; }
+.tria-kit { width: 100%; margin-bottom: var(--e2); }
+.tria-kit[hidden] { display: none; }
 .menu-kit {
   position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 220px;
   display: flex; flex-direction: column; padding: 5px; border-radius: var(--radi-mitja);
@@ -305,6 +306,19 @@ kbd {
 .ajuda {
   max-width: 760px; margin: 0 auto; padding: var(--e1) var(--e8) 0;
   font-size: var(--t-petit); line-height: 1.5; color: var(--text-2);
+}
+.ajuda[hidden] { display: none; }
+/* Què fa ⌫ amb les paraules marcades: una píndola que flota a baix del text. */
+.pista-seleccio {
+  position: sticky; bottom: var(--e5); z-index: 4; width: fit-content; margin: -40px auto 0; padding: 6px 14px;
+  border-radius: 999px; font-size: var(--t-petit); color: var(--fons); background: var(--text);
+  box-shadow: var(--ombra-gran); animation: apareix 160ms ease-out; pointer-events: none;
+}
+.pista-seleccio[hidden] { display: none; }
+.pista-seleccio kbd {
+  display: inline-block; min-width: 18px; margin-right: 4px; padding: 0 5px; border-radius: 5px; text-align: center;
+  font: inherit; font-weight: 600; color: inherit; border: 0; box-shadow: none;
+  background: color-mix(in srgb, currentColor 22%, transparent);
 }
 
 .transcripcio {
@@ -394,6 +408,7 @@ body.mode-corregeix .p { cursor: text; }
 }
 .segmentat button:hover:not(:disabled):not([aria-checked="true"]) { color: var(--text); }
 .segmentat.ample { display: flex; width: 100%; }
+.segmentat[hidden] { display: none; }
 .segmentat.ample button { flex: 1; padding: 0 var(--e1); font-variant-numeric: tabular-nums; }
 .segmentat button[aria-checked="true"] {
   background: var(--superficie); color: var(--text);
@@ -569,12 +584,51 @@ body.mode-destaca .p.clau.fora { color: var(--tret); box-shadow: none; font-weig
 .color input::-webkit-color-swatch { border: 0; border-radius: 50%; }
 .color.apagat { opacity: 0.4; }
 .panell-estil > .enllac { margin: 0; align-self: flex-start; }
-.panell-estil > #fitxer-estil { margin-top: calc(-1 * var(--e4)); }
 
-.altres-editors { margin-top: var(--e5); padding-top: var(--e4); border-top: 1px solid var(--linia); display: flex; flex-direction: column; gap: var(--e2); align-items: flex-start; }
-.altres-editors h3 { margin: 0; font-size: var(--t-ui); font-weight: 600; }
-.altres-editors .detall { margin: 0; }
-.opcio-check { display: flex; align-items: center; gap: var(--e2); margin: calc(-1 * var(--e1)) 0 var(--e2); font-size: var(--t-petit); color: var(--text-2); cursor: pointer; }
+/* --- Exporta: l'esborrany, el vídeo final, els altres editors i els vídeos fets ------------------ */
+.full.exporta { width: min(520px, calc(100vw - var(--e8))); max-height: calc(100vh - var(--e8)); overflow-y: auto; }
+.cap-full { display: flex; align-items: center; gap: var(--e3); }
+.cap-full h2 { font-size: var(--t-titol); }
+.cap-full .detall { flex: 1; margin: 0; font-variant-numeric: tabular-nums; }
+.opcions-export { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e3); margin-top: var(--e5); }
+.opcio-export {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--e4);
+  border: 0; border-radius: var(--radi-mitja); background: var(--omplir); color: var(--text);
+  font: inherit; text-align: left; transition: transform 100ms ease-out, background-color 120ms;
+}
+button.opcio-export { cursor: pointer; }
+button.opcio-export:hover { background: var(--omplir-fort); }
+button.opcio-export:active { transform: scale(0.98); }
+.opcio-export.principal { background: var(--accent-suau); }
+.opcio-export svg {
+  width: 26px; height: 26px; margin-bottom: var(--e2); fill: none; stroke: var(--accent);
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.opcio-export strong { font-size: var(--t-cos); font-weight: 600; }
+.opcio-export > span { font-size: var(--t-petit); color: var(--text-2); }
+.opcio-export .segmentat { display: flex; width: 100%; margin-top: var(--e3); background: var(--superficie); }
+.opcio-export .segmentat label {
+  flex: 1; height: 26px; line-height: 26px; border-radius: var(--radi-petit); text-align: center; cursor: pointer;
+  font-size: var(--t-ui); font-weight: 500; color: var(--text-2);
+}
+.opcio-export .segmentat input { position: absolute; opacity: 0; pointer-events: none; }
+.opcio-export .segmentat label:has(input:checked) { background: var(--accent); color: #fff; }
+.opcio-export .segmentat label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.opcio-export .boto { width: 100%; margin-top: var(--e2); }
+.altres-editors { margin-top: var(--e4); padding-top: var(--e3); border-top: 1px solid var(--linia); }
+.altres-editors summary {
+  display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer;
+  font-size: var(--t-ui); font-weight: 600; color: var(--text);
+}
+.altres-editors summary::-webkit-details-marker { display: none; }
+.altres-editors .xebro-grup { width: 14px; height: 14px; fill: none; stroke: var(--text-2); stroke-width: 1.8; transform: rotate(-90deg); transition: transform 160ms var(--molla); }
+.altres-editors[open] .xebro-grup { transform: none; }
+.altres-editors > .boto { display: block; margin-top: var(--e3); }
+.opcio-check { display: flex; align-items: center; gap: var(--e2); margin: var(--e2) 0 0; font-size: var(--t-petit); color: var(--text-2); cursor: pointer; }
+.versions { margin-top: var(--e4); padding-top: var(--e3); border-top: 1px solid var(--linia); }
+.versions[hidden] { display: none; }
+.versions h3 { margin: 0 0 var(--e2); font-size: var(--t-ui); font-weight: 600; }
+#versions { max-height: 200px; overflow-y: auto; }
 
 .feina { display: flex; align-items: center; gap: var(--e2); font-size: var(--t-ui); color: var(--text-2); font-variant-numeric: tabular-nums; }
 .barra-progres { width: 88px; height: 4px; border-radius: 2px; background: var(--omplir); overflow: hidden; }
@@ -818,12 +872,16 @@ body.reproduint .play .si-play { display: block; }
 
 /* --- So ------------------------------------------------------------------------ */
 
-.abans-despres { display: grid; gap: var(--e2); margin-top: var(--e3); }
-.abans-despres > div { display: flex; flex-direction: column; gap: var(--e1); }
-.abans-despres audio { width: 100%; height: 32px; }
+/* Abans i després: dos botons per escoltar deu segons (sense el reproductor del navegador). */
+.abans-despres { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e2); margin-top: var(--e3); }
+.abans-despres[hidden], .abans-despres [hidden] { display: none; }
+.mostra-so { display: inline-flex; align-items: center; justify-content: center; gap: var(--e2); }
+.icona-so { width: 0; height: 0; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent currentColor; }
+.mostra-so[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.mostra-so[aria-pressed="true"] .icona-so { width: 8px; height: 10px; border: 0; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
 #pestanya-so .interruptor { white-space: normal; text-align: left; }
 #pestanya-so .camp { margin-top: var(--e3); }
-#pestanya-so input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+#pestanya-so input[type="range"], #ritme { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
 #pestanya-so code { font-size: 0.92em; word-break: break-all; }
 #llista-efectes { display: flex; flex-direction: column; margin: var(--e3) 0 var(--e2); }
 .efecte { display: flex; align-items: center; gap: var(--e2); padding: var(--e1) 0; border-top: 1px solid var(--linia); }
@@ -905,10 +963,9 @@ input.camp-text { min-height: 0; }
 
 /* --- On es desa l'export, i l'avís de «fet» ------------------------------------ */
 
-.carpeta-final { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--e1) var(--e2); margin: var(--e3) 0 var(--e1); font-size: var(--t-petit); }
-.carpeta-final code { min-width: 0; overflow-wrap: anywhere; color: var(--text); }
-.accions-carpeta { display: flex; gap: var(--e3); }
-.accions-carpeta .enllac { margin: 0; font-size: var(--t-petit); }
+.carpeta-final { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e1) var(--e2); margin: var(--e4) 0 0; font-size: var(--t-petit); color: var(--text-2); }
+.carpeta-final svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.carpeta-final .enllac { margin: 0; font-size: var(--t-petit); }
 .fet-export {
   display: flex; align-items: center; gap: var(--e2); min-width: 0; padding: 0 var(--e1) 0 var(--e3);
   height: 28px; border-radius: var(--radi); background: var(--accent-suau); font-size: var(--t-petit); color: var(--text);
@@ -983,9 +1040,12 @@ input.camp-text { min-height: 0; }
 .guia-pas { flex: 1; font-size: var(--t-petit); color: var(--text-2); }
 .guia-accions .enllac { margin: 0; }
 .ajuda-guia {
-  width: 18px; height: 18px; margin-left: var(--e1); padding: 0; border: 0; border-radius: 50%; cursor: pointer;
-  background: var(--omplir); color: var(--text-2); font-size: 11px; font-weight: 600; vertical-align: 1px;
+  flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--omplir); color: var(--text-2); font-size: 12px; font-weight: 600;
 }
+.fila-nom { display: flex; align-items: flex-start; gap: var(--e2); }
+.fila-nom h1 { flex: 1; min-width: 0; }
+.fila-nom .ajuda-guia { margin-top: 3px; }
 .ajuda-guia:hover { background: var(--omplir-fort); color: var(--text); }
 @media (prefers-reduced-motion: reduce) { .guia-forat, .guia-bombolla { transition: none; } }
 

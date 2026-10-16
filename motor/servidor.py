@@ -484,8 +484,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     return self._json(instantania())
                 if ruta in ("/api/marca", "/api/marca/restableix", "/api/marca/lletra") and cos.get("kit") not in (None, projecte.kit()):
                     # La pàgina ho demanava per a un altre kit (el vídeo n'ha canviat mentrestant): no en toquem cap.
-                    return self._json({"error": "Aquest vídeo ha canviat de kit i aquest canvi no s'ha desat. "
-                                                "Torna'l a fer si el vols al kit nou.", **info_marca(), **instantania()},
+                    return self._json({"error": "Aquest vídeo ha canviat d'estil i aquest canvi no s'ha desat. "
+                                                "Torna'l a fer si el vols a l'estil nou.", **info_marca(), **instantania()},
                                       HTTPStatus.CONFLICT)
                 if ruta in ("/api/marca", "/api/marca/restableix"):  # l'estil (subtítols, títol, b-roll o so), al kit del vídeo
                     try:
@@ -539,7 +539,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         else:
                             return self.send_error(HTTPStatus.NOT_FOUND)
                     except KeyError:
-                        return self._json({"error": "No trobo aquest kit"}, HTTPStatus.NOT_FOUND)
+                        return self._json({"error": "No trobo aquest estil"}, HTTPStatus.NOT_FOUND)
                     except ValueError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                     return self._json({**info_marca(), **instantania()})
@@ -672,7 +672,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             """Rep un kit (el .zip que fa «Exporta»), l'afegeix i el fa servir per a aquest vídeo."""
             mida = int(self.headers.get("Content-Length") or 0)
             if not 0 < mida <= marca.MIDA_MAXIMA_KIT:
-                return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "El kit és buit o massa gran")
+                return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "El fitxer de l'estil és buit o massa gran")
             contingut = self.rfile.read(mida)
             with bloqueig:
                 if self.headers.get("X-Tallat-Projecte") != clau_de(obert["p"]):

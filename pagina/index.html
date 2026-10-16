@@ -10,40 +10,40 @@
   <aside class="barra" aria-label="Projecte">
     <header class="barra-cap">
       <button class="enllac tornar" id="tornar" hidden>‹ Gravació sencera</button>
-      <p class="marca" id="marca">tallat <button class="ajuda-guia" id="obre-guia" title="Com funciona" aria-label="Com funciona (visita guiada)">?</button></p>
-      <h1 id="nom-projecte">…</h1>
-      <p class="durades"><span id="durada-original">–</span><span class="fletxa" aria-hidden="true">→</span><strong id="durada-final">–</strong></p>
-      <p class="detall" id="trossos">&nbsp;</p>
+      <p class="marca" id="marca" hidden></p>
+      <div class="fila-nom">
+        <h1 id="nom-projecte">…</h1>
+        <button class="ajuda-guia" id="obre-guia" title="Com funciona" aria-label="Com funciona (visita guiada)">?</button>
+      </div>
+      <p class="durades" title="Durada de la gravació → durada del vídeo"><span id="durada-original">–</span><span class="fletxa" aria-hidden="true">→</span><strong id="durada-final">–</strong></p>
     </header>
 
     <section class="seccio kit-cap" data-seccio="kit">
-      <h2>Kit d'estil</h2>
+      <select id="kit" class="tria-kit" aria-label="Estil d'aquest vídeo" hidden></select>
       <div class="fila-kit">
-        <select id="kit" class="tria-kit" aria-label="Kit d'estil d'aquest vídeo"></select>
+        <button class="fila-estil" id="obre-marca" aria-label="El teu estil: colors, lletres i com són els teus vídeos">
+          <span class="mostra-estil mostra-marca" id="mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+          <span class="fila-estil-text"><strong>El teu estil</strong><span id="nom-marca"></span></span>
+          <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+        </button>
         <button class="icona" id="menu-kit-boto" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-kit"
-                aria-label="Més accions del kit" title="Més accions del kit"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="10" r="1.4"/><circle cx="10" cy="10" r="1.4"/><circle cx="15" cy="10" r="1.4"/></svg></button>
+                aria-label="Més accions de l'estil" title="Més accions de l'estil"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="10" r="1.4"/><circle cx="10" cy="10" r="1.4"/><circle cx="15" cy="10" r="1.4"/></svg></button>
         <div class="menu-kit" id="menu-kit" role="menu" aria-label="Accions del kit" hidden>
           <button role="menuitem" id="kit-duplica">Duplica…</button>
-          <button role="menuitem" id="kit-nou">Kit nou amb l'estil de tallat…</button>
+          <button role="menuitem" id="kit-nou">Estil nou (el de tallat)…</button>
           <button role="menuitem" id="kit-nom">Canvia el nom…</button>
           <button role="menuitem" id="kit-defecte">Fes-lo per defecte</button>
           <hr>
           <button role="menuitem" id="kit-exporta">Exporta (.zip)</button>
-          <button role="menuitem" id="kit-importa">Importa un kit…</button>
+          <button role="menuitem" id="kit-importa">Importa un estil…</button>
           <hr id="sep-treu-kit">
           <button role="menuitem" class="perill" id="kit-esborra">Treu-lo</button>
         </div>
       </div>
-      <p class="detall" id="kit-detall"></p>
       <form class="nova-regla" id="form-kit" hidden>
         <input id="nom-kit" type="text" autocomplete="off" maxlength="60" aria-label="Nom del kit">
       </form>
       <input type="file" id="fitxer-kit" accept=".zip,application/zip" hidden>
-      <button class="fila-estil" id="obre-marca" aria-label="La teva marca: colors, lletres i com són els teus vídeos">
-        <span class="mostra-estil mostra-marca" id="mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span class="fila-estil-text"><strong>La teva marca</strong><span id="nom-marca"></span></span>
-        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
-      </button>
     </section>
 
     <div class="pestanyes" role="tablist" aria-label="Què vols fer" id="pestanyes">
@@ -63,10 +63,6 @@
               title="La neteja de la veu i els efectes de so">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
         <span>So</span></button>
-      <button role="tab" id="tab-videos" data-pestanya="videos" aria-controls="pestanya-videos" aria-selected="false"
-              title="Els esborranys i els vídeos finals que has exportat">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M10.5 9.5v5l4-2.5z"/></svg>
-        <span>Vídeos</span><span class="compte-pestanya" id="compte-videos"></span></button>
     </div>
 
     <div class="pestanya" id="pestanya-edita" role="tabpanel" aria-labelledby="tab-edita">
@@ -83,14 +79,9 @@
       <div id="propostes"><p class="buit">No hi ha propostes pendents.</p></div>
     </section>
     <section class="seccio" data-seccio="silenci">
-      <h2>Silenci màxim</h2>
-      <div class="segmentat ample" role="radiogroup" aria-label="Silenci màxim" id="pauses">
-        <button role="radio" data-pausa="0" title="No escurcis cap silenci">Sencers</button>
-        <button role="radio" data-pausa="0.5" title="0,5 segons">0,5</button>
-        <button role="radio" data-pausa="0.35" title="0,35 segons">0,35</button>
-        <button role="radio" data-pausa="0.25" title="0,25 segons">0,25</button>
-      </div>
-      <button class="enllac" id="torna-netejar">Torna a passar la neteja</button>
+      <h2>Silencis <span class="compte" id="nom-ritme"></span></h2>
+      <input type="range" id="ritme" min="0" max="3" step="1" aria-label="Com de llargs queden els silencis entre frases">
+      <div class="extrems" aria-hidden="true"><span>Llargs</span><span>Curts</span></div>
     </section>
     </div>
 
@@ -98,7 +89,7 @@
 
     <button class="oferta-marca" data-obre-assistent hidden>
       <span class="mostra-estil mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-      <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes la teva marca: 4 passos</span></span>
+      <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes el teu estil: 4 passos</span></span>
     </button>
     <section class="seccio" data-seccio="pla-grafics">
       <h2>Pla de gràfics <span class="compte" id="compte-grafics"></span></h2>
@@ -128,10 +119,9 @@
     <div class="panell-estil" id="panell-estil">
       <button class="oferta-marca" data-obre-assistent hidden>
         <span class="mostra-estil mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes la teva marca: 4 passos</span></span>
+        <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes el teu estil: 4 passos</span></span>
       </button>
-      <p class="pista-video">Toca els subtítols al vídeo: hi canvies l'estil, el color i la mida, i els arrossegues on vulguis.</p>
-      <p class="detall">Es desa al kit «<span id="nom-kit-panell"></span>»: canvia tots els vídeos que el fan servir.</p>
+      <p class="pista-video">Toca els subtítols al vídeo per canviar-los.</p>
       <button class="interruptor" id="subtitols" role="switch" aria-checked="true">
         <span class="pista" aria-hidden="true"><span class="bola"></span></span>Posa subtítols al vídeo
       </button>
@@ -143,7 +133,7 @@
         <label class="etiqueta" for="e-font">Lletra</label>
         <select id="e-font"></select>
         <button class="enllac puja-font" id="puja-font">Puja una font teva…</button>
-        <p class="detall avis-lletra" id="avis-lletra" hidden>Les gratuïtes es baixen al kit el primer cop que les tries (cal internet).</p>
+        <p class="detall avis-lletra" id="avis-lletra" hidden>Les gratuïtes es baixen el primer cop que les tries (cal internet).</p>
       </div>
       <div class="camp">
         <label class="etiqueta" for="e-mida">Mida</label>
@@ -303,7 +293,6 @@
       </details>
 
       <button class="enllac" id="restableix-estil">Torna a l'estil de tallat</button>
-      <p class="detall" id="fitxer-estil"></p>
     </div>
     </div>
 
@@ -313,7 +302,6 @@
       <button class="interruptor" id="s-neteja" role="switch" aria-checked="true">
         <span class="pista" aria-hidden="true"><span class="bola"></span></span>Neteja la veu
       </button>
-      <p class="detall">Treu el soroll de fons, suavitza les «s» i iguala el volum al de les xarxes. Ho sentiràs a l'esborrany i al vídeo final; aquí sota en pots escoltar deu segons.</p>
       <div class="camp" id="camp-s-soroll">
         <span class="etiqueta" id="et-s-soroll">Soroll de fons que es treu</span>
         <div class="segmentat ample" role="radiogroup" aria-labelledby="et-s-soroll" id="s-soroll">
@@ -323,8 +311,10 @@
         </div>
       </div>
       <div class="abans-despres" id="s-mostres">
-        <div><span class="etiqueta">Abans</span><audio id="s-abans" controls preload="none"></audio></div>
-        <div id="s-despres-caixa"><span class="etiqueta">Neta</span><audio id="s-despres" controls preload="none"></audio></div>
+        <button class="boto mostra-so" data-audio="s-abans" aria-pressed="false"><span class="icona-so" aria-hidden="true"></span>Abans</button>
+        <button class="boto mostra-so" data-audio="s-despres" id="s-despres-caixa" aria-pressed="false"><span class="icona-so" aria-hidden="true"></span>Neta</button>
+        <audio id="s-abans" preload="none"></audio>
+        <audio id="s-despres" preload="none"></audio>
       </div>
       <p class="detall" id="s-preparant" hidden>Preparant les mostres…</p>
     </section>
@@ -340,22 +330,13 @@
         <input type="range" id="s-volum" min="0" max="1" step="0.05">
       </div>
       <div id="llista-efectes"></div>
-      <p class="detall">Els sons els fa tallat. Si vols els teus, posa'ls a <code id="s-carpeta"></code> amb el nom del so que substitueixen (whoosh, pop, tecla, brill o tic).</p>
     </section>
     </div>
 
-    <div class="pestanya" id="pestanya-videos" role="tabpanel" aria-labelledby="tab-videos" hidden>
-    <section class="seccio" data-seccio="versions">
-      <h2>Vídeos exportats</h2>
-      <div id="versions"><p class="buit">Encara no n'has exportat cap. Fes-ne un amb «Esborrany» o «Final…», a dalt.</p></div>
-    </section>
-    </div>
 
     <div class="panell-estil" id="panell-marca" hidden>
       <button class="enllac tornar" id="tanca-marca">‹ Enrere</button>
-      <h2 class="titol-panell">La teva marca</h2>
-      <p class="detall">La fa l'entrevista de marca: digues a Claude «fem la meva marca». Aquí la pots retocar.
-        Es desa al kit «<span id="nom-kit-marca"></span>» i els colors i les lletres s'apliquen sols.</p>
+      <h2 class="titol-panell">El teu estil</h2>
       <div class="camp">
         <span class="etiqueta">Colors</span>
         <div class="colors colors-marca">
@@ -411,29 +392,11 @@
         <label class="etiqueta" for="m-crida">La teva crida a l'acció</label>
         <input type="text" class="camp-text" id="m-crida" maxlength="600" placeholder="Per exemple: comenta GUIA i te l'envio">
       </div>
-      <details class="grup-estil" id="grup-m-compte">
-        <summary>El teu compte<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
-        <div class="cos-grup">
-          <div class="camp">
-            <label class="etiqueta" for="m-compte">De què va</label>
-            <textarea class="camp-text" id="m-compte" rows="2" maxlength="600"></textarea>
-          </div>
-          <div class="camp">
-            <label class="etiqueta" for="m-public">Qui el mira</label>
-            <textarea class="camp-text" id="m-public" rows="2" maxlength="600"></textarea>
-          </div>
-          <div class="camp">
-            <label class="etiqueta" for="m-referencia">Un reel que t'hauria agradat fer (i per què)</label>
-            <textarea class="camp-text" id="m-referencia" rows="3" maxlength="600"></textarea>
-          </div>
-        </div>
-      </details>
     </div>
 
     <div class="panell-estil" id="panell-titol" hidden>
       <button class="enllac tornar" id="tanca-titol">‹ Enrere</button>
       <h2 class="titol-panell">Títol del ganxo</h2>
-      <p class="detall">El text és d'aquest vídeo; l'estil es desa al kit «<span id="nom-kit-titol"></span>».</p>
       <div class="camp">
         <textarea class="text-titol" id="text-titol" rows="3" placeholder="#3 canvis&#10;*ser creadora*&#10;nivell fàcil"
                   aria-label="El text del títol"></textarea>
@@ -565,7 +528,6 @@
     <div class="panell-estil" id="panell-broll" hidden>
       <button class="enllac tornar" id="tanca-broll">‹ Enrere</button>
       <h2 class="titol-panell">B-roll</h2>
-      <p class="detall">Com surten les imatges i els vídeos de recurs. Es desa al kit «<span id="nom-kit-broll"></span>».</p>
       <div class="estils" id="estils-broll" role="radiogroup" aria-label="Maneres de posar el b-roll"></div>
       <div class="camp">
         <label class="etiqueta" for="b-animacio">Com entra</label>
@@ -666,19 +628,19 @@
           <svg viewBox="0 0 20 20"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg>
         </button>
       </div>
-      <button class="boto" id="esborrany" title="Construeix una versió ràpida per revisar-la i deixar-hi notes">Esborrany</button>
-      <button class="boto principal" id="final">Final…</button>
+      <button class="boto principal" id="final">Exporta</button>
       <button class="icona" id="commuta-reproductor" title="Amaga el vídeo (⌥⌘V)" aria-label="Columna del vídeo" aria-pressed="true">
         <svg viewBox="0 0 20 20"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M12.5 4v12"/></svg>
       </button>
     </div>
-    <p class="ajuda" id="ajuda">Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la; arrossega amb el clic dret per fer-ho amb unes quantes. Per canviar l'ordre d'un paràgraf, arrossega'l per la nansa ⠿ de l'esquerra.</p>
+    <p class="ajuda" id="ajuda" hidden></p>
     <div id="transcripcio" class="transcripcio" aria-live="off"></div>
+    <p class="pista-seleccio" id="pista-seleccio" role="status" hidden></p>
   </main>
 
   <section class="reproductor" aria-label="Reproductor">
-    <div class="segmentat petit" role="radiogroup" aria-label="Què veus" id="vista">
-      <button role="radio" data-vista="directe" aria-checked="true">En directe</button>
+    <div class="segmentat petit" role="radiogroup" aria-label="Què veus" id="vista" hidden>
+      <button role="radio" data-vista="directe" aria-checked="true">Editant</button>
       <button role="radio" data-vista="esborrany" disabled>Esborrany</button>
     </div>
     <div class="pantalla">
@@ -738,31 +700,46 @@
     </div>
   </div>
 
-  <div class="full" id="full-final" role="dialog" aria-modal="true" aria-labelledby="titol-final" hidden>
-    <h2 id="titol-final">Exportar la versió final</h2>
-    <p class="detall" id="final-durada"></p>
-    <label class="opcio"><input type="radio" name="qualitat" value="4k" checked> <span><strong>4K</strong> · 2160 × 3840</span></label>
-    <label class="opcio"><input type="radio" name="qualitat" value="1080"> <span><strong>1080</strong> · 1080 × 1920</span></label>
+  <div class="full exporta" id="full-final" role="dialog" aria-modal="true" aria-labelledby="titol-final" hidden>
+    <div class="cap-full">
+      <h2 id="titol-final">Exporta</h2>
+      <span class="detall" id="final-durada"></span>
+      <button class="icona" id="cancella-final" title="Tanca" aria-label="Tanca">
+        <svg viewBox="0 0 20 20"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg>
+      </button>
+    </div>
+    <div class="opcions-export">
+      <button class="opcio-export" id="exporta-esborrany">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>
+        <strong>Esborrany</strong><span>Ràpid, per mirar-lo sencer</span>
+      </button>
+      <div class="opcio-export principal">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14"/></svg>
+        <strong>Vídeo final</strong><span>A punt per penjar</span>
+        <div class="segmentat" role="radiogroup" aria-label="Qualitat">
+          <label><input type="radio" name="qualitat" value="1080"> 1080</label>
+          <label><input type="radio" name="qualitat" value="4k" checked> 4K</label>
+        </div>
+        <button class="boto principal" id="confirma-final">Exporta</button>
+      </div>
+    </div>
     <p class="avis" id="final-avis" hidden></p>
     <div class="carpeta-final">
-      <span class="etiqueta">Es desarà a</span>
-      <code id="final-carpeta"></code>
-      <span class="accions-carpeta">
-        <button class="enllac" id="canvia-carpeta">Tria una altra carpeta…</button>
-        <button class="enllac" id="carpeta-projecte" hidden>Només a la del projecte</button>
-      </span>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 6.5a2 2 0 0 1 2-2h3.5l1.8 2h5.7a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z"/></svg>
+      <span id="final-carpeta"></span>
+      <button class="enllac" id="canvia-carpeta">Canvia…</button>
+      <button class="enllac" id="carpeta-projecte" hidden>Només a la del projecte</button>
     </div>
-    <div class="botons">
-      <button class="boto" id="cancella-final">Cancel·la</button>
-      <button class="boto principal" id="confirma-final">Exporta</button>
-    </div>
-    <div class="altres-editors">
-      <h3>O acaba'l en un altre editor</h3>
-      <p class="detall">Amb els talls, els zooms, el b-roll, els stickers i els subtítols (.srt), per retocar-los allà.</p>
-      <button class="boto" id="exporta-editors">Projecte per a Premiere, Final Cut o DaVinci</button>
-      <label class="opcio-check"><input type="checkbox" id="editors-capa"> Inclou-hi els subtítols i els gràfics de tallat (tarda uns minuts)</label>
-      <button class="boto" id="exporta-trossos">Trossos per a CapCut o iMovie</button>
-    </div>
+    <details class="altres-editors">
+      <summary>Per acabar-lo en un altre editor<svg class="xebro-grup" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>
+      <button class="boto" id="exporta-editors">Premiere, Final Cut o DaVinci</button>
+      <label class="opcio-check"><input type="checkbox" id="editors-capa"> Amb els subtítols i els gràfics (tarda uns minuts)</label>
+      <button class="boto" id="exporta-trossos">CapCut o iMovie</button>
+    </details>
+    <section class="versions" id="seccio-versions" hidden>
+      <h3>Els teus vídeos</h3>
+      <div id="versions"></div>
+    </section>
   </div>
 
   <input type="file" id="fitxer-broll" accept="image/*,video/*" hidden>

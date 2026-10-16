@@ -8,7 +8,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 
 ## Què fa
 
-- **Edites el vídeo tocant les paraules.** tallat transcriu el que dius en català i et mostra el text en una pàgina del teu ordinador. Un clic dret en una paraula la treu del vídeo; un altre la recupera.
+- **Edites el vídeo tocant les paraules.** tallat transcriu el que dius en català i et mostra el text en una pàgina del teu ordinador. Selecciones paraules com en un document i prems ⌫: fora del vídeo. Si les tornes a seleccionar i prems ⌫, tornen.
 - **Neteja sola.** Treu els «eh» i els «mmm», et proposa els «vale» i els «o sigui» perquè decideixis tu, i escurça els silencis llargs.
 - **Instruccions de veu mentre graves.** «Claude, torno a començar», «tallat, zoom aquí», «Claude, aquí un b-roll d'un vinil girant», «tallat, sticker d'un cor». tallat les troba a la gravació, les treu del vídeo i les aplica.
 - **Primer muntatge.** D'una gravació llarga, Claude et proposa entre un i cinc reels, cadascun amb el seu ganxo i el seu final.
@@ -16,8 +16,8 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 - **B-roll i stickers.** Fitxers teus, o generats amb la intel·ligència artificial d'imatge o vídeo que tinguis connectada a Claude. El b-roll pot tapar tota la pantalla o sortir en una targeta arrodonida, en una finestra petita, com una foto, amb la pantalla partida o en tres targetes seguides.
 - **Canvies l'ordre** dels paràgrafs arrossegant-los.
 - **Títol del ganxo.** Un text dissenyat per als primers segons («#3 canvis / **ser creadora** / nivell fàcil»), que pots escriure tu o et proposa Claude, amb el seu estil: en esglaó, com un rètol, a màquina d'escriure amb el fons enfosquit…
-- **La teva marca.** La primera vegada, Claude et fa unes preguntes (de què va el teu compte, un reel que t'agradaria haver fet, els teus colors i lletres…) i amb les respostes deixa els subtítols, el títol i el b-roll amb el teu estil. Després la pots retocar a la pàgina.
-- **Kits d'estil.** Desa el teu estil (lletra, colors, animacions, durada del b-roll…) amb un nom, fes-ne uns quants per a tipus de vídeo diferents, tria'n un per a cada vídeo i passa'l a qui vulguis en un `.zip`.
+- **El teu estil.** Tries els teus colors i lletres a la pàgina, en 4 passos (o, si vols, Claude te'ls pregunta al xat, a partir d'un reel que t'hauria agradat fer), i els subtítols, el títol, els gràfics i el b-roll els fan servir sols. Després els pots retocar quan vulguis.
+- **Uns quants estils.** Desa el teu estil (lletra, colors, animacions, durada del b-roll…) amb un nom, fes-ne uns quants per a tipus de vídeo diferents, tria'n un per a cada vídeo i passa'l a qui vulguis en un `.zip`.
 - **Recorda el teu gust.** Si dius a Claude «els subtítols, més grans» o «no em treguis mai els *vale*», et pregunta si és per sempre i ho aplica a tots els vídeos següents. Per veure les teves regles, pregunta-li «quines regles tinc?».
 - **Exporta** un esborrany ràpid, la versió final en 1080 o 4K vertical, o un projecte per acabar-lo a Premiere, Final Cut, DaVinci Resolve o CapCut.
 
@@ -70,18 +70,17 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | Per… | Fes… |
    |---|---|
    | escoltar des d'una paraula | clic a la paraula |
-   | treure o recuperar una paraula | clic dret (o control + clic) |
-   | treure'n unes quantes de cop | arrossega amb el clic dret per sobre |
+   | treure o recuperar paraules | selecciona-les (clic, arrossegant o ⇧ + clic) i prem ⌫ |
    | destacar una paraula als subtítols (o deixar de destacar-la) | mode **Destaca**, a dalt, i clic a la paraula |
    | canviar l'ordre d'un paràgraf | arrossega'l per la nansa ⠿ de l'esquerra |
    | desfer / refer | ⌘Z / ⇧⌘Z |
    | reproduir o aturar | espai |
    | amagar la columna de l'esquerra o la del vídeo | ⌃⌘S / ⌥⌘V |
 
-3. A dalt de la columna de l'esquerra tria el kit; a les pestanyes **Subtítols**, **Gràfics** (el pla de gràfics, el títol del ganxo i el b-roll) i **So** (la neteja de la veu i els efectes de so), com vols que quedi.
-4. Si vols gràfics, digues a Claude **«proposa'm gràfics»**: et proposa frases clau, etiquetes, llistes, notificacions, xats, números que compten, notes escrites a mà, captures de webs, fotos en ventall i la crida final, frase a frase i amb els colors i les lletres de la teva marca. A la pestanya **Gràfics** de cada un tries **Mantén**, **Canvia** (i li escrius una nota) o **Treu**. Després digues a Claude «mira les notes dels gràfics» i els canvia. Si un gràfic té el **bloc de color**, el vídeo es fa petit a baix i el gràfic surt a dalt sobre el color de la teva marca: l'actives o el treus tocant el gràfic al vídeo.
-5. Clica **Esborrany** (a dalt) i mira'l. El que vulguis canviar, digues-ho a Claude amb el segon, que veus sota el vídeo: «al segon 12, el b-roll és massa llarg». Els vídeos que exportes, a la pestanya **Vídeos**.
-6. Quan t'agradi, **Final…** → 4K o 1080. O, si el vols acabar en un altre editor, **Projecte per a Premiere, Final Cut o DaVinci** o **Trossos per a CapCut o iMovie**.
+3. A les pestanyes de la columna de l'esquerra, **Subtítols**, **Gràfics** (el pla de gràfics, el títol del ganxo i el b-roll) i **So** (la neteja de la veu i els efectes de so), com vols que quedi.
+4. Si vols gràfics, digues a Claude **«proposa'm gràfics»**: et proposa frases clau, etiquetes, llistes, notificacions, xats, números que compten, notes escrites a mà, captures de webs, fotos en ventall i la crida final, frase a frase i amb els colors i les lletres del teu estil. A la pestanya **Gràfics** de cada un tries **Mantén**, **Canvia** (i li escrius una nota) o **Treu**. Després digues a Claude «mira les notes dels gràfics» i els canvia. Si un gràfic té el **bloc de color**, el vídeo es fa petit a baix i el gràfic surt a dalt sobre el teu color: l'actives o el treus tocant el gràfic al vídeo.
+5. Clica **Exporta** (a dalt) → **Esborrany** i mira'l. El que vulguis canviar, digues-ho a Claude amb el segon, que veus sota el vídeo: «al segon 12, el b-roll és massa llarg».
+6. Quan t'agradi, **Exporta** → **Vídeo final** (1080 o 4K). O, si el vols acabar en un altre editor, **Per acabar-lo en un altre editor**: Premiere, Final Cut o DaVinci, o CapCut o iMovie. Els vídeos que ja has fet també surten a **Exporta**.
 
 En qualsevol moment pots demanar canvis a Claude amb paraules: «treu la primera frase», «fes-me tres reels d'aquesta gravació», «posa-hi un sticker d'una estrella quan dic *genial*».
 
@@ -103,7 +102,7 @@ Les instruccions es treuen soles del vídeo, i a la pàgina decideixes si les ac
 ## On es guarda cada cosa
 
 - **Els teus vídeos i projectes**, on tu diguis, mai dins de la carpeta de tallat.
-- **`~/.tallat/`**, la teva configuració: els teus kits d'estil, amb les seves lletres (`kits/`), les regles del teu gust (`gust.json`), la llista de farciment (`farciment.txt`), les biblioteques de b-roll i stickers (`broll/`, `stickers/`) i les eines que s'han instal·lat.
+- **`~/.tallat/`**, la teva configuració: els teus estils, amb les seves lletres (`kits/`), les regles del teu gust (`gust.json`), la llista de farciment (`farciment.txt`), les biblioteques de b-roll i stickers (`broll/`, `stickers/`) i les eines que s'han instal·lat.
 
 ## Privacitat
 

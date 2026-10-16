@@ -240,7 +240,6 @@ function aplicaTrams(r) {
   let t = 0;
   for (const [a, b] of trams) { acum.push(t); t += b - a; }
   $("#durada-final").textContent = fmt(duradaFinal);
-  $("#trossos").textContent = `${trams.length} ${trams.length === 1 ? "tros" : "trossos"}`;
   if (vista === "directe") { pintaMarques(trams, acum, duradaFinal); recolloca(); }
 }
 
@@ -487,12 +486,22 @@ function pintaSeleccio() {
   marcades.clear();
   const ids = seleccio ? idsEntre(seleccio.inici, seleccio.fi) : seleccioFeta;
   for (const id of ids || []) { spans.get(id)?.classList.add("seleccio"); marcades.add(id); }
+  // La pista: què fa ⌫ amb les paraules marcades (com en un document de text).
+  const n = seleccioFeta?.length || 0;
+  const pista = $("#pista-seleccio");
+  pista.hidden = !n || mode !== "talla";
+  if (n) {
+    const treu = seleccioFeta.some((id) => !esFora(id));
+    pista.innerHTML = `<kbd>⌫</kbd> ${treu ? `per treure ${n === 1 ? "la paraula" : `les ${n} paraules`}`
+      : `per tornar-${n === 1 ? "la" : "les"} a posar`}`;
+  }
 }
 
-// Clic: anar a la paraula i reproduir des d'allà. Clic dret (o control + clic): treure-la o
-// recuperar-la; arrossegant amb el botó dret, totes les que s'hi passen. Arrossegar amb el
-// botó esquerre selecciona unes quantes paraules; després, clic dret o ⌫.
-let seleccioFeta = null;  // ids de l'última selecció arrossegada, en l'ordre de la pàgina
+// Com en un document de text: un clic marca la paraula (i sona des d'allà), ⇧ + clic allarga la
+// selecció i arrossegar en marca unes quantes; ⌫ les treu (o, si ja eren fora, les torna a posar).
+// El clic dret (o control + clic) també les treu o les recupera.
+let seleccioFeta = null;  // ids de les paraules marcades, en l'ordre de la pàgina
+let ancoraSeleccio = null;  // on ha començat la selecció (per a ⇧ + clic)
 
 function commutaIds(ids) {
   if (ids.length) commuta(ids, ids.some((id) => !esFora(id)));
@@ -542,8 +551,13 @@ function instalaText() {
     if (mode === "corregeix") { e.preventDefault(); editaParaula(s, id); return; }
     if (mode === "destaca") { e.preventDefault(); commutaDestacada(id); return; }
     e.preventDefault();
-    seleccioFeta = null;
     llegeixOrdreVisual();
+    if (e.shiftKey && ancoraSeleccio != null && spans.has(ancoraSeleccio)) {
+      seleccioFeta = idsEntre(ancoraSeleccio, id);
+      pintaSeleccio();
+      return;
+    }
+    seleccioFeta = null;
     seleccio = { inici: id, fi: id, mogut: false };
     pintaSeleccio();
   });
@@ -561,8 +575,10 @@ function instalaText() {
       commutaIds(ids);
       return;
     }
-    if (!mogut) {  // un clic: hi anem i sona des d'allà
+    ancoraSeleccio = inici;
+    if (!mogut) {  // un clic: la paraula queda marcada i sona des d'allà
       seleccio = null;
+      seleccioFeta = [inici];
       pintaSeleccio();
       reprodueixDes(inici);
       return;
@@ -581,7 +597,9 @@ function instalaText() {
     if (mode === "talla" && e.target.closest(".p")) e.preventDefault();
   });
   document.addEventListener("keydown", (e) => {
-    if (!seleccioFeta || e.target.matches("input, textarea, select") || !["Backspace", "Delete"].includes(e.key)) return;
+    if (!seleccioFeta || mode !== "talla" || e.target.matches("input, textarea, select")) return;
+    if (e.key === "Escape") { deixaSeleccio(); return; }
+    if (!["Backspace", "Delete"].includes(e.key)) return;
     e.preventDefault();
     commutaIds(seleccioFeta);
     deixaSeleccio();
@@ -1171,7 +1189,6 @@ function pintaPanellEstil() {
   $("#e-fons-color").value = (e.fons_color || "#000000").toLowerCase();
   $("#camp-actiu").classList.toggle("apagat", destacatDe(e) === "cap" && !e.clau_grans && e.aspecte === "normal");
   $("#camp-fons").hidden = e.fons !== "pindola";
-  $("#fitxer-estil").textContent = `Fitxer: ${(P?.fitxer_estil || "").replace(/^\/Users\/[^/]+/, "~")}`;
 }
 
 // --- Desar l'estil ------------------------------------------------------------------------------
@@ -1245,7 +1262,6 @@ function respostaEstil(r) {
 
 function aplicaSo(r) {
   if (r.estil_so) { estilSo = { ...r.estil_so, ...pendents.so }; pintaSo(); }
-  if (r.sons_propis) $("#s-carpeta").textContent = r.sons_propis.replace(/^\/Users\/[^/]+/, "~");
 }
 
 function aplicaBroll(r) {
@@ -1448,8 +1464,8 @@ function instalaTitol() {
 }
 
 // --- Pestanyes de la columna de l'esquerra ------------------------------------------------------
-// Per tasques: Edita (què queda al vídeo), Subtítols, Gràfics (títol i b-roll), So i Vídeos (els
-// exportats). Es recorda la darrera. A «Edita», un punt avisa si hi ha coses per decidir.
+// Per tasques: Edita (què queda al vídeo), Subtítols, Gràfics (títol i b-roll) i So. Els vídeos
+// exportats són a «Exporta». Es recorda la darrera. A «Edita», un punt avisa si hi ha coses per decidir.
 
 function triaPestanya(nom, { focus = false } = {}) {
   if (nom === "estil") nom = "subtitols";  // la pestanya d'abans
@@ -1533,18 +1549,11 @@ function pintaKits() {
     tria.append(o);
   }
   tria.value = kitActual;
+  tria.hidden = kits.length < 2;  // amb un sol kit, no cal triar
   const actual = kits.find((k) => k.id === kitActual);
-  const defecte = kits.find((k) => k.per_defecte);
-  $("#kit-detall").textContent = actual?.per_defecte
-    ? "És el kit per defecte: el fan servir els vídeos nous."
-    : `Els vídeos nous fan servir «${defecte?.nom || ""}».`;
   $("#kit-defecte").hidden = !!actual?.per_defecte;
   $("#kit-esborra").hidden = !!actual?.per_defecte;
   $("#sep-treu-kit").hidden = !!actual?.per_defecte;
-  $("#nom-kit-panell").textContent = actual?.nom || "";
-  $("#nom-kit-titol").textContent = actual?.nom || "";
-  $("#nom-kit-broll").textContent = actual?.nom || "";
-  $("#nom-kit-marca").textContent = actual?.nom || "";
 }
 
 function respostaKit(r, missatge) {
@@ -1569,7 +1578,7 @@ function demanaNomKit(accio) {
   const actual = kits.find((k) => k.id === kitActual)?.nom || "";
   const camp = $("#nom-kit");
   camp.value = accio === "nom" ? actual : accio === "duplica" ? `${actual} (còpia)` : "";
-  camp.placeholder = accio === "nou" ? "Nom del kit nou" : "Nom del kit";
+  camp.placeholder = accio === "nou" ? "Nom de l'estil nou" : "Nom de l'estil";
   $("#form-kit").hidden = false;
   camp.focus();
   camp.select();
@@ -1581,7 +1590,7 @@ async function importaKit(fitxer) {
     await desaEstils();
     const json = await resposta(await fetch(`/api/kit/importa?nom=${encodeURIComponent(fitxer.name)}`,
       { method: "POST", headers: capcaleres({ "Content-Type": "application/zip" }), body: fitxer }));
-    respostaKit(json, "Kit importat. Aquest vídeo ja el fa servir.");
+    respostaKit(json, "Estil importat. Aquest vídeo ja el fa servir.");
   } catch (e) { avis(e.message, 6000); }
 }
 
@@ -1619,7 +1628,7 @@ function instalaKits() {
   instalaMenuKit();
   $("#kit").addEventListener("change", (e) => {
     const nom = kits.find((k) => k.id === e.target.value)?.nom || "";
-    accioKit("/api/kit/tria", { kit: e.target.value }, `Aquest vídeo fa servir el kit «${nom}».`);
+    accioKit("/api/kit/tria", { kit: e.target.value }, `Aquest vídeo fa servir l'estil «${nom}».`);
   });
   $("#kit-duplica").addEventListener("click", () => demanaNomKit("duplica"));
   $("#kit-nou").addEventListener("click", () => demanaNomKit("nou"));
@@ -1635,7 +1644,7 @@ function instalaKits() {
     else {
       const duplica = accioNomKit === "duplica";
       accioKit("/api/kit/nou", { nom, copia_de: duplica ? kitActual : null },
-        `Kit «${nom}» creat${duplica ? "" : " amb l'estil de tallat"}. Aquest vídeo ja el fa servir.`);
+        `Estil «${nom}» creat${duplica ? "" : " (el de tallat)"}. Aquest vídeo ja el fa servir.`);
     }
   });
   camp.addEventListener("keydown", (e) => { if (e.key === "Escape") { form.hidden = true; e.stopPropagation(); } });
@@ -1649,7 +1658,7 @@ function instalaKits() {
     document.body.append(enllac);
     enllac.click();
     enllac.remove();
-    avis("El kit es baixa en un .zip. Si porta una font teva, comprova que la pots compartir.", 5000);
+    avis("L'estil es baixa en un .zip. Si porta una lletra teva, comprova que la pots compartir.", 5000);
   });
   $("#kit-importa").addEventListener("click", () => $("#fitxer-kit").click());
   $("#fitxer-kit").addEventListener("change", (e) => {
@@ -1671,7 +1680,7 @@ function instalaKits() {
     confirma = null;
     treu.textContent = "Treu-lo";
     treu.classList.remove("confirma");
-    accioKit("/api/kit/esborra", { kit: kitActual }, "Kit tret. Aquest vídeo torna a fer servir el per defecte.");
+    accioKit("/api/kit/esborra", { kit: kitActual }, "Estil tret. Aquest vídeo torna a fer servir el per defecte.");
   });
 }
 
@@ -1692,7 +1701,7 @@ async function baixaLletra(id, seccio = "subtitols", clau = "font") {
   try {
     await desaEstils();
     respostaEstil(await api("/api/marca/lletra", { id, seccio, clau, kit: kitActual }));
-    avis(`Lletra «${nom}» afegida al kit.`);
+    avis(`Lletra «${nom}» afegida al teu estil.`);
   } catch (e) {
     avis(e.message, 6000);
     pintaPanellEstil();
@@ -1798,6 +1807,7 @@ function instalaSeccions() {
   const plegades = new Set(llegeix("tallat.plegades", []));
   for (const seccio of $$(".barra .seccio[data-seccio]")) {
     const h2 = seccio.querySelector("h2");
+    if (!h2) continue;  // el kit, a dalt: sense títol ni plegar
     const boto = document.createElement("button");
     boto.className = "plega";
     boto.innerHTML = XEBRO_SECCIO;
@@ -2026,6 +2036,7 @@ async function carregaVersio(nom, aTemps = 0) {
   for (const [a, b] of talls || []) { inicis.push(t); t += b - a; }
   esborrany = { nom, trams: talls, acum: inicis, durada: t || null };
   $('#vista [data-vista="esborrany"]').disabled = false;
+  $("#vista").hidden = false;  // fins que no hi ha cap esborrany, no cal triar què veus
   vE.src = `/exports/${encodeURIComponent(nom)}`;
   vE.addEventListener("loadedmetadata", () => {
     esborrany.durada ||= vE.duration;
@@ -2038,10 +2049,10 @@ async function carregaVersio(nom, aTemps = 0) {
 }
 
 function pintaVersions(exports) {
-  $("#compte-videos").textContent = exports.length || "";
   const cont = $("#versions");
   cont.textContent = "";
-  if (!exports.length) { cont.innerHTML = '<p class="buit">Encara no n\'has exportat cap. Fes-ne un amb «Esborrany» o «Final…», a dalt.</p>'; return; }
+  $("#seccio-versions").hidden = !exports.length;
+  if (!exports.length) return;
   for (const x of exports) {
     const item = document.createElement("div");
     item.className = "item";
@@ -2049,9 +2060,9 @@ function pintaVersions(exports) {
       <button class="mini" title="Mira-la" aria-label="Mira-la">${ICONES.play}</button>
       <button class="mini" title="Mostra al Finder" aria-label="Mostra al Finder">${ICONES.finder}</button>`;
     const [mira, finder] = item.querySelectorAll(".mini");
-    mira.addEventListener("click", (e) => { e.stopPropagation(); carregaVersio(x.nom); });
+    mira.addEventListener("click", (e) => { e.stopPropagation(); tancaFinal(); carregaVersio(x.nom); });
     finder.addEventListener("click", (e) => { e.stopPropagation(); api("/api/mostra", { nom: x.nom }).catch((err) => avis(err.message)); });
-    item.addEventListener("click", () => carregaVersio(x.nom));
+    item.addEventListener("click", () => { tancaFinal(); carregaVersio(x.nom); });
     fesClicable(item);
     cont.append(item);
   }
@@ -2065,7 +2076,6 @@ let consulta = null;
 function seguimentFeina(feina) {
   const caixa = $("#feina");
   const ocupat = feina?.estat === "treballant";
-  $("#esborrany").disabled = ocupat;
   $("#final").disabled = ocupat;
   caixa.hidden = !ocupat;
   if (ocupat) {
@@ -2129,9 +2139,10 @@ function mostraAlFinder(feina) {
 
 function pintaCarpeta(r) {
   if (!r?.carpeta_exports) return;
-  $("#final-carpeta").textContent = r.carpeta_exports;
+  // El nom de la carpeta (el camí sencer, en passar-hi el ratolí).
+  $("#final-carpeta").textContent = `Es desa a «${r.carpeta_exports.split("/").filter(Boolean).pop()}»`;
+  $("#final-carpeta").title = r.carpeta_exports + (r.carpeta_propia ? " (i també a la carpeta del projecte)" : "");
   $("#carpeta-projecte").hidden = !r.carpeta_propia;
-  $("#final-carpeta").title = r.carpeta_propia ? "I també a la carpeta del projecte (pestanya Vídeos)" : "";
 }
 
 async function triaCarpeta(accio) {
@@ -2154,7 +2165,7 @@ async function comencaRender(qualitat) {
 function obreFinal() {
   const o = P.origen || {};
   $("#fet-export").hidden = true;
-  $("#final-durada").textContent = `Durada: ${fmt(duradaFinal)} · ${trams.length} trossos`;
+  $("#final-durada").textContent = fmt(duradaFinal);
   const avisFinal = $("#final-avis");
   if (o.amplada && o.amplada * 16 > o.alcada * 9) {
     const ample = Math.round((o.alcada * 9) / 16);
@@ -2180,9 +2191,10 @@ function pintaReels() {
   $("#compte-reels").textContent = reels.length || "";
   const obert = reels.find((r) => r.id === P.reel_actual);
   $("#tornar").hidden = !P.reel_actual;
+  $("#marca").hidden = !P.reel_actual;
   if (P.reel_actual) {
     $("#nom-projecte").textContent = obert?.titol || P.nom;
-    $("#marca").textContent = `tallat · ${P.arrel}`;
+    $("#marca").textContent = `De la gravació «${P.arrel}»`;
     document.title = `${obert?.titol || P.nom} · tallat`;
   }
   for (const e of P.errors_reels || []) avis(`reels.json: ${e}`, 6000);
@@ -2458,7 +2470,7 @@ function perDibuixar(g) {
 }
 
 function textGrafic(g) {
-  const text = (g.text || (g.tipus === "crida" ? estilMarca?.crida || "La crida de la teva marca" : "")).replaceAll("*", "");
+  const text = (g.text || (g.tipus === "crida" ? estilMarca?.crida || "La teva crida habitual" : "")).replaceAll("*", "");
   if (g.tipus === "llista") return [text, ...g.punts.map((p) => `· ${p.text}`)].filter(Boolean).join("  ");
   if (g.tipus === "xat") return [text, ...g.punts.map((p) => `${p.costat === "enviat" ? "→" : "←"} ${p.text}`)].filter(Boolean).join("  ");
   if (g.tipus === "notificacio") return `${g.de ? `${g.de}: ` : ""}«${text}»`;
@@ -2645,7 +2657,8 @@ function pintaPla() {
   $("#ajuda-grafics").textContent = !tots.length
     ? "Encara no hi ha cap pla. Demana'l a Claude, al xat: «proposa'm gràfics»."
     : notes ? `Quan acabis, digues a Claude: «mira les notes dels gràfics» (${notes === 1 ? "n'hi ha una" : `n'hi ha ${notes}`}).`
-    : "Toca'n un per veure'l al vídeo. Si en vols canviar algun, toca «Canvia» i escriu-li una nota per a Claude.";
+    : "";
+  $("#ajuda-grafics").hidden = !$("#ajuda-grafics").textContent;
   for (const [id, fet] of targetesGrafic) if (!graficDe(id)) { fet.tl?.kill?.(); targetesGrafic.delete(id); }
   ompleGrafics($("#pla-grafics"), vius);
   ompleGrafics($("#grafics-trets"), trets);
@@ -2914,7 +2927,7 @@ function pintaBarraGrafic(id) {
   bloc.className = "boto petit bloc-color";
   const ambBloc = !!d.bloc;  // si no s'ha dit, el de cada tipus (la web i les fotos, amb bloc)
   bloc.setAttribute("aria-pressed", String(ambBloc));
-  bloc.title = "El vídeo es fa petit a baix i el gràfic surt sobre el color de la teva marca";
+  bloc.title = "El vídeo es fa petit a baix i el gràfic surt sobre el teu color";
   bloc.innerHTML = '<span class="mostra-bloc"></span><span></span>';
   bloc.lastChild.textContent = ambBloc ? "Amb bloc de color" : "Bloc de color";
   const rol = ["mac", "scrapbook"].includes(g.estil || d.estil) ? "principal" : "fosc";
@@ -3003,10 +3016,10 @@ function instalaEdicioAlVideo() {
 
 const PASSES_GUIA = [
   ["#seccio-reels", "Aquí hi ha els reels que t'ha proposat Claude. Toca'n un per obrir-lo."],
-  [".text", "Això és el que dius. Toca una paraula per escoltar-la. Amb el clic dret la treus del vídeo (i la tornes a posar)."],
+  [".text", "Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫."],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
-  ["#pestanyes", "Aquí tens els subtítols, els gràfics, el so i els vídeos que exportes."],
-  ["#esborrany", "Esborrany: el vídeo sencer per mirar-lo. Final…: el desa a punt per penjar."],
+  ["#pestanyes", "Aquí tens els subtítols, els gràfics i el so."],
+  ["#final", "Quan estigui a punt, toca Exporta: un esborrany per mirar-lo, el vídeo final o per a un altre editor."],
 ];
 let passaGuia = -1;
 let passesVisibles = [];
@@ -3076,7 +3089,7 @@ function instalaGuia() {
 
 // --- La teva marca, pas a pas -------------------------------------------------------------------
 // Quatre passos visuals dins la pàgina: els colors, les lletres, l'estil dels gràfics i la crida.
-// No va al principi: s'ofereix quan arribes als subtítols o als gràfics (o des de «La teva marca»).
+// No va al principi: s'ofereix quan arribes als subtítols o als gràfics (o des d'«El teu estil»).
 
 const PALETES = [
   { nom: "Clàssica", color_text: "#FFFFFF", color_principal: "#1D1D1F", color_destacat: "#FFD60A", color_secundari: "#8E8E93", color_clar: "#F5F5F7", color_fosc: "#111111" },
@@ -3282,7 +3295,7 @@ async function acabaAssistent() {
   } else {
     await desaEstils();
   }
-  avis("Fet. Els subtítols, el títol i els gràfics ja tenen la teva marca.", 5000);
+  avis("Fet. Els subtítols, el títol i els gràfics ja tenen el teu estil.", 5000);
 }
 
 function instalaAssistent() {
@@ -3452,11 +3465,14 @@ function avis(text, ms = 2600) {
 
 // --- Inici ------------------------------------------------------------------------------------
 
+// Només als modes que canvien el que fa un clic (a «Talla», la pista surt quan hi ha paraules marcades).
 const AJUDES = {
-  talla: "Clic en una paraula per escoltar des d'allà. Clic dret per treure-la o recuperar-la; arrossega amb el clic dret per fer-ho amb unes quantes. Per canviar l'ordre d'un paràgraf, arrossega'l per la nansa ⠿ de l'esquerra.",
-  corregeix: "Toca una paraula per corregir com s'escriu als subtítols. <kbd>↩</kbd> per desar, <kbd>esc</kbd> per deixar-ho.",
-  destaca: "Toca una paraula per destacar-la als subtítols (més gran i d'un altre color) o per deixar de destacar-la. Les subratllades ja ho estan: les que no triïs, les tria tallat.",
+  talla: "",
+  corregeix: "Toca una paraula per corregir com s'escriu als subtítols.",
+  destaca: "Toca una paraula per destacar-la als subtítols (o per deixar de destacar-la).",
 };
+const RITMES = [0, 0.5, 0.35, 0.25];  // el silenci més llarg que es deixa: del més tranquil (tots) al més àgil
+const NOMS_RITME = ["Sencers", "Llargs", "Normals", "Curts"];
 
 function instalaControls() {
   for (const b of $$("#mode button")) {
@@ -3465,17 +3481,17 @@ function instalaControls() {
       for (const x of $$("#mode button")) x.setAttribute("aria-checked", String(x === b));
       document.body.classList.toggle("mode-corregeix", mode === "corregeix");
       document.body.classList.toggle("mode-destaca", mode === "destaca");
-      $("#ajuda").innerHTML = AJUDES[mode];
+      $("#ajuda").textContent = AJUDES[mode];
+      $("#ajuda").hidden = !AJUDES[mode];
+      pintaSeleccio();
       if (mode === "destaca") marcaClaus();
     });
   }
-  for (const b of $$("#pauses button")) {
-    b.addEventListener("click", () => {
-      const v = parseFloat(b.dataset.pausa);
-      canvia((e) => { e.pausa_maxima = v > 0 ? v : null; }, { repinta: true });
-      marcaPausa();
-    });
-  }
+  $("#ritme").addEventListener("input", () => {
+    const v = RITMES[Number($("#ritme").value)];
+    canvia((e) => { e.pausa_maxima = v > 0 ? v : null; }, { repinta: true });
+    marcaPausa();
+  });
   for (const b of $$("#vista button")) b.addEventListener("click", () => {
     if (b.dataset.vista === "esborrany" && !esborrany) {
       const darrer = $$("#versions .item")[0];
@@ -3489,18 +3505,6 @@ function instalaControls() {
     const fitxer = e.target.files[0];
     if (fitxer && instruccioPerPujar) pujaBroll(instruccioPerPujar, fitxer);
     e.target.value = "";
-  });
-  $("#torna-netejar").addEventListener("click", async () => {
-    desfer.push(copia(estat));
-    refer.length = 0;
-    try {
-      const r = await api("/api/neteja", {});
-      estat = r.estat;
-      aplicaTrams(r);
-      refresca(true);
-      marcaPausa();
-      avis("Neteja feta. Les paraules que havies recuperat es respecten.");
-    } catch (e) { avis(e.message); }
   });
   instalaColumnes();
   instalaSeccions();
@@ -3531,7 +3535,7 @@ function instalaControls() {
   });
   $("#desfes").addEventListener("click", desfes);
   $("#refes").addEventListener("click", refes);
-  $("#esborrany").addEventListener("click", () => comencaRender("esborrany"));
+  $("#exporta-esborrany").addEventListener("click", () => { tancaFinal(); comencaRender("esborrany"); });
   $("#final").addEventListener("click", obreFinal);
   $("#cancella-final").addEventListener("click", tancaFinal);
   $("#canvia-carpeta").addEventListener("click", () => triaCarpeta("tria"));
@@ -3585,8 +3589,14 @@ function marcaSubtitols() {
 }
 
 function marcaPausa() {
+  // Si el kit en diu un altre (0,6 s, per exemple), el control es posa al més semblant.
   const actual = estat.pausa_maxima || 0;
-  for (const b of $$("#pauses button")) b.setAttribute("aria-checked", String(parseFloat(b.dataset.pausa) === actual));
+  let k = 0;
+  if (actual > 0) k = [1, 2, 3].reduce((millor, j) => (Math.abs(RITMES[j] - actual) < Math.abs(RITMES[millor] - actual) ? j : millor), 1);
+  $("#ritme").value = String(k);
+  $("#ritme").setAttribute("aria-valuetext", NOMS_RITME[k]);
+  $("#ritme").title = NOMS_RITME[k];
+  $("#nom-ritme").textContent = NOMS_RITME[k];
 }
 
 async function inicia() {
@@ -3755,6 +3765,17 @@ function instalaSo() {
     for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaSo({ [clau]: b.dataset.valor }));
   }
   $("#s-volum").addEventListener("input", (e) => canviaSo({ volum_efectes: +e.target.value }));
+  // Abans i neta: un toc la fa sonar (i atura l'altra); un altre toc l'atura.
+  for (const boto of $$(".mostra-so")) {
+    const audio = $(`#${boto.dataset.audio}`);
+    boto.addEventListener("click", () => {
+      for (const altre of $$(".abans-despres audio")) if (altre !== audio) altre.pause();
+      if (audio.paused) audio.play().catch(() => avis("Encara s'està preparant la mostra.")); else audio.pause();
+    });
+    for (const ev of ["play", "pause", "ended"]) {
+      audio.addEventListener(ev, () => boto.setAttribute("aria-pressed", String(!audio.paused)));
+    }
+  }
 }
 
 // --- La teva marca ------------------------------------------------------------------------------
@@ -3770,8 +3791,7 @@ const COLORS_MARCA = [["m-color-text", "color_text"], ["m-color-principal", "col
 const energies = (m) => [].concat(m?.energia || "net");  // un o uns quants estils de gràfics
 const LLETRES_MARCA = [["m-lletra-titols", "lletra_titols"], ["m-lletra-text", "lletra_text"],
   ["m-lletra-accent", "lletra_accent"], ["m-lletra-ma", "lletra_ma"]];
-const TEXTOS_MARCA = [["m-prohibits", "colors_prohibits"], ["m-crida", "crida"], ["m-compte", "compte"],
-  ["m-public", "public"], ["m-referencia", "referencia"]];
+const TEXTOS_MARCA = [["m-prohibits", "colors_prohibits"], ["m-crida", "crida"]];
 
 function aplicaMarca(r) {
   if (r.paleta_grafics) { paletaGrafics = r.paleta_grafics; previaBruta = true; }
@@ -3788,8 +3808,8 @@ function pintaResumMarca() {
   pintaOfertaMarca();
   const colors = COLORS_MARCA.map(([, clau]) => m[clau]).filter(Boolean);
   $$("#mostra-marca i").forEach((el, k) => { el.style.background = colors[k] || ""; });
-  const feta = colors.length || m.compte;
-  $("#nom-marca").textContent = feta ? (m.compte || m.crida || "Colors i lletres") : "Encara no: toca aquí i fes-la en 4 passos";
+  const lletres = [...new Set([m.lletra_titols, m.lletra_text].filter(Boolean))].join(" · ");
+  $("#nom-marca").textContent = colors.length ? (lletres || "Colors i lletres") : "Encara no: toca aquí i fes-lo en 4 passos";
 }
 
 function pintaPanellMarca() {
