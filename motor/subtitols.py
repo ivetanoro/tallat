@@ -258,6 +258,9 @@ def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict]
     titol_js = (f'TallatSubtitols.titol(document.getElementById("titol"), {_js(titol)}, {_js(et)}, '
                 f'{{ tl, familia: {_js(familia_css({"font": et.get("font") or estil.get("font")}))} }});'
                 if titol else "")
+    if titol and linies and not et.get("amaga_subtitols"):  # els subtítols que toquen el títol s'aparten
+        titol_js += (f'\n      TallatSubtitols.aparta(document.getElementById("subtitols"), '
+                     f'document.getElementById("titol"), {_js(titol)}, tl);')
     font_face = _font_face(fonts or [])
 
     blocs, passos = [], []

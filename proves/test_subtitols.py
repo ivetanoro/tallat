@@ -210,6 +210,16 @@ class TestTitol(unittest.TestCase):
         self.assertIn('familia: "\\"Fraunces\\", system-ui', html)  # la lletra del títol, en JSON
         self.assertNotIn("TallatSubtitols.titol(", subtitols.composicio([], ESTIL, 5.0))
 
+    def test_els_subtitols_s_aparten_del_titol(self):
+        # Del feedback: el títol i els subtítols (al mig) es trepitjaven. Ara els que el toquen s'aparten.
+        titol = {"text": "un títol", "inici": 0.0, "final": 3.0}
+        linies = [{"inici": 0.5, "final": 2.0, "bloc": 0, "paraules": [{"text": "hola", "inici": 0.5, "final": 1.0}]}]
+        estil_titol = marca.carrega(marca.PER_DEFECTE)["titol"]
+        html = subtitols.composicio(linies, ESTIL, 5.0, titol=titol, estil_titol=dict(estil_titol, amaga_subtitols=False))
+        self.assertIn("TallatSubtitols.aparta(", html)
+        amagats = subtitols.composicio(linies, ESTIL, 5.0, titol=titol, estil_titol=dict(estil_titol, amaga_subtitols=True))
+        self.assertNotIn("TallatSubtitols.aparta(", amagats)  # si s'amaguen, no cal
+
     def test_estils_de_titol_valids(self):
         for e in marca.estils_titol():
             with self.subTest(estil=e["id"]):

@@ -471,6 +471,7 @@
     const fets = (grafics || []).map((g) => {
       const costat = g.tipus === "anotacio" && g.costat === "dreta" ? " tg-a-dreta" : "";
       const lloc = element(doc, "div", `tg-lloc tg-${g.tipus} tg-${g.estil || "net"}${costat}`);
+      if (g.id) lloc.dataset.id = g.id;  // la pàgina hi troba el que es toca al vídeo
       const c = cos(doc, g);
       lloc.append(c);
       arrel.append(lloc);

@@ -188,14 +188,25 @@ kbd {
 
 .tornar { display: block; margin: 0 0 var(--e3); }
 
-/* Cinc pestanyes per tasques: Edita, Subtítols, Gràfics, So i Vídeos. Han de cabre a la columna més
-   estreta: cada una fa l'amplada del seu nom, i el punt («hi ha coses per decidir») no n'ocupa. */
-.pestanyes { margin-top: var(--e5); overflow-x: auto; scrollbar-width: none; }  /* si la columna és molt estreta, llisquen */
-.pestanyes::-webkit-scrollbar { display: none; }
-.pestanyes [role="tab"] { position: relative; flex: 1 0 auto; padding: 0 3px; font-size: var(--t-petit); }
-.pestanyes [role="tab"][aria-selected="true"] { background: var(--superficie); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
-.pestanyes .punt { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--auto); }
-.pestanyes .compte-pestanya { margin-left: 4px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+/* Cinc pestanyes per tasques, amb una icona gran: es reconeixen sense llegir. El punt («hi ha coses
+   per decidir») i el nombre de vídeos van a la cantonada. */
+.pestanyes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin: var(--e5) calc(-1 * var(--e1)) 0; }
+.pestanyes [role="tab"] {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0;
+  padding: 8px 0 6px; border: 0; border-radius: var(--radi); background: none; cursor: pointer;
+  color: var(--text-2); font-size: 10.5px; font-weight: 500; line-height: 1.1; letter-spacing: -0.01em;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.pestanyes [role="tab"] span:not(.punt):not(.compte-pestanya) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pestanyes [role="tab"] svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pestanyes [role="tab"]:hover { background: var(--omplir); color: var(--text); }
+.pestanyes [role="tab"]:active { transform: scale(0.97); }
+.pestanyes [role="tab"][aria-selected="true"] { background: var(--accent-suau); color: var(--accent); }
+.pestanyes .punt { position: absolute; top: 6px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--auto); }
+.pestanyes .compte-pestanya {
+  position: absolute; top: 3px; right: 4px; min-width: 15px; padding: 0 4px; border-radius: 8px;
+  font-size: 10px; line-height: 15px; background: var(--omplir-fort); color: var(--text-2); font-variant-numeric: tabular-nums;
+}
 .pestanyes .compte-pestanya:empty { display: none; }
 .pestanya > .seccio:first-child { margin-top: var(--e5); }
 /* Els subtítols tenen el panell directament a la pestanya. */
@@ -883,3 +894,104 @@ input.camp-text { min-height: 0; }
 .fet-export .fet-marca { color: var(--accent); font-weight: 700; }
 .fet-export .enllac { margin: 0; font-size: var(--t-petit); white-space: nowrap; }
 .fet-export .icona { width: 22px; height: 22px; }
+
+/* --- Editar tocant el vídeo ----------------------------------------------------------- */
+
+.capa-edita {
+  grid-area: 1 / 1; position: relative; z-index: 3; pointer-events: none;
+  width: min(100cqw, calc(100cqh * 9 / 16)); aspect-ratio: 9 / 16;
+}
+.marc-capa {
+  position: absolute; pointer-events: auto; cursor: ns-resize; border-radius: 10px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.95); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.marc-capa[hidden], .barra-capa[hidden] { display: none; }
+.barra-capa {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; pointer-events: auto;
+  display: flex; flex-direction: column; gap: var(--e2); padding: var(--e2);
+  border-radius: var(--radi-mitja); background: var(--superficie); box-shadow: var(--ombra-gran);
+}
+.barra-capa.a-dalt { top: 8px; bottom: auto; }
+.barra-estils { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--e1); }
+.barra-estils .estil { padding: 0; border: 0; background: none; cursor: pointer; }
+.barra-estils .estil-mostra { display: block; width: 100%; aspect-ratio: 1; border-radius: var(--radi); }
+.barra-estils .estil-nom { display: none; }
+.barra-fila { display: flex; align-items: center; gap: var(--e2); }
+.barra-fila input[type="range"] { flex: 1; min-width: 40px; accent-color: var(--accent); }
+.barra-fila .enllac { margin: 0; font-size: var(--t-petit); white-space: nowrap; }
+.barra-fila .icona { width: 24px; height: 24px; }
+.barra-icona { font-size: var(--t-petit); font-weight: 600; color: var(--text-2); }
+.rodona {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.rodona[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--superficie), 0 0 0 4px var(--accent); }
+.pista-video { margin: 0 0 var(--e2); padding: var(--e2) var(--e3); border-radius: var(--radi); background: var(--accent-suau); font-size: var(--t-petit); color: var(--text); }
+.barra-estils.quatre { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.barra-estils .estil[aria-pressed="true"] .estil-mostra { box-shadow: 0 0 0 2px var(--superficie), 0 0 0 4px var(--accent); }
+.barra-fila .boto.petit { flex: 1; height: 26px; padding: 0 var(--e2); font-size: var(--t-petit); }
+.barra-fila .boto.petit[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.barra-fila .decisio-tret[aria-pressed="true"] { background: var(--auto); }
+.pantalla.editant .gran-play { display: none; }
+
+/* --- La visita guiada -------------------------------------------------------------------------- */
+
+.guia { position: fixed; inset: 0; z-index: 50; }
+.guia[hidden] { display: none; }
+.guia-forat {
+  position: fixed; border-radius: var(--radi-mitja); pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(255, 255, 255, 0.9);
+  transition: left 250ms var(--molla), top 250ms var(--molla), width 250ms var(--molla), height 250ms var(--molla);
+}
+.guia-bombolla {
+  position: fixed; padding: var(--e4); border-radius: var(--radi-mitja);
+  background: var(--superficie); box-shadow: var(--ombra-gran);
+  transition: left 250ms var(--molla), top 250ms var(--molla);
+}
+.guia-bombolla p { margin: 0 0 var(--e3); font-size: var(--t-cos); line-height: 1.4; color: var(--text); }
+.guia-accions { display: flex; align-items: center; gap: var(--e3); }
+.guia-pas { flex: 1; font-size: var(--t-petit); color: var(--text-2); }
+.guia-accions .enllac { margin: 0; }
+.ajuda-guia {
+  width: 18px; height: 18px; margin-left: var(--e1); padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: var(--omplir); color: var(--text-2); font-size: 11px; font-weight: 600; vertical-align: 1px;
+}
+.ajuda-guia:hover { background: var(--omplir-fort); color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .guia-forat, .guia-bombolla { transition: none; } }
+
+/* --- La teva marca, pas a pas ------------------------------------------------------------------ */
+
+.full.assistent { width: min(520px, calc(100vw - var(--e8))); max-height: calc(100vh - var(--e8)); overflow-y: auto; }
+.full.assistent h2 { margin: var(--e3) 0 var(--e4); font-size: var(--t-titol); font-weight: 600; }
+.passes-assistent { display: flex; gap: var(--e1); }
+.passes-assistent i { flex: 1; height: 4px; border-radius: 2px; background: var(--omplir-fort); }
+.passes-assistent i.fet { background: var(--accent); }
+.graella-assistent { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--e3); margin-bottom: var(--e4); }
+.opcio-assistent {
+  display: flex; flex-direction: column; gap: var(--e2); align-items: flex-start; padding: var(--e3);
+  border: 0; border-radius: var(--radi-mitja); background: var(--omplir); cursor: pointer; text-align: left;
+  color: var(--text); transition: box-shadow 150ms ease-out, transform 100ms ease-out;
+}
+.opcio-assistent:hover { box-shadow: inset 0 0 0 1px var(--linia); }
+.opcio-assistent:active { transform: scale(0.98); }
+.opcio-assistent[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-suau); }
+.rodones { display: flex; gap: 4px; }
+.rodones i { width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.nom-opcio { font-size: var(--t-petit); font-weight: 500; }
+.lletres-opcio strong { font-size: 20px; line-height: 1.1; }
+.lletres-opcio span { font-size: var(--t-ui); color: var(--text-2); }
+.lletres-opcio em { font-size: 17px; }
+.grafic-opcio { align-items: stretch; }
+.mostra-grafic { display: block; position: relative; aspect-ratio: 4 / 3; border-radius: var(--radi); overflow: hidden;
+  background: linear-gradient(160deg, #5a5a5e, #2c2c2e); }
+.mostra-grafic > span { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
+.colors-assistent { margin-top: var(--e3); }
+.full.assistent .camp-text { margin-bottom: var(--e4); }
+.oferta-marca {
+  display: flex; align-items: center; gap: var(--e3); width: 100%; margin: 0 0 var(--e3); padding: var(--e2) var(--e3);
+  border: 0; border-radius: var(--radi-mitja); background: var(--accent-suau); cursor: pointer; text-align: left;
+}
+.oferta-marca[hidden] { display: none; }
+.oferta-marca > span:last-child { display: flex; flex-direction: column; gap: 1px; font-size: var(--t-petit); color: var(--text-2); }
+.oferta-marca strong { font-size: var(--t-ui); color: var(--text); font-weight: 600; }
+.oferta-marca .mostra-estil { width: 34px; height: 34px; }

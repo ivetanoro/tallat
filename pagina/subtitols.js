@@ -24,7 +24,8 @@
   const AMPLADA = 1080;
   const ESTILS_CSS = `
 .ts-capa { position: absolute; left: 0; top: 0; width: ${AMPLADA}px; pointer-events: none; }
-.ts-linia { position: absolute; inset: 0; visibility: hidden; }
+.ts-linia { position: absolute; inset: 0; visibility: hidden;
+  transform: translateY(calc(var(--ts-aparta, 0) * var(--ts-desplaca, 0px))); }  /* aparta(): lluny del títol */
 .ts-tipus {
   font-family: var(--ts-font); font-weight: var(--ts-pes); font-size: var(--ts-mida);
   color: var(--ts-color); text-transform: var(--ts-majuscules); font-kerning: normal;
@@ -600,5 +601,46 @@
     return tl;
   }
 
-  global.TallatSubtitols = { construeix, titol, llegeixTitol, AMPLADA, rgba, familiaDe };
+  // Mentre surt el títol del ganxo, les línies de subtítols que el tocarien s'aparten: just a sota del
+  // títol o, si no hi caben, just a sobre. Quan el títol se'n va, tornen al seu lloc. Es mesura on queda
+  // cada cosa (també quan arriben les lletres), i les dues capes es comparen a la mida del vídeo.
+  const MARGE_TITOL = 28;
+  function aparta(arrelSub, arrelTitol, t, tl) {
+    if (!t || !tl || typeof tl.set !== "function") return;
+    const blocs = [...arrelSub.children].filter((el) => el.classList.contains("ts-linia"));
+    if (!blocs.length) return;
+    const caixa = (el, arrel) => {
+      const ref = arrel.getBoundingClientRect();
+      const k = ref.width / AMPLADA || 1;  // la capa pot estar escalada (la pàgina, l'esborrany)
+      const r = el.getBoundingClientRect();
+      return [(r.top - ref.top) / k, (r.bottom - ref.top) / k];
+    };
+    const mesura = () => {
+      const bloc = arrelTitol.querySelector(".tt-bloc");
+      if (!bloc) return;
+      const [dalt, baix] = caixa(bloc, arrelTitol);
+      const alcada = (arrelSub.getBoundingClientRect().height / (arrelSub.getBoundingClientRect().width / AMPLADA)) || 1920;
+      for (const b of blocs) {
+        b.style.removeProperty("--ts-desplaca");
+        const cont = b.firstElementChild;
+        if (!cont) continue;
+        const [d, s] = caixa(cont, arrelSub);
+        let desplaca = 0;
+        if (d < baix + MARGE_TITOL && s > dalt - MARGE_TITOL) {  // es trepitgen
+          const avall = baix + MARGE_TITOL - d;
+          desplaca = s + avall <= alcada * 0.8 ? avall : dalt - MARGE_TITOL - s;
+        }
+        if (desplaca) b.style.setProperty("--ts-desplaca", `${Math.round(desplaca)}px`);
+      }
+    };
+    mesura();
+    const doc = arrelSub.ownerDocument;
+    if (doc.fonts && doc.fonts.status !== "loaded") doc.fonts.ready.then(mesura);
+    for (const b of blocs) {
+      tl.set(b, { "--ts-aparta": 1 }, t.inici);
+      tl.set(b, { "--ts-aparta": 0 }, t.final);
+    }
+  }
+
+  global.TallatSubtitols = { construeix, titol, llegeixTitol, aparta, AMPLADA, rgba, familiaDe };
 })(typeof window !== "undefined" ? window : globalThis);

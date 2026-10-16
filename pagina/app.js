@@ -922,6 +922,7 @@ function bucle() {
   pintaBroll();
   pintaStickers();
   sonaEfectes();
+  pintaMarcCapa();
   R.v.classList.toggle("zoom", vista === "directe" && !!zoomsTram[Math.min(R.k, trams.length - 1)]);
 }
 
@@ -950,6 +951,8 @@ function refaPrevia() {
   previaTitol = estilTitol ? TallatSubtitols.titol($("#tt-host"), titol, estilTitol,
     { familia: familiaCss({ font: estilTitol.font || estilSub?.font }) }) : null;
   previaGrafics = window.TallatGrafics && paletaGrafics ? TallatGrafics.construeix($("#tg-host"), grafics, paletaGrafics) : null;
+  // Com al vídeo final: mentre surt el títol, els subtítols que el toquen s'aparten.
+  if (titol && previa && previaTitol && !estilTitol?.amaga_subtitols) TallatSubtitols.aparta($("#ts-host"), $("#tt-host"), titol, previa);
 }
 
 function pintaSubtitols() {
@@ -2596,6 +2599,566 @@ function desaNotaGrafic(id, text) {
   if (nota) avis("Nota desada. Quan acabis, digues a Claude: «mira les notes dels gràfics».", 4000);
 }
 
+// --- Editar tocant el vídeo ---------------------------------------------------------------------
+// Es toquen els subtítols o el títol al vídeo: queden marcats i es poden arrossegar amunt i avall, i
+// una barra petita en canvia l'estil (en dibuixos), el color (els de la marca) i la mida. Visual:
+// sense haver de llegir res.
+
+let capaTriada = null;   // "subtitols", "titol" o "grafic:<id>"
+let arrossegantCapa = null;  // {y0, valor0, alcada, valor}
+
+const dinsDe = (r, e) => r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 8 && e.clientY <= r.bottom + 8;
+
+// On es veu ara (px de pantalla) la línia de subtítols, el títol o un gràfic; null si no es veu.
+function caixaCapa(quin) {
+  if (vista !== "directe" || $("#capa-subtitols").hidden) return null;
+  if (quin.startsWith("grafic:")) {
+    const lloc = $(`#tg-host .tg-lloc[data-id="${CSS.escape(quin.slice(7))}"]`);
+    if (!lloc || getComputedStyle(lloc).visibility !== "visible" || Number(getComputedStyle(lloc).opacity) < 0.1) return null;
+    const r = lloc.firstElementChild?.getBoundingClientRect();
+    return r && r.height ? r : null;
+  }
+  if (quin === "titol") {
+    const host = $("#tt-host");
+    const bloc = host.querySelector(".tt-bloc");
+    if (!bloc || getComputedStyle(host).visibility !== "visible") return null;
+    const r = bloc.getBoundingClientRect();
+    return r.height ? r : null;
+  }
+  const host = $("#ts-host");
+  if (host.hidden || getComputedStyle(host).opacity === "0") return null;
+  const linia = [...host.children].find((el) => el.classList.contains("ts-linia") && getComputedStyle(el).visibility === "visible");
+  const cont = linia?.firstElementChild;
+  if (!cont) return null;
+  // Apilades o escampades: només les files que ja han sortit (les altres hi són, però no es veuen).
+  const files = [...cont.querySelectorAll(".ts-fila")].filter((f) => Number(getComputedStyle(f).opacity) > 0.05);
+  const rects = (files.length ? files : [cont]).map((el) => el.getBoundingClientRect()).filter((r) => r.height);
+  if (!rects.length) return null;
+  const [left, top] = [Math.min(...rects.map((r) => r.left)), Math.min(...rects.map((r) => r.top))];
+  const [right, bottom] = [Math.max(...rects.map((r) => r.right)), Math.max(...rects.map((r) => r.bottom))];
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
+const estilDe = (quin) => (quin === "titol" ? estilTitol : estilSub);
+// Els gràfics que es veuen ara, de dalt a baix de la llista (el primer que es toca és el de més amunt).
+const graficsALaVista = () => [...$("#tg-host").querySelectorAll(".tg-lloc[data-id]")].map((el) => `grafic:${el.dataset.id}`);
+const canviaCapa = (quin, canvis) => (quin === "titol" ? canviaTitol(canvis) : canviaEstil(canvis));
+
+function triaCapa(quin) {
+  capaTriada = quin;
+  $(".pantalla").classList.add("editant");  // el botó gran de reproduir no tapa el que s'edita
+  pintaBarraCapa();
+}
+
+function deixaCapa() {
+  capaTriada = null;
+  $(".pantalla").classList.remove("editant");
+  arrossegantCapa = null;
+  $("#marc-capa").hidden = true;
+  $("#barra-capa").hidden = true;
+}
+
+// Cada fotograma: el marc segueix el que s'ha triat (les paraules entren, la línia canvia…).
+function pintaMarcCapa() {
+  if (!capaTriada) return;
+  const r = caixaCapa(capaTriada);
+  if (!r && !arrossegantCapa) { deixaCapa(); return; }
+  if (!r) return;
+  const base = $("#capa-edita").getBoundingClientRect();
+  Object.assign($("#marc-capa").style, {
+    left: `${r.left - base.left - 6}px`, top: `${r.top - base.top - 6}px`,
+    width: `${r.width + 12}px`, height: `${r.height + 12}px`,
+  });
+  $("#marc-capa").hidden = false;
+  // La barra, a la meitat on no hi ha el que s'edita.
+  $("#barra-capa").classList.toggle("a-dalt", r.top + r.height / 2 - base.top > base.height / 2);
+}
+
+function pintaBarraCapa() {
+  const barra = $("#barra-capa");
+  barra.textContent = "";
+  const quin = capaTriada;
+  if (quin?.startsWith("grafic:")) { pintaBarraGrafic(quin.slice(7)); return; }
+  const e = estilDe(quin);
+  if (!quin || !e) { barra.hidden = true; return; }
+  barra.hidden = false;
+  // Els estils fets, en dibuixos.
+  const estils = document.createElement("div");
+  estils.className = "barra-estils";
+  barra.append(estils);
+  const llista = quin === "titol" ? estilsTitol : estilsPredefinits;
+  const actual = quin === "titol" ? predefinitTitol() : predefinitActual();
+  for (const p of llista.slice(0, 6)) {
+    const valors = ambMarca(quin, p.valors);
+    const mostra = botoEstil(estils, p, p === actual, () => { canviaCapa(quin, valors); pintaBarraCapa(); });
+    if (!window.TallatSubtitols) continue;
+    if (quin === "titol") pintaMostraTitol(mostra, { ...e, ...valors, mida: 0.3, clau_mida: 1, corba: 0 }, "*Aa*", 1080);
+    else pintaMostra(mostra, { ...e, ...valors }, { paraules: [MOSTRA[0], MOSTRA[2]], alcada: 1080, mida: 0.2 });
+  }
+  // Els colors de la marca (i el d'ara), en rodones.
+  const fila = document.createElement("div");
+  fila.className = "barra-fila";
+  barra.append(fila);
+  const m = estilMarca || {};
+  // Sense marca, el blanc de sempre; amb marca, només els seus colors (n'hi ha que no volen mai el blanc pur).
+  const colors = [...new Set([e.color, m.color_text, m.color_destacat, m.color_principal, m.color_secundari, m.color_clar,
+    marcaFeta() ? null : "#FFFFFF"].filter(Boolean).map((c) => c.toUpperCase()))].slice(0, 6);
+  for (const c of colors) {
+    const b = document.createElement("button");
+    b.className = "rodona";
+    b.style.background = c;
+    b.setAttribute("aria-label", `Color ${c}`);
+    b.setAttribute("aria-pressed", String((e.color || "").toUpperCase() === c));
+    b.addEventListener("click", () => { canviaCapa(quin, { color: c }); pintaBarraCapa(); });
+    fila.append(b);
+  }
+  // La mida.
+  const mida = document.createElement("input");
+  Object.assign(mida, { type: "range", min: quin === "titol" ? 0.035 : 0.04, max: quin === "titol" ? 0.14 : 0.12,
+    step: 0.002, value: e.mida ?? 0.075 });
+  mida.setAttribute("aria-label", "Mida");
+  mida.addEventListener("input", () => canviaCapa(quin, { mida: Number(mida.value) }));
+  const icona = document.createElement("span");
+  icona.className = "barra-icona";
+  icona.setAttribute("aria-hidden", "true");
+  icona.textContent = "A";
+  fila.append(icona, mida);
+  // Més opcions (el panell sencer) i tancar.
+  const mes = document.createElement("button");
+  mes.className = "enllac";
+  mes.textContent = quin === "titol" ? "Text i més" : "Més";
+  mes.addEventListener("click", () => {
+    const q = quin;
+    deixaCapa();
+    if (q === "titol") { triaPestanya("grafics"); obreTitol(); } else triaPestanya("subtitols");
+  });
+  const tanca = document.createElement("button");
+  tanca.className = "icona";
+  tanca.setAttribute("aria-label", "Tanca");
+  tanca.innerHTML = '<svg viewBox="0 0 20 20"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg>';
+  tanca.addEventListener("click", deixaCapa);
+  fila.append(mes, tanca);
+  pintaMarcCapa();
+}
+
+// La barra d'un gràfic: l'estil (net, mac, scrapbook, editorial) en dibuixos, i Mantén, Canvia, Treu.
+// Si el canvies o el mous, és que t'agrada: queda mantingut (Claude ja no el tocarà).
+function canviaGrafic(id, canvis) {
+  canvia((e) => {
+    const g = e.grafics.find((x) => x.id === id);
+    if (g) Object.assign(g, canvis, g.estat === "proposat" ? { estat: "mantingut" } : {});
+  });
+  previaBruta = true;
+}
+
+function pintaBarraGrafic(id) {
+  const barra = $("#barra-capa");
+  const g = graficDe(id);
+  const d = dibuixosGrafics[id];
+  if (!g || !d) { deixaCapa(); return; }
+  barra.hidden = false;
+  const estils = document.createElement("div");
+  estils.className = "barra-estils quatre";
+  barra.append(estils);
+  for (const estil of ["net", "mac", "scrapbook", "editorial"]) {
+    const b = document.createElement("button");
+    b.className = "estil";
+    b.setAttribute("aria-pressed", String((g.estil || d.estil) === estil));
+    b.setAttribute("aria-label", `Estil ${estil}`);
+    b.innerHTML = '<span class="estil-mostra"></span>';
+    b.addEventListener("click", () => { canviaGrafic(id, { estil }); setTimeout(pintaBarraCapa, 0); });
+    estils.append(b);
+    if (window.TallatGrafics && paletaGrafics) {
+      const host = document.createElement("div");
+      b.firstChild.append(host);
+      const mostra = { ...d, estil, posicio: "mig", limits: [0, 1920], inici: 0, final: 1e5,
+        punts: (d.punts || []).map((p) => ({ ...p, t: 0 })) };
+      TallatGrafics.construeix(host, [mostra], paletaGrafics).seek(50, false);
+      host.style.transform = `scale(${b.firstChild.clientWidth / 1080})`;
+      host.style.transformOrigin = "0 0";
+      host.style.marginTop = `${(b.firstChild.clientHeight - b.firstChild.clientWidth * 1920 / 1080) / 2}px`;
+    }
+  }
+  const fila = document.createElement("div");
+  fila.className = "barra-fila";
+  barra.append(fila);
+  for (const [estat, text] of [["mantingut", "Mantén"], ["canvia", "Canvia"], ["tret", "Treu"]]) {
+    const b = document.createElement("button");
+    b.className = `boto petit decisio-${estat}`;
+    b.textContent = text;
+    b.setAttribute("aria-pressed", String(g.estat === estat));
+    b.addEventListener("click", () => {
+      if (estat === "canvia") {  // la nota s'escriu a la llista dels gràfics
+        deixaCapa();
+        triaPestanya("grafics");
+        decideixGrafic(id, "canvia");
+        targetesGrafic.get(id)?.el.scrollIntoView({ block: "center", behavior: "smooth" });
+        return;
+      }
+      decideixGrafic(id, estat);
+      if (estat === "tret") deixaCapa(); else setTimeout(pintaBarraCapa, 0);
+    });
+    fila.append(b);
+  }
+  const tanca = document.createElement("button");
+  tanca.className = "icona";
+  tanca.setAttribute("aria-label", "Tanca");
+  tanca.innerHTML = '<svg viewBox="0 0 20 20"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg>';
+  tanca.addEventListener("click", deixaCapa);
+  fila.append(tanca);
+  pintaMarcCapa();
+}
+
+function instalaEdicioAlVideo() {
+  const pantalla = $(".pantalla");
+  const host = (quin) => (quin === "titol" ? $("#tt-host") : $("#ts-host"));
+  const prefix = (quin) => (quin === "titol" ? "tt" : "ts");
+  pantalla.addEventListener("pointerdown", (e) => {
+    if (vista !== "directe" || e.button !== 0 || e.target.closest("#gran-play, #barra-capa")) return;
+    const quin = e.target.closest("#marc-capa") ? capaTriada
+      : [...graficsALaVista(), "titol", "subtitols"].find((q) => dinsDe(caixaCapa(q), e));
+    if (!quin) { deixaCapa(); return; }
+    e.preventDefault();
+    if (sona()) atura();
+    if (quin !== capaTriada) triaCapa(quin);
+    // I d'entrada es pot arrossegar amunt i avall.
+    const alcada = $("#capa-subtitols").clientHeight || 1;
+    let valor0;
+    if (quin.startsWith("grafic:")) {  // el centre del gràfic, ara
+      const r = caixaCapa(quin);
+      valor0 = r ? (r.top + r.height / 2 - $("#capa-subtitols").getBoundingClientRect().top) / alcada : 0.5;
+    } else valor0 = estilDe(quin)?.posicio_y ?? (quin === "titol" ? 0.25 : 0.7);
+    arrossegantCapa = { quin, y0: e.clientY, valor0, valor: valor0, alcada };
+    pantalla.setPointerCapture(e.pointerId);
+  });
+  pantalla.addEventListener("pointermove", (e) => {
+    const a = arrossegantCapa;
+    if (!a) return;
+    a.valor = limita(a.valor0 + (e.clientY - a.y0) / a.alcada, 0.08, 0.92);
+    // Mentre s'arrossega, només es mou (no es refà res): el canvi es desa en deixar-lo anar.
+    if (a.quin.startsWith("grafic:")) {
+      const lloc = $(`#tg-host .tg-lloc[data-id="${CSS.escape(a.quin.slice(7))}"]`);
+      if (lloc) lloc.style.translate = `0 ${(a.valor - a.valor0) * 1920}px`;
+      return;
+    }
+    host(a.quin).style.setProperty(`--${prefix(a.quin)}-y`, `${a.valor * 100}%`);
+    host(a.quin).style.setProperty(`--${prefix(a.quin)}-ancora`, `${-a.valor * 100}%`);
+  });
+  const deixa = () => {
+    const a = arrossegantCapa;
+    arrossegantCapa = null;
+    if (!a || Math.abs(a.valor - a.valor0) <= 0.002) return;
+    if (a.quin.startsWith("grafic:")) canviaGrafic(a.quin.slice(7), { posicio: Math.round(a.valor * 1000) / 1000 });
+    else canviaCapa(a.quin, { posicio_y: Math.round(a.valor * 1000) / 1000 });
+  };
+  pantalla.addEventListener("pointerup", deixa);
+  pantalla.addEventListener("pointercancel", deixa);
+}
+
+// --- La visita guiada (el primer cop) -----------------------------------------------------------
+// Unes quantes passes curtes: s'enfosqueix la pàgina, s'il·lumina una part i una frase diu què és.
+// Surt sola el primer cop; després, amb el «?» de dalt.
+
+const PASSES_GUIA = [
+  ["#seccio-reels", "Aquí hi ha els reels que t'ha proposat Claude. Toca'n un per obrir-lo."],
+  [".text", "Això és el que dius. Toca una paraula per escoltar-la. Amb el clic dret la treus del vídeo (i la tornes a posar)."],
+  [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
+  ["#pestanyes", "Aquí tens els subtítols, els gràfics, el so i els vídeos que exportes."],
+  ["#esborrany", "Esborrany: el vídeo sencer per mirar-lo. Final…: el desa a punt per penjar."],
+];
+let passaGuia = -1;
+let passesVisibles = [];
+
+function esVeu(el) {
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && !el.closest("[hidden]");
+}
+
+function obreGuia() {
+  passesVisibles = PASSES_GUIA.filter(([sel]) => esVeu($(sel)));
+  if (!passesVisibles.length) return;
+  passaGuia = 0;
+  $("#guia").hidden = false;
+  pintaGuia();
+  $("#guia-seguent").focus();
+}
+
+function tancaGuia() {
+  passaGuia = -1;
+  $("#guia").hidden = true;
+  desa("tallat.guia-vista", true);
+}
+
+function pintaGuia() {
+  if (passaGuia < 0) return;
+  const [sel, text] = passesVisibles[passaGuia];
+  const r = $(sel).getBoundingClientRect();
+  const marge = 6;
+  Object.assign($("#guia-forat").style, {
+    left: `${r.left - marge}px`, top: `${r.top - marge}px`, width: `${r.width + 2 * marge}px`, height: `${r.height + 2 * marge}px`,
+  });
+  $("#guia-text").textContent = text;
+  $("#guia-pas").textContent = `${passaGuia + 1} de ${passesVisibles.length}`;
+  const darrera = passaGuia === passesVisibles.length - 1;
+  $("#guia-seguent").textContent = darrera ? "Som-hi" : "Següent";
+  $("#guia-salta").hidden = darrera;
+  // La bombolla, al costat on hi ha més lloc (sota, sobre, a la dreta o a l'esquerra).
+  const b = $("#guia-bombolla");
+  const amplada = Math.min(320, innerWidth - 24);
+  b.style.width = `${amplada}px`;
+  const alcada = b.offsetHeight || 120;
+  let x = limita(r.left + r.width / 2 - amplada / 2, 12, innerWidth - amplada - 12);
+  let y;
+  if (innerHeight - r.bottom > alcada + 24) y = r.bottom + 14;
+  else if (r.top > alcada + 24) y = r.top - alcada - 14;
+  else {  // un element molt alt (la columna del text, el vídeo): al costat
+    y = limita(r.top + 24, 12, innerHeight - alcada - 12);
+    x = innerWidth - r.right > amplada + 24 ? r.right + 14 : Math.max(12, r.left - amplada - 14);
+  }
+  Object.assign(b.style, { left: `${x}px`, top: `${y}px` });
+}
+
+function instalaGuia() {
+  $("#obre-guia").addEventListener("click", obreGuia);
+  $("#guia-salta").addEventListener("click", tancaGuia);
+  $("#guia-seguent").addEventListener("click", () => {
+    if (passaGuia >= passesVisibles.length - 1) tancaGuia();
+    else { passaGuia++; pintaGuia(); }
+  });
+  addEventListener("resize", pintaGuia);
+  document.addEventListener("keydown", (e) => {
+    if (passaGuia >= 0 && e.key === "Escape") { e.stopPropagation(); tancaGuia(); }
+  }, true);
+}
+
+// --- La teva marca, pas a pas -------------------------------------------------------------------
+// Quatre passos visuals dins la pàgina: els colors, les lletres, l'estil dels gràfics i la crida.
+// No va al principi: s'ofereix quan arribes als subtítols o als gràfics (o des de «La teva marca»).
+
+const PALETES = [
+  { nom: "Clàssica", color_text: "#FFFFFF", color_principal: "#1D1D1F", color_destacat: "#FFD60A", color_secundari: "#8E8E93", color_clar: "#F5F5F7", color_fosc: "#111111" },
+  { nom: "Càlida", color_text: "#FFF8F0", color_principal: "#C2410C", color_destacat: "#FDBA74", color_secundari: "#7C2D12", color_clar: "#FFF1E6", color_fosc: "#2B1608" },
+  { nom: "Fresca", color_text: "#FFFFFF", color_principal: "#0F766E", color_destacat: "#5EEAD4", color_secundari: "#F59E0B", color_clar: "#F0FDFA", color_fosc: "#0B2A27" },
+  { nom: "Pastel", color_text: "#FFFFFF", color_principal: "#DB6A9A", color_destacat: "#FDE68A", color_secundari: "#93C5FD", color_clar: "#FDF2F8", color_fosc: "#3B2440" },
+  { nom: "Nit", color_text: "#F8FAFC", color_principal: "#6366F1", color_destacat: "#A5B4FC", color_secundari: "#F472B6", color_clar: "#EEF2FF", color_fosc: "#0F172A" },
+  { nom: "Revista", color_text: "#FAFAF9", color_principal: "#B91C1C", color_destacat: "#FDE047", color_secundari: "#57534E", color_clar: "#F5F5F4", color_fosc: "#1C1917" },
+];
+const PARELLES = [
+  { nom: "Moderna", lletra_titols: "poppins", lletra_text: "inter", lletra_accent: "playfair-display" },
+  { nom: "Revista", lletra_titols: "fraunces", lletra_text: "dm-sans", lletra_accent: "instrument-serif" },
+  { nom: "Impacte", lletra_titols: "anton", lletra_text: "archivo", lletra_accent: "fraunces" },
+  { nom: "Elegant", lletra_titols: "dm-serif-display", lletra_text: "dm-sans", lletra_accent: "dm-serif-display" },
+  { nom: "Amable", lletra_titols: "fredoka", lletra_text: "poppins", lletra_accent: "caveat" },
+  { nom: "Neta", lletra_titols: "inter-tight", lletra_text: "inter", lletra_accent: "fraunces" },
+];
+const TITOLS_ASSISTENT = ["Els teus colors", "Les teves lletres", "Com són els teus gràfics", "La teva crida"];
+let assistent = null;  // {pas, colors, parella, energia, grafics, crida}
+
+const marcaFeta = (m = estilMarca) => !!m && COLORS_MARCA.some(([, k]) => m[k]);
+
+function pintaOfertaMarca() {
+  for (const b of $$("[data-obre-assistent]")) b.hidden = marcaFeta() || !estilMarca;
+}
+
+// Les lletres de la biblioteca, per veure-les escrites (de la mateixa web d'on es baixen en triar-les).
+const lletresVistes = new Map();
+function carregaLletraBiblioteca(id) {
+  const l = bibliotecaLletres.lletres.find((x) => x.id === id);
+  if (!l || lletresVistes.has(id)) return l?.nom;
+  const paquet = l.variable ? `@fontsource-variable/${id}` : `@fontsource/${id}`;
+  const fitxer = l.variable ? `${id}-latin-wght-normal` : `${id}-latin-${(l.pesos || [400])[0]}-normal`;
+  const font = new FontFace(l.nom, `url(https://cdn.jsdelivr.net/npm/${paquet}@5.3.0/files/${fitxer}.woff2)`,
+    l.variable ? { weight: "100 900" } : {});
+  lletresVistes.set(id, font);
+  font.load().then((f) => document.fonts.add(f)).catch(() => {});
+  return l.nom;
+}
+const nomLletra = (id) => bibliotecaLletres.lletres.find((x) => x.id === id)?.nom || id;
+
+function obreAssistent() {
+  const m = estilMarca || {};
+  assistent = {
+    pas: 0,
+    colors: marcaFeta(m) ? Object.fromEntries(COLORS_MARCA.map(([, k]) => [k, m[k] || null])) : { ...PALETES[0] },
+    parella: null,
+    energia: energies(m),
+    grafics: m.grafics || "normal",
+    crida: m.crida || "",
+  };
+  delete assistent.colors.nom;
+  $("#velo").hidden = false;
+  $("#full-marca").hidden = false;
+  pintaAssistent();
+}
+
+function tancaAssistent() {
+  assistent = null;
+  $("#velo").hidden = true;
+  $("#full-marca").hidden = true;
+}
+
+function opcioAssistent(cont, triada, fes) {
+  const b = document.createElement("button");
+  b.className = "opcio-assistent";
+  b.setAttribute("aria-pressed", String(triada));
+  b.addEventListener("click", fes);
+  cont.append(b);
+  return b;
+}
+
+function pintaAssistent() {
+  const a = assistent;
+  if (!a) return;
+  $("#titol-assistent").textContent = TITOLS_ASSISTENT[a.pas];
+  $$("#passes-assistent i").forEach((el, k) => el.classList.toggle("fet", k <= a.pas));
+  $("#assistent-enrere").textContent = a.pas ? "Enrere" : "Ara no";
+  $("#assistent-seguent").textContent = a.pas === 3 ? "Fet" : "Següent";
+  const cos = $("#cos-assistent");
+  cos.textContent = "";
+  const graella = document.createElement("div");
+  graella.className = "graella-assistent";
+  cos.append(graella);
+  if (a.pas === 0) {
+    for (const p of PALETES) {
+      const triada = COLORS_MARCA.every(([, k]) => (a.colors[k] || "").toUpperCase() === p[k]);
+      const b = opcioAssistent(graella, triada, () => { a.colors = { ...p }; delete a.colors.nom; pintaAssistent(); });
+      b.innerHTML = '<span class="rodones"></span><span class="nom-opcio"></span>';
+      for (const k of ["color_principal", "color_destacat", "color_secundari", "color_clar", "color_fosc"]) {
+        const r = document.createElement("i");
+        r.style.background = p[k];
+        b.firstChild.append(r);
+      }
+      b.lastChild.textContent = p.nom;
+    }
+    // Els meus colors: els sis, un per un.
+    const propis = document.createElement("div");
+    propis.className = "colors-marca colors-assistent";
+    for (const [, k] of COLORS_MARCA) {
+      const l = document.createElement("label");
+      l.className = "color";
+      l.innerHTML = '<input type="color"><span></span>';
+      l.firstChild.value = (a.colors[k] || "#8E8E93").toLowerCase();
+      l.lastChild.textContent = { color_text: "Text", color_principal: "Principal", color_destacat: "Destacat",
+        color_secundari: "Secundari", color_clar: "Clar", color_fosc: "Fosc" }[k];
+      l.firstChild.addEventListener("input", (e) => { a.colors[k] = e.target.value.toUpperCase(); });
+      propis.append(l);
+    }
+    const detalls = document.createElement("details");
+    detalls.className = "grup-estil";
+    detalls.innerHTML = "<summary>Els meus colors</summary>";
+    detalls.append(propis);
+    cos.append(detalls);
+  } else if (a.pas === 1) {
+    for (const p of PARELLES) {
+      const b = opcioAssistent(graella, a.parella === p, () => { a.parella = p; pintaAssistent(); });
+      b.classList.add("lletres-opcio");
+      const t = document.createElement("strong");
+      t.textContent = "El teu títol";
+      t.style.fontFamily = `"${carregaLletraBiblioteca(p.lletra_titols)}"`;
+      const x = document.createElement("span");
+      x.textContent = "i així es llegeix el text";
+      x.style.fontFamily = `"${carregaLletraBiblioteca(p.lletra_text)}"`;
+      const c = document.createElement("em");
+      c.textContent = "la paraula clau";
+      c.style.fontFamily = `"${carregaLletraBiblioteca(p.lletra_accent)}"`;
+      c.style.color = a.colors.color_principal || "inherit";
+      b.append(t, x, c);
+    }
+    if (fontsKit.length) {
+      const b = opcioAssistent(graella, a.parella === "kit", () => { a.parella = "kit"; pintaAssistent(); });
+      b.classList.add("lletres-opcio");
+      b.innerHTML = "<strong>Les meves</strong><span>Les lletres que ja tens al kit</span>";
+    }
+  } else if (a.pas === 2) {
+    const paleta = { ...(paletaGrafics || {}), text: a.colors.color_text, principal: a.colors.color_principal,
+      destacat: a.colors.color_destacat || a.colors.color_text, secundari: a.colors.color_secundari || a.colors.color_principal,
+      clar: a.colors.color_clar || "#FFFFFF", fosc: a.colors.color_fosc || "#111111" };
+    if (a.parella && a.parella !== "kit") {
+      Object.assign(paleta, { lletra_titols: nomLletra(a.parella.lletra_titols), lletra_text: nomLletra(a.parella.lletra_text),
+        lletra_accent: nomLletra(a.parella.lletra_accent) });
+    }
+    for (const [estil, nom] of [["net", "Net"], ["mac", "Mac"], ["scrapbook", "Scrapbook"], ["editorial", "Editorial"]]) {
+      const triat = a.energia.includes(estil);
+      const b = opcioAssistent(graella, triat, () => {
+        const nou = new Set(a.energia);
+        if (nou.has(estil) && nou.size > 1) nou.delete(estil); else nou.add(estil);
+        a.energia = [...nou];
+        pintaAssistent();
+      });
+      b.classList.add("grafic-opcio");
+      b.innerHTML = '<span class="mostra-grafic"><span></span></span><span class="nom-opcio"></span>';
+      b.lastChild.textContent = nom;
+      if (window.TallatGrafics) {
+        const host = b.querySelector(".mostra-grafic > span");
+        const mostra = { id: estil, tipus: estil === "editorial" ? "frase" : "llista", estil, posicio: "mig", limits: [0, 1920],
+          inici: 0, final: 1e5, text: estil === "editorial" ? "una *idea* clara" : "3 coses",
+          punts: estil === "editorial" ? [] : [{ text: "una", t: 0 }, { text: "dues", t: 0 }] };
+        requestAnimationFrame(() => {
+          TallatGrafics.construeix(host, [mostra], paleta).seek(50, false);
+          const caixa = b.querySelector(".mostra-grafic");
+          host.style.transform = `scale(${caixa.clientWidth / 1080})`;
+          host.style.marginTop = `${(caixa.clientHeight - caixa.clientWidth * 1920 / 1080) / 2}px`;
+        });
+      }
+    }
+    const quants = document.createElement("div");
+    quants.className = "segmentat ample";
+    quants.setAttribute("role", "radiogroup");
+    quants.setAttribute("aria-label", "Quants gràfics");
+    for (const [v, t] of [["pocs", "Pocs"], ["normal", "Normal"], ["molts", "Molts"]]) {
+      const b = document.createElement("button");
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(a.grafics === v));
+      b.textContent = t;
+      b.addEventListener("click", () => { a.grafics = v; pintaAssistent(); });
+      quants.append(b);
+    }
+    cos.append(quants);
+  } else {
+    graella.remove();
+    const camp = document.createElement("input");
+    camp.type = "text";
+    camp.className = "camp-text";
+    camp.maxLength = 600;
+    camp.placeholder = "Per exemple: desa't aquest vídeo per quan el necessitis";
+    camp.value = a.crida;
+    camp.setAttribute("aria-label", "La teva crida a l'acció");
+    camp.addEventListener("input", () => { a.crida = camp.value; });
+    cos.append(camp);
+    setTimeout(() => camp.focus(), 50);
+  }
+}
+
+async function acabaAssistent() {
+  const a = assistent;
+  tancaAssistent();
+  canviaMarca({ ...a.colors, energia: a.energia, grafics: a.grafics, crida: a.crida.trim() });
+  pintaPanellMarca();
+  if (a.parella && a.parella !== "kit") {
+    for (const clau of ["lletra_titols", "lletra_text", "lletra_accent"]) await baixaLletra(a.parella[clau], "marca", clau);
+  } else {
+    await desaEstils();
+  }
+  avis("Fet. Els subtítols, el títol i els gràfics ja tenen la teva marca.", 5000);
+}
+
+function instalaAssistent() {
+  for (const b of $$("[data-obre-assistent]")) b.addEventListener("click", obreAssistent);
+  $("#assistent-enrere").addEventListener("click", () => {
+    if (!assistent || assistent.pas === 0) tancaAssistent();
+    else { assistent.pas--; pintaAssistent(); }
+  });
+  $("#assistent-seguent").addEventListener("click", () => {
+    if (!assistent) return;
+    if (assistent.pas === 3) acabaAssistent();
+    else { assistent.pas++; pintaAssistent(); }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (assistent && e.key === "Escape") { e.stopPropagation(); tancaAssistent(); }
+  }, true);
+}
+
 let instruccioPerPujar = null;
 async function pujaBroll(iid, fitxer) {
   avis(`Pujant «${fitxer.name}»…`, 20000);
@@ -2793,6 +3356,9 @@ function instalaControls() {
   instalaColumnes();
   instalaSeccions();
   instalaEstil();
+  instalaEdicioAlVideo();
+  instalaGuia();
+  instalaAssistent();
   instalaKits();
   instalaTitol();
   instalaBroll();
@@ -2841,6 +3407,7 @@ function instalaControls() {
 
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea, select")) return;
+    if (capaTriada && e.key === "Escape") { deixaCapa(); return; }
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
     if (editantTitol && e.key === "Escape") { tancaTitol(); return; }
     if (editantBroll && e.key === "Escape") { tancaBroll(); return; }
@@ -2914,6 +3481,7 @@ async function inicia() {
   pintaInstruccions();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;
+  if (!llegeix("tallat.guia-vista", false)) setTimeout(obreGuia, 600);  // el primer cop, la visita guiada
 }
 
 
@@ -3068,10 +3636,11 @@ function aplicaMarca(r) {
 function pintaResumMarca() {
   const m = estilMarca;
   if (!m) return;
+  pintaOfertaMarca();
   const colors = COLORS_MARCA.map(([, clau]) => m[clau]).filter(Boolean);
   $$("#mostra-marca i").forEach((el, k) => { el.style.background = colors[k] || ""; });
   const feta = colors.length || m.compte;
-  $("#nom-marca").textContent = feta ? (m.compte || m.crida || "Colors i lletres") : "Encara no: digues a Claude «fem la meva marca»";
+  $("#nom-marca").textContent = feta ? (m.compte || m.crida || "Colors i lletres") : "Encara no: toca aquí i fes-la en 4 passos";
 }
 
 function pintaPanellMarca() {
@@ -3113,7 +3682,7 @@ function tancaMarca() {
 }
 
 function instalaMarca() {
-  $("#obre-marca").addEventListener("click", obreMarca);
+  $("#obre-marca").addEventListener("click", () => (marcaFeta() ? obreMarca() : obreAssistent()));
   $("#tanca-marca").addEventListener("click", tancaMarca);
   for (const [id, clau] of COLORS_MARCA) {
     $(`#${id}`).addEventListener("input", (e) => canviaMarca({ [clau]: e.target.value.toUpperCase() }));

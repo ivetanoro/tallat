@@ -10,7 +10,7 @@
   <aside class="barra" aria-label="Projecte">
     <header class="barra-cap">
       <button class="enllac tornar" id="tornar" hidden>‹ Gravació sencera</button>
-      <p class="marca" id="marca">tallat</p>
+      <p class="marca" id="marca">tallat <button class="ajuda-guia" id="obre-guia" title="Com funciona" aria-label="Com funciona (visita guiada)">?</button></p>
       <h1 id="nom-projecte">…</h1>
       <p class="durades"><span id="durada-original">–</span><span class="fletxa" aria-hidden="true">→</span><strong id="durada-final">–</strong></p>
       <p class="detall" id="trossos">&nbsp;</p>
@@ -46,17 +46,27 @@
       </button>
     </section>
 
-    <div class="segmentat ample pestanyes" role="tablist" aria-label="Què vols fer" id="pestanyes">
+    <div class="pestanyes" role="tablist" aria-label="Què vols fer" id="pestanyes">
       <button role="tab" id="tab-edita" data-pestanya="edita" aria-controls="pestanya-edita" aria-selected="true"
-              title="Què queda al vídeo: reels, instruccions de veu, propostes i silencis">Edita<span class="punt" id="punt-edita" hidden></span></button>
+              title="Què queda al vídeo: reels, instruccions de veu, propostes i silencis">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><path d="M8.6 8.6 20 18M8.6 15.4 20 6"/></svg>
+        <span>Edita</span><span class="punt" id="punt-edita" hidden></span></button>
       <button role="tab" id="tab-subtitols" data-pestanya="subtitols" aria-controls="pestanya-subtitols" aria-selected="false"
-              title="Com són els subtítols: l'estil, la lletra, els colors i les paraules destacades">Subtítols</button>
+              title="Com són els subtítols: l'estil, la lletra, els colors i les paraules destacades">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 11.5h4M14 11.5h3M7 15h10"/></svg>
+        <span>Subtítols</span></button>
       <button role="tab" id="tab-grafics" data-pestanya="grafics" aria-controls="pestanya-grafics" aria-selected="false"
-              title="El pla de gràfics que proposa Claude, el títol del ganxo i el b-roll">Gràfics<span class="punt" id="punt-grafics" hidden></span></button>
+              title="El pla de gràfics que proposa Claude, el títol del ganxo i el b-roll">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3.5l1.9 5.1 5.1 1.9-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/><path d="M18.5 15v5M16 17.5h5"/></svg>
+        <span>Gràfics</span><span class="punt" id="punt-grafics" hidden></span></button>
       <button role="tab" id="tab-so" data-pestanya="so" aria-controls="pestanya-so" aria-selected="false"
-              title="La neteja de la veu i els efectes de so">So</button>
+              title="La neteja de la veu i els efectes de so">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+        <span>So</span></button>
       <button role="tab" id="tab-videos" data-pestanya="videos" aria-controls="pestanya-videos" aria-selected="false"
-              title="Els esborranys i els vídeos finals que has exportat">Vídeos<span class="compte-pestanya" id="compte-videos"></span></button>
+              title="Els esborranys i els vídeos finals que has exportat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M10.5 9.5v5l4-2.5z"/></svg>
+        <span>Vídeos</span><span class="compte-pestanya" id="compte-videos"></span></button>
     </div>
 
     <div class="pestanya" id="pestanya-edita" role="tabpanel" aria-labelledby="tab-edita">
@@ -86,6 +96,10 @@
 
     <div class="pestanya" id="pestanya-grafics" role="tabpanel" aria-labelledby="tab-grafics" hidden>
 
+    <button class="oferta-marca" data-obre-assistent hidden>
+      <span class="mostra-estil mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes la teva marca: 4 passos</span></span>
+    </button>
     <section class="seccio" data-seccio="pla-grafics">
       <h2>Pla de gràfics <span class="compte" id="compte-grafics"></span></h2>
       <p class="detall" id="ajuda-grafics"></p>
@@ -112,6 +126,11 @@
 
     <div class="pestanya" id="pestanya-subtitols" role="tabpanel" aria-labelledby="tab-subtitols" hidden>
     <div class="panell-estil" id="panell-estil">
+      <button class="oferta-marca" data-obre-assistent hidden>
+        <span class="mostra-estil mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes la teva marca: 4 passos</span></span>
+      </button>
+      <p class="pista-video">Toca els subtítols al vídeo: hi canvies l'estil, el color i la mida, i els arrossegues on vulguis.</p>
       <p class="detall">Es desa al kit «<span id="nom-kit-panell"></span>»: canvia tots els vídeos que el fan servir.</p>
       <button class="interruptor" id="subtitols" role="switch" aria-checked="true">
         <span class="pista" aria-hidden="true"><span class="bola"></span></span>Posa subtítols al vídeo
@@ -669,6 +688,10 @@
       <div class="capa-broll" id="capa-broll" aria-hidden="true"><div id="br-host"></div></div>
       <div class="capa-subtitols" id="capa-subtitols" aria-hidden="true"><div id="ts-host"></div><div id="tg-host"></div><div id="tt-host"></div></div>
       <div class="capa-stickers" id="capa-stickers" aria-hidden="true"></div>
+      <div class="capa-edita" id="capa-edita">
+        <div class="marc-capa" id="marc-capa" hidden title="Arrossega per moure"></div>
+        <div class="barra-capa" id="barra-capa" role="toolbar" hidden></div>
+      </div>
       <button class="gran-play" id="gran-play" aria-label="Reprodueix">
         <svg viewBox="0 0 40 40"><path d="M15 11.5v17l13-8.5z"/></svg>
       </button>
@@ -704,6 +727,16 @@
   <div class="divisor" id="divisor-reproductor" role="separator" aria-orientation="vertical" tabindex="0"
        aria-label="Amplada de la columna del vídeo" title="Arrossega per canviar l'amplada. Doble clic: mida normal."></div>
   <div class="velo" id="velo" hidden></div>
+  <div class="full assistent" id="full-marca" role="dialog" aria-modal="true" aria-labelledby="titol-assistent" hidden>
+    <div class="passes-assistent" id="passes-assistent" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <h2 id="titol-assistent"></h2>
+    <div id="cos-assistent"></div>
+    <div class="botons">
+      <button class="enllac" id="assistent-enrere">Enrere</button>
+      <button class="boto principal" id="assistent-seguent">Següent</button>
+    </div>
+  </div>
+
   <div class="full" id="full-final" role="dialog" aria-modal="true" aria-labelledby="titol-final" hidden>
     <h2 id="titol-final">Exportar la versió final</h2>
     <p class="detall" id="final-durada"></p>
@@ -734,6 +767,17 @@
   <input type="file" id="fitxer-broll" accept="image/*,video/*" hidden>
   <input type="file" id="fitxer-font" accept=".ttf,.otf,.woff,.woff2" hidden>
   <div class="avis-flotant" id="avis-flotant" role="status" aria-live="polite"></div>
+  <div class="guia" id="guia" hidden>
+    <div class="guia-forat" id="guia-forat"></div>
+    <div class="guia-bombolla" id="guia-bombolla" role="dialog" aria-modal="true" aria-labelledby="guia-text">
+      <p id="guia-text"></p>
+      <div class="guia-accions">
+        <span class="guia-pas" id="guia-pas"></span>
+        <button class="enllac" id="guia-salta">Salta</button>
+        <button class="boto principal" id="guia-seguent">Següent</button>
+      </div>
+    </div>
+  </div>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
   <script src="/pagina/subtitols.js"></script>
   <script src="/pagina/grafics.js"></script>
