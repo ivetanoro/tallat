@@ -818,3 +818,5 @@ body.reproduint .play .si-play { display: block; }
 #m-energia button[aria-pressed="true"] { background: var(--superficie); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
 input.camp-text { min-height: 0; }
 #panell-marca select, #e-clau-font, #t-clau-font { width: 100%; }
+/* El resum de la marca, a la fila: com a molt dues línies. */
+#nom-marca { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
