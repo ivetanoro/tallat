@@ -108,7 +108,10 @@ def crea_reel(arrel, reel: dict) -> Path:
     for nom in (TRANSCRIPCIO, PROXY, INSTRUCCIONS):
         enllac = carpeta / nom
         if not enllac.exists() and (arrel.carpeta / nom).exists():
-            enllac.symlink_to(Path("..") / ".." / nom)
+            try:
+                enllac.symlink_to(Path("..") / ".." / nom)
+            except OSError:  # Windows sense permís per fer enllaços: Projecte.fitxer els busca a la gravació sencera
+                pass
     (carpeta / REEL).write_text(json.dumps(reel, ensure_ascii=False, indent=1), encoding="utf-8")
     if not (carpeta / EDICIO).exists():
         projecte = Projecte(carpeta)

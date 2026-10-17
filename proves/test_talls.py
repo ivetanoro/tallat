@@ -354,6 +354,35 @@ class TestMuntatgeALots(unittest.TestCase):
                 self.assertAlmostEqual(durades["audio"], esperat, delta=0.05, msg=fitxer.name)
 
 
+class TestCodificadorPerSistema(unittest.TestCase):
+    """Al Mac, la gràfica (VideoToolbox); a Windows no n'hi ha i es fa amb el processador (x264)."""
+
+    def test_al_mac_com_sempre(self):
+        from unittest import mock
+        with mock.patch.object(exporta.sys, "platform", "darwin"):
+            self.assertEqual(exporta.codec_video("final", "16M"),
+                             ["-c:v", "h264_videotoolbox", "-b:v", "16M", "-maxrate", "16M", "-profile:v", "high"])
+            self.assertEqual(exporta.codec_video("copia", "3M"), ["-c:v", "h264_videotoolbox", "-b:v", "3M", "-g", "15"])
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_a_windows_amb_x264_tambe_a_lots(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=360x640:r=30:d=6",
+                            "-f", "lavfi", "-i", "sine=d=6", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                            "-shortest", str(d / "v.mp4")], check=True)
+            trams = [edicio.Tram(i * 0.5, i * 0.5 + 0.3) for i in range(9)]
+            with mock.patch.object(exporta.sys, "platform", "win32"), mock.patch.object(exporta, "MEMORIA_LOT", 1):
+                self.assertEqual(exporta.codec_video("final", "4M")[:2], ["-c:v", "libx264"])
+                sortida = exporta.exporta(d / "v.mp4", trams, d / "final.mp4", "esborrany")
+                previa = exporta.fes_previa(d / "v.mp4", trams, d / "previa.mp4")
+            for f in (sortida, previa):
+                s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
+                                               "-of", "json", str(f)], capture_output=True, text=True).stdout)["streams"][0]
+                self.assertEqual(s["codec_name"], "h264")
+
+
 class TestPreviaContinua(unittest.TestCase):
     """El muntatge en un sol vídeo, perquè la pàgina el reprodueixi sense saltar."""
 

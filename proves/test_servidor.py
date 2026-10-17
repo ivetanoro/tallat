@@ -99,6 +99,9 @@ class TestServidor(unittest.TestCase):
             def __init__(self, carpeta):
                 self.carpeta = carpeta
 
+            def fitxer(self, nom):
+                return self.carpeta / nom
+
             def previa(self, trams):
                 return self.carpeta / "previa" / f"previa_{len(trams)}.mp4"
 
@@ -141,6 +144,9 @@ class TestServidor(unittest.TestCase):
 
             def trams(self):
                 return self.t
+
+            def fitxer(self, nom):
+                return self.carpeta / nom
 
             def previa(self, trams, nom="previa"):
                 return self.carpeta / "previa" / f"{nom}_{trams[0][0]}_{len(trams)}.mp4"

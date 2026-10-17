@@ -37,7 +37,9 @@ a Claude) i tret (no surt, però es guarda perquè Claude no el torni a proposar
 """
 from __future__ import annotations
 
+import glob
 import math
+import os
 import re
 import subprocess
 import tempfile
@@ -582,18 +584,22 @@ def full_de_fotogrames(video: Path, quadres: list[dict], desti: Path) -> Path:
 
 # --- La captura d'una web (per al gràfic «web») ----------------------------------------------------
 
-# El Chrome sense finestra que ja fa servir HyperFrames per dibuixar (o el que hi hagi al Mac).
+# El Chrome sense finestra que ja fa servir HyperFrames per dibuixar (o el Chrome o l'Edge de l'ordinador).
 CHROMES = ("~/.cache/hyperframes/chrome/chrome-headless-shell/*/*/chrome-headless-shell",
+           "~/.cache/hyperframes/chrome/chrome-headless-shell/*/*/chrome-headless-shell.exe",
            "~/.cache/puppeteer/chrome-headless-shell/*/*/chrome-headless-shell",
-           "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+           "~/.cache/puppeteer/chrome-headless-shell/*/*/chrome-headless-shell.exe",
+           "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+           "C:/Program Files/Google/Chrome/Application/chrome.exe",
+           "~/AppData/Local/Google/Chrome/Application/chrome.exe",
+           "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe")
 MIDA_CAPTURA = (1280, 1950)  # com una pantalla d'ordinador, i una mica més de llarg perquè baixi
 
 
 def troba_chrome() -> Path | None:
     for patro in CHROMES:
-        patro = str(Path(patro).expanduser())
-        trobats = sorted(Path("/").glob(patro.lstrip("/"))) if "*" in patro else [Path(patro)]
-        trobats = [p for p in trobats if p.is_file()]
+        patro = os.path.expanduser(patro)  # glob accepta camins absoluts a tots els sistemes (Path.glob no)
+        trobats = [Path(p) for p in sorted(glob.glob(patro)) if Path(p).is_file()]
         if trobats:
             return trobats[-1]
     return None

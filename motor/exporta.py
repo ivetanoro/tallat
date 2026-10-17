@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 from fractions import Fraction
@@ -134,6 +135,27 @@ def temps_exactes(a: float, b: float, fps: str) -> tuple[str, str]:
     inici = (fa * 1_000_000 * f.denominator) // f.numerator
     durada = ((fb - fa) * 1_000_000 * f.denominator) // f.numerator
     return tuple(f"{us // 1_000_000}.{us % 1_000_000:06d}" for us in (inici, durada))
+
+
+def codec_video(us: str, bitrate: str) -> list[str]:
+    """Com es comprimeix el vídeo. Al Mac, amb la gràfica (VideoToolbox): molt més ràpid. A Windows (i Linux)
+    no n'hi ha i es fa amb el processador (x264), amb un preset més ràpid per al que només es mira a la pàgina.
+
+    `us`: «final» (l'export), «lot» (el muntatge a lots, que després es torna a comprimir), «copia» (la còpia
+    lleugera), «previa» (la vista prèvia contínua) o «curt» (els segons d'escoltar un tall). La còpia, la
+    vista prèvia i l'escolta porten un fotograma clau cada mig segon perquè els salts siguin instantanis."""
+    gop = ["-g", "15"] if us in ("copia", "previa", "curt") else []
+    if us == "curt" and _te_x264():  # la gràfica tarda mig segon a arrencar i x264 no
+        return ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", *gop, "-pix_fmt", "yuv420p"]
+    if sys.platform == "darwin":
+        extra = {"final": ["-maxrate", bitrate, "-profile:v", "high"],
+                 "lot": ["-profile:v", "high", "-allow_sw", "1"],  # -allow_sw: si la gràfica és ocupada
+                 "copia": [], "previa": ["-allow_sw", "1"], "curt": ["-allow_sw", "1"]}[us]
+        return ["-c:v", "h264_videotoolbox", "-b:v", bitrate, *extra, *gop]
+    preset = {"final": "medium", "lot": "veryfast", "copia": "veryfast", "previa": "veryfast", "curt": "ultrafast"}[us]
+    extra = ["-maxrate", bitrate, "-bufsize", f"{int(bitrate.rstrip('M')) * 2}M", "-profile:v", "high"] \
+        if us in ("final", "lot") else []
+    return ["-c:v", "libx264", "-preset", preset, "-b:v", bitrate, *extra, *gop, "-pix_fmt", "yuv420p"]
 
 
 def _so_del_tros(i: int, tram) -> str:
@@ -335,9 +357,8 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
         peces = targetes.prepara_peces(brolls, ow / targetes.AMPLADA, Path(temporal))
         base = len(trams) > trossos_per_lot(info)
         if base:  # molts trossos: primer el muntatge a lots (60 % de la feina), després la resta
-            llista = _munta_lots(video, trams, info, Path(temporal), ["-c:v", "h264_videotoolbox", "-b:v",
-                                 _bitrate_intermedi(bitrate), "-profile:v", "high"], enquadrament=enquadrament,
-                                 zooms=zooms, progres=_part_del_progres(progres, 0, 60))
+            llista = _munta_lots(video, trams, info, Path(temporal), codec_video("lot", _bitrate_intermedi(bitrate)),
+                                 enquadrament=enquadrament, zooms=zooms, progres=_part_del_progres(progres, 0, 60))
             entrades = _entrada_lots(llista)
             progres = _part_del_progres(progres, 60, 100)
         else:
@@ -404,7 +425,7 @@ def _part_del_progres(progres, de: float, fins: float):
     return lambda pc: progres(int(de + (fins - de) * pc / 100))
 
 
-def _munta_lots(video: Path, trams, info, carpeta: Path, codec_video: list[str], enquadrament: str | None = None,
+def _munta_lots(video: Path, trams, info, carpeta: Path, codec: list[str], enquadrament: str | None = None,
                 zooms: list[bool] | None = None, progres=None) -> Path:
     """El muntatge dels trossos a lots de trossos_per_lot(): cada lot és un fitxer amb la imatge (enquadrada,
     si cal) i el so ja units (el so sense comprimir, perquè en encadenar-los no hi hagi petits salts). Torna
@@ -423,7 +444,7 @@ def _munta_lots(video: Path, trams, info, carpeta: Path, codec_video: list[str],
         avanc = (lambda pc, d=durada, f=fets: progres(min(100, int((f + d * pc / 100) / total * 100)))) if progres else None
         _executa(["ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", *_entrades_trams(video, lot, info),
                   "-filter_complex_script", str(filtre), "-map", "[v]", "-map", "[a]", "-r", info["fps"],
-                  *codec_video, "-allow_sw", "1", "-c:a", "pcm_s16le", "-ar", "48000", str(nom)], durada, avanc)
+                  *codec, "-c:a", "pcm_s16le", "-ar", "48000", str(nom)], durada, avanc)
         fets += durada
         noms.append(nom)
     llista = carpeta / "lots.txt"
@@ -471,7 +492,7 @@ def _exporta(entrades_base, durada, sortida, qualitat, info, filtre, brolls, pec
         "ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", *entrades,
         "-filter_complex_script", filtre, "-map", "[vout]", "-map", "[aout]",
         "-r", info["fps"],
-        "-c:v", "h264_videotoolbox", "-b:v", bitrate, "-maxrate", bitrate, "-profile:v", "high",
+        *codec_video("final", bitrate),
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
         "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(sortida),
     ]
@@ -495,16 +516,13 @@ def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, cur
     if not trams:
         raise ValueError("No queda cap paraula")
     info = info_video(proxy)
-    # Si la gràfica és ocupada (un export alhora), amb el processador (-allow_sw). Un vídeo `curt` (uns
-    # segons per escoltar un tall) es fa amb x264: la gràfica tarda mig segon a arrencar i x264 no.
-    codec_video = (["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-g", "15", "-pix_fmt", "yuv420p"]
-                   if curt and _te_x264() else ["-c:v", "h264_videotoolbox", "-allow_sw", "1", "-b:v", "3M", "-g", "15"])
+    codec = codec_video("curt" if curt else "previa", "3M")
     sortida.parent.mkdir(parents=True, exist_ok=True)
     # Un nom propi per a cada feina: dues peticions iguals alhora no s'han de trepitjar el fitxer a mitges.
     temporal = sortida.with_name(f".{sortida.stem}.{os.getpid()}-{threading.get_ident()}.fent{sortida.suffix}")
     with tempfile.TemporaryDirectory() as carpeta:
         if len(trams) > trossos_per_lot(info):  # molts trossos: a lots, i la imatge dels lots es copia tal qual
-            llista = _munta_lots(proxy, trams, info, Path(carpeta), codec_video)
+            llista = _munta_lots(proxy, trams, info, Path(carpeta), codec)
             ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", *_entrada_lots(llista),
                      "-map", "0:v", "-map", "0:a", "-c:v", "copy"]
         else:
@@ -514,7 +532,7 @@ def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, cur
             filtre.write_text("\n".join(parts), encoding="utf-8")
             ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", *_entrades_trams(proxy, trams, info),
                      "-filter_complex_script", str(filtre), "-map", "[v]", "-map", "[a]", "-r", info["fps"],
-                     *codec_video]
+                     *codec]
         ordre += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", str(temporal)]
         try:
             # Un vídeo curt (l'escolta d'un tall) que no surt en mig minut, ja no cal: la pàgina se'n surt sense.
@@ -537,7 +555,7 @@ def fes_proxy(video: Path, sortida: Path, progres=None) -> Path:
     ordre = [
         "ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", "-i", str(video),
         "-map", "0:v:0", "-map", "0:a:0", "-vf", enquadrament,
-        "-c:v", "h264_videotoolbox", "-b:v", "3M", "-g", "15",
+        *codec_video("copia", "3M"),
         "-c:a", "aac", "-b:a", "128k", "-ac", "2",
         "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(temporal),
     ]

@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from motor import broll, edicio, editors, exporta, grafics, marca, muntatge, so, stickers, targetes
+from motor import broll, edicio, editors, entorn, exporta, grafics, marca, muntatge, so, stickers, targetes
 from motor.projecte import EXPORTS, PREVIES, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -99,6 +99,15 @@ class Feina:
             self._actualitza(estat="error", error=str(e))
 
 
+def _esborra(path: Path) -> None:
+    """Esborra una vista prèvia vella. A Windows no es pot esborrar un fitxer obert (el navegador encara la
+    pot estar llegint): llavors es deixa, i ja s'esborrarà una altra vegada."""
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 class Previa:
     """El muntatge en un vídeo continu per a la pàgina (exporta.fes_previa), un alhora i en segon pla.
     La pàgina el demana després de cada canvi; mentre es fa, reprodueix saltant com sempre."""
@@ -108,7 +117,7 @@ class Previa:
         self.fent = None  # el fitxer que s'està fent
 
     def demana(self, projecte: Projecte, trams) -> dict:
-        if not trams or not (projecte.carpeta / PROXY).exists():
+        if not trams or not (projecte.fitxer(PROXY)).exists():
             return {"estat": "no", "trams": edicio.trams_json(trams)}
         desti = projecte.previa(trams)
         if desti.exists():
@@ -120,7 +129,7 @@ class Previa:
         with self.bloqueig:
             if self.fent is None:  # si se'n fa una altra, la pàgina ho tornarà a demanar
                 self.fent = desti
-                threading.Thread(target=self._fes, args=(projecte.carpeta / PROXY, list(trams), desti),
+                threading.Thread(target=self._fes, args=(projecte.fitxer(PROXY), list(trams), desti),
                                  daemon=True).start()
         return {"estat": "fent", "trams": edicio.trams_json(trams)}
 
@@ -130,7 +139,7 @@ class Previa:
             # Se'n guarden les quatre que s'han fet servir darrerament (desfer i refer hi tornen); la que
             # sona a la pàgina sempre n'és una, perquè cada petició la toca (os.utime).
             for vell in sorted(desti.parent.glob("previa_*.mp4"), key=lambda p: p.stat().st_mtime)[:-4]:
-                vell.unlink(missing_ok=True)
+                _esborra(vell)
         except Exception:
             traceback.print_exc()
         finally:
@@ -144,7 +153,7 @@ ESCOLTA = 1.5  # segons abans i després del tall que se senten en treure o recu
 def prepara_escolta(projecte: Projecte, m: float) -> dict | None:
     """El que cal per fer el vídeo curt d'escolta (es llegeix amb el projecte bloquejat; el vídeo es fa
     després, sense bloquejar: mentrestant la pàgina ha de poder desar i fer la resta, revisió de Codex)."""
-    proxy = projecte.carpeta / PROXY
+    proxy = projecte.fitxer(PROXY)
     trams, inici = edicio.finestra(projecte.trams(), max(0.0, m - ESCOLTA), m + ESCOLTA, projecte.fps)
     if not trams or not proxy.exists():
         return None
@@ -166,7 +175,7 @@ def fes_escolta(feina: dict | None) -> dict:
             traceback.print_exc()
             return {"estat": "no"}
         for vell in sorted(desti.parent.glob("escolta_*.mp4"), key=lambda p: p.stat().st_mtime)[:-5]:
-            vell.unlink(missing_ok=True)
+            _esborra(vell)
     return {"estat": "fet", "url": f"/previa/{desti.name}", "inici": feina["inici"],
             "durada": round(sum(b - a for a, b in feina["trams"]), 6)}
 
@@ -400,7 +409,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             if ruta.startswith("/pagina/"):
                 return self._segur(PAGINA, ruta[len("/pagina/"):])
             if ruta == "/proxy.mp4":
-                return self._fitxer(projecte.carpeta / PROXY)
+                return self._fitxer(projecte.fitxer(PROXY))
             if ruta.startswith("/broll/"):
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
             if ruta.startswith("/stickers/"):
@@ -472,12 +481,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             if cos.get("accio") == "projecte":
                 exporta.tria_carpeta_exports(None)
             else:
-                r = subprocess.run(["osascript", "-e", 'POSIX path of (choose folder with prompt '
-                                    '"On vols desar els vídeos que exportis amb tallat?")'],
-                                   capture_output=True, text=True)
-                if r.returncode != 0 or not r.stdout.strip():  # ha cancel·lat
+                triada = entorn.tria_carpeta("On vols desar els vídeos que exportis amb tallat?")
+                if triada is None:  # ha cancel·lat
                     return self._json({"cancel·lat": True, **info_carpeta(projecte)})
-                exporta.tria_carpeta_exports(Path(r.stdout.strip()))
+                exporta.tria_carpeta_exports(triada)
             return self._json(info_carpeta(projecte))
 
         def do_POST(self):
@@ -647,7 +654,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     path = (carpeta / str(cos.get("copia") or cos.get("nom", ""))).resolve()
                     if path.parent != carpeta or not path.exists():
                         return self._json({"error": "No trobo aquest fitxer"}, HTTPStatus.NOT_FOUND)
-                    subprocess.run(["open", "-R", str(path)], check=False)
+                    entorn.mostra_al_gestor(path)
                     return self._json({"ok": True})
                 if ruta == "/api/exporta":
                     qualitat = cos.get("qualitat", "esborrany")

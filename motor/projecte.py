@@ -40,17 +40,35 @@ def minuts(segons: float) -> str:
     return f"{int(segons // 60)} min {int(segons % 60):02d} s"
 
 
+def arrel_de(carpeta: Path) -> Path:
+    """La carpeta de la gravació sencera. Un reel (reels/<id>/, amb reel.json: muntatge.REEL) en comparteix
+    la transcripció, la còpia lleugera i les instruccions. Al Mac hi apunta amb enllaços; a Windows, on fer
+    enllaços demana permisos especials, no n'hi ha, i es busquen a la gravació sencera (Projecte.fitxer)."""
+    carpeta = Path(carpeta)
+    if (carpeta / "reel.json").exists() and (carpeta.parent.parent / TRANSCRIPCIO).exists():
+        return carpeta.parent.parent.resolve()
+    transcripcio = carpeta / TRANSCRIPCIO
+    return transcripcio.resolve().parent if transcripcio.exists() else carpeta
+
+
 class Projecte:
     def __init__(self, carpeta: Path | str):
         self.carpeta = Path(carpeta).expanduser().resolve()
+        self.arrel = arrel_de(self.carpeta)
         self.avisos: list[str] = []
-        self.dades = json.loads((self.carpeta / TRANSCRIPCIO).read_text(encoding="utf-8"))
+        self.dades = json.loads(self.fitxer(TRANSCRIPCIO).read_text(encoding="utf-8"))
         self.estat = self._carrega_estat()
         self._versio_al_disc = self._versio_estat()
 
     @property
     def nom(self) -> str:
         return self.carpeta.name
+
+    def fitxer(self, nom: str) -> Path:
+        """Un fitxer compartit del projecte (transcripció, còpia lleugera, instruccions): el de la carpeta
+        o, en un reel sense enllaços (Windows), el de la gravació sencera."""
+        propi = self.carpeta / nom
+        return propi if propi.exists() or propi.is_symlink() or self.arrel == self.carpeta else self.arrel / nom
 
     @property
     def video(self) -> Path:
@@ -107,8 +125,7 @@ class Projecte:
         if not hasattr(self, "_veu"):
             from motor import veu
             try:
-                arrel = (self.carpeta / TRANSCRIPCIO).resolve().parent
-                self._veu = veu.carrega(arrel, self.video, self.dades.get("durada"), arrel / PROXY)
+                self._veu = veu.carrega(self.arrel, self.video, self.dades.get("durada"), self.arrel / PROXY)
             except Exception:  # sense el vídeo o sense so: escurcem els silencis com abans
                 self._veu = None
         return self._veu
@@ -146,8 +163,7 @@ class Projecte:
     def kit(self) -> str:
         """El kit d'estil d'aquest vídeo: el triat aquí; en un reel que no en té cap de triat, el de la
         gravació sencera; i si no, el kit per defecte (també si el triat ja no existeix)."""
-        arrel = (self.carpeta / TRANSCRIPCIO).resolve().parent  # en un reel, la gravació sencera
-        for carpeta in (self.carpeta, arrel):
+        for carpeta in (self.carpeta, self.arrel):  # en un reel, també la gravació sencera
             try:
                 triat = json.loads((carpeta / KIT_TRIAT).read_text(encoding="utf-8")).get("kit")
             except (OSError, json.JSONDecodeError, AttributeError):
@@ -370,12 +386,12 @@ class Projecte:
     # --- Instruccions de veu ------------------------------------------------------
 
     def instruccions(self) -> list[dict]:
-        return instruccions.llegeix(self.carpeta)
+        return instruccions.llegeix(self.carpeta_instruccions())
 
     def detecta_instruccions(self) -> list[dict]:
         """Detecta les instruccions «Claude, …», les treu del vídeo i en desa les propostes."""
         noves = instruccions.fusiona(instruccions.detecta(self.dades["paraules"]), self.instruccions())
-        instruccions.desa(self.carpeta, noves)
+        instruccions.desa(self.carpeta_instruccions(), noves)
         self.estat = instruccions.aplica_a_estat(self.estat, noves)
         return noves
 
@@ -387,12 +403,12 @@ class Projecte:
             raise KeyError(iid)
         ins["estat"] = nou_estat
         self.estat = instruccions.aplica_decisio(self.estat, ins)
-        instruccions.desa(self.carpeta, llista)
+        instruccions.desa(self.carpeta_instruccions(), llista)
         return llista
 
     def carpeta_instruccions(self) -> Path:
         """On viuen instruccions.json i el b-roll: a la gravació sencera (els reels hi apunten)."""
-        path = self.carpeta / instruccions.FITXER
+        path = self.fitxer(instruccions.FITXER)
         return path.resolve().parent if path.exists() else self.carpeta
 
     def afegeix_instruccio(self, tipus: str, paraula: int, text: str = "", treu: tuple[int, int] | None = None) -> dict:
@@ -551,7 +567,7 @@ class Projecte:
     def previa(self, trams, nom: str = "previa") -> Path:
         """On va (o és) el muntatge d'aquests talls en un sol vídeo (exporta.fes_previa). El nom diu els
         talls (també on comença i acaba el so de cadascun) i la còpia lleugera: si canvien, n'hi ha un altre."""
-        proxy = self.carpeta / PROXY
+        proxy = self.fitxer(PROXY)
         empremta = json.dumps([[round(a, 4), round(b, 4), *(round(x, 4) for x in edicio.so_del_tram(t))]
                                for t in trams for a, b in [t]]) + str(proxy.stat().st_mtime_ns)
         return self.carpeta / PREVIES / f"{nom}_{hashlib.sha1(empremta.encode()).hexdigest()[:12]}.mp4"
@@ -559,7 +575,7 @@ class Projecte:
     def font(self, qualitat: str) -> Path:
         """Vídeo d'on es fa l'export. L'esborrany surt de la còpia lleugera (ja és vertical i
         petita): és molt més ràpid, sobretot amb vídeos d'iPhone (HEVC 4K)."""
-        proxy = self.carpeta / PROXY
+        proxy = self.fitxer(PROXY)
         if qualitat == "esborrany" and proxy.exists():
             return proxy
         return self.video

@@ -37,6 +37,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import webbrowser
 from pathlib import Path
 
 from motor import comprova, edicio, editors, entorn, exporta, grafics, gust, instruccions, marca, muntatge, transcripcio
@@ -84,7 +85,10 @@ def guarda_anteriors(carpeta: Path) -> Path | None:
             shutil.copytree(carpeta / nom, desti / nom, copy_function=_enllaca)
     for nom in (PROXY, "veu.npy", "veu.json"):  # el mateix vídeo: n'hi ha prou amb apuntar-hi
         if (carpeta / nom).exists():
-            (desti / nom).symlink_to(Path("..") / nom)
+            try:
+                (desti / nom).symlink_to(Path("..") / nom)
+            except OSError:  # Windows sense permís per fer enllaços: el mateix fitxer amb un altre nom (o una còpia)
+                _enllaca(carpeta / nom, desti / nom)
     for nom in moure:
         (carpeta / nom).rename(desti / nom)
     return desti
@@ -101,7 +105,7 @@ def ordre_realinea(args) -> None:
     """Torna a calcular quan comença i acaba cada paraula (amb l'alineador d'ara), sense canviar el text
     ni res de l'edició: els talls, els subtítols i els gràfics hi tornen a caure al lloc."""
     projecte = _carrega(args)
-    path = (projecte.carpeta / TRANSCRIPCIO).resolve()  # en un reel, la de la gravació sencera
+    path = projecte.fitxer(TRANSCRIPCIO).resolve()  # en un reel, la de la gravació sencera
     dades = json.loads(path.read_text(encoding="utf-8"))
     paraules = dades["paraules"]
     frases: dict[int, list[dict]] = {}
@@ -212,7 +216,7 @@ def ordre_revisa(args) -> None:
     from motor.servidor import crea_servidor
 
     projecte = _carrega(args)
-    proxy = projecte.carpeta / PROXY
+    proxy = projecte.fitxer(PROXY)
     if not proxy.exists() or proxy.stat().st_mtime < projecte.video.stat().st_mtime:
         print("Preparant la còpia lleugera del vídeo (només el primer cop)…")
         exporta.fes_proxy(projecte.video, proxy, progres=_barra("còpia"))
@@ -230,7 +234,7 @@ def ordre_revisa(args) -> None:
     print(f"Pàgina de revisió de «{projecte.nom}»: {adreca}", flush=True)  # també si no és un terminal
     print("Deixa aquesta finestra oberta mentre revises. Per tancar: Control + C.")
     if not args.sense_navegador:
-        subprocess.run(["open", adreca], check=False)
+        webbrowser.open(adreca)
     try:
         servidor.serve_forever()
     except KeyboardInterrupt:
@@ -495,7 +499,7 @@ def ordre_grafics(args) -> None:
         situats = projecte.grafics(trams)
         if not situats:
             sys.exit("Aquest vídeo encara no té cap gràfic que surti al vídeo.")
-        proxy = projecte.carpeta / PROXY
+        proxy = projecte.fitxer(PROXY)
         quadres = [{"t": projecte.al_original(g["inici"] + min(1.0, (g["final"] - g["inici"]) / 2), trams),
                     "limits": g["limits"]} for g in situats]
         desti = grafics.full_de_fotogrames(proxy if proxy.exists() else projecte.video, quadres,

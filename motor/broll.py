@@ -46,7 +46,8 @@ def _lut(lut: str | None) -> str:
     path = Path(lut).expanduser()
     if not path.exists():
         raise FileNotFoundError(f"No trobo el LUT de l'estil: {path}")
-    return f",lut3d=file='{str(path).replace(chr(39), '')}'"
+    # Amb barres «/»: dins d'un filtre d'ffmpeg, les «\» de Windows (C:\Users\…) es llegirien com a escapades.
+    return f",lut3d=file='{path.as_posix().replace(chr(39), '')}'"
 
 
 def prepara(origen: Path, desti: Path, durada: float = 1.5, lut: str | None = None) -> Path:

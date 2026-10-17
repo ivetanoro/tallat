@@ -18,7 +18,8 @@ from pathlib import Path
 
 from motor import entorn
 
-ARREGLA = "executa ./prepara.sh (des de la carpeta de tallat)"
+ARREGLA = ("executa prepara.ps1 (des de la carpeta de tallat)" if entorn.WINDOWS
+           else "executa ./prepara.sh (des de la carpeta de tallat)")
 MARQUES = {"ok": "✓", "avis": "!", "error": "✗"}
 
 
@@ -66,12 +67,24 @@ def _ffmpeg() -> list[tuple]:
     versio = (versio.splitlines() or ["?"])[0].replace("ffmpeg version ", "")
     codificadors = (_executa([ffmpeg, "-hide_banner", "-encoders"]) or subprocess.CompletedProcess([], 1, "", "")).stdout
     filtres = (_executa([ffmpeg, "-hide_banner", "-filters"]) or subprocess.CompletedProcess([], 1, "", "")).stdout
-    falten = [c for c in ("h264_videotoolbox", "libx264", "aac") if not re.search(rf"\s{c}\s", codificadors)]
+    necessaris = ("h264_videotoolbox", "libx264", "aac") if entorn.MAC else ("libx264", "aac")  # vegeu exporta.codec_video
+    falten = [c for c in necessaris if not re.search(rf"\s{c}\s", codificadors)]
     falten += [f for f in ("lut3d", "zoompan", "overlay", "concat") if not re.search(rf"\s{f}\s", filtres)]
     if falten:
         return [("error", "ffmpeg", f"{versio} no porta {', '.join(falten)} → {ARREGLA}")]
-    propi = Path(ffmpeg).parent == entorn.EINES
+    propi = Path(ffmpeg).parent in entorn.carpetes_eines()
     return [("ok", "ffmpeg", f"{versio.split(' ')[0]}" + (" (de tallat)" if propi else f" ({ffmpeg})"))]
+
+
+def _carpetes_npx() -> list[Path]:
+    """On guarda npx els paquets que baixa: ~/.npm/_npx al Mac, %LOCALAPPDATA%\\npm-cache\\_npx a Windows
+    (o on digui la configuració de npm)."""
+    carpetes = [Path.home() / ".npm" / "_npx"]
+    if os.environ.get("LOCALAPPDATA"):
+        carpetes.append(Path(os.environ["LOCALAPPDATA"]) / "npm-cache" / "_npx")
+    if os.environ.get("npm_config_cache"):
+        carpetes.append(Path(os.environ["npm_config_cache"]) / "_npx")
+    return carpetes
 
 
 def _node() -> list[tuple]:
@@ -83,7 +96,7 @@ def _node() -> list[tuple]:
     if major < 18:
         return [("error", "Node.js", f"{versio} és massa antic (cal el 18 o més nou) → {ARREGLA}")]
     resultat = [("ok", "Node.js", versio)]
-    paquets = list((Path.home() / ".npm" / "_npx").glob("*/node_modules/hyperframes/package.json"))
+    paquets = [p for carpeta in _carpetes_npx() for p in carpeta.glob("*/node_modules/hyperframes/package.json")]
     versions = set()
     for p in paquets:
         try:

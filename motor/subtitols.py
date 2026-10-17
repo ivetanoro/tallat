@@ -21,7 +21,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-VERSIO_HYPERFRAMES = "0.8.154"
+from motor import entorn
+
+VERSIO_HYPERFRAMES = entorn.VERSIO_HYPERFRAMES
 VERSIO_GSAP = "3.14.2"
 CODI_ANIMACIO = Path(__file__).resolve().parent.parent / "pagina" / "subtitols.js"
 CODI_GRAFICS = CODI_ANIMACIO.with_name("grafics.js")  # els gràfics del pla (fa servir subtitols.js)
@@ -400,7 +402,7 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
                                                     grafics=grafics, paleta=paleta), encoding="utf-8")
 
     temporal = sortida.with_suffix(".tmp.mov")
-    ordre = ["npx", "--yes", f"hyperframes@{VERSIO_HYPERFRAMES}", "render", str(projecte),
+    ordre = [entorn.programa("npx"), "--yes", f"hyperframes@{VERSIO_HYPERFRAMES}", "render", str(projecte),
              "--format", "mov", "--fps", str(FPS), "--output", str(temporal)]
     if escala == "4k":
         ordre += ["--resolution", "portrait-4k"]

@@ -105,6 +105,25 @@ class TestDecisionsAlsReels(unittest.TestCase):
             self.assertTrue(reel.zooms_per_tram(reel.trams())[0])
 
 
+class TestReelsSenseEnllacos(unittest.TestCase):
+    """A Windows, fer enllaços demana permisos especials: el reel funciona igual sense, buscant la
+    transcripció, la còpia lleugera i les instruccions a la gravació sencera."""
+
+    def test_un_reel_sense_enllacos(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            arrel = projecte_amb(Path(d), [ZOOM])
+            (Path(d) / "proxy.mp4").write_bytes(b"x")
+            with mock.patch.object(Path, "symlink_to", side_effect=OSError(1314, "A required privilege is not held")):
+                carpeta_reel = muntatge.crea_reel(arrel, {"id": "r", "paraules": [(4, 9)]})
+            self.assertFalse(any(f.is_symlink() for f in carpeta_reel.iterdir()))
+            reel = Projecte(carpeta_reel)
+            self.assertEqual(reel.arrel, arrel.carpeta)
+            self.assertEqual(reel.fitxer("proxy.mp4"), arrel.carpeta / "proxy.mp4")
+            self.assertEqual(reel.carpeta_instruccions(), arrel.carpeta)
+            self.assertTrue(reel.zooms_per_tram(reel.trams())[0])  # l'instrucció de la gravació sencera hi val
+
+
 class TestGuardaAnteriors(unittest.TestCase):
     def test_els_reels_guardats_conserven_la_transcripcio_vella(self):
         # Segona revisió de Codex: els reels arxivats seguien apuntant a la transcripció nova.

@@ -1,0 +1,38 @@
+# Proves de tallat en un Windows de GitHub: s'instal·la de zero amb prepara.ps1 (com ho faria una persona
+# nova) i es passen totes les proves. Es fa a cada canvi pujat i quan es demana a mà (Actions → Run).
+name: Proves
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: powershell  # el Windows PowerShell 5.1, el que té tothom (no el pwsh 7)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instal·la tallat de zero (prepara.ps1)
+        run: powershell -ExecutionPolicy Bypass -File prepara.ps1
+
+      - name: Proves
+        env:
+          KMP_DUPLICATE_LIB_OK: "TRUE"
+        run: |
+          $ErrorActionPreference = "Continue"  # unittest escriu a stderr: no és cap error
+          $env:PATH = "$env:USERPROFILE\.tallat\eines\Library\bin;$env:USERPROFILE\.tallat\eines;$env:PATH"
+          .venv\Scripts\python.exe -m unittest discover -s proves -t . -v 2>&1 | Tee-Object -FilePath proves.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Desa el registre de les proves
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registre-proves-windows
+          path: proves.log
+          if-no-files-found: ignore
