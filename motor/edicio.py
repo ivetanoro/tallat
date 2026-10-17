@@ -198,6 +198,31 @@ def so_del_tram(tram) -> tuple[float, float]:
     return getattr(tram, "so", None) or (tram[0], tram[1])
 
 
+def trams_json(trams) -> list[list[float]]:
+    """Els trossos per a la pàgina: [inici, final, inici del so, final del so]. Amb el so: un canvi que només
+    toca el so (els fotogrames són els mateixos) també ha de refer la vista prèvia (revisió de Codex)."""
+    return [[t[0], t[1], *so_del_tram(t)] for t in trams]
+
+
+def cap_endins(trams, fps: float) -> list:
+    """Els trossos per als projectes d'altres editors (Premiere, Final Cut, DaVinci): allà el so va lligat
+    als fotogrames del clip i no hi ha Tram.so. Al costat d'una paraula treta, els fotogrames s'arrodoneixen
+    cap endins perquè no se'n coli cap bocí (com abans); si la paraula és més curta que un fotograma, s'hi
+    deixa el fotograma sencer (millor un bocí de més que perdre-la). Tot el que va a l'editor (subtítols,
+    b-rolls) s'ha de calcular amb aquests mateixos trossos."""
+    sortida = []
+    for tram in trams:
+        a, b = tram[0], tram[1]
+        sa, sb = so_del_tram(tram)
+        fa = math.ceil(sa * fps - 1e-6) if sa > a + 1e-6 else round(a * fps)
+        fb = math.floor(sb * fps + 1e-6) if sb < b - 1e-6 else round(b * fps)
+        if fb - fa < 1:
+            sortida.append(Tram(a, b))
+        else:
+            sortida.append(Tram(round(fa / fps, 6), round(fb / fps, 6)))
+    return sortida
+
+
 def finestra(trams, m0: float, m1: float, fps: float) -> tuple[list, float]:
     """Els trossos que sonen entre m0 i m1 del muntatge, retallats a fotogrames sencers, i on comença el
     primer al muntatge. Per escoltar uns segons al voltant d'un tall sense refer tot el muntatge."""
@@ -344,12 +369,9 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
                 anterior[3] = max(anterior[3], so_b)
                 anterior[5] = tanca_b
                 continue
-            # Entremig hi ha una paraula treta tan curta que comparteixen fotograma: el vídeo continua on
-            # s'havia quedat i el so comença on toca.
-            fa = anterior[1]
-            fb = max(fb, fa + 1)
-            so_a = max(so_a, fa / fps)
-            so_b = min(max(so_b, so_a), fb / fps)
+            # Entremig hi ha una paraula treta tan curta que comparteixen fotograma: es queden dos trossos i
+            # aquell fotograma es veu dues vegades (una trentena de mil·lisegons, no es nota), però cada tros
+            # sona sencer. Abans s'hi retallava el so i es podia perdre una paraula curta (revisió de Codex).
         if fb - fa < 1 or so_b <= so_a:
             continue
         ajustats.append([fa, fb, so_a, so_b, tanca_a, tanca_b])

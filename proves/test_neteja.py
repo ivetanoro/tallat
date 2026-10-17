@@ -80,5 +80,20 @@ class TestPronoms(unittest.TestCase):
         self.assertEqual((treure, proposar), ({}, {}))
 
 
+class TestEntradesAmbComa(unittest.TestCase):
+    def test_moure_i_desfer_no_esborra_l_entrada_amb_coma(self):
+        # Revisió de Codex: desfer un canvi de «bé» esborrava «bé,» de la llista.
+        import shutil
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            llista = Path(d) / "farciment.txt"
+            shutil.copy(neteja.LLISTA_PER_DEFECTE, llista)
+            self.assertEqual(neteja.seccio_de("bé,", llista), "proposa")
+            abans = neteja.seccio_de("bé", llista)
+            neteja.mou_expressio("bé", "treu", llista)
+            neteja.mou_expressio("bé", abans, llista)
+            self.assertEqual((neteja.seccio_de("bé", llista), neteja.seccio_de("bé,", llista)), (None, "proposa"))
+
+
 if __name__ == "__main__":
     unittest.main()

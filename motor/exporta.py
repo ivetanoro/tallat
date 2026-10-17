@@ -143,10 +143,12 @@ def _so_del_tros(i: int, tram) -> str:
     també ho és (com a molt una quarta part del que sona)."""
     a, b = tram[0], tram[1]
     sa, sb = so_del_tram(tram)
-    inici, final = max(0.0, sa - a), min(b - a, sb - a)
-    fos = max(0.001, min(FOS_AUDIO, (final - inici) / 4))
-    return (f"[{i}:a]asetpts=PTS-STARTPTS,afade=t=in:st={inici:.4f}:d={fos:.4f},"
-            f"afade=t=out:st={max(inici, final - fos):.4f}:d={fos:.4f}[a{i}];")
+    inici, final = max(0.0, sa - a), max(0.0, min(b - a, sb - a))
+    # El fos mai no passa de la finestra (abans tenia un mínim d'1 ms, i en una finestra més curta se'n
+    # sortia, revisió de Codex). Temps al microsegon: amb quatre decimals podia quedar alguna mostra fora.
+    fos = max(1e-6, min(FOS_AUDIO, (final - inici) / 4))
+    return (f"[{i}:a]asetpts=PTS-STARTPTS,afade=t=in:st={inici:.6f}:d={fos:.6f},"
+            f"afade=t=out:st={max(inici, final - fos):.6f}:d={fos:.6f}[a{i}];")
 
 
 def _enquadrament(amplada: int, alcada: int, ow: int, oh: int) -> str:
@@ -336,7 +338,7 @@ def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualit
             llista = _munta_lots(video, trams, info, Path(temporal), ["-c:v", "h264_videotoolbox", "-b:v",
                                  _bitrate_intermedi(bitrate), "-profile:v", "high"], enquadrament=enquadrament,
                                  zooms=zooms, progres=_part_del_progres(progres, 0, 60))
-            entrades = ["-f", "concat", "-safe", "0", "-i", str(llista)]
+            entrades = _entrada_lots(llista)
             progres = _part_del_progres(progres, 60, 100)
         else:
             entrades = _entrades_trams(video, trams, info)
@@ -429,6 +431,12 @@ def _munta_lots(video: Path, trams, info, carpeta: Path, codec_video: list[str],
     return llista
 
 
+def _entrada_lots(llista: Path) -> list[str]:
+    """Els lots com una sola entrada. Els seus fotogrames ja són drets, però l'ffmpeg 7.1 hi copia
+    l'etiqueta «gira'l 90°» del vídeo de l'iPhone: sense -noautorotate, es tornaven a girar (revisió de Codex)."""
+    return ["-noautorotate", "-f", "concat", "-safe", "0", "-i", str(llista)]
+
+
 def _mesura_veu(entrades: list[str], trams, nivell: str) -> dict:
     """Primera passada de la neteja: mesura el volum de la veu ja muntada (només l'àudio: va de pressa).
     `entrades`: els trossos (i llavors `trams`, per unir-los) o el muntatge ja fet a lots (trams None)."""
@@ -492,11 +500,12 @@ def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, cur
     codec_video = (["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-g", "15", "-pix_fmt", "yuv420p"]
                    if curt and _te_x264() else ["-c:v", "h264_videotoolbox", "-allow_sw", "1", "-b:v", "3M", "-g", "15"])
     sortida.parent.mkdir(parents=True, exist_ok=True)
-    temporal = sortida.with_name(f".{sortida.stem}.fent{sortida.suffix}")
+    # Un nom propi per a cada feina: dues peticions iguals alhora no s'han de trepitjar el fitxer a mitges.
+    temporal = sortida.with_name(f".{sortida.stem}.{os.getpid()}-{threading.get_ident()}.fent{sortida.suffix}")
     with tempfile.TemporaryDirectory() as carpeta:
         if len(trams) > trossos_per_lot(info):  # molts trossos: a lots, i la imatge dels lots es copia tal qual
             llista = _munta_lots(proxy, trams, info, Path(carpeta), codec_video)
-            ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", "-f", "concat", "-safe", "0", "-i", str(llista),
+            ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", *_entrada_lots(llista),
                      "-map", "0:v", "-map", "0:a", "-c:v", "copy"]
         else:
             parts = _uneix_trossos(trams, None, None)
@@ -508,7 +517,8 @@ def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, cur
                      *codec_video]
         ordre += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", str(temporal)]
         try:
-            r = subprocess.run(ordre, capture_output=True, text=True)
+            # Un vídeo curt (l'escolta d'un tall) que no surt en mig minut, ja no cal: la pàgina se'n surt sense.
+            r = subprocess.run(ordre, capture_output=True, text=True, timeout=30 if curt else None)
             if r.returncode != 0:
                 raise RuntimeError("ffmpeg no ha pogut fer la previsualització:\n" + r.stderr[-1500:])
             temporal.replace(sortida)

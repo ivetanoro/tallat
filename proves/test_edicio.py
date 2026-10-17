@@ -134,3 +134,12 @@ class TestFiDeLaVeu(unittest.TestCase):
         t = edicio.trams(self.paraules(), fps=30, durada=2, veu=v)
         self.assertLessEqual(t[0].so[1], 0.45)  # el so no s'allarga (el fotograma sencer sí, en silenci)
         self.assertLessEqual(t[0][1], 0.45 + 1 / 30)
+
+
+class TestTramsPerALaPagina(unittest.TestCase):
+    def test_un_canvi_nomes_de_so_es_veu(self):
+        # Revisió de Codex: la pàgina només veia els fotogrames i no refeia la vista prèvia.
+        abans = edicio.trams_json([edicio.Tram(0.4, 0.833333, so=(0.4, 0.811))])
+        despres = edicio.trams_json([edicio.Tram(0.4, 0.833333, so=(0.4, 0.829))])
+        self.assertNotEqual(abans, despres)
+        self.assertEqual(abans, [[0.4, 0.833333, 0.4, 0.811]])

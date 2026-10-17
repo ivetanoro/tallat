@@ -34,6 +34,17 @@ class TestTrams(unittest.TestCase):
         self.assertGreaterEqual(tram[1], 0.46)
         self.assertEqual(tram.so, (0.41, 0.46))  # i no se sent res de les tretes
 
+    def test_dues_paraules_que_comparteixen_fotograma_sonen_senceres(self):
+        # Revisió de Codex: entre «A» i «B» hi havia una paraula treta més curta que un fotograma; el so de
+        # «B» es retallava (o desapareixia sencer). Ara el fotograma es repeteix i cada tros sona sencer.
+        for fps, (a, x, b) in ((30, (0.41, 0.42, 0.46)), (24, (0.501, 0.521, 0.541))):
+            p = [{"id": 0, "text": "A", "inici": 0.2, "final": a, "frase": 0, "conservada": True},
+                 {"id": 1, "text": "eh", "inici": a, "final": x, "frase": 0, "conservada": False},
+                 {"id": 2, "text": "B", "inici": x, "final": b, "frase": 0, "conservada": True},
+                 {"id": 3, "text": "eh", "inici": b, "final": 1.0, "frase": 0, "conservada": False}]
+            primer, segon = edicio.trams(p, fps=fps, durada=1.0, marge=0)
+            self.assertEqual((primer.so[1], segon.so), (a, (x, b)))
+
     def test_l_ultima_paraula_acaba_on_acaba_la_veu(self):
         # L'alineador diu que acaba a 0,4 s, però la veu continua fins a 0,85 s.
         veu_ = np.zeros(200, dtype=bool)
@@ -112,6 +123,31 @@ class TestMapaDeVeu(unittest.TestCase):
                 self.assertEqual(len(veu.carrega(d, d / "b.mov", durada=5.0)), 500)  # un altre vídeo
             finally:
                 veu.llegeix_audio = original
+
+    def test_un_altre_video_que_dura_el_mateix_tambe_es_torna_a_fer(self):
+        # Revisió de Codex: amb la mateixa durada, el mapa d'un altre vídeo es reaprofitava.
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            video = d / "v.mov"
+            video.write_bytes(b"primer")
+            crides = []
+            original = veu.llegeix_audio
+            veu.llegeix_audio = lambda v: crides.append(v) or np.full(veu.SR * 2, 0.2, dtype=np.float32)
+            try:
+                veu.carrega(d, video, durada=2.0)
+                veu.carrega(d, video, durada=2.0)
+                self.assertEqual(len(crides), 1)
+                video.write_bytes(b"un altre video")  # el mateix nom i la mateixa durada, un altre fitxer
+                veu.carrega(d, video, durada=2.0)
+                self.assertEqual(len(crides), 2)
+            finally:
+                veu.llegeix_audio = original
+
+    def test_un_3_per_cent_de_veu_clara(self):
+        t = np.arange(veu.SR * 10) / veu.SR
+        so = (0.001 * np.sin(2 * np.pi * 50 * t)).astype(np.float32)
+        so[:int(veu.SR * 0.3)] += (0.3 * np.sin(2 * np.pi * 220 * t[:int(veu.SR * 0.3)])).astype(np.float32)
+        self.assertAlmostEqual(veu.mapa(so).mean(), 0.03, delta=0.005)
 
     def test_no_trepitja_el_mapa_on_apunta_un_enllac(self):
         with tempfile.TemporaryDirectory() as d:
@@ -279,6 +315,25 @@ class TestMuntatgeALots(unittest.TestCase):
         self.assertEqual(exporta.trossos_per_lot({"amplada": 720, "alcada": 1280}), 40)
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_a_lots_un_video_d_iphone_no_es_torna_a_girar(self):
+        # Revisió de Codex: l'ffmpeg 7.1 copia l'etiqueta «gira'l 90°» als lots, que ja són drets, i el
+        # vídeo sortia de costat (1280×720).
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=640x360:r=30:d=6",
+                            "-f", "lavfi", "-i", "sine=d=6", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                            "-shortest", str(d / "pla.mp4")], check=True)
+            subprocess.run(["ffmpeg", "-v", "error", "-display_rotation:v:0", "90", "-i", str(d / "pla.mp4"),
+                            "-c", "copy", str(d / "girat.mov")], check=True)
+            trams = [edicio.Tram(i * 0.5, i * 0.5 + 0.3) for i in range(9)]
+            with mock.patch.object(exporta, "MEMORIA_LOT", 1):  # lots de 4 trossos
+                sortida = exporta.exporta(d / "girat.mov", trams, d / "final.mp4", "esborrany")
+            s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
+                                           "-of", "json", str(sortida)], capture_output=True, text=True).stdout)["streams"][0]
+            self.assertEqual((s["width"], s["height"], exporta._rotacio(s)), (720, 1280, 0))
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
     def test_a_lots_dura_el_mateix_i_no_perd_res(self):
         from unittest import mock
         with tempfile.TemporaryDirectory() as d:
@@ -367,12 +422,22 @@ class TestAjustaTemps(unittest.TestCase):
         u, dos, _ = segments[0]["words"]
         self.assertEqual((u["start"], u["end"]), (0.97, 1.55))
         self.assertGreaterEqual(dos["start"], u["end"])
-        self.assertEqual(segments[0]["start"], 0.97)
+        self.assertEqual(segments[0]["start"], 0.5)  # hi ha «25» sense temps: el segment conserva els límits
 
     def test_compta_les_que_anaven_enrere(self):
-        segments = [{"words": [{"word": "a", "start": 5.0, "end": 5.5}, {"word": "b", "start": 2.0, "end": 2.4}]}]
+        segments = [{"words": [{"word": "a", "start": 5.0, "end": 5.5, "score": 0.9},
+                               {"word": "b", "start": 2.0, "end": 2.4, "score": 0.9}]}]
         self.assertEqual(transcripcio.ajusta_temps(segments, np.ones(1000, dtype=bool)), 1)
         self.assertEqual(segments[0]["words"][1]["start"], 5.5)
+        self.assertIsNone(segments[0]["words"][1]["score"])  # ja no és el temps de l'alineador: aproximat
+
+    def test_els_numbers_conserven_el_forat(self):
+        # Revisió de Codex: el segment s'encongia fins a «gats» i «25» i «%» es quedaven sense durada.
+        segments = [{"start": 0.0, "end": 3.0, "words": [{"word": "25"}, {"word": "gats", "start": 1.0, "end": 2.0},
+                                                          {"word": "%"}]}]
+        transcripcio.ajusta_temps(segments, np.ones(400, dtype=bool))
+        p = transcripcio.a_paraules(segments)
+        self.assertEqual([(x["inici"], x["final"]) for x in p], [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)])
 
     def test_la_confianca_es_desa_i_el_comodi_no_se_sap(self):
         p = transcripcio.a_paraules([{"start": 0, "end": 2, "words": [
@@ -389,6 +454,13 @@ class TestComparaTemps(unittest.TestCase):
         self.assertEqual(r["n"], 4)  # inici de «Hola», final de «tal?», i les dues vores de «Bé.»
         self.assertEqual((r["mes_025"], r["mes_05"]), (2, 0))
         self.assertEqual(r["grans"][0]["text"], "Bé.")
+
+    def test_la_mediana_i_els_llindars(self):
+        # Revisió de Codex: amb [0, 1] la mediana sortia 1, i 0,4 − 0,3 comptava com a més d'una dècima.
+        paraules = [{"text": "a", "inici": 0.4, "final": 1.0}, {"text": "b", "inici": 2.0, "final": 3.0}]
+        srt = [{"start": 0.3, "end": 1.0, "text": "a"}, {"start": 2.0, "end": 3.0, "text": "b"}]
+        r = transcripcio.compara_temps(paraules, srt)
+        self.assertEqual((r["mediana"], r["mes_01"]), (0.0, 0))
 
 
 class TestAlineadorSegur(unittest.TestCase):

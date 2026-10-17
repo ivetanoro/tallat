@@ -156,3 +156,14 @@ class TestCarruselAlsEditors(unittest.TestCase):
             durada = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
                                            str(d / "copia.mp4")], capture_output=True, text=True).stdout)
             self.assertAlmostEqual(durada, 1.7, delta=0.05)
+
+
+class TestSoAlsEditors(unittest.TestCase):
+    """Revisió de Codex: als editors el so va lligat als fotogrames del clip; amb els fotogrames cap enfora
+    hi tornaven a entrar bocins de les paraules tretes. Allà s'arrodoneix cap endins des del so exacte."""
+
+    def test_cap_endins(self):
+        from motor import edicio
+        trams = [edicio.Tram(0.4, 0.866667, so=(0.41, 0.85)), edicio.Tram(1.0, 2.0),
+                 edicio.Tram(3.0, 3.066667, so=(3.01, 3.04))]  # aquest, més curt que un fotograma
+        self.assertEqual(edicio.cap_endins(trams, 30), [(0.433333, 0.833333), (1.0, 2.0), (3.0, 3.066667)])

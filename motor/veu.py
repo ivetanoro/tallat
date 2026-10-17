@@ -46,7 +46,7 @@ def mapa(audio: np.ndarray) -> np.ndarray:
         return np.ones(0, dtype=bool)
     trossos = audio[:n * mida].reshape(n, mida)
     db = 20 * np.log10(np.sqrt((trossos ** 2).mean(axis=1)) + 1e-9)
-    alt = float(np.percentile(db, 95))
+    alt = float(np.percentile(db, 99))  # el nivell de la veu, encara que n'hi hagi poca (fins al 3 %)
     for percentil in (10, 2):
         terra = float(np.percentile(db, percentil))
         veu = db >= terra + SOBRE_EL_SOROLL
@@ -56,28 +56,40 @@ def mapa(audio: np.ndarray) -> np.ndarray:
     return np.ones(n, dtype=bool)
 
 
+def _identitat(font: Path) -> dict:
+    """De quin fitxer és el mapa: camí, mida i data de modificació."""
+    st = Path(font).stat()
+    return {"cami": str(Path(font).resolve()), "mida": st.st_size, "modificat": st.st_mtime_ns}
+
+
 def carrega(carpeta: Path, video: Path, durada: float | None = None, alternativa: Path | None = None) -> np.ndarray:
-    """El mapa de veu del projecte. Es calcula un cop i es desa a veu.npy, amb veu.json al costat (la
-    durada del so i la versió del càlcul). Si el projecte ara és d'un altre vídeo (s'ha tornat a
-    transcriure, la durada no hi casa) o el càlcul ha canviat, es torna a fer. `alternativa`: d'on
-    llegir el so si el vídeo ja no hi és (la còpia lleugera, que té el mateix so)."""
+    """El mapa de veu del projecte. Es calcula un cop i es desa a veu.npy, amb veu.json al costat (de quin
+    fitxer és, la durada del so i la versió del càlcul). Si el projecte ara és d'un altre vídeo (s'ha tornat
+    a transcriure), el fitxer ha canviat o el càlcul és un altre, es torna a fer. `alternativa`: d'on llegir
+    el so si el vídeo ja no hi és (la còpia lleugera, que té el mateix so)."""
     path, path_meta = carpeta / "veu.npy", carpeta / "veu.json"
+    font = video if Path(video).exists() or alternativa is None else alternativa
     try:
         meta = json.loads(path_meta.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         meta = {}
+    try:
+        identitat = _identitat(font)
+    except OSError:
+        identitat = None
     if path.exists() and meta.get("versio") == VERSIO_MAPA and (
-            durada is None or abs(float(meta.get("durada", -10)) - durada) < 1.0):
+            durada is None or abs(float(meta.get("durada", -10)) - durada) < 1.0) and (
+            identitat is None or meta.get("font") == identitat):
         desat = np.load(path)
         if desat.size:
             return desat
-    font = video if Path(video).exists() or alternativa is None else alternativa
     m = mapa(llegeix_audio(font))
     for p in (path, path_meta):  # un enllaç (els «anteriors-…» apunten al del projecte): no el trepitgem
         if p.is_symlink():
             p.unlink()
     np.save(path, m)
-    path_meta.write_text(json.dumps({"versio": VERSIO_MAPA, "durada": round(len(m) * PAS, 2)}), encoding="utf-8")
+    path_meta.write_text(json.dumps({"versio": VERSIO_MAPA, "durada": round(len(m) * PAS, 2), "font": identitat},
+                                    ensure_ascii=False), encoding="utf-8")
     return m
 
 

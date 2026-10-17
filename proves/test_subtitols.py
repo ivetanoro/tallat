@@ -47,6 +47,12 @@ class TestGrups(unittest.TestCase):
             self.assertEqual([m["text"] for l in linies for m in l["paraules"]], ["Hola"])
             self.assertAlmostEqual(linies[0]["inici"], 0.0, delta=1 / fps)
 
+    def test_trossos_un_dins_de_l_altre(self):
+        # Revisió de Codex: amb la cerca ràpida, un tros curt dins d'un de llarg amagava la paraula.
+        p = paraules(("hola", 5.0, 6.0))
+        linies = subtitols.grups(p, [(0.0, 10.0), (1.0, 2.0)], ESTIL)
+        self.assertEqual([m["text"] for l in linies for m in l["paraules"]], ["hola"])
+
     def test_cap_linia_passa_del_final(self):
         p = paraules(("final", 0.0, 0.9))
         self.assertLessEqual(subtitols.grups(p, [(0, 1)], ESTIL)[-1]["final"], 1.0)

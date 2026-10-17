@@ -109,20 +109,20 @@ class Previa:
 
     def demana(self, projecte: Projecte, trams) -> dict:
         if not trams or not (projecte.carpeta / PROXY).exists():
-            return {"estat": "no", "trams": trams}
+            return {"estat": "no", "trams": edicio.trams_json(trams)}
         desti = projecte.previa(trams)
         if desti.exists():
             try:
                 os.utime(desti)  # la darrera que s'ha demanat: la neteja no se l'emporta
             except OSError:
                 pass
-            return {"estat": "fet", "url": f"/previa/{desti.name}", "trams": trams}
+            return {"estat": "fet", "url": f"/previa/{desti.name}", "trams": edicio.trams_json(trams)}
         with self.bloqueig:
             if self.fent is None:  # si se'n fa una altra, la pàgina ho tornarà a demanar
                 self.fent = desti
                 threading.Thread(target=self._fes, args=(projecte.carpeta / PROXY, list(trams), desti),
                                  daemon=True).start()
-        return {"estat": "fent", "trams": trams}
+        return {"estat": "fent", "trams": edicio.trams_json(trams)}
 
     def _fes(self, proxy: Path, trams, desti: Path) -> None:
         try:
@@ -141,21 +141,38 @@ class Previa:
 ESCOLTA = 1.5  # segons abans i després del tall que se senten en treure o recuperar paraules
 
 
-def escolta(projecte: Projecte, m: float) -> dict:
-    """El muntatge d'uns segons al voltant del moment m (un tall que s'acaba de fer), en un vídeo curt fet
-    ara mateix: en mig segon ja és a punt, i se sent com a l'export (el so tallat al punt exacte i amb els
-    fosos). Mentrestant el muntatge sencer encara no hi és, i la còpia que salta no fa fosos."""
+def prepara_escolta(projecte: Projecte, m: float) -> dict | None:
+    """El que cal per fer el vídeo curt d'escolta (es llegeix amb el projecte bloquejat; el vídeo es fa
+    després, sense bloquejar: mentrestant la pàgina ha de poder desar i fer la resta, revisió de Codex)."""
     proxy = projecte.carpeta / PROXY
     trams, inici = edicio.finestra(projecte.trams(), max(0.0, m - ESCOLTA), m + ESCOLTA, projecte.fps)
     if not trams or not proxy.exists():
+        return None
+    return {"proxy": proxy, "trams": trams, "desti": projecte.previa(trams, nom="escolta"), "inici": inici}
+
+
+def fes_escolta(feina: dict | None) -> dict:
+    """El muntatge d'uns segons al voltant d'un tall (un vídeo curt fet ara mateix: en mig segon ja és a
+    punt) i se sent com a l'export: el so tallat al punt exacte i amb els fosos. Mentrestant el muntatge
+    sencer encara no hi és, i la còpia que salta no fa fosos. Si no es pot fer a temps, la pàgina ho fa
+    com abans."""
+    if feina is None:
         return {"estat": "no"}
-    desti = projecte.previa(trams, nom="escolta")
+    desti = feina["desti"]
     if not desti.exists():
-        exporta.fes_previa(proxy, trams, desti, curt=True)
+        try:
+            exporta.fes_previa(feina["proxy"], feina["trams"], desti, curt=True)
+        except Exception:  # noqa: BLE001 — la pàgina se'n surt sense
+            traceback.print_exc()
+            return {"estat": "no"}
         for vell in sorted(desti.parent.glob("escolta_*.mp4"), key=lambda p: p.stat().st_mtime)[:-5]:
             vell.unlink(missing_ok=True)
-    return {"estat": "fet", "url": f"/previa/{desti.name}", "inici": inici,
-            "durada": round(sum(b - a for a, b in trams), 6)}
+    return {"estat": "fet", "url": f"/previa/{desti.name}", "inici": feina["inici"],
+            "durada": round(sum(b - a for a, b in feina["trams"]), 6)}
+
+
+def escolta(projecte: Projecte, m: float) -> dict:
+    return fes_escolta(prepara_escolta(projecte, m))
 
 
 def _copia(fitxer: Path) -> tuple[str | None, str | None]:
@@ -204,7 +221,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         brolls, enganxines = projecte.brolls(trams), projecte.stickers(trams)
         linies, titol = projecte.linies_subtitols(trams), projecte.titol(trams)
         situats = projecte.grafics(trams, linies)
-        return {"estat": _estat_json(projecte.estat), "trams": trams,
+        return {"estat": _estat_json(projecte.estat), "trams": edicio.trams_json(trams),
                 "durada_final": round(sum(b - a for a, b in trams), 3),
                 "zooms": projecte.zooms_per_tram(trams), "zoom": exporta.ZOOM,
                 "instruccions": projecte.instruccions(),
@@ -490,6 +507,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return
             except json.JSONDecodeError:
                 return self._json({"error": "JSON no vàlid"}, HTTPStatus.BAD_REQUEST)
+            feina_escolta = None
             with bloqueig:
                 # Mentre llegíem el cos, una altra pestanya pot haver canviat de projecte o haver tornat
                 # a obrir el mateix reel (amb canvis desats): es comprova amb el que hi ha obert ara.
@@ -519,8 +537,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     return self._json(instantania())
                 if ruta == "/api/previa":  # el muntatge d'ara en un vídeo continu (si no hi és, es fa)
                     return self._json(previa.demana(projecte, projecte.trams()))
-                if ruta == "/api/escolta":  # uns segons al voltant d'un tall, amb el so com a l'export
-                    return self._json(escolta(projecte, float(cos.get("m", 0))))
+                if ruta == "/api/escolta":  # uns segons al voltant d'un tall: el vídeo es fa fora del bloqueig
+                    feina_escolta = prepara_escolta(projecte, float(cos.get("m", 0)))
                 if ruta == "/api/registre":  # què fa el reproductor al navegador (per trobar errors)
                     with (projecte.carpeta / "registre-pagina.log").open("a", encoding="utf-8") as f:
                         for e in cos.get("events", [])[:500]:
@@ -638,6 +656,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     if not feina.comença(projecte, qualitat):
                         return self._json({"error": "Ja hi ha un render en marxa"}, HTTPStatus.CONFLICT)
                     return self._json({"feina": feina.info()})
+            if ruta == "/api/escolta":
+                return self._json(fes_escolta(feina_escolta))
             self.send_error(HTTPStatus.NOT_FOUND)
 
         def _puja_broll(self, projecte):

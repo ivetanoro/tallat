@@ -15,6 +15,7 @@ com abans, frase per frase amb WhisperX.
 from __future__ import annotations
 
 import re
+import statistics
 import unicodedata
 from pathlib import Path
 
@@ -92,12 +93,18 @@ def ajusta_temps(segments: list[dict], veu) -> int:
     endarrere, fi = 0, 0.0
     for w in paraules:
         if w["start"] < fi - 0.1:
+            # Anava enrere: es posa just després de l'anterior, però aquest temps ja no és el de l'alineador.
+            # Sense confiança (None) surt marcada com a aproximada (revisió de Codex).
             endarrere += 1
+            w["score"] = None
         w["start"] = max(w["start"], fi)
         w["end"] = fi = max(w["end"], w["start"])
     for seg in segments:
-        amb_temps = [w for w in seg.get("words", []) if w.get("start") is not None]
-        if amb_temps:
+        # Si hi ha paraules sense temps (números, símbols), el segment conserva els límits: a_paraules
+        # els reparteix el forat que queda fins a les vores del segment (revisió de Codex).
+        words = seg.get("words", [])
+        amb_temps = [w for w in words if w.get("start") is not None]
+        if amb_temps and len(amb_temps) == len(words):
             seg["start"], seg["end"] = amb_temps[0]["start"], max(w["end"] for w in amb_temps)
     return endarrere
 
@@ -271,12 +278,14 @@ def compara_temps(paraules: list[dict], frases_srt: list[dict], grans: int = 10)
         for i, j in zip(range(i1, i2), range(j1, j2)):
             for vora in ("inici", "final"):
                 if srt[j][vora] is not None and paraules[i].get(vora) is not None:
-                    diferencies.append((abs(paraules[i][vora] - srt[j][vora]), paraules[i], srt[j], vora))
+                    # Al mil·lisegon: 0,4 − 0,3 dona 0,10000000000000003 i comptava com a més d'una dècima.
+                    dif = round(abs(paraules[i][vora] - srt[j][vora]), 3)
+                    diferencies.append((dif, paraules[i], srt[j], vora))
     if not diferencies:
         return {"n": 0, "mediana": 0.0, "mes_01": 0, "mes_025": 0, "mes_05": 0, "grans": []}
     d = sorted(x[0] for x in diferencies)
     pitjors = sorted(diferencies, key=lambda x: -x[0])[:grans]
-    return {"n": len(d), "mediana": d[len(d) // 2],
+    return {"n": len(d), "mediana": statistics.median(d),
             "mes_01": sum(x > 0.1 for x in d), "mes_025": sum(x > 0.25 for x in d), "mes_05": sum(x > 0.5 for x in d),
             "grans": [{"text": p["text"], "vora": v, "nostre": p[v], "srt": w[v]} for _, p, w, v in pitjors if _ > 0.1]}
 

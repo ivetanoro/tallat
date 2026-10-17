@@ -14,6 +14,7 @@ from pathlib import Path
 
 LLISTA_PER_DEFECTE = Path(__file__).resolve().parent.parent / "config" / "farciment.txt"
 LLISTA_USUARI = Path.home() / ".tallat" / "farciment.txt"
+COMA = ","  # marca d'una expressió que només compta si va seguida de coma
 
 
 def normalitza(paraula: str) -> str:
@@ -31,7 +32,12 @@ def ruta_llista() -> Path:
 
 
 def _clau(expressio: str) -> tuple[str, ...]:
-    return tuple(normalitza(t) for t in expressio.split())
+    """Com es compara una expressió de la llista. Amb una coma al final («bé,») és una altra entrada que
+    «bé»: només compta si la paraula va seguida de coma. La mateixa clau serveix per carregar, buscar,
+    moure i desfer (revisió de Codex: abans, desfer un canvi de «bé» esborrava «bé,»)."""
+    expressio = expressio.strip()
+    amb_coma = expressio.endswith(",")
+    return tuple(normalitza(t) for t in expressio.rstrip(",").split()) + ((COMA,) if amb_coma else ())
 
 
 def seccio_de(expressio: str, path: Path | None = None) -> str | None:
@@ -81,13 +87,10 @@ def carrega_llista(path: Path | None = None) -> dict[str, list[tuple[str, ...]]]
             actual = m.group(1)
             continue
         if actual in seccions:
-            amb_coma = linia.endswith(",")  # només quan va seguida de coma (vegeu config/farciment.txt)
-            clau = tuple(normalitza(t) for t in linia.rstrip(",").split())
-            seccions[actual].append(clau + ((COMA,) if amb_coma else ()))
+            seccions[actual].append(_clau(linia))  # amb coma: només si va seguida de coma (config/farciment.txt)
     return seccions
 
 
-COMA = ","  # marca d'una expressió que només compta si va seguida de coma
 FI_DE_FRASE = re.compile(r"[.?!…]$")
 PAUSA_DINS_EXPRESSIO = 0.6  # segons: «o … sigui» amb més silenci entremig ja no és una expressió
 

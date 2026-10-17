@@ -14,6 +14,7 @@ import bisect
 import functools
 import hashlib
 import html
+import itertools
 import json
 import re
 import shutil
@@ -129,6 +130,7 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
     # miraven tots per a cada paraula: amb 5.000 paraules, uns quants segons a cada canvi).
     per_inici = sorted(range(len(trams)), key=lambda k: trams[k][0])
     inicis = [trams[k][0] for k in per_inici]
+    finals_max = list(itertools.accumulate((trams[k][1] for k in per_inici), max))  # el final més tardà fins aquí
 
     def al_muntatge(inici: float, final: float):
         """On cau la paraula al muntatge. Va al tros amb què se solapa més: els talls s'arrodoneixen a
@@ -138,7 +140,7 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
         while j > 0:
             j -= 1
             k = per_inici[j]
-            if trams[k][1] <= inici - 1.0:  # els d'abans acaben encara més aviat
+            if finals_max[j] <= inici - 1.0:  # cap dels d'abans (ni d'aquest) arriba fins a la paraula
                 break
             candidats.append(k)
         millor, solapament = None, 0.0

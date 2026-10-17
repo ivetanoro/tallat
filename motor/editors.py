@@ -29,7 +29,7 @@ from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape
 
-from motor import exporta, grafics, subtitols
+from motor import edicio, exporta, grafics, subtitols
 
 AMPLADA, ALCADA = 1080, 1920
 FPS_RECURSOS = 30  # el b-roll (motor/broll.py) i la capa de subtítols (motor/subtitols.py) es fan a 30 fps
@@ -429,7 +429,7 @@ def _efectes(projecte, trams, desti: Path) -> None:
 
 def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
     """Escriu la carpeta per a altres editors i en torna el camí."""
-    trams = projecte.trams()
+    trams = edicio.cap_endins(projecte.trams(), projecte.fps)  # allà el so va lligat als fotogrames
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
     nom = projecte.video.stem
