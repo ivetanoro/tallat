@@ -77,6 +77,14 @@ def alinea(audio, frases: list[dict], avis=print) -> list[dict]:
 SR = 16000
 TROS_EMISSIO = 30  # segons: el so es passa pel model a trossos (amb un segon de marge a cada costat)
 MINIM_PARAULA = 0.04
+# Fins aquí, tot el text contra tot el so. Més llarg, a trossos de frases (la memòria de l'alineació
+# creix amb la llargada del so per la del text), cadascun amb un bon marge al voltant dels seus temps.
+LLARG = 20 * 60
+TROS_FRASES = 5 * 60
+MARGE_TROS = 20
+# Si més d'aquesta part de les paraules surt amb poca confiança, el text no correspon al so (un SRT
+# d'un altre muntatge, un tros que no hi és): llavors no ens en refiem i es fa com abans.
+CONFIANCA_BAIXA, MAXIM_DUBTOSES = 0.3, 0.25
 
 
 def romanitza(text: str) -> str:
@@ -102,15 +110,21 @@ def _emissions(model, audio):
     return torch.cat(parts, dim=1)
 
 
-def temps_mms(audio, textos: list[str]) -> list[tuple[float, float]]:
-    """(inici, final) de cada paraula, en ordre, alineant-les totes contra tot el so. Les que no tenen
-    lletres (números, «--») van amb el comodí: ocupen el que soni allà."""
-    import torch
+def model_mms():
     import torchaudio
     bundle = torchaudio.pipelines.MMS_FA
     model = bundle.get_model(with_star=True)
     model.eval()
-    diccionari = bundle.get_dict(star="*")
+    return model, bundle.get_dict(star="*")
+
+
+def temps_mms(audio, textos: list[str], model=None, diccionari=None) -> tuple[list[tuple[float, float]], list[float]]:
+    """(inici, final) de cada paraula, en ordre, alineant-les totes contra aquest so, i la confiança de
+    cadascuna (de 0 a 1). Les que no tenen lletres (números, «--») van amb el comodí: ocupen el que soni allà."""
+    import torch
+    import torchaudio
+    if model is None:
+        model, diccionari = model_mms()
     emissio = _emissions(model, audio)
     fites, n_per_paraula = [], []
     for text in textos:
@@ -120,12 +134,13 @@ def temps_mms(audio, textos: list[str]) -> list[tuple[float, float]]:
     alineacio, punts = torchaudio.functional.forced_align(emissio, torch.tensor([fites], dtype=torch.int32), blank=0)
     trams = torchaudio.functional.merge_tokens(alineacio[0], punts[0].exp())
     per_trama = len(audio) / SR / emissio.shape[1]
-    sortida, k = [], 0
+    sortida, confiances, k = [], [], 0
     for n in n_per_paraula:
         tros = trams[k:k + n]
         k += n
         sortida.append((tros[0].start * per_trama, tros[-1].end * per_trama))
-    return sortida
+        confiances.append(sum(t.score for t in tros) / len(tros))
+    return sortida, confiances
 
 
 def retalla_als_silencis(temps: list[tuple[float, float]], veu, pas: float = 0.01) -> list[tuple[float, float]]:
@@ -144,11 +159,36 @@ def retalla_als_silencis(temps: list[tuple[float, float]], veu, pas: float = 0.0
     return sortida
 
 
+def _trossos_de_frases(frases: list[dict], durada: float):
+    """Les frases en trossos de TROS_FRASES segons: (primera, última+1, inici, final del so que s'hi mira)."""
+    i = 0
+    while i < len(frases):
+        j = i + 1
+        while j < len(frases) and frases[j - 1]["end"] - frases[i]["start"] < TROS_FRASES:
+            j += 1
+        yield i, j, max(0.0, frases[i]["start"] - MARGE_TROS), min(durada, frases[j - 1]["end"] + MARGE_TROS)
+        i = j
+
+
 def alinea_mms(audio, frases: list[dict]) -> list[dict]:
-    """Com alinea(), amb MMS: cada frase porta les seves paraules (separades pels espais) amb el temps."""
+    """Com alinea(), amb MMS: cada frase porta les seves paraules (separades pels espais) amb el temps.
+    Llança ValueError si el text no sembla correspondre al so (vegeu MAXIM_DUBTOSES)."""
     from motor import veu
     textos = [[w for w in f["text"].split() if w.strip()] for f in frases]
-    temps = retalla_als_silencis(temps_mms(audio, [w for t in textos for w in t]), veu.mapa(audio))
+    model, diccionari = model_mms()
+    durada = len(audio) / SR
+    if durada <= LLARG:
+        crus, confiances = temps_mms(audio, [w for t in textos for w in t], model, diccionari)
+    else:
+        crus, confiances = [], []
+        for i, j, a, b in _trossos_de_frases(frases, durada):
+            t, c = temps_mms(audio[int(a * SR):int(b * SR)], [w for tt in textos[i:j] for w in tt], model, diccionari)
+            crus += [(x + a, y + a) for x, y in t]
+            confiances += c
+    dubtoses = sum(c < CONFIANCA_BAIXA for c in confiances) / max(1, len(confiances))
+    if dubtoses > MAXIM_DUBTOSES:
+        raise ValueError(f"el text no sembla correspondre al so ({dubtoses:.0%} de paraules dubtoses)")
+    temps = retalla_als_silencis(crus, veu.mapa(audio))
     sortida, k = [], 0
     for f, paraules in zip(frases, textos):
         words = [{"word": w, "start": temps[k + j][0], "end": temps[k + j][1]} for j, w in enumerate(paraules)]

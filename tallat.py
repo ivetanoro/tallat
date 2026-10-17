@@ -112,7 +112,13 @@ def ordre_realinea(args) -> None:
     print(f"Calculant de nou el temps de {len(paraules)} paraules (pot trigar uns minuts; el primer cop baixa el model)…",
           flush=True)
     t0 = time.time()
-    noves = transcripcio.a_paraules(transcripcio.alinea(transcripcio.carrega_audio(Path(dades["video"])), segments))
+    video = Path(dades["video"])
+    if not video.exists():  # s'ha mogut l'original: la còpia lleugera té el mateix so i el mateix temps
+        video = path.parent / PROXY
+        print(f"No trobo el vídeo original: faig servir la còpia lleugera ({video.name}).")
+    if not paraules or not video.exists():
+        sys.exit("No hi ha res per alinear (cap paraula, o ni el vídeo ni la còpia lleugera).")
+    noves = transcripcio.a_paraules(transcripcio.alinea(transcripcio.carrega_audio(video), segments))
     if [p["text"] for p in noves] != [p["text"] for p in paraules]:
         sys.exit("Les paraules no coincideixen amb les de la transcripció: no he canviat res.")
     canvis = [abs(n["inici"] - p["inici"]) for n, p in zip(noves, paraules)]

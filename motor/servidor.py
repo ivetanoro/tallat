@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import mimetypes
+import os
 import secrets
 import subprocess
 import sys
@@ -109,6 +110,10 @@ class Previa:
             return {"estat": "no", "trams": trams}
         desti = projecte.previa(trams)
         if desti.exists():
+            try:
+                os.utime(desti)  # la darrera que s'ha demanat: la neteja no se l'emporta
+            except OSError:
+                pass
             return {"estat": "fet", "url": f"/previa/{desti.name}", "trams": trams}
         with self.bloqueig:
             if self.fent is None:  # si se'n fa una altra, la pàgina ho tornarà a demanar
@@ -120,8 +125,10 @@ class Previa:
     def _fes(self, proxy: Path, trams, desti: Path) -> None:
         try:
             exporta.fes_previa(proxy, trams, desti)
-            for vell in sorted(desti.parent.glob("previa_*.mp4"), key=lambda p: p.stat().st_mtime)[:-3]:
-                vell.unlink(missing_ok=True)  # se'n guarden les tres darreres (desfer i refer hi tornen)
+            # Se'n guarden les quatre que s'han fet servir darrerament (desfer i refer hi tornen); la que
+            # sona a la pàgina sempre n'és una, perquè cada petició la toca (os.utime).
+            for vell in sorted(desti.parent.glob("previa_*.mp4"), key=lambda p: p.stat().st_mtime)[:-4]:
+                vell.unlink(missing_ok=True)
         except Exception:
             traceback.print_exc()
         finally:

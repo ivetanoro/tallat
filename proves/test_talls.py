@@ -230,3 +230,52 @@ class TestAlineadorMMS(unittest.TestCase):
         veu[100:150] = True  # veu d'1,00 a 1,50 s
         self.assertEqual(transcripcio.retalla_als_silencis([(0.6, 1.8)], veu), [(1.0, 1.5)])
         self.assertEqual(transcripcio.retalla_als_silencis([(2.0, 2.5)], veu), [(2.0, 2.5)])  # sense veu: com era
+
+
+class TestAlineadorSegur(unittest.TestCase):
+    """L'alineador no es refia d'un text que no correspon al so, i les gravacions llargues van a trossos."""
+
+    def test_trossos_de_frases(self):
+        frases = [{"start": i * 60.0, "end": i * 60.0 + 50, "text": "x"} for i in range(12)]  # 12 minuts
+        trossos = list(transcripcio._trossos_de_frases(frases, 720.0))
+        self.assertEqual([(i, j) for i, j, _, _ in trossos], [(0, 6), (6, 12)])
+        self.assertEqual(trossos[1][2:], (360.0 - 20, 720.0))  # amb marge (fins on s'acaba el so)
+        self.assertEqual(trossos[0][2], 0.0)
+
+    def test_un_text_que_no_correspon_al_so_no_s_accepta(self):
+        from unittest import mock
+        frases = [{"start": 0.0, "end": 2.0, "text": "u dos tres quatre"}]
+        audio = np.zeros(16000 * 2, dtype=np.float32)
+        temps = [(0.1, 0.2), (0.3, 0.4), (0.5, 0.6), (0.7, 0.8)]
+        with mock.patch.object(transcripcio, "model_mms", return_value=(None, None)):
+            with mock.patch.object(transcripcio, "temps_mms", return_value=(temps, [0.9, 0.1, 0.1, 0.9])):
+                with self.assertRaises(ValueError):
+                    transcripcio.alinea_mms(audio, frases)
+            with mock.patch.object(transcripcio, "temps_mms", return_value=(temps, [0.9, 0.9, 0.1, 0.9])):
+                segments = transcripcio.alinea_mms(audio, frases)
+        self.assertEqual([w["word"] for w in segments[0]["words"]], ["u", "dos", "tres", "quatre"])
+
+
+class TestRealinea(unittest.TestCase):
+    def test_canvia_els_temps_i_res_mes(self):
+        import argparse
+        from unittest import mock
+        import tallat
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "proxy.mp4").write_bytes(b"x")
+            paraules = [{"id": i, "text": t, "inici": i * 1.0, "final": i * 1.0 + 0.5, "frase": 0}
+                        for i, t in enumerate(["Hola,", "què", "tal?"])]
+            (d / "transcripcio.json").write_text(json.dumps({"video": str(d / "ja-no-hi-es.mov"), "fps": "30",
+                                                             "durada": 4.0, "font": "WhisperX", "paraules": paraules}))
+            segments = [{"start": 0.2, "end": 2.9, "text": "Hola, què tal?",
+                         "words": [{"word": "Hola,", "start": 0.2, "end": 0.6}, {"word": "què", "start": 1.3, "end": 1.6},
+                                   {"word": "tal?", "start": 2.2, "end": 2.9}]}]
+            with mock.patch.object(tallat.transcripcio, "carrega_audio", return_value=None) as audio, \
+                    mock.patch.object(tallat.transcripcio, "alinea", return_value=segments):
+                tallat.ordre_realinea(argparse.Namespace(projecte=str(d)))
+            self.assertEqual(audio.call_args[0][0].name, "proxy.mp4")  # l'original no hi és: la còpia lleugera
+            dades = json.loads((d / "transcripcio.json").read_text())
+            self.assertEqual([(p["text"], p["inici"], p["frase"]) for p in dades["paraules"]],
+                             [("Hola,", 0.2, 0), ("què", 1.3, 0), ("tal?", 2.2, 0)])
+            self.assertEqual(len(list(d.glob("transcripcio-abans-*.json"))), 1)

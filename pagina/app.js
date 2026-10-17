@@ -247,7 +247,8 @@ function aplicaTrams(r) {
   if (canviats) {
     previaLlesta = null;
     if (onSom != null) passaAProxy(onSom);
-    programaPrevia();
+    // En un vídeo llarg, refer el continu costa: s'espera que s'hagi acabat de retallar una estona.
+    programaPrevia(duradaFinal > 300 ? 4000 : 900);
   }
   if (vista === "directe") { pintaMarques(trams, acum, duradaFinal); recolloca(); }
 }
@@ -812,55 +813,65 @@ async function demanaPrevia() {
   }
 }
 
-// Al vídeo continu, al mateix punt i sense que es vegi el canvi (només amb el vídeo aturat).
-function passaAMuntatge() {
-  if (continu() || !previaLlesta || previaLlesta.trams !== JSON.stringify(trams) || R.reproduint) return;
-  const m = tempsMuntatge();
+const previaAPunt = () => !!previaLlesta && previaLlesta.trams === JSON.stringify(trams);
+let intentCanvi = 0;  // cada intent de passar al vídeo continu té el seu número: els d'abans ja no fan res
+
+// El vídeo continu passa a ser el que es veu i sona, al punt m del muntatge. L'únic lloc on es fa el
+// canvi: el que hi hagi a mig fer s'oblida i el vídeo continu sempre queda amb so.
+function activaMuntatge(m) {
+  intentCanvi++;
+  const M = R.muntatge;
+  M.muted = false;
+  R.proxy.pause();
   R.salt = null;
   R.repren = false;
+  R.v = M;
+  R.k = trosDe(m);
+  R.posat = true;
+  registre("continu", { m: +m.toFixed(3) });
+}
+
+// Amb el vídeo aturat: es posa al mateix punt i, quan hi és, se'n canvia (sense que es vegi el salt).
+// Només a la vista en directe: a la de l'esborrany, el temps és el d'un altre vídeo.
+function passaAMuntatge() {
+  if (continu() || !previaAPunt() || R.reproduint || vista !== "directe") return;
+  const intent = ++intentCanvi;
+  const m = tempsMuntatge();
   const fet = () => {
-    if (R.reproduint || continu() || previaLlesta?.trams !== JSON.stringify(trams)) return;
+    if (intent !== intentCanvi || R.reproduint || continu() || !previaAPunt()) return;
     if (Math.abs(tempsMuntatge() - m) > 0.05) { passaAMuntatge(); return; }  // mentrestant s'ha mogut
-    R.proxy.pause();
-    R.v = R.muntatge;
-    R.k = trosDe(m);
+    activaMuntatge(m);
     mostraVideoActiu();
-    registre("continu", { m: +m.toFixed(3) });
   };
   if (Math.abs(R.muntatge.currentTime - m) < 0.02) { fet(); return; }
   R.muntatge.addEventListener("seeked", fet, { once: true });
   R.muntatge.currentTime = m;
 }
 
-// El mateix, però mentre sona: el vídeo continu es posa una mica més endavant, en silenci, i comença a
-// sonar just quan la còpia que salta hi arriba; llavors se'n canvia (sense que s'aturi ni es noti).
-let canviantSonant = false;
+// Mentre sona: el vídeo continu es posa una mica més endavant, en silenci, i comença a sonar just quan
+// la còpia que salta hi arriba; llavors se'n canvia (sense que s'aturi ni es noti). Si mentrestant passa
+// qualsevol altra cosa (s'atura, es torna a fer play, canvien els talls), l'intent s'oblida sense tocar res.
 function passaAMuntatgeSonant() {
-  if (canviantSonant || continu() || !previaLlesta || previaLlesta.trams !== JSON.stringify(trams) || !R.reproduint) return;
+  if (continu() || !previaAPunt() || !R.reproduint || vista !== "directe") return;
+  const intent = ++intentCanvi;
   const M = R.muntatge;
   const objectiu = tempsMuntatge() + 0.5;
   if (objectiu >= duradaFinal - 0.6) return;
-  canviantSonant = true;
-  const plega = () => { canviantSonant = false; M.muted = false; };
-  const valid = () => R.reproduint && !continu() && previaLlesta?.trams === JSON.stringify(trams);
+  const viu = () => intent === intentCanvi && R.reproduint && !continu() && previaAPunt();
+  const deixa = () => { if (M !== R.v) { M.pause(); M.muted = false; } };  // mai el que ja sona
   M.muted = true;
   M.addEventListener("seeked", () => {
     const espera = () => {
-      if (!valid()) { M.pause(); plega(); return; }
+      if (!viu()) { deixa(); return; }
       const ara = tempsMuntatge();
-      if (ara > objectiu + 0.2) { plega(); passaAMuntatgeSonant(); return; }  // s'ha passat (un salt lent): de nou
+      if (ara > objectiu + 0.2) { deixa(); passaAMuntatgeSonant(); return; }  // s'ha passat (un salt lent): de nou
       if (ara < objectiu - 0.12) { setTimeout(espera, 15); return; }
       M.addEventListener("playing", () => {
-        if (!valid()) { M.pause(); plega(); return; }
-        M.muted = false;
-        R.proxy.pause();
-        R.v = M;
-        R.k = trosDe(M.currentTime);
+        if (!viu()) { deixa(); return; }
+        activaMuntatge(M.currentTime);
         mostraVideoActiu();
-        canviantSonant = false;
-        registre("continu", { m: +M.currentTime.toFixed(3), sonant: true });
       }, { once: true });
-      M.play().catch(() => plega());
+      M.play().catch(deixa);
     };
     espera();
   }, { once: true });
@@ -870,13 +881,13 @@ function passaAMuntatgeSonant() {
 // Els talls han canviat: el vídeo continu ja no hi correspon. Tornem a la còpia que salta, al mateix
 // moment de la gravació, i, si sonava, continua sonant.
 function passaAProxy(tOriginal) {
+  intentCanvi++;  // el que hi hagués a mig fer cap al continu, s'oblida
   if (!continu()) return;
-  const sonava = R.reproduint;
   R.muntatge.pause();
   R.v = R.proxy;
   mostraVideoActiu();
+  // El salt el fa posaTemps: si sona, continua sonant quan el salt ha acabat (no abans: el Safari s'encalla).
   vesAOriginal(tOriginal);
-  if (sonava) R.v.play().catch(() => {});
   registre("salts", { t: +tOriginal.toFixed(3) });
 }
 
@@ -1002,14 +1013,9 @@ function salta() {
 function reprodueix() {
   if (vista === "esborrany") { vE.play(); return; }
   if (!trams.length) return;
-  if (!continu() && previaLlesta?.trams === JSON.stringify(trams)) {  // el continu és a punt: hi passem ja
+  if (!continu() && previaAPunt()) {  // el continu és a punt: hi passem ja, abans de començar
     const m = R.posat && tempsMuntatge() < duradaFinal - 0.05 ? tempsMuntatge() : 0;
-    R.proxy.pause();
-    R.salt = null;
-    R.repren = false;
-    R.v = R.muntatge;
-    R.k = trosDe(m);
-    R.posat = true;
+    activaMuntatge(m);
     if (Math.abs(R.v.currentTime - m) < 0.01) mostraVideoActiu();
     else {
       R.v.addEventListener("seeked", mostraVideoActiu, { once: true });  // es veu quan ja hi és
@@ -2225,7 +2231,7 @@ function canviaVista(nova) {
   mostraVideoActiu();
   vE.classList.toggle("amagat", directe);
   $("#escolta").hidden = !directe;
-  if (directe) pintaMarques(trams, acum, duradaFinal);
+  if (directe) { pintaMarques(trams, acum, duradaFinal); passaAMuntatge(); }
   else if (esborrany) pintaMarques(esborrany.trams || [], esborrany.acum || [], esborrany.durada);
   pintaTemps();
 }
@@ -4013,6 +4019,7 @@ function instalaSo() {
   for (const boto of $$(".mostra-so")) {
     const audio = $(`#${boto.dataset.audio}`);
     boto.addEventListener("click", () => {
+      if (sona()) atura();  // que no soni alhora que el vídeo
       for (const altre of $$(".abans-despres audio")) if (altre !== audio) altre.pause();
       if (audio.paused) audio.play().catch(() => avis("Encara s'està preparant la mostra.")); else audio.pause();
     });

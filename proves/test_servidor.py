@@ -92,6 +92,43 @@ class TestServidor(unittest.TestCase):
         self.assertEqual(self.peticio("GET", f"/imatges-grafics/{nom}")[1], "una foto")
         self.assertEqual(self.peticio("GET", "/imatges-grafics/../transcripcio.json")[0], 403)
 
+    def test_la_previsualitzacio_continua(self):
+        from motor import exporta
+
+        class Projecte_:
+            def __init__(self, carpeta):
+                self.carpeta = carpeta
+
+            def previa(self, trams):
+                return self.carpeta / "previa" / f"previa_{len(trams)}.mp4"
+
+        def fes(proxy, trams, desti):
+            desti.parent.mkdir(exist_ok=True)
+            desti.write_bytes(b"mp4")
+
+        projecte = Projecte_(self.carpeta)
+        (self.carpeta / "proxy.mp4").write_bytes(b"x")
+        previa = servidor.Previa()
+        with mock.patch.object(exporta, "fes_previa", side_effect=fes):
+            self.assertEqual(previa.demana(projecte, [(0, 1)])["estat"], "fent")
+            for _ in range(100):  # el fil acaba de seguida
+                if previa.fent is None:
+                    break
+                time.sleep(0.01)
+            r = previa.demana(projecte, [(0, 1)])
+            self.assertEqual((r["estat"], r["url"]), ("fet", "/previa/previa_1.mp4"))
+            for n in range(2, 8):  # se'n fan més: només se'n guarden quatre, i mai la que s'ha demanat ara
+                previa.demana(projecte, [(0, 1)] * n)
+                for _ in range(100):
+                    if previa.fent is None:
+                        break
+                    time.sleep(0.01)
+                previa.demana(projecte, [(0, 1)])
+        noms = sorted(p.name for p in (self.carpeta / "previa").glob("previa_*.mp4"))
+        self.assertEqual(len(noms), 4)
+        self.assertIn("previa_1.mp4", noms)
+        self.assertEqual(previa.demana(projecte, [])["estat"], "no")
+
     def test_si_no_es_pot_copiar_a_la_carpeta_l_export_no_falla(self):
         from motor import exporta
         with mock.patch.object(exporta, "copia_a_carpeta", side_effect=PermissionError(13, "Permission denied")):
