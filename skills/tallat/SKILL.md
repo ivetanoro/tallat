@@ -20,21 +20,21 @@ La majoria no són programadores i volen que sigui fàcil. **Guia-la pas a pas:*
 - **Paraules:** a la persona, digues-ne **el teu estil** (els colors, les lletres i com són els seus vídeos), mai «marca» ni «kit»: la majoria no tenen una marca, tenen un estil. Si en té uns quants, «els teus estils».
 - **En les feines llargues** (transcriure, exportar), avisa abans de quant trigarà i ves-li dient com va. Quan acabi, digues-li clarament que ha acabat i on és el resultat.
 
-**On funciona:** a l'ordinador de la persona (un Mac), des de la pestanya Code de l'app de Claude o des de Codex. Si et trobes en un entorn que no és el seu ordinador (un contenidor al núvol, sense `~/.tallat` ni el seu `$HOME`, amb internet limitat, o el xat normal o Cowork), no improvisis l'edició pel teu compte: digues-li que obri tallat a la pestanya **Code** de l'app de Claude al seu Mac (o amb Codex) i que hi escrigui «instal·la tallat».
+**On funciona:** a l'ordinador de la persona (un Mac o un Windows; a Windows, encara en proves), des de la pestanya Code de l'app de Claude o des de Codex. Si et trobes en un entorn que no és el seu ordinador (un contenidor al núvol, sense `~/.tallat` ni el seu `$HOME`, amb internet limitat, o el xat normal o Cowork), no improvisis l'edició pel teu compte: digues-li que obri tallat a la pestanya **Code** de l'app de Claude al seu Mac (o amb Codex) i que hi escrigui «instal·la tallat».
 
 ## Instal·lació (la primera vegada)
 
 Quan la persona digui «instal·la tallat», o una ordre falli perquè falta una eina (ffmpeg, WhisperX, Node…):
 1. Explica-li en una frase què passarà: es baixen uns 2-3 GB (ffmpeg, Node, Python, WhisperX, el navegador de HyperFrames i el model de veu català), triga 10-20 minuts, tot va a la seva carpeta d'usuari (`~/.tallat`) i no demana mai la contrasenya.
 2. Si no fa servir Descript per transcriure, afegeix `--amb-whisper` (baixa 3 GB més, el model de transcripció).
-3. Executa `./prepara.sh` des de la carpeta de tallat. És llarg: fes-ho en una pestanya del terminal on la persona ho vegi, o en segon pla, i ves-li dient com va. Es pot tornar a executar sense por: només fa el que falta.
-4. En acabar, `prepara.sh` mateix executa `tallat.py comprova`. Si hi ha cap ✗, llegeix el missatge, torna a executar `./prepara.sh` i, si continua, explica-li què passa amb paraules senzilles.
+3. Executa `./prepara.sh` des de la carpeta de tallat (a **Windows**: `powershell -ExecutionPolicy Bypass -File prepara.ps1`, i `-AmbWhisper` en lloc de `--amb-whisper`). És llarg: fes-ho en una pestanya del terminal on la persona ho vegi, o en segon pla, i ves-li dient com va. Es pot tornar a executar sense por: només fa el que falta.
+4. En acabar, l'instal·lador mateix executa `tallat.py comprova`. Si hi ha cap ✗, llegeix el missatge, torna a executar l'instal·lador i, si continua, explica-li què passa amb paraules senzilles.
 
 `tallat.py comprova` revisa en qualsevol moment que tot hi sigui (✓ bé, ! avís, ✗ cal arreglar). Descript és opcional: es connecta des de la configuració de connectors de l'assistent (a Claude, la de claude.ai).
 
 ## Ordres
 
-Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre d'aquest `SKILL.md` (si s'ha instal·lat com a connector, és la carpeta del connector; a Claude Code, `${CLAUDE_PLUGIN_ROOT}`), amb l'entorn `.venv`. Si `.venv` no hi és (la primera vegada, o després d'actualitzar el connector), executa `./prepara.sh`: si ja està tot instal·lat, només refà l'enllaç i triga uns segons.
+Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre d'aquest `SKILL.md` (si s'ha instal·lat com a connector, és la carpeta del connector; a Claude Code, `${CLAUDE_PLUGIN_ROOT}`), amb l'entorn `.venv`. Si `.venv` no hi és (la primera vegada, o després d'actualitzar el connector), executa l'instal·lador: si ja està tot instal·lat, només refà l'enllaç i triga uns segons. **A Windows**, a totes les ordres d'aquí sota, en lloc de `.venv/bin/python` escriu `.venv\Scripts\python.exe`.
 
 ```bash
 .venv/bin/python tallat.py transcriu VIDEO --projecte CARPETA [--srt FITXER.srt]
@@ -272,7 +272,7 @@ Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o Cap
 
 - L'esborrany és per revisar. El vídeo final es fa a la pàgina (**Exporta** → **Vídeo final**), que diu **a quina carpeta es desa** i té **Canvia…** (el diàleg del Mac; tallat la recorda). Al xat, `tallat.py exporta` fa el mateix i desa a la mateixa carpeta.
 - Els vídeos sempre queden també a la carpeta del projecte (pestanya **Vídeos**); a la carpeta triada hi van com un enllaç al mateix fitxer (no ocupen més lloc al mateix disc).
-- Quan acabi, digues-li el nom del fitxer i on és. A la pàgina queda un avís amb **Mostra al Finder**.
+- Quan acabi, digues-li el nom del fitxer i on és. A la pàgina queda un avís amb **Mostra-la al Finder** (a Windows, **a l'Explorador**).
 - Per a Premiere: després d'importar el `.xml`, cal fer **doble clic a la seqüència** (si s'arrossega a una seqüència nova, el Premiere la converteix en un sol clip).
 
 ## Revisar l'esborrany

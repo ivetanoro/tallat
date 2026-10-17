@@ -36,6 +36,12 @@ const limita = (v, a, b) => Math.min(b, Math.max(a, v));
 const copia = (o) => JSON.parse(JSON.stringify(o));
 const arrodoneix = (n) => Math.round(n * 100) / 100;
 
+// Al Mac les dreceres van amb ⌘ i els fitxers es mostren al Finder; a Windows, amb Ctrl i a l'Explorador.
+const ES_MAC = /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
+const GESTOR = ES_MAC ? "al Finder" : "a l'Explorador";
+const TECLES_WINDOWS = { "⌘Z": "Ctrl+Z", "⇧⌘Z": "Ctrl+Maj+Z", "⌃⌘S": "Ctrl+Alt+S", "⌥⌘V": "Ctrl+Alt+V" };
+const tecla = (mac) => (ES_MAC ? mac : TECLES_WINDOWS[mac] || mac);
+
 // --- Registre de diagnòstic ---------------------------------------------------------------
 // La pàgina apunta què fa el reproductor; el servidor ho desa a registre-pagina.log
 // dins la carpeta del projecte (no surt de l'ordinador). Serveix per trobar errors.
@@ -412,7 +418,7 @@ function mouParagraf(de, a, teclat = false) {
   canvia((e) => { e.ordre = natural ? null : rangs; }, { repinta: true });
   registre("mou-paragraf", { de, a, ordre: natural ? null : rangs.length });
   if (teclat) paragrafsEl[on]?.el.querySelector(".nansa").focus();
-  else avis(natural ? "Tot torna a sonar en l'ordre de la gravació." : "Paràgraf mogut. Prem ⌘Z per desfer-ho.");
+  else avis(natural ? "Tot torna a sonar en l'ordre de la gravació." : `Paràgraf mogut. Prem ${tecla("⌘Z")} per desfer-ho.`);
 }
 
 function pausaAbans(id) {
@@ -545,7 +551,7 @@ function deixaSeleccio() {
 function instalaText() {
   const cont = $("#transcripcio");
   cont.addEventListener("pointerdown", (e) => {
-    const dret = e.button === 2 || (e.button === 0 && e.ctrlKey);
+    const dret = e.button === 2 || (ES_MAC && e.button === 0 && e.ctrlKey);  // ⌃clic és el clic dret del Mac
     if (e.button !== 0 && !dret) return;
     if (e.target.closest(".nansa")) return;  // moure paràgrafs: ho fa la nansa mateixa
     if (dret) {
@@ -2130,7 +2136,7 @@ function mostraColumna(nom, visible) {
   document.body.classList.toggle(c.classe, !visible);
   $(c.boto).setAttribute("aria-pressed", String(visible));
   $(c.boto).title = (visible ? "Amaga " : "Mostra ") +
-    (nom === "barra" ? "la columna de l'esquerra (⌃⌘S)" : "el vídeo (⌥⌘V)");
+    (nom === "barra" ? `la columna de l'esquerra (${tecla("⌃⌘S")})` : `el vídeo (${tecla("⌥⌘V")})`);
   desa(`tallat.amaga.${nom}`, !visible);
 }
 
@@ -2450,7 +2456,7 @@ function pintaVersions(exports) {
     item.className = "item";
     item.innerHTML = `<span class="context"><b style="color:var(--text)">${QUALITATS[x.qualitat] || "Vídeo"}</b> · ${x.data} · ${x.mida_mb} MB</span>
       <button class="mini" title="Mira-la" aria-label="Mira-la">${ICONES.play}</button>
-      <button class="mini" title="Mostra al Finder" aria-label="Mostra al Finder">${ICONES.finder}</button>`;
+      <button class="mini" title="Mostra-la ${GESTOR}" aria-label="Mostra-la ${GESTOR}">${ICONES.finder}</button>`;
     const [mira, finder] = item.querySelectorAll(".mini");
     mira.addEventListener("click", (e) => { e.stopPropagation(); tancaFinal(); carregaVersio(x.nom); });
     finder.addEventListener("click", (e) => { e.stopPropagation(); api("/api/mostra", { nom: x.nom }).catch((err) => avis(err.message)); });
@@ -3428,6 +3434,16 @@ function instalaEdicioAlVideo() {
   pantalla.addEventListener("pointercancel", deixa);
 }
 
+// Els textos de la pàgina que diuen una drecera o el Finder, com es diuen en aquest ordinador.
+function instalaTecles() {
+  if (ES_MAC) return;
+  for (const [sel, mac] of [["#desfes", "⌘Z"], ["#refes", "⇧⌘Z"], ["#commuta-barra", "⌃⌘S"], ["#commuta-reproductor", "⌥⌘V"]]) {
+    const b = $(sel);
+    if (b) b.title = b.title.replace(mac, tecla(mac));
+  }
+  $("#fet-mostra").textContent = `Mostra-la ${GESTOR}`;
+}
+
 // --- La visita guiada (el primer cop) -----------------------------------------------------------
 // Unes quantes passes curtes: s'enfosqueix la pàgina, s'il·lumina una part i una frase diu què és.
 // Surt sola el primer cop; després, amb el «?» de dalt.
@@ -3941,6 +3957,7 @@ function instalaControls() {
     if (fitxer && instruccioPerPujar) pujaBroll(instruccioPerPujar, fitxer);
     e.target.value = "";
   });
+  instalaTecles();
   instalaColumnes();
   instalaSeccions();
   instalaEstil();
@@ -4000,12 +4017,12 @@ function instalaControls() {
     if (editantTitol && e.key === "Escape") { tancaTitol(); return; }
     if (editantBroll && e.key === "Escape") { tancaBroll(); return; }
     if (editantMarca && e.key === "Escape") { tancaMarca(); return; }
-    if (e.ctrlKey && e.metaKey && e.code === "KeyS") {  // ⌃⌘S, com al Finder
+    if ((ES_MAC ? e.ctrlKey && e.metaKey : e.ctrlKey && e.altKey) && e.code === "KeyS") {  // ⌃⌘S (com al Finder) o Ctrl+Alt+S
       e.preventDefault();
       mostraColumna("barra", document.body.classList.contains("sense-barra"));
       return;
     }
-    if (e.altKey && e.metaKey && e.code === "KeyV") {  // ⌥⌘V
+    if ((ES_MAC ? e.altKey && e.metaKey : e.ctrlKey && e.altKey) && e.code === "KeyV") {  // ⌥⌘V o Ctrl+Alt+V
       e.preventDefault();
       mostraColumna("reproductor", document.body.classList.contains("sense-reproductor"));
       return;

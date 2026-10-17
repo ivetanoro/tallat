@@ -23,7 +23,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 
 ## Què necessites
 
-- **Un Mac.** De moment tallat només funciona en Mac. S'ha provat en un Mac amb processador Intel; en els Mac nous (M1, M2, M3…) hauria de funcionar igual, però encara no s'hi ha provat.
+- **Un Mac o un Windows.** S'ha provat en un Mac amb processador Intel; en els Mac nous (M1, M2, M3…) hauria de funcionar igual, però encara no s'hi ha provat. **Windows encara està en proves:** passa les proves automàtiques en un Windows 64 bits, però encara no l'ha fet servir ningú de debò. Allà els vídeos es fan amb el processador i van més lents que al Mac.
 - **L'app de Claude**, amb un pla que inclogui Claude Code (la pestanya **Code**; el més barat és el Pro). **O bé Codex**, d'OpenAI, amb un pla de ChatGPT que l'inclogui.
 - **Uns 5 GB lliures** per a la instal·lació, i espai per als teus vídeos.
 - **Opcional:** [Descript](https://www.descript.com) connectat a Claude. Transcriu millor i conserva el farciment perquè el puguis treure tu. Sense Descript, tallat transcriu al teu ordinador amb WhisperX (més lent).
@@ -60,7 +60,7 @@ Tot funciona igual que amb Claude. Només canvien els connectors opcionals (Desc
 
 ### Què fa la instal·lació
 
-Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el vídeo), Python i WhisperX (per transcriure), el model de veu català de Softcatalà, i HyperFrames (per dibuixar els subtítols). Són uns 2-3 GB i 10-20 minuts la primera vegada. Tot va a una carpeta teva, `~/.tallat`, i no et demana mai la contrasenya del Mac. Tu només has de clicar **«Permet»** quan Claude et demani permís per fer alguna cosa.
+Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el vídeo), Python i WhisperX (per transcriure), el model de veu català de Softcatalà, i HyperFrames (per dibuixar els subtítols). Són uns 2-3 GB i 10-20 minuts la primera vegada. Tot va a una carpeta teva, `~/.tallat` (a Windows, `.tallat` dins de la teva carpeta d'usuari), i no et demana mai la contrasenya del Mac. Tu només has de clicar **«Permet»** quan Claude et demani permís per fer alguna cosa.
 
 ## Com es fa servir
 
@@ -106,7 +106,7 @@ Les instruccions es treuen soles del vídeo, i a la pàgina decideixes si les ac
 
 ## Privacitat
 
-- Tot es fa al teu ordinador. La pàgina de revisió només es pot obrir des del teu Mac.
+- Tot es fa al teu ordinador. La pàgina de revisió només es pot obrir des del teu ordinador.
 - Si fas servir Descript, l'àudio es puja al teu compte de Descript per transcriure'l.
 - Si generes b-roll amb intel·ligència artificial, la descripció de la imatge va a aquell servei i gasta crèdits del teu compte.
 
@@ -123,7 +123,7 @@ Les instruccions es treuen soles del vídeo, i a la pàgina decideixes si les ac
 - `skills/tallat/SKILL.md`: les instruccions que segueix Claude.
 - `config/`: els valors per defecte, neutres (estil, estils de subtítols, farciment, emojis).
 - `proves/`: les proves (`.venv/bin/python -m unittest discover -s proves -t .`).
-- `prepara.sh`: l'instal·lador. `tallat.py comprova`: la revisió de l'equip.
+- `prepara.sh`: l'instal·lador (a Windows, `prepara.ps1`). `tallat.py comprova`: la revisió de l'equip.
 
 Les regles del projecte són a [CLAUDE.md](CLAUDE.md): tot en català, marca neutra per defecte, cap vídeo dins del repositori i codi escrit de zero.
 

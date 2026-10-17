@@ -625,7 +625,7 @@ def captura_web(url: str, desti: Path) -> Path:
         r = subprocess.run([str(chrome), "--headless", "--use-mock-keychain", "--password-store=basic",
                             "--hide-scrollbars", "--no-first-run", "--disable-gpu", f"--user-data-dir={perfil}",
                             f"--window-size={MIDA_CAPTURA[0]},{MIDA_CAPTURA[1]}", "--virtual-time-budget=8000",
-                            f"--screenshot={desti}", url], capture_output=True, text=True, timeout=90)
+                            f"--screenshot={desti}", url], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90)
     if not desti.is_file() or desti.stat().st_size == 0:
         raise RuntimeError(f"No he pogut fer la captura de {url}:\n{(r.stderr or r.stdout)[-500:]}")
     return desti

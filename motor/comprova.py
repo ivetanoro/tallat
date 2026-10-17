@@ -32,7 +32,7 @@ def _versio(paquet: str) -> str | None:
 
 def _executa(ordre: list[str], temps: int = 60) -> subprocess.CompletedProcess | None:
     try:
-        return subprocess.run(ordre, capture_output=True, text=True, timeout=temps)
+        return subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=temps)
     except (OSError, subprocess.TimeoutExpired):
         return None
 

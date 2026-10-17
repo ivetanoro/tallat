@@ -79,7 +79,7 @@ def mostra(video: Path, inici: float, desti: Path, nivell: str | None, durada: f
     if nivell:
         mesura_ordre = ["ffmpeg", "-v", "info", *entrada[3:]]  # loudnorm diu la mesura amb -v info
         primera = subprocess.run([*mesura_ordre, "-af", filtre_veu(nivell, None), "-f", "null", "-"],
-                                 capture_output=True, text=True)
+                                 capture_output=True, text=True, encoding="utf-8", errors="replace")
         mesura = llegeix_mesura(primera.stderr)
         filtre = ["-af", filtre_veu(nivell, mesura)]
     else:

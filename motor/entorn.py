@@ -40,6 +40,12 @@ def prepara() -> None:
         # A Windows, torch i ctranslate2 (WhisperX) porten cadascun la seva còpia d'OpenMP; sense això, en
         # carregar la segona el programa s'atura («OMP: Error #15»). Al Mac Intel ho arregla prepara.sh.
         os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+        # Quan la sortida no va a una finestra (Claude la llegeix per un canal), Windows fa servir una
+        # codificació antiga i «✓» o «·» farien petar el programa. Els programes fills, en UTF-8.
+        for corrent in (sys.stdout, sys.stderr):
+            if hasattr(corrent, "reconfigure"):
+                corrent.reconfigure(encoding="utf-8", errors="replace")
+        os.environ.setdefault("PYTHONUTF8", "1")
 
 
 def programa(nom: str) -> str:
@@ -62,7 +68,7 @@ def tria_carpeta(pregunta: str) -> Path | None:
     """Obre la finestra del sistema per triar una carpeta. None si es cancel·la (o no es pot obrir)."""
     if MAC:
         r = subprocess.run(["osascript", "-e", f'POSIX path of (choose folder with prompt "{pregunta}")'],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     elif WINDOWS:
         # La sortida en UTF-8: si no, una carpeta com «Descàrregues» arribaria amb les lletres canviades.
         ordre = ("[Console]::OutputEncoding = [Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; "
@@ -72,7 +78,7 @@ def tria_carpeta(pregunta: str) -> Path | None:
                            text=True, encoding="utf-8", env={**os.environ, "TALLAT_PREGUNTA": pregunta})
     else:
         r = subprocess.run(["zenity", "--file-selection", "--directory", f"--title={pregunta}"],
-                           capture_output=True, text=True) if shutil.which("zenity") else None
+                           capture_output=True, text=True, encoding="utf-8", errors="replace") if shutil.which("zenity") else None
     if r is None or r.returncode != 0 or not r.stdout.strip():
         return None
     return Path(r.stdout.strip())

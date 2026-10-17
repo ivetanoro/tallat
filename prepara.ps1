@@ -45,11 +45,18 @@ function Baixa-I-Comprova($url, $desti) {
   if ($esperat -ne $obtingut) { Remove-Item $desti; Falla "La baixada de $url no és correcta (la suma no coincideix)." }
 }
 
-# Executa un programa i diu si ha anat bé (sense que els seus missatges d'error aturin l'script).
+# Executa un programa i diu si ha anat bé (sense que els seus missatges d'error aturin l'script). El que
+# ha escrit queda a $script:Sortida, per mostrar-ne el final si falla (Falla-Amb).
+$script:Sortida = ""
 function Prova($programa, [string[]]$arguments) {
   $ErrorActionPreference = "Continue"
-  & $programa @arguments *> $null
+  $script:Sortida = (& $programa @arguments 2>&1 | Out-String)
   return $LASTEXITCODE -eq 0
+}
+function Falla-Amb($text) {
+  $linies = ($script:Sortida -split "`r?`n" | Where-Object { $_.Trim() }) | Select-Object -Last 15
+  if ($linies) { Write-Host ""; Write-Host "Les últimes línies del que ha passat:"; $linies | ForEach-Object { Write-Host "    $_" } }
+  Falla $text
 }
 
 New-Item -ItemType Directory -Force -Path $BIN | Out-Null
@@ -70,7 +77,7 @@ $NODE = Join-Path $EINES "node.exe"
 if (-not (Test-Path $FFMPEG) -or -not (Test-Path (Join-Path $EINES "Library\bin\ffprobe.exe")) -or -not (Test-Path $NODE)) {
   $env:MAMBA_ROOT_PREFIX = Join-Path $TALLAT "mamba"
   if (-not (Prova $MAMBA @("create", "-y", "-q", "-p", $EINES, "-c", "conda-forge", "--override-channels",
-                            "ffmpeg=7.1.*=*gpl*", "nodejs=22.*"))) { Falla "No he pogut instal·lar ffmpeg i Node.js." }
+                            "ffmpeg=7.1.*=*gpl*", "nodejs=22.*"))) { Falla-Amb "No he pogut instal·lar ffmpeg i Node.js." }
 }
 $env:PATH = "$(Join-Path $EINES 'Library\bin');$EINES;$BIN;$env:PATH"
 Fet "$((& $FFMPEG -hide_banner -version | Select-Object -First 1) -replace '^(ffmpeg version \S+).*', '$1') · Node.js $(& $NODE --version)"
@@ -98,7 +105,7 @@ if (-not (Test-Path $PYVENV) -or -not (Prova $PYVENV @("-c", "import sys; sys.ex
     Rename-Item $VENV "$VENV.vell"
   }
   $env:UV_PYTHON_INSTALL_DIR = Join-Path $TALLAT "python"
-  if (-not (Prova $UV @("venv", "--quiet", "--python", "3.11", $VENV))) { Falla "No he pogut crear l'entorn de Python." }
+  if (-not (Prova $UV @("venv", "--quiet", "--python", "3.11", $VENV))) { Falla-Amb "No he pogut crear l'entorn de Python." }
   if (-not (Prova $PYVENV @("-c", "import sys"))) { Falla "L'entorn de Python nou no funciona." }
   if (Test-Path "$VENV.vell") { Remove-Item -Recurse -Force "$VENV.vell" }
 }
@@ -110,21 +117,21 @@ Fet "$(& $PY --version) a $VENV"
 
 Pas "4/6 · WhisperX i la resta de paquets de Python (la part més llarga)"
 if (-not (Prova $UV @("pip", "install", "--quiet", "--python", $PY, "-r", (Join-Path $CARPETA "requirements.txt")))) {
-  Falla "No he pogut instal·lar els paquets de Python."
+  Falla-Amb "No he pogut instal·lar els paquets de Python."
 }
 # torch i ctranslate2 porten cadascun la seva còpia d'OpenMP (vegeu motor/entorn.py).
 $env:KMP_DUPLICATE_LIB_OK = "TRUE"
 Push-Location $CARPETA
 $arrenca = Prova $PY @("-c", "from motor import entorn; entorn.prepara(); entorn.llista_de_lletres(); import ctranslate2, torch, whisperx")
 Pop-Location
-if (-not $arrenca) { Falla "WhisperX no arrenca. Executa «.venv\Scripts\python tallat.py comprova» per veure-hi més." }
+if (-not $arrenca) { Falla-Amb "WhisperX no arrenca. Executa «.venv\Scripts\python tallat.py comprova» per veure-hi més." }
 $versions = & $PY -c "import importlib.metadata as m; print(m.version('whisperx') + ' · torch ' + m.version('torch'))"
 Fet "WhisperX $versions"
 
 Pas "5/6 · HyperFrames i el seu navegador (per dibuixar els subtítols)"
 $NPX = Join-Path $EINES "npx.cmd"
 if (-not (Prova $NPX @("--yes", "hyperframes@$VERSIO_HYPERFRAMES", "browser", "ensure"))) {
-  Falla "No he pogut preparar HyperFrames. Torna-ho a provar d'aquí a una estona."
+  Falla-Amb "No he pogut preparar HyperFrames. Torna-ho a provar d'aquí a una estona."
 }
 Fet "HyperFrames $VERSIO_HYPERFRAMES"
 
@@ -134,13 +141,13 @@ $env:TRANSFORMERS_VERBOSITY = "error"
 Push-Location $CARPETA
 $model = Prova $PY @("-c", "import warnings; warnings.filterwarnings('ignore'); from motor import entorn, transcripcio; entorn.prepara(); transcripcio._whisperx().load_align_model(language_code='ca', device='cpu')")
 Pop-Location
-if (-not $model) { Falla "No he pogut baixar el model de veu català." }
+if (-not $model) { Falla-Amb "No he pogut baixar el model de veu català." }
 Fet "model de Softcatalà"
 if ($AmbWhisper) {
   Push-Location $CARPETA
   $whisper = Prova $PY @("-c", "from motor import entorn, transcripcio; entorn.prepara(); transcripcio._whisperx().load_model('large-v3', 'cpu', compute_type='int8', language='ca')")
   Pop-Location
-  if (-not $whisper) { Falla "No he pogut baixar el model de transcripció." }
+  if (-not $whisper) { Falla-Amb "No he pogut baixar el model de transcripció." }
   Fet "model de transcripció (large-v3)"
 }
 

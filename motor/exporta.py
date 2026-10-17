@@ -38,7 +38,7 @@ def info_video(video: Path) -> dict:
     sortida = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams", "-show_format",
          "-of", "json", str(video)],
-        capture_output=True, text=True, check=True).stdout
+        capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
     d = json.loads(sortida)
     s = d["streams"][0]
     amplada, alcada = s["width"], s["height"]
@@ -61,7 +61,7 @@ def treu_rotacio(fitxer: Path) -> None:
     és, es treu, sense tornar a codificar res."""
     fitxer = Path(fitxer)
     s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams", "-of", "json",
-                                   str(fitxer)], capture_output=True, text=True, check=True).stdout)["streams"]
+                                   str(fitxer)], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout)["streams"]
     if not s or _rotacio(s[0]) == 0:
         return
     temporal = fitxer.with_name(f".{fitxer.stem}.dret{fitxer.suffix}")
@@ -317,7 +317,7 @@ def _executa(ordre: list[str], durada: float, progres) -> None:
     # Els errors es llegeixen alhora, en un altre fil: si ffmpeg n'escriu molts (un vídeo malmès)
     # i ningú no els llegeix, el canal s'omple, ffmpeg s'espera i l'export no acaba mai.
     errors = collections.deque(maxlen=200)
-    with subprocess.Popen(ordre, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    with subprocess.Popen(ordre, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
                           errors="replace") as proces:
         fil = threading.Thread(target=lambda: errors.extend(proces.stderr), daemon=True)
         fil.start()
@@ -378,7 +378,7 @@ def comprova_durades(fitxer: Path, esperada: float, fps: str) -> str | None:
     vídeo amb fotogrames de durada variable, un tros que no s'ha pogut llegir sencer…), torna un avís."""
     try:
         streams = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,duration",
-                                             "-of", "json", str(fitxer)], capture_output=True, text=True,
+                                             "-of", "json", str(fitxer)], capture_output=True, text=True, encoding="utf-8", errors="replace",
                                             check=True).stdout)["streams"]
         durades = {s_["codec_type"]: float(s_["duration"]) for s_ in streams if "duration" in s_}
     except (OSError, subprocess.CalledProcessError, ValueError, KeyError):
@@ -469,7 +469,7 @@ def _mesura_veu(entrades: list[str], trams, nivell: str) -> dict:
                      f"{so.filtre_veu(nivell, None)}[m]")
     resultat = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", *entrades,
                                "-filter_complex", "".join(parts), "-map", "[m]", "-f", "null", "-"],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
     return so.llegeix_mesura(resultat.stderr)
 
 
@@ -504,7 +504,7 @@ def _exporta(entrades_base, durada, sortida, qualitat, info, filtre, brolls, pec
 def _te_x264() -> bool:
     try:
         return "libx264" in subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True,
-                                           text=True, timeout=20).stdout
+                                           text=True, encoding="utf-8", errors="replace", timeout=20).stdout
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -536,7 +536,7 @@ def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, cur
         ordre += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", str(temporal)]
         try:
             # Un vídeo curt (l'escolta d'un tall) que no surt en mig minut, ja no cal: la pàgina se'n surt sense.
-            r = subprocess.run(ordre, capture_output=True, text=True, timeout=30 if curt else None)
+            r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30 if curt else None)
             if r.returncode != 0:
                 raise RuntimeError("ffmpeg no ha pogut fer la previsualització:\n" + r.stderr[-1500:])
             temporal.replace(sortida)

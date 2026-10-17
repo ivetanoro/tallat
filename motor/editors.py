@@ -38,7 +38,7 @@ FPS_RECURSOS = 30  # el b-roll (motor/broll.py) i la capa de subtítols (motor/s
 def _mida_imatge(path: Path) -> tuple[int, int]:
     sortida = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
                               "stream=width,height", "-of", "json", str(path)],
-                             capture_output=True, text=True, check=True).stdout
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout
     s = json.loads(sortida)["streams"][0]
     return int(s["width"]), int(s["height"])
 
