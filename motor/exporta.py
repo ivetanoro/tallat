@@ -22,7 +22,8 @@ QUALITATS = {
     "1080": (1080, 1920, "16M"),
     "4k": (2160, 3840, "45M"),
 }
-PREFERENCIES = Path.home() / ".tallat" / "preferencies.json"  # la carpeta on la persona vol els vídeos
+# La carpeta on la persona vol els vídeos. TALLAT_PREFERENCIES en fa servir unes altres (les proves).
+PREFERENCIES = Path(os.environ.get("TALLAT_PREFERENCIES") or Path.home() / ".tallat" / "preferencies.json")
 FOS_AUDIO = 0.01  # segons de fos a cada tall, perquè no se sentin clics
 ZOOM = 1.15       # apropament dels trossos amb zoom (instrucció de veu «Claude, zoom aquí»)
 # Cada tros és una entrada d'ffmpeg, i cada entrada guarda uns quants fotogrames a la memòria: amb el

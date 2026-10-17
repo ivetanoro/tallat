@@ -29,10 +29,18 @@ jobs:
           .venv\Scripts\python.exe -m unittest discover -s proves -t . -v 2>&1 | Tee-Object -FilePath proves.log
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
+      - name: Prova de fum (export amb subtítols, projecte per a editors i pàgina de revisió)
+        run: |
+          $ErrorActionPreference = "Continue"
+          .venv\Scripts\python.exe .github\fum.py "$env:RUNNER_TEMP\fum" 2>&1 | Tee-Object -FilePath fum.log
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Desa el registre de les proves
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: registre-proves-windows
-          path: proves.log
+          path: |
+            proves.log
+            fum.log
           if-no-files-found: ignore
