@@ -73,7 +73,7 @@ class TestExportAmbSo(unittest.TestCase):
             efectes = so.pista([{"so": "whoosh", "moments": [2.0]}], 6.0, 0.5, d / "e.wav")
             exporta.exporta(d / "v.mp4", [(0.0, 6.0)], d / "s.mp4", "esborrany", neteja="suau", efectes=efectes)
             mesura = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(d / "s.mp4"), "-af", "ebur128",
-                                     "-f", "null", "-"], capture_output=True, text=True).stderr
+                                     "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8").stderr
             volum = float(mesura.rsplit("I:", 1)[1].split("LUFS")[0])
             self.assertAlmostEqual(volum, -14, delta=1.5)
 

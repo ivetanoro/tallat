@@ -31,21 +31,32 @@ def carpetes_eines() -> list[Path]:
 
 def prepara() -> None:
     """Posa les eines de tallat al davant del PATH (si l'instal·lador les ha posat)."""
-    camins = os.environ.get("PATH", "").split(os.pathsep)
-    for carpeta in (INSTAL_LADORS, *reversed(carpetes_eines())):  # les eines queden primer
-        if carpeta.is_dir() and str(carpeta) not in camins:
-            camins.insert(0, str(carpeta))
-    os.environ["PATH"] = os.pathsep.join(camins)
+    # Al davant de tot, encara que ja hi fossin més enrere (darrere d'un ffmpeg o un Node antics que
+    # guanyarien). A Windows, els camins es comparen sense majúscules (revisió de Codex).
+    nostres = [str(c) for c in (*carpetes_eines(), INSTAL_LADORS) if c.is_dir()]
+    clau = {os.path.normcase(os.path.normpath(c)) for c in nostres}
+    altres = [c for c in os.environ.get("PATH", "").split(os.pathsep)
+              if c and os.path.normcase(os.path.normpath(c)) not in clau]
+    os.environ["PATH"] = os.pathsep.join(nostres + altres)
     if WINDOWS:
         # A Windows, torch i ctranslate2 (WhisperX) porten cadascun la seva còpia d'OpenMP; sense això, en
         # carregar la segona el programa s'atura («OMP: Error #15»). Al Mac Intel ho arregla prepara.sh.
         os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
         # Quan la sortida no va a una finestra (Claude la llegeix per un canal), Windows fa servir una
         # codificació antiga i «✓» o «·» farien petar el programa. Els programes fills, en UTF-8.
-        for corrent in (sys.stdout, sys.stderr):
+        for corrent in (sys.stdin, sys.stdout, sys.stderr):  # també el que arriba per l'entrada (un JSON)
             if hasattr(corrent, "reconfigure"):
                 corrent.reconfigure(encoding="utf-8", errors="replace")
         os.environ.setdefault("PYTHONUTF8", "1")
+
+
+def esborra_si_pots(path: Path) -> None:
+    """Esborra un fitxer vell que ja no cal. A Windows no es pot esborrar un fitxer obert (el navegador el pot
+    estar llegint): llavors es deixa, i ja s'esborrarà en una altra neteja."""
+    try:
+        Path(path).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def programa(nom: str) -> str:
@@ -59,7 +70,9 @@ def mostra_al_gestor(path: Path) -> None:
     if MAC:
         subprocess.run(["open", "-R", str(path)], check=False)
     elif WINDOWS:
-        subprocess.run(["explorer", f"/select,{Path(path)}"], check=False)
+        # L'Explorador vol «/select,"camí"» exactament així: amb una llista, Python hi posaria les cometes
+        # abans de /select i no el trobaria. (Explorer torna 1 encara que vagi bé: no es comprova.)
+        subprocess.run(f'explorer /select,"{Path(path)}"', check=False)
     else:
         subprocess.run(["xdg-open", str(Path(path).parent)], check=False)
 

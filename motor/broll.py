@@ -12,6 +12,8 @@ amb un zoom lent perquè no quedin estàtiques.
 """
 from __future__ import annotations
 
+import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -46,8 +48,16 @@ def _lut(lut: str | None) -> str:
     path = Path(lut).expanduser()
     if not path.exists():
         raise FileNotFoundError(f"No trobo el LUT de l'estil: {path}")
-    # Amb barres «/»: dins d'un filtre d'ffmpeg, les «\» de Windows (C:\Users\…) es llegirien com a escapades.
-    return f",lut3d=file='{path.as_posix().replace(chr(39), '')}'"
+    return f",lut3d=file={escapa_ffmpeg(path.as_posix())}"
+
+
+def escapa_ffmpeg(valor: str) -> str:
+    """Un valor (un camí) a punt per anar dins d'un filtre d'ffmpeg (-vf), amb les dues escapades que demana
+    (ffmpeg-filters, «Notes on filtergraph escaping»): la de l'opció (els dos punts, l'apòstrof i la barra
+    invertida) i la del filtre (a més, claudàtors, comes i punts i coma). Així «C:/Users/…», «d'en Pau» o
+    «Vídeos [1]» arriben tal qual. Els camins, amb barres «/» (as_posix)."""
+    opcio = re.sub(r"([\\':])", r"\\\1", valor)
+    return re.sub(r"([\\'\[\],;])", r"\\\1", opcio)
 
 
 def prepara(origen: Path, desti: Path, durada: float = 1.5, lut: str | None = None) -> Path:
@@ -84,5 +94,12 @@ def copia_original(origen: Path, carpeta: Path, nom: str) -> Path:
     desti = carpeta / CARPETA / "originals" / f"{nom}{origen.suffix.lower()}"
     desti.parent.mkdir(parents=True, exist_ok=True)
     if origen.resolve() != desti.resolve():
-        shutil.copy(origen, desti)
+        # Un fitxer nou que reemplaça el d'abans (no reescriure'l): les còpies arxivades («anteriors-…») hi
+        # poden apuntar amb un enllaç dur i han de conservar l'original d'abans (revisió de Codex).
+        temporal = desti.with_name(f".{desti.name}.{os.getpid()}.copiant")
+        try:
+            shutil.copy(origen, temporal)
+            temporal.replace(desti)
+        finally:
+            temporal.unlink(missing_ok=True)
     return desti

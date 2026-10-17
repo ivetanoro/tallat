@@ -99,15 +99,6 @@ class Feina:
             self._actualitza(estat="error", error=str(e))
 
 
-def _esborra(path: Path) -> None:
-    """Esborra una vista prèvia vella. A Windows no es pot esborrar un fitxer obert (el navegador encara la
-    pot estar llegint): llavors es deixa, i ja s'esborrarà una altra vegada."""
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        pass
-
-
 class Previa:
     """El muntatge en un vídeo continu per a la pàgina (exporta.fes_previa), un alhora i en segon pla.
     La pàgina el demana després de cada canvi; mentre es fa, reprodueix saltant com sempre."""
@@ -139,7 +130,7 @@ class Previa:
             # Se'n guarden les quatre que s'han fet servir darrerament (desfer i refer hi tornen); la que
             # sona a la pàgina sempre n'és una, perquè cada petició la toca (os.utime).
             for vell in sorted(desti.parent.glob("previa_*.mp4"), key=lambda p: p.stat().st_mtime)[:-4]:
-                _esborra(vell)
+                entorn.esborra_si_pots(vell)
         except Exception:
             traceback.print_exc()
         finally:
@@ -175,7 +166,7 @@ def fes_escolta(feina: dict | None) -> dict:
             traceback.print_exc()
             return {"estat": "no"}
         for vell in sorted(desti.parent.glob("escolta_*.mp4"), key=lambda p: p.stat().st_mtime)[:-5]:
-            _esborra(vell)
+            entorn.esborra_si_pots(vell)
     return {"estat": "fet", "url": f"/previa/{desti.name}", "inici": feina["inici"],
             "durada": round(sum(b - a for a, b in feina["trams"]), 6)}
 

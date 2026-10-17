@@ -12,6 +12,8 @@ import unicodedata
 import uuid
 from pathlib import Path
 
+from motor import entorn
+
 BIBLIOTECA = Path.home() / ".tallat" / "stickers"
 CARPETA = "stickers"  # dins del projecte (al costat d'instruccions.json)
 FORMATS = {".png", ".webp", ".gif", ".svg"}
@@ -61,4 +63,4 @@ def retira_anteriors(desti: Path) -> None:
     nom = desti.name[:-len(desti.suffix)] if desti.suffix else desti.name
     for vell in desti.parent.glob(f"{nom}.*"):
         if vell != desti:
-            vell.unlink(missing_ok=True)
+            entorn.esborra_si_pots(vell)

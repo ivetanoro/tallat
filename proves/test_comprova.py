@@ -22,6 +22,18 @@ class TestEntorn(unittest.TestCase):
                 entorn.prepara()  # dues vegades: no s'hi repeteixen
                 self.assertEqual(os.environ["PATH"].split(os.pathsep), [str(eines), str(bin_), "/usr/bin", "/bin"])
 
+    def test_les_passa_al_davant_encara_que_ja_hi_fossin(self):
+        # Revisió de Codex: si ja eren al PATH darrere d'un ffmpeg antic, no es movien i guanyava l'antic.
+        with tempfile.TemporaryDirectory() as d:
+            eines, bin_ = Path(d) / "eines", Path(d) / "bin"
+            eines.mkdir()
+            bin_.mkdir()
+            with mock.patch.object(entorn, "carpetes_eines", return_value=[eines]), \
+                    mock.patch.object(entorn, "INSTAL_LADORS", bin_), \
+                    mock.patch.dict(os.environ, {"PATH": os.pathsep.join(["/opt/vell", str(eines), "/usr/bin"])}):
+                entorn.prepara()
+                self.assertEqual(os.environ["PATH"].split(os.pathsep), [str(eines), str(bin_), "/opt/vell", "/usr/bin"])
+
     def test_si_no_hi_son_no_es_toca_res(self):
         with mock.patch.object(entorn, "carpetes_eines", return_value=[Path("/no/existeix")]), \
                 mock.patch.object(entorn, "INSTAL_LADORS", Path("/tampoc")), \
@@ -36,13 +48,13 @@ class TestEntorn(unittest.TestCase):
             d = Path(d)
             (d / "bin").mkdir()
             fals = d / "bin" / "system_profiler"
-            fals.write_text(f'#!/bin/sh\ntouch "{d}/cridat"\necho \'<plist version="1.0"><array><dict/></array></plist>\'\n')
+            fals.write_text(f'#!/bin/sh\ntouch "{d}/cridat"\necho \'<plist version="1.0"><array><dict/></array></plist>\'\n', encoding="utf-8")
             fals.chmod(0o755)
             arrel = Path(__file__).resolve().parent.parent
             codi = f"import sys; sys.path.insert(0, {str(arrel)!r}); from motor import entorn; " \
                    "entorn.llista_de_lletres(); import matplotlib.font_manager"
             entorn_proves = {**os.environ, "PATH": f"{d / 'bin'}:/usr/bin:/bin", "MPLCONFIGDIR": str(d / "mpl")}
-            prova = subprocess.run([sys.executable, "-c", codi], env=entorn_proves, capture_output=True, text=True)
+            prova = subprocess.run([sys.executable, "-c", codi], env=entorn_proves, capture_output=True, text=True, encoding="utf-8")
             self.assertEqual(prova.returncode, 0, prova.stderr[-500:])
             self.assertFalse((d / "cridat").exists())
             self.assertTrue(list((d / "mpl").glob("fontlist-*.json")))  # desada: els altres cops ja no es fa

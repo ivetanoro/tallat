@@ -39,7 +39,10 @@ const arrodoneix = (n) => Math.round(n * 100) / 100;
 // Al Mac les dreceres van amb ⌘ i els fitxers es mostren al Finder; a Windows, amb Ctrl i a l'Explorador.
 const ES_MAC = /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
 const GESTOR = ES_MAC ? "al Finder" : "a l'Explorador";
-const TECLES_WINDOWS = { "⌘Z": "Ctrl+Z", "⇧⌘Z": "Ctrl+Maj+Z", "⌃⌘S": "Ctrl+Alt+S", "⌥⌘V": "Ctrl+Alt+V" };
+// A Windows, Ctrl+Alt és AltGr (la tecla de @, € o # als teclats catalans): les dreceres de les columnes
+// van amb Ctrl+Maj (revisió de Codex).
+const TECLES_WINDOWS = { "⌘Z": "Ctrl+Z", "⇧⌘Z": "Ctrl+Maj+Z", "⌃⌘S": "Ctrl+Maj+E", "⌥⌘V": "Ctrl+Maj+V" };
+const ambAltGr = (e) => !!e.getModifierState?.("AltGraph");
 const tecla = (mac) => (ES_MAC ? mac : TECLES_WINDOWS[mac] || mac);
 
 // --- Registre de diagnòstic ---------------------------------------------------------------
@@ -1369,11 +1372,16 @@ function aplicaEstilSubtitols(e) {
 
 // --- Estil dels subtítols (panell) ------------------------------------------------------------
 
-const FONTS = [
+// Les lletres que porta l'ordinador (les mateixes que fa servir el vídeo final, que es dibuixa en aquest ordinador).
+const FONTS = ES_MAC ? [
   ["system-ui", "San Francisco (la del sistema)"], ["Avenir Next", "Avenir Next"], ["Helvetica Neue", "Helvetica Neue"],
   ["Futura", "Futura"], ["DIN Condensed", "DIN Condensed"], ["Gill Sans", "Gill Sans"], ["Impact", "Impact"],
   ["Arial Black", "Arial Black"], ["Rockwell", "Rockwell"], ["Georgia", "Georgia"],
   ["American Typewriter", "American Typewriter"], ["Marker Felt", "Marker Felt"], ["Chalkboard SE", "Chalkboard SE"],
+] : [
+  ["system-ui", "Segoe UI (la del sistema)"], ["Bahnschrift", "Bahnschrift"], ["Arial", "Arial"],
+  ["Arial Black", "Arial Black"], ["Impact", "Impact"], ["Verdana", "Verdana"], ["Trebuchet MS", "Trebuchet MS"],
+  ["Georgia", "Georgia"], ["Segoe Print", "Segoe Print"], ["Comic Sans MS", "Comic Sans MS"],
 ];
 const AGRUPACIONS = { una: [1, 30], poques: [3, 18], frase: [7, 34] };  // [paraules, lletres] per línia
 const agrupacioDe = (e) => (e.paraules_per_linia <= 1 ? "una" : e.paraules_per_linia <= 4 ? "poques" : "frase");
@@ -1482,8 +1490,8 @@ function ompleLletres(select, valor, { laDelsSubtitols = false, buit = null, cur
     return;
   }
   if (meves.length) { const g = grup("Les teves"); for (const f of meves) opcio(g, f, f); }
-  const delMac = grup("Del Mac");
-  for (const [v, text] of FONTS) opcio(delMac, v, text);
+  const delSistema = grup(ES_MAC ? "Del Mac" : "De Windows");
+  for (const [v, text] of FONTS) opcio(delSistema, v, text);
   for (const [id, nom] of Object.entries(bibliotecaLletres.grups || {})) {
     const g = grup(`${nom} · gratuïtes`);
     for (const l of bibliotecaLletres.lletres.filter((x) => x.grup === id)) {
@@ -4017,12 +4025,14 @@ function instalaControls() {
     if (editantTitol && e.key === "Escape") { tancaTitol(); return; }
     if (editantBroll && e.key === "Escape") { tancaBroll(); return; }
     if (editantMarca && e.key === "Escape") { tancaMarca(); return; }
-    if ((ES_MAC ? e.ctrlKey && e.metaKey : e.ctrlKey && e.altKey) && e.code === "KeyS") {  // ⌃⌘S (com al Finder) o Ctrl+Alt+S
+    if (ES_MAC ? e.ctrlKey && e.metaKey && e.code === "KeyS"  // ⌃⌘S, com al Finder
+      : e.ctrlKey && e.shiftKey && !e.altKey && !ambAltGr(e) && e.code === "KeyE") {  // Ctrl+Maj+E
       e.preventDefault();
       mostraColumna("barra", document.body.classList.contains("sense-barra"));
       return;
     }
-    if ((ES_MAC ? e.altKey && e.metaKey : e.ctrlKey && e.altKey) && e.code === "KeyV") {  // ⌥⌘V o Ctrl+Alt+V
+    if (ES_MAC ? e.altKey && e.metaKey && e.code === "KeyV"  // ⌥⌘V
+      : e.ctrlKey && e.shiftKey && !e.altKey && !ambAltGr(e) && e.code === "KeyV") {  // Ctrl+Maj+V
       e.preventDefault();
       mostraColumna("reproductor", document.body.classList.contains("sense-reproductor"));
       return;

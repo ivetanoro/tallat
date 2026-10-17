@@ -418,5 +418,5 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     temporal.replace(sortida)
     for vell in base.glob(f"subtitols_{escala}_*.mov"):  # només en guardem un per mida
         if vell != sortida:
-            vell.unlink(missing_ok=True)
+            entorn.esborra_si_pots(vell)
     return sortida

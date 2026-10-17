@@ -213,7 +213,7 @@ class TestTempsExactes(unittest.TestCase):
 
             def fotogrames(*opcions):
                 sortida = subprocess.run(["ffmpeg", "-v", "error", *opcions, "-i", str(video), "-f", "framemd5", "-"],
-                                         capture_output=True, text=True, check=True).stdout
+                                         capture_output=True, text=True, encoding="utf-8", check=True).stdout
                 return [l.split(",")[-1] for l in sortida.splitlines() if l and not l.startswith("#")]
             tots = fotogrames()
             for fa, fb in ((1, 4), (7, 8), (13, 40), (29, 30), (44, 49)):
@@ -232,7 +232,7 @@ class TestVideosDeLiPhone(unittest.TestCase):
 
     def rotacio(self, video):
         s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
-                                       "-of", "json", str(video)], capture_output=True, text=True).stdout)
+                                       "-of", "json", str(video)], capture_output=True, text=True, encoding="utf-8").stdout)
         return exporta._rotacio(s["streams"][0])
 
     def test_l_export_no_porta_l_etiqueta_de_girar(self):
@@ -274,7 +274,7 @@ class TestCarpetaDelsVideos(unittest.TestCase):
                 self.assertEqual(copia.stat().st_ino, video.stat().st_ino)  # el mateix fitxer: no ocupa més
                 carpeta = Path(d) / "projecte_editors"
                 carpeta.mkdir()
-                (carpeta / "LLEGEIX-ME.txt").write_text("hola")
+                (carpeta / "LLEGEIX-ME.txt").write_text("hola", encoding="utf-8")
                 self.assertEqual((exporta.copia_a_carpeta(carpeta) / "LLEGEIX-ME.txt").read_text(encoding="utf-8"), "hola")
             finally:
                 exporta.tria_carpeta_exports(None)
@@ -330,7 +330,7 @@ class TestMuntatgeALots(unittest.TestCase):
             with mock.patch.object(exporta, "MEMORIA_LOT", 1):  # lots de 4 trossos
                 sortida = exporta.exporta(d / "girat.mov", trams, d / "final.mp4", "esborrany")
             s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
-                                           "-of", "json", str(sortida)], capture_output=True, text=True).stdout)["streams"][0]
+                                           "-of", "json", str(sortida)], capture_output=True, text=True, encoding="utf-8").stdout)["streams"][0]
             self.assertEqual((s["width"], s["height"], exporta._rotacio(s)), (720, 1280, 0))
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
@@ -348,7 +348,7 @@ class TestMuntatgeALots(unittest.TestCase):
                 final = exporta.exporta(d / "v.mp4", trams, d / "final.mp4", "esborrany")
             for fitxer in (previa, final):
                 info = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,duration",
-                                                  "-of", "json", str(fitxer)], capture_output=True, text=True).stdout)
+                                                  "-of", "json", str(fitxer)], capture_output=True, text=True, encoding="utf-8").stdout)
                 durades = {s["codec_type"]: float(s["duration"]) for s in info["streams"]}
                 self.assertAlmostEqual(durades["video"], esperat, delta=0.05, msg=fitxer.name)
                 self.assertAlmostEqual(durades["audio"], esperat, delta=0.05, msg=fitxer.name)
@@ -360,9 +360,15 @@ class TestCodificadorPerSistema(unittest.TestCase):
     def test_al_mac_com_sempre(self):
         from unittest import mock
         with mock.patch.object(exporta.sys, "platform", "darwin"):
-            self.assertEqual(exporta.codec_video("final", "16M"),
-                             ["-c:v", "h264_videotoolbox", "-b:v", "16M", "-maxrate", "16M", "-profile:v", "high"])
-            self.assertEqual(exporta.codec_video("copia", "3M"), ["-c:v", "h264_videotoolbox", "-b:v", "3M", "-g", "15"])
+            self.assertEqual(exporta.codec_video("final", "16M"), ["-c:v", "h264_videotoolbox", "-b:v", "16M", "-maxrate",
+                                                                    "16M", "-profile:v", "high", "-allow_sw", "1"])
+            self.assertEqual(exporta.codec_video("lot", "48M"),
+                             ["-c:v", "h264_videotoolbox", "-b:v", "48M", "-profile:v", "high", "-allow_sw", "1"])
+            for us in ("copia", "previa"):
+                self.assertEqual(exporta.codec_video(us, "3M"),
+                                 ["-c:v", "h264_videotoolbox", "-b:v", "3M", "-g", "15", "-allow_sw", "1"])
+            if exporta._te_x264():  # l'escolta d'un tall, amb x264 (la gràfica tarda a arrencar)
+                self.assertEqual(exporta.codec_video("curt", "3M")[:2], ["-c:v", "libx264"])
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
     def test_a_windows_amb_x264_tambe_a_lots(self):
@@ -379,8 +385,28 @@ class TestCodificadorPerSistema(unittest.TestCase):
                 previa = exporta.fes_previa(d / "v.mp4", trams, d / "previa.mp4")
             for f in (sortida, previa):
                 s = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_streams",
-                                               "-of", "json", str(f)], capture_output=True, text=True).stdout)["streams"][0]
+                                               "-of", "json", str(f)], capture_output=True, text=True, encoding="utf-8").stdout)["streams"][0]
                 self.assertEqual(s["codec_name"], "h264")
+
+
+class TestLutAmbCaminsRars(unittest.TestCase):
+    """Revisió de Codex: a Windows, «C:» trencava el filtre i s'esborraven els apòstrofs del camí del LUT."""
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_un_lut_en_una_carpeta_amb_noms_rars(self):
+        from motor import broll
+        with tempfile.TemporaryDirectory() as d:
+            nom = "C_" if sys.platform == "win32" else "C:"  # a Windows els «:» no poden anar en un nom
+            carpeta = Path(d) / nom / "d'en Pau [1], x; y"
+            carpeta.mkdir(parents=True)
+            lut = carpeta / "lut.cube"
+            lut.write_text("LUT_3D_SIZE 2\n" + "".join(f"{r} {g} {b}\n" for b in (0, 1) for g in (0, 1) for r in (0, 1)),
+                           encoding="utf-8")
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x240:r=30:d=2", "-c:v",
+                            "libx264", "-pix_fmt", "yuv420p", str(Path(d) / "clip.mp4")], check=True)
+            sortida = broll.prepara(Path(d) / "clip.mp4", Path(d) / "sortida.mp4", durada=1.0, lut=str(lut))
+            self.assertGreater(sortida.stat().st_size, 1000)
+        self.assertEqual(broll.escapa_ffmpeg("C:/a/d'en [1],x;y"), r"C\\:/a/d\\\'en \[1\]\,x\;y")
 
 
 class TestPreviaContinua(unittest.TestCase):
@@ -527,7 +553,8 @@ class TestRealinea(unittest.TestCase):
             paraules = [{"id": i, "text": t, "inici": i * 1.0, "final": i * 1.0 + 0.5, "frase": 0}
                         for i, t in enumerate(["Hola,", "què", "tal?"])]
             (d / "transcripcio.json").write_text(json.dumps({"video": str(d / "ja-no-hi-es.mov"), "fps": "30",
-                                                             "durada": 4.0, "font": "WhisperX", "paraules": paraules}))
+                                                             "durada": 4.0, "font": "WhisperX", "paraules": paraules}),
+                                                 encoding="utf-8")
             segments = [{"start": 0.2, "end": 2.9, "text": "Hola, què tal?",
                          "words": [{"word": "Hola,", "start": 0.2, "end": 0.6}, {"word": "què", "start": 1.3, "end": 1.6},
                                    {"word": "tal?", "start": 2.2, "end": 2.9}]}]

@@ -26,7 +26,6 @@ import subprocess
 import time
 from fractions import Fraction
 from pathlib import Path
-from urllib.parse import quote
 from xml.sax.saxutils import escape
 
 from motor import edicio, exporta, grafics, subtitols
@@ -261,7 +260,9 @@ def _attr(text) -> str:
 
 
 def _url(path: Path) -> str:
-    return "file://" + quote(str(Path(path).resolve()))
+    """L'adreça d'un fitxer per als editors: «file:///Users/…» al Mac, «file:///C:/Users/…» a Windows (abans,
+    a Windows hi quedaven les barres «\\» i «C:» codificades i l'editor no trobava el vídeo)."""
+    return Path(path).resolve().as_uri()
 
 
 # --- Premiere Pro (XML de Final Cut 7) ---------------------------------------------------------
@@ -299,7 +300,7 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         audio = ("<audio><samplecharacteristics><depth>16</depth><samplerate>48000</samplerate>"
                  "</samplecharacteristics><channelcount>2</channelcount></audio>") if so else ""
         return (f'<file id="{fid}"><name>{escape(Path(path).name)}</name>'
-                f'<pathurl>{escape("file://localhost" + quote(str(Path(path).resolve())))}</pathurl>{rate_font}'
+                f'<pathurl>{escape(_url(path).replace("file://", "file://localhost", 1))}</pathurl>{rate_font}'
                 f"<duration>{durada}</duration><media><video><samplecharacteristics><width>{w}</width>"
                 f"<height>{h}</height></samplecharacteristics></video>{audio}</media></file>")
 

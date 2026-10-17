@@ -154,7 +154,7 @@ class TestCarruselAlsEditors(unittest.TestCase):
             editors._copia_clip(br, d / "copia.mp4")
             self.assertAlmostEqual(br["durada"], 1.7)
             durada = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-                                           str(d / "copia.mp4")], capture_output=True, text=True).stdout)
+                                           str(d / "copia.mp4")], capture_output=True, text=True, encoding="utf-8").stdout)
             self.assertAlmostEqual(durada, 1.7, delta=0.05)
 
 

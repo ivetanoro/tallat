@@ -149,10 +149,9 @@ def codec_video(us: str, bitrate: str) -> list[str]:
     if us == "curt" and _te_x264():  # la gràfica tarda mig segon a arrencar i x264 no
         return ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", *gop, "-pix_fmt", "yuv420p"]
     if sys.platform == "darwin":
-        extra = {"final": ["-maxrate", bitrate, "-profile:v", "high"],
-                 "lot": ["-profile:v", "high", "-allow_sw", "1"],  # -allow_sw: si la gràfica és ocupada
-                 "copia": [], "previa": ["-allow_sw", "1"], "curt": ["-allow_sw", "1"]}[us]
-        return ["-c:v", "h264_videotoolbox", "-b:v", bitrate, *extra, *gop]
+        # -allow_sw: si la gràfica és ocupada (o no n'hi ha, com en un Mac virtual), amb el processador.
+        extra = {"final": ["-maxrate", bitrate, "-profile:v", "high"], "lot": ["-profile:v", "high"]}.get(us, [])
+        return ["-c:v", "h264_videotoolbox", "-b:v", bitrate, *extra, *gop, "-allow_sw", "1"]
     preset = {"final": "medium", "lot": "veryfast", "copia": "veryfast", "previa": "veryfast", "curt": "ultrafast"}[us]
     extra = ["-maxrate", bitrate, "-bufsize", f"{int(bitrate.rstrip('M')) * 2}M", "-profile:v", "high"] \
         if us in ("final", "lot") else []

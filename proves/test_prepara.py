@@ -30,7 +30,7 @@ class TestEntornPython(unittest.TestCase):
                           *linies[inici:final + 1]])
         entorn = {**os.environ, "TALLAT": str(tallat), "BIN": str(tallat / "bin"), "CARPETA": str(carpeta),
                   "PY": str(carpeta / ".venv" / "bin" / "python")}
-        return subprocess.run(["bash", "-c", guio], env=entorn, capture_output=True, text=True, timeout=60)
+        return subprocess.run(["bash", "-c", guio], env=entorn, capture_output=True, text=True, encoding="utf-8", timeout=60)
 
     def test_un_entorn_a_mitges_no_bloqueja_els_reintents(self):
         # Revisió de Codex: una instal·lació interrompuda deixava ~/.tallat/venv a mitges i uv ja no en

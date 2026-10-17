@@ -122,6 +122,33 @@ class TestReelsSenseEnllacos(unittest.TestCase):
             self.assertEqual(reel.fitxer("proxy.mp4"), arrel.carpeta / "proxy.mp4")
             self.assertEqual(reel.carpeta_instruccions(), arrel.carpeta)
             self.assertTrue(reel.zooms_per_tram(reel.trams())[0])  # l'instrucció de la gravació sencera hi val
+            # Les ordres del terminal també l'obren (abans demanaven transcripcio.json a la carpeta del reel).
+            self.assertEqual(tallat._carrega(argparse.Namespace(projecte=str(carpeta_reel))).arrel, arrel.carpeta)
+
+    def test_la_primera_instruccio_d_un_reel_va_a_la_gravacio(self):
+        # Revisió de Codex: si la gravació encara no en tenia, la primera es quedava només al reel.
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            arrel = projecte_amb(Path(d), [])
+            (Path(d) / "instruccions.json").unlink()
+            with mock.patch.object(Path, "symlink_to", side_effect=OSError(1314, "A required privilege is not held")):
+                reel = Projecte(muntatge.crea_reel(arrel, {"id": "r", "paraules": [(4, 9)]}))
+            self.assertEqual(reel.carpeta_instruccions(), arrel.carpeta)
+
+    def test_l_arxiu_d_un_mapa_de_veu_es_una_copia(self):
+        # Revisió de Codex: sense enllaços, veu.npy s'arxivava amb un enllaç dur i refer-lo canviava tots dos.
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            carpeta = Path(d)
+            (carpeta / "transcripcio.json").write_text("{}", encoding="utf-8")
+            (carpeta / "edicio.json").write_text("{}", encoding="utf-8")
+            (carpeta / "veu.npy").write_bytes(b"mapa vell")
+            (carpeta / "proxy.mp4").write_bytes(b"video")
+            with mock.patch.object(Path, "symlink_to", side_effect=OSError(1314, "A required privilege is not held")):
+                anteriors = tallat.guarda_anteriors(carpeta)
+            (carpeta / "veu.npy").write_bytes(b"mapa nou")  # es reescriu al mateix lloc
+            self.assertEqual((anteriors / "veu.npy").read_bytes(), b"mapa vell")
+            self.assertEqual((anteriors / "proxy.mp4").read_bytes(), b"video")
 
 
 class TestGuardaAnteriors(unittest.TestCase):

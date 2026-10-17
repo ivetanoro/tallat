@@ -41,12 +41,13 @@ import webbrowser
 from pathlib import Path
 
 from motor import comprova, edicio, editors, entorn, exporta, grafics, gust, instruccions, marca, muntatge, transcripcio
-from motor.projecte import EXPORTS, ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, minuts
+from motor.projecte import EXPORTS, ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, arrel_de, minuts
 
 
 def _carrega(args) -> Projecte:
     carpeta = Path(args.projecte).expanduser().resolve()
-    if not (carpeta / TRANSCRIPCIO).exists():
+    # En un reel sense enllaços (Windows), la transcripció és a la gravació sencera.
+    if not (arrel_de(carpeta) / TRANSCRIPCIO).exists():
         sys.exit(f"Aquesta carpeta encara no té cap transcripció: {carpeta}\n"
                  "Primer fes: python tallat.py transcriu VIDEO --projecte CARPETA")
     projecte = Projecte(carpeta)
@@ -87,8 +88,10 @@ def guarda_anteriors(carpeta: Path) -> Path | None:
         if (carpeta / nom).exists():
             try:
                 (desti / nom).symlink_to(Path("..") / nom)
-            except OSError:  # Windows sense permís per fer enllaços: el mateix fitxer amb un altre nom (o una còpia)
-                _enllaca(carpeta / nom, desti / nom)
+            except OSError:  # Windows sense permís per fer enllaços
+                # La còpia lleugera, el mateix fitxer amb un altre nom (no es reescriu mai: es reemplaça). El mapa
+                # de veu, una còpia: veu.carrega el reescriu i, compartit, canviaria el de l'altra carpeta.
+                (_enllaca if nom == PROXY else shutil.copy2)(carpeta / nom, desti / nom)
     for nom in moure:
         (carpeta / nom).rename(desti / nom)
     return desti
@@ -143,7 +146,8 @@ def ordre_compara_temps(args) -> None:
     (Descript). Amb un SRT d'una paraula per subtítol es comparen totes; amb subtítols de frases, només
     l'inici de la primera paraula i el final de l'última de cada subtítol. On no coincideixen, val la pena
     escoltar-ho: és la manera de saber quin dels dos encerta (vegeu transcripcio.compara_temps)."""
-    path = Path(args.projecte).expanduser().resolve() / TRANSCRIPCIO
+    carpeta = Path(args.projecte).expanduser().resolve()
+    path = arrel_de(carpeta) / TRANSCRIPCIO  # en un reel sense enllaços, la de la gravació sencera
     if not path.exists():
         sys.exit(f"No trobo la transcripció: {path}")
     paraules = json.loads(path.read_text(encoding="utf-8"))["paraules"]

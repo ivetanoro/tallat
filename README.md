@@ -31,7 +31,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 
 ## Instal·lació (sense terminal)
 
-> **Important:** tallat només funciona a la pestanya **Code** de l'app de Claude (o a Codex), al teu Mac. Al xat normal (la pestanya **Chat**), a **Cowork** o a claude.ai al navegador, Claude treballa en un ordinador al núvol: no pot instal·lar res al teu Mac ni baixar el model de veu, i acaba editant el vídeo pel seu compte, sense tallat.
+> **Important:** tallat només funciona a la pestanya **Code** de l'app de Claude (o a Codex), al teu ordinador. Al xat normal (la pestanya **Chat**), a **Cowork** o a claude.ai al navegador, Claude treballa en un ordinador al núvol: no pot instal·lar res al teu ordinador ni baixar el model de veu, i acaba editant el vídeo pel seu compte, sense tallat.
 
 ### Opció 1: com a connector de Claude
 

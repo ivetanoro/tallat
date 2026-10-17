@@ -74,7 +74,7 @@ class TestMateixaAnimacio(unittest.TestCase):
                  for a in ("pop", "puja", "llisca", "fos")]
         script = funcio + f"console.log(JSON.stringify({json.dumps(casos)}.map((b) => {json.dumps(temps)}" \
                           ".map((m) => animacioBroll(b, m)))))"
-        js = json.loads(subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True).stdout)
+        js = json.loads(subprocess.run(["node", "-e", script], capture_output=True, text=True, encoding="utf-8", check=True).stdout)
         for cas, valors in zip(casos, js):
             for t, v in zip(temps, valors):
                 nums = [float(x) for x in re.findall(r"-?[\d.]+(?:e-?\d+)?", v["transform"])]

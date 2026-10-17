@@ -33,16 +33,26 @@ function Falla($text) { Write-Host ""; Write-Host "✗ $text"; exit 1 }
 
 if (-not [Environment]::Is64BitOperatingSystem) { Falla "tallat necessita un Windows de 64 bits." }
 
-# Baixa un fitxer i en comprova la suma (sha256) amb la que publica qui el fa.
+# Els camins, sempre literals (-LiteralPath): amb -Path, una carpeta com «Pau[1]» es llegiria com un patró.
+function Hi-Es($cami) { return Test-Path -LiteralPath $cami }
+function Esborra($cami) { if (Hi-Es $cami) { Remove-Item -LiteralPath $cami -Recurse -Force } }
+
+# Baixa un fitxer i en comprova la suma (sha256) amb la que publica qui el fa. Es baixa a «.part» i només
+# quan la suma coincideix pren el nom de debò: si es talla internet a mitges, la vegada següent es torna a baixar.
 function Baixa-I-Comprova($url, $desti) {
+  $part = "$desti.part"; $suma = "$desti.sha256"
+  Esborra $part; Esborra $suma
   try {
-    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $desti
-    Invoke-WebRequest -UseBasicParsing -Uri "$url.sha256" -OutFile "$desti.sha256"
-  } catch { Falla "No he pogut baixar $url. Hi ha connexió a internet?" }
-  $esperat = ((Get-Content "$desti.sha256" -Raw).Trim() -split "\s+")[0].ToLower()
-  $obtingut = (Get-FileHash -Algorithm SHA256 $desti).Hash.ToLower()
-  Remove-Item "$desti.sha256"
-  if ($esperat -ne $obtingut) { Remove-Item $desti; Falla "La baixada de $url no és correcta (la suma no coincideix)." }
+    $web = New-Object Net.WebClient
+    $web.DownloadFile($url, $part)
+    $web.DownloadFile("$url.sha256", $suma)
+  } catch { Esborra $part; Esborra $suma; Falla "No he pogut baixar $url. Hi ha connexió a internet?" }
+  $esperat = (([IO.File]::ReadAllText($suma)).Trim() -split "\s+")[0].ToLower()
+  $obtingut = (Get-FileHash -Algorithm SHA256 -LiteralPath $part).Hash.ToLower()
+  Esborra $suma
+  if ($esperat -ne $obtingut) { Esborra $part; Falla "La baixada de $url no és correcta (la suma no coincideix)." }
+  Esborra $desti
+  Move-Item -LiteralPath $part -Destination $desti
 }
 
 # Executa un programa i diu si ha anat bé (sense que els seus missatges d'error aturin l'script). El que
@@ -60,13 +70,13 @@ function Falla-Amb($text) {
   Falla $text
 }
 
-New-Item -ItemType Directory -Force -Path $BIN | Out-Null
+[IO.Directory]::CreateDirectory($BIN) | Out-Null
 Write-Host "Preparant tallat a $CARPETA"
 Write-Host "(la primera vegada baixa uns 2-3 GB i pot trigar 10-20 minuts)"
 
 Pas "1/6 · Instal·lador de paquets (micromamba)"
 $MAMBA = Join-Path $BIN "micromamba.exe"
-if (-not (Test-Path $MAMBA)) {
+if (-not (Hi-Es $MAMBA)) {
   Baixa-I-Comprova "https://github.com/mamba-org/micromamba-releases/releases/download/$VERSIO_MICROMAMBA/micromamba-win-64" $MAMBA
 }
 Fet "micromamba $(& $MAMBA --version)"
@@ -75,7 +85,7 @@ Pas "2/6 · ffmpeg i Node.js"
 # Els paquets de conda-forge per a Windows deixen ffmpeg a Library\bin i Node.js a l'arrel de l'entorn.
 $FFMPEG = Join-Path $EINES "Library\bin\ffmpeg.exe"
 $NODE = Join-Path $EINES "node.exe"
-if (-not (Test-Path $FFMPEG) -or -not (Test-Path (Join-Path $EINES "Library\bin\ffprobe.exe")) -or -not (Test-Path $NODE)) {
+if (-not (Hi-Es $FFMPEG) -or -not (Hi-Es (Join-Path $EINES "Library\bin\ffprobe.exe")) -or -not (Hi-Es $NODE)) {
   $env:MAMBA_ROOT_PREFIX = Join-Path $TALLAT "mamba"
   if (-not (Prova $MAMBA @("create", "-y", "-q", "-p", $EINES, "-c", "conda-forge", "--override-channels",
                             "ffmpeg=7.1.*=*gpl*", "nodejs=22.*"))) { Falla-Amb "No he pogut instal·lar ffmpeg i Node.js." }
@@ -85,34 +95,39 @@ Fet "$((& $FFMPEG -hide_banner -version | Select-Object -First 1) -replace '^(ff
 
 Pas "3/6 · Python 3.11 (uv)"
 $UV = Join-Path $BIN "uv.exe"
-if (-not (Test-Path $UV)) {
+if (-not (Hi-Es $UV)) {
   $zip = Join-Path $BIN "uv.zip"
   Baixa-I-Comprova "https://github.com/astral-sh/uv/releases/download/$VERSIO_UV/uv-x86_64-pc-windows-msvc.zip" $zip
   $dins = Join-Path $BIN "uv-baixat"
-  Expand-Archive -Force -Path $zip -DestinationPath $dins
-  Get-ChildItem -Path $dins -Recurse -Filter "uv*.exe" | ForEach-Object { Move-Item -Force $_.FullName $BIN }
-  Remove-Item -Recurse -Force $dins, $zip
+  Esborra $dins
+  Expand-Archive -Force -LiteralPath $zip -DestinationPath $dins
+  Get-ChildItem -LiteralPath $dins -Recurse -Filter "uv*.exe" | ForEach-Object {
+    Move-Item -Force -LiteralPath $_.FullName -Destination (Join-Path $BIN $_.Name)
+  }
+  Esborra $dins; Esborra $zip
 }
 # L'entorn va a .tallat\venv i .venv n'és un enllaç (una «junction», que a Windows no demana permisos): si
 # tallat s'actualitza, només cal refer l'enllaç. Si ja hi havia un .venv de debò, es queda on és.
 $VENV = Join-Path $TALLAT "venv"
-$enllac = Get-Item -Force -ErrorAction SilentlyContinue (Join-Path $CARPETA ".venv")
+$enllac = Get-Item -Force -ErrorAction SilentlyContinue -LiteralPath (Join-Path $CARPETA ".venv")
 if ($enllac -and -not $enllac.LinkType) { $VENV = $enllac.FullName }
 $PYVENV = Join-Path $VENV "Scripts\python.exe"
-if (-not (Test-Path $PYVENV) -or -not (Prova $PYVENV @("-c", "import sys; sys.exit(0 if sys.version_info[:2] == (3, 11) else 1)"))) {
+if (-not (Hi-Es $PYVENV) -or -not (Prova $PYVENV @("-c", "import sys; sys.exit(0 if sys.version_info[:2] == (3, 11) else 1)"))) {
   # Un entorn a mitges (una instal·lació interrompuda) o d'una altra versió: s'aparta i se'n fa un de nou.
-  if (Test-Path $VENV) {
-    if (Test-Path "$VENV.vell") { Remove-Item -Recurse -Force "$VENV.vell" }
-    Rename-Item $VENV "$VENV.vell"
+  if (Hi-Es $VENV) {
+    Esborra "$VENV.vell"
+    Rename-Item -LiteralPath $VENV -NewName (Split-Path -Leaf "$VENV.vell")
   }
   $env:UV_PYTHON_INSTALL_DIR = Join-Path $TALLAT "python"
   if (-not (Prova $UV @("venv", "--quiet", "--python", "3.11", $VENV))) { Falla-Amb "No he pogut crear l'entorn de Python." }
   if (-not (Prova $PYVENV @("-c", "import sys"))) { Falla "L'entorn de Python nou no funciona." }
-  if (Test-Path "$VENV.vell") { Remove-Item -Recurse -Force "$VENV.vell" }
+  Esborra "$VENV.vell"
 }
 if ($VENV -ne (Join-Path $CARPETA ".venv")) {
   if ($enllac) { $enllac.Delete() }  # només l'enllaç, no el que hi ha a dins
-  New-Item -ItemType Junction -Path (Join-Path $CARPETA ".venv") -Target $VENV | Out-Null
+  # mklink /J: una «junction» (no demana administrador); amb cmd, els camins van literals.
+  cmd /c mklink /J "$(Join-Path $CARPETA '.venv')" "$VENV" | Out-Null
+  if (-not (Hi-Es (Join-Path $CARPETA ".venv\Scripts\python.exe"))) { Falla "No he pogut enllaçar .venv amb $VENV." }
 }
 Fet "$(& $PY --version) a $VENV"
 

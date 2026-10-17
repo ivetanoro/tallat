@@ -21,6 +21,8 @@ import subprocess
 import wave
 from pathlib import Path
 
+from motor import entorn
+
 MOSTREIG = 48000
 SONS_PROPIS = Path.home() / ".tallat" / "sons"
 NIVELLS_SOROLL = {"suau": 6, "mitja": 12, "fort": 20}  # quants dB de soroll es treuen
@@ -344,7 +346,7 @@ def mostra_efecte(nom: str, carpeta: Path) -> Path:
     desti = carpeta / f"so-{nom}-{empremta_nom}.wav"
     if not desti.exists():
         for vell in carpeta.glob(f"so-{nom}-*.wav") if carpeta.is_dir() else []:
-            vell.unlink(missing_ok=True)
+            entorn.esborra_si_pots(vell)
         moments = [0.05 + k * 0.07 for k in range(8)] if nom == "tecla" else [0.05]
         pista([{"so": nom, "moments": moments}], 1.2, 1.0, desti)
     return desti

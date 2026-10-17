@@ -34,7 +34,7 @@ Quan la persona digui «instal·la tallat», o una ordre falli perquè falta una
 
 ## Ordres
 
-Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre d'aquest `SKILL.md` (si s'ha instal·lat com a connector, és la carpeta del connector; a Claude Code, `${CLAUDE_PLUGIN_ROOT}`), amb l'entorn `.venv`. Si `.venv` no hi és (la primera vegada, o després d'actualitzar el connector), executa l'instal·lador: si ja està tot instal·lat, només refà l'enllaç i triga uns segons. **A Windows**, a totes les ordres d'aquí sota, en lloc de `.venv/bin/python` escriu `.venv\Scripts\python.exe`.
+Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre d'aquest `SKILL.md` (si s'ha instal·lat com a connector, és la carpeta del connector; a Claude Code, `${CLAUDE_PLUGIN_ROOT}`), amb l'entorn `.venv`. Si `.venv` no hi és (la primera vegada, o després d'actualitzar el connector), executa l'instal·lador: si ja està tot instal·lat, només refà l'enllaç i triga uns segons. **A Windows**, a totes les ordres d'aquí sota, en lloc de `.venv/bin/python` escriu `.venv/Scripts/python.exe` (amb barres «/» funciona tant a PowerShell com al Git Bash de Claude Code).
 
 ```bash
 .venv/bin/python tallat.py transcriu VIDEO --projecte CARPETA [--srt FITXER.srt]
@@ -270,7 +270,7 @@ Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o Cap
 
 ## Exportar
 
-- L'esborrany és per revisar. El vídeo final es fa a la pàgina (**Exporta** → **Vídeo final**), que diu **a quina carpeta es desa** i té **Canvia…** (el diàleg del Mac; tallat la recorda). Al xat, `tallat.py exporta` fa el mateix i desa a la mateixa carpeta.
+- L'esborrany és per revisar. El vídeo final es fa a la pàgina (**Exporta** → **Vídeo final**), que diu **a quina carpeta es desa** i té **Canvia…** (la finestra del Mac o de Windows per triar carpeta; tallat la recorda). Al xat, `tallat.py exporta` fa el mateix i desa a la mateixa carpeta.
 - Els vídeos sempre queden també a la carpeta del projecte (pestanya **Vídeos**); a la carpeta triada hi van com un enllaç al mateix fitxer (no ocupen més lloc al mateix disc).
 - Quan acabi, digues-li el nom del fitxer i on és. A la pàgina queda un avís amb **Mostra-la al Finder** (a Windows, **a l'Explorador**).
 - Per a Premiere: després d'importar el `.xml`, cal fer **doble clic a la seqüència** (si s'arrossega a una seqüència nova, el Premiere la converteix en un sol clip).

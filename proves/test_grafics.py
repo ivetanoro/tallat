@@ -183,7 +183,7 @@ class TestBlocDeColor(unittest.TestCase):
         temps = [0.9, 1.1, 1.2, 2.0, 4.8, 4.9, 5.0]
         sortida = subprocess.run([node, "-e", tros + f"console.log(JSON.stringify([BLOC, ANIMACIO_BLOC, "
                                   f"{temps}.map((t) => pasBloc(t, 1, 5))]))"],
-                                 capture_output=True, text=True, check=True).stdout
+                                 capture_output=True, text=True, encoding="utf-8", check=True).stdout
         bloc, animacio, passos = json.loads(sortida)
         self.assertEqual(bloc, grafics.BLOC)
         self.assertEqual(animacio, grafics.ANIMACIO_BLOC)

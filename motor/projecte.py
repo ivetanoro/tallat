@@ -18,7 +18,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import broll, edicio, grafics, instruccions, marca, neteja, so, stickers, subtitols, targetes
+from motor import broll, edicio, entorn, grafics, instruccions, marca, neteja, so, stickers, subtitols, targetes
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -409,7 +409,9 @@ class Projecte:
     def carpeta_instruccions(self) -> Path:
         """On viuen instruccions.json i el b-roll: a la gravació sencera (els reels hi apunten)."""
         path = self.fitxer(instruccions.FITXER)
-        return path.resolve().parent if path.exists() else self.carpeta
+        # Si encara no n'hi ha cap, la de la gravació sencera: així la primera instrucció d'un reel tampoc no
+        # es queda només al reel (revisió de Codex). En una gravació sencera, arrel és la mateixa carpeta.
+        return path.resolve().parent if path.exists() else self.arrel
 
     def afegeix_instruccio(self, tipus: str, paraula: int, text: str = "", treu: tuple[int, int] | None = None) -> dict:
         """Una instrucció afegida a mà en una paraula. `treu`: les paraules on es deia la instrucció
@@ -634,4 +636,4 @@ def _poda(carpeta: Path, patro: str, guarda: int = 0) -> None:
     if not carpeta.is_dir():
         return
     for vell in sorted(carpeta.glob(patro), key=lambda f: f.stat().st_mtime, reverse=True)[guarda:]:
-        vell.unlink(missing_ok=True)
+        entorn.esborra_si_pots(vell)
