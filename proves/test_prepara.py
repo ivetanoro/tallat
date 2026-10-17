@@ -19,6 +19,7 @@ mkdir -p "$desti/bin" && touch "$desti/pyvenv.cfg" && ln -sf "{python}" "$desti/
 """
 
 
+@unittest.skipIf(sys.platform == "win32", "prova prepara.sh, l'instal·lador del Mac (a Windows és prepara.ps1)")
 class TestEntornPython(unittest.TestCase):
     def executa(self, tallat: Path, carpeta: Path) -> subprocess.CompletedProcess:
         """Només el pas de l'entorn de Python de prepara.sh, amb el uv de mentida."""

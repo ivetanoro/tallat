@@ -275,7 +275,7 @@ class TestCarpetaDelsVideos(unittest.TestCase):
                 carpeta = Path(d) / "projecte_editors"
                 carpeta.mkdir()
                 (carpeta / "LLEGEIX-ME.txt").write_text("hola")
-                self.assertEqual((exporta.copia_a_carpeta(carpeta) / "LLEGEIX-ME.txt").read_text(), "hola")
+                self.assertEqual((exporta.copia_a_carpeta(carpeta) / "LLEGEIX-ME.txt").read_text(encoding="utf-8"), "hola")
             finally:
                 exporta.tria_carpeta_exports(None)
         self.assertIsNone(exporta.carpeta_exports())  # si la carpeta ja no hi és, la del projecte
@@ -535,7 +535,7 @@ class TestRealinea(unittest.TestCase):
                     mock.patch.object(tallat.transcripcio, "alinea", return_value=segments):
                 tallat.ordre_realinea(argparse.Namespace(projecte=str(d)))
             self.assertEqual(audio.call_args[0][0].name, "proxy.mp4")  # l'original no hi és: la còpia lleugera
-            dades = json.loads((d / "transcripcio.json").read_text())
+            dades = json.loads((d / "transcripcio.json").read_text(encoding="utf-8"))
             self.assertEqual([(p["text"], p["inici"], p["frase"]) for p in dades["paraules"]],
                              [("Hola,", 0.2, 0), ("què", 1.3, 0), ("tal?", 2.2, 0)])
             self.assertEqual(len(list(d.glob("transcripcio-abans-*.json"))), 1)

@@ -82,7 +82,7 @@ class TestMarca(unittest.TestCase):
         nom, contingut = marca.empaqueta_kit("el-meu-estil")
         nou = marca.importa_kit(contingut)
         self.assertEqual(marca.carrega(kit=nou)["marca"]["crida"], "segueix-me")
-        self.assertEqual(json.loads((marca.KITS / nou / "kit.json").read_text())["subtitols"]["color_actiu"], "#123456")
+        self.assertEqual(json.loads((marca.KITS / nou / "kit.json").read_text(encoding="utf-8"))["subtitols"]["color_actiu"], "#123456")
 
 
 if __name__ == "__main__":

@@ -327,7 +327,9 @@ class TestArranjaments(unittest.TestCase):
         xifres = [grafics.llegeix_xifra(c) for c in casos]
         codi = "".join((ARREL / "pagina" / f).read_text(encoding="utf-8") for f in ("subtitols.js", "grafics.js"))
         codi += f"\nconsole.log(JSON.stringify({json.dumps(xifres)}.map((x) => TallatGrafics.formata(x, x.valor))));"
-        sortida = subprocess.run(["node", "-e", codi], capture_output=True, text=True, check=True).stdout
+        # Per l'entrada: a Windows, una ordre tan llarga (node -e …) passa del límit de la línia d'ordres.
+        sortida = subprocess.run(["node"], input=codi, capture_output=True, text=True, encoding="utf-8",
+                                 check=True).stdout
         self.assertEqual(json.loads(sortida), casos)  # el que compta la pàgina acaba igual que s'ha escrit
 
 

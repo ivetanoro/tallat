@@ -15,14 +15,15 @@ class TestEntorn(unittest.TestCase):
             eines, bin_ = Path(d) / "eines" / "bin", Path(d) / "bin"
             eines.mkdir(parents=True)
             bin_.mkdir()
-            with mock.patch.object(entorn, "EINES", eines), mock.patch.object(entorn, "INSTAL_LADORS", bin_), \
-                    mock.patch.dict(os.environ, {"PATH": "/usr/bin:/bin"}):
+            with mock.patch.object(entorn, "carpetes_eines", return_value=[eines]), \
+                    mock.patch.object(entorn, "INSTAL_LADORS", bin_), \
+                    mock.patch.dict(os.environ, {"PATH": os.pathsep.join(["/usr/bin", "/bin"])}):
                 entorn.prepara()
                 entorn.prepara()  # dues vegades: no s'hi repeteixen
                 self.assertEqual(os.environ["PATH"].split(os.pathsep), [str(eines), str(bin_), "/usr/bin", "/bin"])
 
     def test_si_no_hi_son_no_es_toca_res(self):
-        with mock.patch.object(entorn, "EINES", Path("/no/existeix")), \
+        with mock.patch.object(entorn, "carpetes_eines", return_value=[Path("/no/existeix")]), \
                 mock.patch.object(entorn, "INSTAL_LADORS", Path("/tampoc")), \
                 mock.patch.dict(os.environ, {"PATH": "/usr/bin"}):
             entorn.prepara()
@@ -57,7 +58,8 @@ class TestInforme(unittest.TestCase):
     def test_amb_errors(self):
         text = comprova.informe([("error", "ffmpeg", "no trobo ffmpeg"), ("error", "Node.js", "no el trobo")])
         self.assertIn("✗ ffmpeg", text)
-        self.assertIn("Hi ha 2 coses per arreglar. Executa ./prepara.sh", text)
+        self.assertIn("Hi ha 2 coses per arreglar. Executa ", text)
+        self.assertIn("prepara.ps1" if sys.platform == "win32" else "./prepara.sh", text)
 
     def test_ffmpeg_que_no_hi_es(self):
         with mock.patch("shutil.which", return_value=None):

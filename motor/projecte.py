@@ -438,7 +438,8 @@ class Projecte:
         d = float(durada or ins.get("durada") or estil.get("durada", 1.5))
         original = broll.copia_original(Path(origen), base, iid)
         clip = broll.prepara(original, base / broll.CARPETA / f"{iid}.mp4", d, estil.get("lut"))
-        ins.update(fitxer=str(clip.relative_to(base)), original=str(original.relative_to(base)),
+        # Amb barres «/» (as_posix): el mateix projecte s'ha de poder obrir al Mac i a Windows.
+        ins.update(fitxer=clip.relative_to(base).as_posix(), original=original.relative_to(base).as_posix(),
                    durada=d, estat="acceptada", tipus="broll")
         instruccions.desa(base, llista)
         return ins
@@ -462,7 +463,7 @@ class Projecte:
         base = self.carpeta_instruccions()
         d = float(durada or ins.get("durada") or self.estil().get("stickers", {}).get("durada", 2.0))
         copia = stickers.copia(origen, base, iid)
-        ins.update(fitxer=str(copia.relative_to(base)), durada=d, estat="acceptada", tipus="sticker")
+        ins.update(fitxer=copia.relative_to(base).as_posix(), durada=d, estat="acceptada", tipus="sticker")
         instruccions.desa(base, llista)
         stickers.retira_anteriors(copia)
         return ins
