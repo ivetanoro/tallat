@@ -50,7 +50,8 @@ function Baixa-I-Comprova($url, $desti) {
 $script:Sortida = ""
 function Prova($programa, [string[]]$arguments) {
   $ErrorActionPreference = "Continue"
-  $script:Sortida = (& $programa @arguments 2>&1 | Out-String)
+  # Cada línia com a text: si no, PowerShell hi afegeix el seu propi embolcall d'error a cada línia d'stderr.
+  $script:Sortida = (& $programa @arguments 2>&1 | ForEach-Object { "$_" } | Out-String)
   return $LASTEXITCODE -eq 0
 }
 function Falla-Amb($text) {

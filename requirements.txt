@@ -5,6 +5,9 @@ torchaudio==2.2.2
 numpy<2
 transformers<4.47
 whisperx==3.3.1
+# A Windows, ctranslate2 (el motor de WhisperX) fa servir pkg_resources, que ve amb setuptools i que els
+# entorns nous ja no porten (a partir de la 81 tampoc setuptools).
+setuptools<81; sys_platform == "win32"
 
 # A Mac Intel, ctranslate2 i torch porten cadascun una còpia de libiomp5 i xoquen (segfault).
 # Cal que ctranslate2/.dylibs/libiomp5.dylib i functorch/.dylibs/libiomp5.dylib
