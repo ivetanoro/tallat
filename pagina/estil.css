@@ -326,6 +326,11 @@ kbd {
   font-size: var(--t-lectura); line-height: 1.6;
   user-select: none; -webkit-user-select: none;
 }
+/* A «Talla», el text se selecciona com sempre (arrossegant, doble clic, triple clic, ⇧ + clic) i ⌫ el treu.
+   Els silencis i les nanses no hi entren. */
+body:not(.mode-corregeix):not(.mode-destaca) .transcripcio { user-select: text; -webkit-user-select: text; }
+.transcripcio .pausa, .transcripcio .nansa, .transcripcio .marca-temps { user-select: none; -webkit-user-select: none; }
+.transcripcio ::selection { background: var(--accent-suau); }
 .paragraf {
   position: relative; margin: 0 0 var(--e4);
   transition: font-size 200ms var(--molla), opacity 200ms ease-out, margin 200ms var(--molla);
@@ -906,17 +911,36 @@ input.camp-text { min-height: 0; }
 
 /* --- El pla de gràfics --------------------------------------------------------- */
 
-#pla-grafics, #grafics-trets { display: flex; flex-direction: column; margin-top: var(--e2); }
-.grafic { display: flex; gap: var(--e3); padding: var(--e3) 0; border-top: 0.5px solid var(--linia); }
-.grafic:first-child { border-top: 0; }
+/* Una graella de miniatures; la que es toca s'obre a tota l'amplada, amb el detall al costat. */
+#pla-grafics, #grafics-trets {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: var(--e3) var(--e2); margin-top: var(--e2);
+}
+.grafic { display: flex; flex-direction: column; gap: var(--e1); min-width: 0; }
+.grafic.triat {
+  grid-column: 1 / -1; flex-direction: row; gap: var(--e3); padding: var(--e3);
+  border-radius: var(--radi-mitja); background: var(--omplir);
+}
 .mini-grafic {
-  flex: none; position: relative; width: 54px; height: 96px; padding: 0; border: 0; border-radius: var(--radi);
+  flex: none; position: relative; width: 100%; aspect-ratio: 9 / 16; padding: 0; border: 0; border-radius: var(--radi);
   overflow: hidden; cursor: pointer; background: linear-gradient(170deg, #5a5a5e, #2c2c2e);
   transition: transform 100ms ease-out, box-shadow 120ms;
 }
-.mini-grafic:hover:not(:disabled) { box-shadow: 0 0 0 2px var(--accent); }
-.mini-grafic:active:not(:disabled) { transform: scale(0.96); }
-.mini-grafic:disabled { cursor: default; }
+.grafic.triat .mini-grafic { width: 72px; box-shadow: 0 0 0 2px var(--accent); }
+.mini-grafic:hover { box-shadow: 0 0 0 2px var(--accent); }
+.mini-grafic:active { transform: scale(0.96); }
+.mg-avis {
+  position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+  color: #fff; background: var(--proposta); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.mg-avis[hidden] { display: none; }
+.grafic-peu {
+  display: flex; flex-direction: column; min-width: 0; font-size: var(--t-peu); line-height: 1.25; cursor: pointer;
+}
+.grafic-peu strong { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grafic-peu .temps-petit { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grafic.triat .grafic-peu { display: none; }
+.grafic-cos[hidden] { display: none; }
 .mg-host { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; transform-origin: 0 0; }
 .mg-targeta { position: absolute; background: linear-gradient(170deg, #5a5a5e, #2c2c2e); }
 .grafic-imatges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e1); }
@@ -943,15 +967,15 @@ input.camp-text { min-height: 0; }
 }
 .grafic-nota { margin: 0; font-size: var(--t-petit); color: var(--proposta); }
 .grafic-motiu { margin: 0; font-size: var(--t-peu); color: var(--text-2); }
-.grafic .decisio { margin-top: var(--e1); }
+.grafic .decisio { margin-top: var(--e1); background: var(--superficie); }
 .segmentat button[aria-pressed="true"] {
   background: var(--superficie); color: var(--text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
 }
-.decisio button[data-estat="mantingut"][aria-pressed="true"] { color: var(--accent); }
 .decisio button[data-estat="canvia"][aria-pressed="true"] { color: var(--proposta); }
 .grafic .torna { align-self: flex-start; margin: var(--e1) 0 0; font-size: var(--t-petit); }
-.grafic.fora .mini-grafic, .grafic.fora .grafic-text, .grafic.tret .mini-grafic, .grafic.tret .grafic-text { opacity: 0.5; }
+.grafic.fora .mini-grafic, .grafic.fora .grafic-text, .grafic.tret .mini-grafic, .grafic.tret .grafic-text,
+.grafic.fora .grafic-peu, .grafic.tret .grafic-peu { opacity: 0.5; }
 .nota-grafic { display: flex; flex-direction: column; gap: var(--e2); margin-top: var(--e1); }
 .nota-grafic[hidden] { display: none; }
 .nota-accions { display: flex; align-items: center; gap: var(--e3); }

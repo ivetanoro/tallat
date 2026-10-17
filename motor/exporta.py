@@ -170,8 +170,9 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = Fa
     ow, oh = (int(x) for x in mida_sortida.split(":"))
     parts.append(f"[vc]{enquadrament}[vb0];")
     actual = "vb0"
+    total = sum(b - a for a, b in trams)
     for i, bloc in enumerate(blocs or []):
-        linies, actual = _filtre_bloc(bloc, i, actual, (ow, oh), fps)
+        linies, actual = _filtre_bloc(bloc, i, actual, (ow, oh), fps, total)
         parts += linies
     if brolls:
         # El b-roll comença a «inici» del muntatge: a pantalla sencera, en targeta, en pantalla
@@ -208,37 +209,40 @@ def _color_ffmpeg(color: str) -> str:
     return "0x" + c.upper() if len(c) == 6 and all(x in "0123456789abcdefABCDEF" for x in c) else "0x111111"
 
 
-def _filtre_bloc(bloc: dict, i: int, actual: str, mida: tuple[int, int], fps: str) -> tuple[list[str], str]:
+def _filtre_bloc(bloc: dict, i: int, actual: str, mida: tuple[int, int], fps: str,
+                 total: float) -> tuple[list[str], str]:
     """Un bloc de color (motor/grafics.py, BLOC): entre `inici` i `final`, el vídeo s'encongeix fins a la
-    targeta de baix sobre el color de la marca i, al final, torna a créixer. Es fa amb una còpia del tros:
-    s'encongeix fotograma a fotograma (scale amb eval=frame), es posa sobre el color i dues franges del
-    mateix color en retallen el que sobresurt per dalt i per baix. La pàgina fa el mateix (app.js, pintaBloc)."""
+    targeta de baix sobre el color de la marca i, al final, torna a créixer. El vídeo sencer passa per un
+    scale que, fotograma a fotograma, el deixa igual fora del bloc i l'encongeix a dins; es posa sobre un
+    fons del color (tan llarg com el vídeo) i dues franges del mateix color en retallen el que sobresurt
+    per dalt i per baix. Sense còpies del vídeo: si n'hi hagués una que comencés al bloc, ffmpeg hauria de
+    guardar a la memòria tots els fotogrames d'abans. La pàgina fa el mateix (app.js, pintaBloc)."""
     ow, oh = mida
     k = ow / 1080
     a, b = bloc["inici"], bloc["final"]
     llarg = b - a
-    d = min(grafics.ANIMACIO_BLOC, llarg / 2)
+    d = max(0.001, min(grafics.ANIMACIO_BLOC, llarg / 2))
     g = grafics.BLOC
     s_fi = g["w"] / 1080  # l'escala de la targeta
     ty_fi = g["y"] - g["retall_y"] * s_fi  # on queda la part de dalt del vídeo encongit
     franja_dalt = 2 * round(k * g["y"] / 2)
     franja_baix = 2 * round(k * (1920 - g["y"] - g["h"]) / 2)
-    # Com pas_bloc: 0 → 1 en entrar, 1 → 0 en sortir, suau. Cada expressió el calcula de nou.
-    e = f"(st(1,clip(min(t/{d:.4f},({llarg:.4f}-t)/{d:.4f}),0,1));ld(1)*ld(1)*(3-2*ld(1)))"
+    # Com pas_bloc, amb el temps del vídeo: 0 fora del bloc, 0 → 1 en entrar, 1 → 0 en sortir, suau.
+    # Cada expressió el calcula de nou (no comparteixen variables).
+    e = f"(st(1,clip(min((t-{a:.4f})/{d:.4f},({b:.4f}-t)/{d:.4f}),0,1));ld(1)*ld(1)*(3-2*ld(1)))"
     s = f"(1-{1 - s_fi:.5f}*{e})"
+    dins = f"between(t,{a:.4f},{b:.4f})"
     color = _color_ffmpeg(bloc["color"])
-    font = f"color=c={color}:r={fps}:d={llarg:.4f}"
+    # Els fons, una mica més llargs que el vídeo: cada overlay s'acaba amb el més curt (shortest), el vídeo.
+    font = f"color=c={color}:r={fps}:d={total + 1:.4f}"
     return [
-        f"[{actual}]split[bm{i}][bc{i}];",
-        f"[bc{i}]trim=start={a:.4f}:end={b:.4f},setpts=PTS-STARTPTS,"
-        f"scale=w='2*trunc({ow}*{s}/2)':h='2*trunc({oh}*{s}/2)':eval=frame[bv{i}];",
+        f"[{actual}]scale=w='2*trunc({ow}*{s}/2)':h='2*trunc({oh}*{s}/2)':eval=frame[bv{i}];",
         f"{font}:s={ow}x{oh}[bf{i}];",
         f"{font}:s={ow}x{franja_dalt}[bd{i}];",
         f"{font}:s={ow}x{franja_baix}[bb{i}];",
-        f"[bf{i}][bv{i}]overlay=x='{k * g['x']:.3f}*{e}':y='{k * ty_fi:.3f}*{e}':eval=frame[bo{i}];",
-        f"[bo{i}][bd{i}]overlay=x=0:y='{franja_dalt}*{e}-{franja_dalt}':eval=frame[bp{i}];",
-        f"[bp{i}][bb{i}]overlay=x=0:y='{oh}-{franja_baix}*{e}':eval=frame,setpts=PTS+{a:.4f}/TB[bt{i}];",
-        f"[bm{i}][bt{i}]overlay=eof_action=pass[vbl{i}];",
+        f"[bf{i}][bv{i}]overlay=x='{k * g['x']:.3f}*{e}':y='{k * ty_fi:.3f}*{e}':eval=frame:shortest=1[bo{i}];",
+        f"[bo{i}][bd{i}]overlay=x=0:y='{franja_dalt}*{e}-{franja_dalt}':eval=frame:enable='{dins}':shortest=1[bp{i}];",
+        f"[bp{i}][bb{i}]overlay=x=0:y='{oh}-{franja_baix}*{e}':eval=frame:enable='{dins}':shortest=1[vbl{i}];",
     ], f"vbl{i}"
 
 
@@ -355,6 +359,39 @@ def _exporta(video, trams, sortida, qualitat, info, filtre, brolls, peces, capa,
     ]
     _executa(ordre, sum(b - a for a, b in trams), progres)
     treu_rotacio(sortida)
+
+
+def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path) -> Path:
+    """El muntatge en un sol vídeo continu (de la còpia lleugera, sense subtítols ni res), perquè la pàgina
+    el pugui reproduir sense saltar: als salts, el Safari s'encalla uns quants dècims de segon. Els talls
+    i els fosos del so, com a l'export (el temps del muntatge és el mateix)."""
+    if not trams:
+        raise ValueError("No queda cap paraula")
+    info = info_video(proxy)
+    parts = []
+    for i, (a, b) in enumerate(trams):
+        parts.append(f"[{i}:v]setpts=PTS-STARTPTS,setsar=1[v{i}];")
+        parts.append(f"[{i}:a]asetpts=PTS-STARTPTS,afade=t=in:st=0:d={FOS_AUDIO},"
+                     f"afade=t=out:st={max(0, b - a - FOS_AUDIO):.4f}:d={FOS_AUDIO}[a{i}];")
+    parts.append(f"{''.join(f'[v{i}][a{i}]' for i in range(len(trams)))}concat=n={len(trams)}:v=1:a=1[v][a]")
+    sortida.parent.mkdir(parents=True, exist_ok=True)
+    temporal = sortida.with_name(f".{sortida.stem}.fent{sortida.suffix}")
+    with tempfile.TemporaryDirectory() as carpeta:
+        filtre = Path(carpeta) / "previa.txt"
+        filtre.write_text("\n".join(parts), encoding="utf-8")
+        ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", *_entrades_trams(proxy, trams, info),
+                 "-filter_complex_script", str(filtre), "-map", "[v]", "-map", "[a]", "-r", info["fps"],
+                 # Si la gràfica és ocupada (un export alhora), amb el processador.
+                 "-c:v", "h264_videotoolbox", "-allow_sw", "1", "-b:v", "3M", "-g", "15",
+                 "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", str(temporal)]
+        try:
+            r = subprocess.run(ordre, capture_output=True, text=True)
+            if r.returncode != 0:
+                raise RuntimeError("ffmpeg no ha pogut fer la previsualització:\n" + r.stderr[-1500:])
+            temporal.replace(sortida)
+        finally:
+            temporal.unlink(missing_ok=True)
+    return sortida
 
 
 def fes_proxy(video: Path, sortida: Path, progres=None) -> Path:

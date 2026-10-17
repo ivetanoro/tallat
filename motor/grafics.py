@@ -344,18 +344,19 @@ def _punts_visibles(g: dict, imatges) -> list[dict]:
 
 
 def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alcada: float | None = None,
-           imatges=None) -> dict | None:
+           imatges=None, sense_bloc: bool = False) -> dict | None:
     """El que cal per dibuixar un gràfic, sense els temps: {id, tipus, nom, text, punts, estil, posicio,
     amaga_subtitols, limits, i de, xifra, forma i costat o imatge}. None si no té res a dir (una crida
     sense text ni crida a la marca). La web i el ventall sense imatges porten `falta`: a la pàgina es
     veuen (per pujar-les-hi), però no surten al vídeo. `imatges`: els noms de les que hi ha al projecte
-    (si no es diu, no es comprova). També el fa servir la pàgina per a les miniatures (dels trets, per exemple)."""
+    (si no es diu, no es comprova). `sense_bloc`: com si cap no en portés (per als altres editors, que no
+    tenen el bloc de color). També el fa servir la pàgina per a les miniatures (dels trets, per exemple)."""
     estils = [estils] if isinstance(estils, str) else (estils or [])  # els kits d'abans: un sol estil
     text = g["text"] or (crida.strip()[:MIDA_TEXT["crida"]] if g["tipus"] == "crida" else "")
     if g["tipus"] not in AMB_IMATGE and not (text or g["punts"] or g.get("xifra")):
         return None
     # Amb el bloc de color, el gràfic fa de diapositiva: per defecte, sense subtítols.
-    bloc = g["tipus"] in BLOC_PER_DEFECTE if g.get("bloc") is None else g["bloc"]
+    bloc = False if sense_bloc else g["tipus"] in BLOC_PER_DEFECTE if g.get("bloc") is None else g["bloc"]
     amaga = (AMAGA[g["tipus"]] or bloc) if g.get("amaga_subtitols") is None else g["amaga_subtitols"]
     d = {"id": g["id"], "tipus": g["tipus"], "nom": NOMS[g["tipus"]], "text": text,
          "punts": [{c: v for c, v in p.items() if c != "paraula"} for p in _punts_visibles(g, imatges)],
@@ -383,7 +384,7 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
 
 def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils: list[str],
           crida: str = "", subtitols: dict | None = None, bloc_de: dict | None = None,
-          alcada: float | None = None, imatges=None) -> list[dict]:
+          alcada: float | None = None, imatges=None, sense_bloc: bool = False) -> list[dict]:
     """Els gràfics que surten al vídeo (no els trets), a punt per dibuixar, en temps del muntatge:
     el `dibuix` de cadascun amb `inici`, `final` i, als punts, `t`. Els que són d'una frase que ja no
     surt al vídeo no hi són. `subtitols`: l'estil dels subtítols, si el vídeo en porta (perquè els
@@ -392,7 +393,7 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
     `imatges`: les que hi ha al projecte (la web i el ventall sense imatge no surten)."""
     llista = []
     for g in grafics:
-        situat = dibuix(g, estils, crida, subtitols, alcada, imatges) if g.get("estat") != "tret" else None
+        situat = dibuix(g, estils, crida, subtitols, alcada, imatges, sense_bloc) if g.get("estat") != "tret" else None
         if situat is None or situat.get("falta"):
             continue
         mateix_bloc = (lambda p: bloc_de is None or g["paraula"] is None or
@@ -420,7 +421,17 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
                 punt["t"] = round(min(max(t, inici + 0.15), final - 0.3), 3)
         situat.update(inici=round(inici, 3), final=final)
         llista.append(situat)
-    return _sense_trepitjar(sorted(llista, key=lambda g: g["inici"]))
+    return _dins_dels_blocs(_sense_trepitjar(sorted(llista, key=lambda g: g["inici"])))
+
+
+def _dins_dels_blocs(llista: list[dict]) -> list[dict]:
+    """Un gràfic sense bloc que surt mentre n'hi ha un amb bloc no ha de tapar el gràfic de dalt: va sobre
+    la targeta del vídeo, a la part que no tapa Instagram."""
+    blocs = [g for g in llista if g.get("bloc")]
+    for g in llista:
+        if not g.get("bloc") and any(b["inici"] < g["final"] and g["inici"] < b["final"] for b in blocs):
+            g["limits"] = [BLOC["y"] + 30, round(ZONA_SEGURA[1] * ALCADA) - 20]
+    return llista
 
 
 def blocs(situats: list[dict], paleta: dict) -> list[dict]:

@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from motor import broll, edicio, editors, exporta, grafics, marca, muntatge, so, stickers, targetes
-from motor.projecte import EXPORTS, PROXY, Projecte
+from motor.projecte import EXPORTS, PREVIES, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
 MIDA_MAXIMA_FONT = 20 * 1024 * 1024  # una font no passa mai d'uns quants MB
@@ -26,12 +26,12 @@ MIDA_MAXIMA_JSON = 10 * 1024 * 1024  # l'estat d'un projecte llarg no arriba ni 
 MIDA_MAXIMA_PUJADA = 2 * 1024 ** 3   # un b-roll o un sticker
 MIDA_MAXIMA_IMATGE = 60 * 1024 ** 2  # una captura o una foto d'un gràfic
 # Les peticions que canvien el projecte obert: han de dir a quin projecte van (dues pestanyes).
-RUTES_DEL_PROJECTE = {"/api/estat", "/api/neteja", "/api/instruccio", "/api/broll/biblioteca",
+RUTES_DEL_PROJECTE = {"/api/estat", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
-                      "/api/so/mostres", "/api/grafics/imatge"}
+                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa"}
 mimetypes.add_type("audio/mp4", ".m4a")  # Python diu «audio/mp4a-latm», que els navegadors no reprodueixen
 mimetypes.add_type("audio/wav", ".wav")
 RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge"}  # el cos és el fitxer mateix
@@ -59,7 +59,7 @@ class Feina:
             if self.estat and self.estat["estat"] == "treballant":
                 return False
             self.estat = {"estat": "treballant", "qualitat": qualitat, "fase": "video", "progres": 0,
-                          "fitxer": None, "copia": None, "error": None}
+                          "fitxer": None, "copia": None, "avis": None, "error": None}
         threading.Thread(target=self._fes, args=(projecte, qualitat, capa, trossos), daemon=True).start()
         return True
 
@@ -76,8 +76,8 @@ class Feina:
                 else:
                     self._actualitza(fase="subtitols" if capa else "editors")
                     carpeta = editors.exporta_editors(projecte, amb_capa=capa)
-                copia = exporta.copia_a_carpeta(carpeta)
-                self._actualitza(estat="fet", progres=100, fitxer=carpeta.name, copia=copia.name if copia else None)
+                copia, avis = _copia(carpeta)
+                self._actualitza(estat="fet", progres=100, fitxer=carpeta.name, copia=copia, avis=avis)
                 return
             sortida = projecte.sortida(qualitat)
             trams = projecte.trams()
@@ -89,11 +89,54 @@ class Feina:
                             zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
                             blocs=projecte.blocs(trams), **projecte.opcions_so(trams))
             projecte.desa_talls(sortida, trams)
-            copia = exporta.copia_a_carpeta(sortida) if qualitat != "esborrany" else None
-            self._actualitza(estat="fet", progres=100, fitxer=sortida.name, copia=copia.name if copia else None)
+            copia, avis = _copia(sortida)  # també l'esborrany: la carpeta que es tria és per a tot
+            self._actualitza(estat="fet", progres=100, fitxer=sortida.name, copia=copia, avis=avis)
         except Exception as e:  # el missatge arriba a la pàgina
             traceback.print_exc()
             self._actualitza(estat="error", error=str(e))
+
+
+class Previa:
+    """El muntatge en un vídeo continu per a la pàgina (exporta.fes_previa), un alhora i en segon pla.
+    La pàgina el demana després de cada canvi; mentre es fa, reprodueix saltant com sempre."""
+
+    def __init__(self):
+        self.bloqueig = threading.Lock()
+        self.fent = None  # el fitxer que s'està fent
+
+    def demana(self, projecte: Projecte, trams) -> dict:
+        if not trams or not (projecte.carpeta / PROXY).exists():
+            return {"estat": "no", "trams": trams}
+        desti = projecte.previa(trams)
+        if desti.exists():
+            return {"estat": "fet", "url": f"/previa/{desti.name}", "trams": trams}
+        with self.bloqueig:
+            if self.fent is None:  # si se'n fa una altra, la pàgina ho tornarà a demanar
+                self.fent = desti
+                threading.Thread(target=self._fes, args=(projecte.carpeta / PROXY, list(trams), desti),
+                                 daemon=True).start()
+        return {"estat": "fent", "trams": trams}
+
+    def _fes(self, proxy: Path, trams, desti: Path) -> None:
+        try:
+            exporta.fes_previa(proxy, trams, desti)
+            for vell in sorted(desti.parent.glob("previa_*.mp4"), key=lambda p: p.stat().st_mtime)[:-3]:
+                vell.unlink(missing_ok=True)  # se'n guarden les tres darreres (desfer i refer hi tornen)
+        except Exception:
+            traceback.print_exc()
+        finally:
+            with self.bloqueig:
+                self.fent = None
+
+
+def _copia(fitxer: Path) -> tuple[str | None, str | None]:
+    """La còpia a la carpeta de la persona: (nom, None) o, si no es pot (un disc que ja no hi és, sense
+    permís…), (None, avís). L'export ja és a la carpeta del projecte: no es dona per fallat."""
+    try:
+        copia = exporta.copia_a_carpeta(fitxer)
+        return (copia.name if copia else None), None
+    except OSError as e:
+        return None, f"El vídeo és a la carpeta del projecte, però no l'he pogut copiar a la teva carpeta ({e.strerror or e})."
 
 
 def _arrel_de(projecte: Projecte) -> Projecte:
@@ -105,6 +148,7 @@ def _arrel_de(projecte: Projecte) -> Projecte:
 
 def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
     feina = Feina()
+    previa = Previa()
     bloqueig = threading.Lock()
     # Seguretat: el servidor només escolta aquest Mac, però una web oberta al navegador podria
     # intentar enviar-li peticions. Per això: només s'accepten els noms 127.0.0.1 i localhost
@@ -315,6 +359,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
             if ruta.startswith("/stickers/"):
                 return self._segur(projecte.carpeta_instruccions() / stickers.CARPETA, ruta[len("/stickers/"):])
+            if ruta.startswith("/previa/"):  # el muntatge en un vídeo continu
+                return self._segur(projecte.carpeta / PREVIES, ruta[len("/previa/"):])
             if ruta.startswith("/imatges-grafics/"):  # les captures i les fotos dels gràfics
                 return self._segur(projecte.carpeta_imatges, ruta[len("/imatges-grafics/"):])
             if ruta.startswith("/so/"):  # la pista d'efectes, les mostres de la veu i cada so
@@ -442,11 +488,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     projecte.estat["revisio"] = cos["revisio"] + 1
                     projecte.desa()
                     return self._json(instantania())
-                if ruta == "/api/neteja":
-                    projecte.neteja()
-                    projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
-                    projecte.desa()
-                    return self._json(instantania())
+                if ruta == "/api/previa":  # el muntatge d'ara en un vídeo continu (si no hi és, es fa)
+                    return self._json(previa.demana(projecte, projecte.trams()))
                 if ruta == "/api/registre":  # què fa el reproductor al navegador (per trobar errors)
                     with (projecte.carpeta / "registre-pagina.log").open("a", encoding="utf-8") as f:
                         for e in cos.get("events", [])[:500]:

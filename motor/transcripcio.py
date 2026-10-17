@@ -1,14 +1,20 @@
 """Transcripció en català amb marques de temps per paraula.
 
-Dues fonts possibles:
-- «alinea»: el text ve d'un SRT (p. ex. exportat de Descript) i WhisperX només calcula
-  quan comença i acaba cada paraula. És la més ràpida i la més fidel (conserva el farciment).
-- «whisperx»: WhisperX escriu el text i calcula els temps. Gratuïta i sense internet,
-  però més lenta i tendeix a esborrar el farciment («eh», «mmm»).
+Dues fonts del text:
+- un SRT (p. ex. exportat de Descript): és la més ràpida i la més fidel (conserva el farciment).
+- WhisperX escriu el text. Gratuïta i sense internet, però més lenta i tendeix a esborrar el
+  farciment («eh», «mmm»).
+
+El temps de cada paraula el calcula l'alineador MMS de Meta (torchaudio.pipelines.MMS_FA): tot el
+text contra tot el so, sense refiar-se dels temps de les frases (els de Descript poden anar uns
+segons desplaçats, i l'alineador d'abans, el de WhisperX, estirava les paraules pels silencis i
+s'equivocava fins a un segon i mig). Després, les vores de cada paraula es retallen als silencis
+reals (motor/veu.py). El primer cop baixa el model (uns 1,2 GB). Si no pot, fa servir el de WhisperX.
 """
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 
 IDIOMA = "ca"
@@ -53,11 +59,103 @@ def carrega_audio(video: Path):
         return _whisperx().load_audio(str(wav))
 
 
-def alinea(audio, frases: list[dict]) -> list[dict]:
-    """Calcula el temps de cada paraula amb el model català de Softcatalà."""
-    wx = _whisperx()
-    model, meta = wx.load_align_model(language_code=IDIOMA, device=DISPOSITIU)
-    return wx.align(frases, model, meta, audio, DISPOSITIU, return_char_alignments=False)["segments"]
+def alinea(audio, frases: list[dict], avis=print) -> list[dict]:
+    """Calcula el temps de cada paraula: [{start, end, text, words: [{word, start, end}]}].
+    Amb MMS; si no es pot (no s'ha pogut baixar el model…), amb el model català de WhisperX."""
+    try:
+        return alinea_mms(audio, frases)
+    except Exception as e:  # noqa: BLE001 — qualsevol problema amb MMS: l'alineador d'abans
+        if avis:
+            avis(f"No he pogut fer servir l'alineador MMS ({e}); faig servir el de WhisperX.")
+        wx = _whisperx()
+        model, meta = wx.load_align_model(language_code=IDIOMA, device=DISPOSITIU)
+        return wx.align(frases, model, meta, audio, DISPOSITIU, return_char_alignments=False)["segments"]
+
+
+# --- L'alineador MMS -----------------------------------------------------------------------------
+
+SR = 16000
+TROS_EMISSIO = 30  # segons: el so es passa pel model a trossos (amb un segon de marge a cada costat)
+MINIM_PARAULA = 0.04
+
+
+def romanitza(text: str) -> str:
+    """El que entén MMS: minúscules sense accents ni signes («L'àvia,» → «l'avia», «col·la» → «colla»)."""
+    t = unicodedata.normalize("NFKD", text.lower().replace("·", ""))
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return re.sub(r"[^a-z']", "", t)
+
+
+def _emissions(model, audio):
+    """Què sona a cada trama (20 ms), a trossos per no omplir la memòria amb gravacions llargues."""
+    import torch
+    x = torch.from_numpy(audio).unsqueeze(0)
+    tros, marge = TROS_EMISSIO * SR, SR
+    parts = []
+    with torch.inference_mode():
+        for a in range(0, x.shape[1], tros):
+            i0, i1 = max(0, a - marge), min(x.shape[1], a + tros + marge)
+            em, _ = model(x[:, i0:i1])
+            per_mostra = em.shape[1] / (i1 - i0)
+            s0 = round((a - i0) * per_mostra)
+            parts.append(em[:, s0:s0 + round((min(a + tros, x.shape[1]) - a) * per_mostra)])
+    return torch.cat(parts, dim=1)
+
+
+def temps_mms(audio, textos: list[str]) -> list[tuple[float, float]]:
+    """(inici, final) de cada paraula, en ordre, alineant-les totes contra tot el so. Les que no tenen
+    lletres (números, «--») van amb el comodí: ocupen el que soni allà."""
+    import torch
+    import torchaudio
+    bundle = torchaudio.pipelines.MMS_FA
+    model = bundle.get_model(with_star=True)
+    model.eval()
+    diccionari = bundle.get_dict(star="*")
+    emissio = _emissions(model, audio)
+    fites, n_per_paraula = [], []
+    for text in textos:
+        ids = [diccionari[c] for c in romanitza(text) if c in diccionari] or [diccionari["*"]]
+        n_per_paraula.append(len(ids))
+        fites += ids
+    alineacio, punts = torchaudio.functional.forced_align(emissio, torch.tensor([fites], dtype=torch.int32), blank=0)
+    trams = torchaudio.functional.merge_tokens(alineacio[0], punts[0].exp())
+    per_trama = len(audio) / SR / emissio.shape[1]
+    sortida, k = [], 0
+    for n in n_per_paraula:
+        tros = trams[k:k + n]
+        k += n
+        sortida.append((tros[0].start * per_trama, tros[-1].end * per_trama))
+    return sortida
+
+
+def retalla_als_silencis(temps: list[tuple[float, float]], veu, pas: float = 0.01) -> list[tuple[float, float]]:
+    """Les vores de cada paraula, sense el silenci que hi hagi a dins (l'alineador sovint allarga una
+    paraula fins a la següent, per sobre del silenci): l'inici, al primer moment amb veu; el final,
+    a l'últim. Si dins la paraula no hi ha veu (o és molt curta), es queda com era."""
+    sortida = []
+    for a, b in temps:
+        i0, i1 = int(a / pas), min(len(veu), int(round(b / pas)))
+        amb_veu = [i for i in range(i0, i1) if veu[i]]
+        if amb_veu:
+            na, nb = amb_veu[0] * pas, (amb_veu[-1] + 1) * pas
+            if nb - na >= MINIM_PARAULA:
+                a, b = max(a, na), min(b, nb)
+        sortida.append((round(a, 3), round(b, 3)))
+    return sortida
+
+
+def alinea_mms(audio, frases: list[dict]) -> list[dict]:
+    """Com alinea(), amb MMS: cada frase porta les seves paraules (separades pels espais) amb el temps."""
+    from motor import veu
+    textos = [[w for w in f["text"].split() if w.strip()] for f in frases]
+    temps = retalla_als_silencis(temps_mms(audio, [w for t in textos for w in t]), veu.mapa(audio))
+    sortida, k = [], 0
+    for f, paraules in zip(frases, textos):
+        words = [{"word": w, "start": temps[k + j][0], "end": temps[k + j][1]} for j, w in enumerate(paraules)]
+        k += len(paraules)
+        sortida.append({"start": words[0]["start"] if words else f["start"],
+                        "end": words[-1]["end"] if words else f["end"], "text": f["text"], "words": words})
+    return sortida
 
 
 def transcriu(audio, model: str = "large-v3") -> list[dict]:

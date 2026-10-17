@@ -70,7 +70,7 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | Per… | Fes… |
    |---|---|
    | escoltar des d'una paraula | clic a la paraula |
-   | treure o recuperar paraules | selecciona-les (clic, arrossegant o ⇧ + clic) i prem ⌫ |
+   | treure o recuperar paraules | selecciona-les com en un document (arrossegant, doble clic, ⇧ + clic) i prem ⌫ |
    | destacar una paraula als subtítols (o deixar de destacar-la) | mode **Destaca**, a dalt, i clic a la paraula |
    | canviar l'ordre d'un paràgraf | arrossega'l per la nansa ⠿ de l'esquerra |
    | desfer / refer | ⌘Z / ⇧⌘Z |
@@ -78,7 +78,7 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | amagar la columna de l'esquerra o la del vídeo | ⌃⌘S / ⌥⌘V |
 
 3. A les pestanyes de la columna de l'esquerra, **Subtítols**, **Gràfics** (el pla de gràfics, el títol del ganxo i el b-roll) i **So** (la neteja de la veu i els efectes de so), com vols que quedi.
-4. Si vols gràfics, digues a Claude **«proposa'm gràfics»**: et proposa frases clau, etiquetes, llistes, notificacions, xats, números que compten, notes escrites a mà, captures de webs, fotos en ventall i la crida final, frase a frase i amb els colors i les lletres del teu estil. A la pestanya **Gràfics** de cada un tries **Mantén**, **Canvia** (i li escrius una nota) o **Treu**. Després digues a Claude «mira les notes dels gràfics» i els canvia. Si un gràfic té el **bloc de color**, el vídeo es fa petit a baix i el gràfic surt a dalt sobre el teu color: l'actives o el treus tocant el gràfic al vídeo.
+4. Si vols gràfics, digues a Claude **«proposa'm gràfics»**: et proposa frases clau, etiquetes, llistes, notificacions, xats, números que compten, notes escrites a mà, captures de webs, fotos en ventall i la crida final, frase a frase i amb els colors i les lletres del teu estil. A la pestanya **Gràfics** els veus en miniatura: si en toques un, el pots **Canviar** (i li escrius una nota) o **Treure**. Si no hi toques res, es queda. Després digues a Claude «mira les notes dels gràfics» i els canvia. Si un gràfic té el **bloc de color**, el vídeo es fa petit a baix i el gràfic surt a dalt sobre el teu color: l'actives o el treus tocant el gràfic al vídeo.
 5. Clica **Exporta** (a dalt) → **Esborrany** i mira'l. El que vulguis canviar, digues-ho a Claude amb el segon, que veus sota el vídeo: «al segon 12, el b-roll és massa llarg».
 6. Quan t'agradi, **Exporta** → **Vídeo final** (1080 o 4K). O, si el vols acabar en un altre editor, **Per acabar-lo en un altre editor**: Premiere, Final Cut o DaVinci, o CapCut o iMovie. Els vídeos que ja has fet també surten a **Exporta**.
 

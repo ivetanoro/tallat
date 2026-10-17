@@ -77,6 +77,14 @@ class TestOrdre(unittest.TestCase):
         self.assertEqual(len(t), 2)  # el tros [0-1] i, després, el [3-5]
         self.assertLess(t[0][0], t[1][0])
 
+    def test_les_recuperades_de_fora_sonen_on_les_mostra_la_pagina(self):
+        # Al final, com a la pàgina: abans s'afegien al tros d'abans (o al primer de la gravació) i el
+        # vídeo saltava a un text que a la pàgina era molt més avall.
+        p = self.paraules()
+        p[2]["conservada"] = True
+        t = edicio.trams(p, fps=30, durada=10, ordre=[[4, 5], [2, 3]])  # 0 i 1, recuperades
+        self.assertEqual([round(a) for a, b in t], [4, 2, 0])
+
     def test_sense_pausa_maxima_no_peta_entre_blocs(self):
         p = self.paraules()
         edicio.trams(p, fps=30, durada=10, pausa_maxima=None, ordre=[[3, 3], [4, 5]])

@@ -26,6 +26,7 @@ EDICIO_TEXT = "edicio.txt"  # format de la fase 1: s'importa un cop
 ORIGINAL = "original.txt"
 REVISIO = "revisio.txt"
 PROXY = "proxy.mp4"
+PREVIES = "previa"  # el muntatge en un vídeo continu, per reproduir-lo a la pàgina sense salts
 EXPORTS = "exports"
 KIT_TRIAT = "kit-triat.json"
 
@@ -195,9 +196,10 @@ class Projecte:
             linies = self.linies_subtitols()
         return estil.get("marca") or {}, sub, grafics.alcada_subtitols(sub, linies) if sub else None
 
-    def grafics(self, trams=None, linies=None) -> list[dict]:
+    def grafics(self, trams=None, linies=None, sense_bloc: bool = False) -> list[dict]:
         """Els gràfics del pla que surten al vídeo, en temps del muntatge (motor/grafics.py). Qui ja té
-        les línies dels subtítols les pot passar (si són apilades, se n'ha de saber l'alçada)."""
+        les línies dels subtítols les pot passar (si són apilades, se n'ha de saber l'alçada).
+        `sense_bloc`: sense el bloc de color (els altres editors no el tenen)."""
         pla = self.estat.get("grafics")
         if not pla:
             return []
@@ -205,7 +207,7 @@ class Projecte:
         inicis, finals, bloc_de = grafics.temps_paraules(self._blocs(), mapa_muntatge(trams))
         marca_kit, sub, alcada = self._per_dibuixar(linies)
         return grafics.situa(pla, inicis, finals, sum(b - a for a, b in trams), marca_kit.get("energia"),
-                             marca_kit.get("crida") or "", sub, bloc_de, alcada, self.imatges_grafics())
+                             marca_kit.get("crida") or "", sub, bloc_de, alcada, self.imatges_grafics(), sense_bloc)
 
     # --- Les imatges dels gràfics (la web i el ventall) ------------------------------------------------
 
@@ -544,6 +546,13 @@ class Projecte:
             llista.append({"nom": f.name, "qualitat": qualitat, "mida_mb": round(f.stat().st_size / 1e6, 1),
                            "data": time.strftime("%d/%m %H:%M", time.localtime(f.stat().st_mtime))})
         return llista
+
+    def previa(self, trams) -> Path:
+        """On va (o és) el muntatge d'aquests talls en un sol vídeo (exporta.fes_previa). El nom diu els
+        talls i la còpia lleugera: si canvien, n'hi ha un altre."""
+        proxy = self.carpeta / PROXY
+        empremta = json.dumps([[round(a, 4), round(b, 4)] for a, b in trams]) + str(proxy.stat().st_mtime_ns)
+        return self.carpeta / PREVIES / f"previa_{hashlib.sha1(empremta.encode()).hexdigest()[:12]}.mp4"
 
     def font(self, qualitat: str) -> Path:
         """Vídeo d'on es fa l'export. L'esborrany surt de la còpia lleugera (ja és vertical i

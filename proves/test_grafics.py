@@ -217,6 +217,17 @@ class TestBlocDeColor(unittest.TestCase):
             self.assertEqual(pixel(3.5, 540, 300), "vermell")  # en acabar, torna a ser sencer
             self.assertEqual((exporta._color_ffmpeg("#abc"), exporta._color_ffmpeg("vermell")), ("0xAABBCC", "0x111111"))
 
+    def test_un_bloc_tard_no_guarda_tot_el_video_a_la_memoria(self):
+        # Una còpia del vídeo que comencés al bloc obligaria ffmpeg a guardar tots els fotogrames d'abans
+        # (2 GB per a un bloc al segon 20 en 1080): el bloc es fa sobre el mateix vídeo, sense split ni trim.
+        from motor import exporta
+        filtre = exporta._filtre([(0.0, 60.0)], exporta._enquadrament(1080, 1920, 1080, 1920),
+                                 blocs=[{"inici": 50.0, "final": 55.0, "color": "#000000"}], fps="30")
+        bloc = filtre.split("[vb0];", 1)[1]
+        self.assertNotIn("split", bloc)
+        self.assertNotIn("trim", bloc)
+        self.assertIn("shortest=1", bloc)  # el fons de color no allarga el vídeo
+
 
 class TestWebIVentall(unittest.TestCase):
     """La captura d'una web en una finestra i les fotos en ventall: gràfics amb imatges del projecte."""
@@ -246,6 +257,20 @@ class TestWebIVentall(unittest.TestCase):
     def test_sense_bloc_si_es_diu(self):
         g = grafics.net({"tipus": "ventall", "paraula": 0, "punts": ["a.png"], "bloc": False})
         self.assertNotIn("bloc", grafics.dibuix(g, []))
+
+    def test_el_que_surt_durant_un_bloc_va_sobre_la_targeta(self):
+        pla = grafics.neteja_llista([{"tipus": "ventall", "paraula": 0, "punts": ["f1.jpg"]},
+                                     {"tipus": "etiqueta", "paraula": 1, "text": "pas 1"},
+                                     {"tipus": "etiqueta", "paraula": 2, "text": "després"}])
+        inicis, finals = {0: 0.0, 1: 1.0, 2: 9.0}, {0: 0.5, 1: 1.5, 2: 9.5}
+        ventall, durant, despres = grafics.situa(pla, inicis, finals, 12.0, [], imatges={"f1.jpg"})
+        self.assertEqual(ventall["limits"], [269, grafics.BLOC["y"] - 40])
+        self.assertEqual(durant["limits"], [grafics.BLOC["y"] + 30, 1228])  # no tapa el ventall de dalt
+        self.assertNotEqual(despres["limits"], durant["limits"])  # quan el bloc ja ha acabat, com sempre
+        # Per als altres editors, sense bloc: la web i el ventall, com un gràfic qualsevol.
+        sense = grafics.situa(pla, inicis, finals, 12.0, [], imatges={"f1.jpg"}, sense_bloc=True)
+        self.assertFalse(any(g.get("bloc") for g in sense))
+        self.assertNotEqual(sense[1]["limits"], durant["limits"])
 
     def test_la_web_curta(self):
         self.assertEqual(grafics.adreca_curta("https://www.elmeuweb.cat/curs/?ref=ig#a"), "elmeuweb.cat/curs")

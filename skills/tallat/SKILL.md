@@ -89,6 +89,8 @@ La marca diu com són els vídeos de la persona: els seus colors i lletres (cada
 
 - **Amb Descript** (millor text, conserva el farciment): importa l'àudio al compte de la persona amb el connector de Descript (projecte privat, idioma `ca`), exporta la transcripció en SRT, desa-la a la carpeta del projecte i executa `transcriu --srt`. WhisperX només hi calcula el temps de cada paraula.
 - **Sense Descript**: `transcriu` sense `--srt` fa servir WhisperX sencer. És més lent i esborra part del farciment; avisa-ho.
+- **El temps de cada paraula** el calcula l'alineador MMS de Meta (gratuït, sense internet; el primer cop baixa uns 1,2 GB): tot el text contra tot el so, i les vores de les paraules es retallen als silencis reals. És el que fa que els talls caiguin al lloc i que els subtítols vagin a temps. Els temps de Descript poden anar uns segons desplaçats: no s'hi refia.
+- **Si els talls sonen malament o els subtítols van a destemps en un projecte fet abans** (amb l'alineador d'abans): `tallat.py realinea --projecte X`. No toca el text ni l'edició; desa la transcripció d'abans al costat. Després, cal tornar a obrir la pàgina de revisió.
 
 ## Primer muntatge (proposar reels d'una gravació llarga)
 
@@ -177,7 +179,7 @@ tallat no depèn de cap IA: només necessita un fitxer per a cada instrucció ac
 
 ## Pla de gràfics
 
-Gràfics que proposes tu, frase a frase, i que la persona revisa a la pestanya **Gràfics** de la pàgina: cada un té una miniatura, el segon on surt i tres botons, **Mantén** (li agrada: no el toquis), **Canvia** (amb una nota per a tu) i **Treu**. Els proposats ja surten a la vista prèvia i al vídeo; els trets, no. Es desen a l'estat del vídeo (`grafics`), lligats a paraules (si es mouen els talls, segueixen la seva frase), i es dibuixen amb `pagina/grafics.js`, el mateix codi a la vista prèvia i al vídeo final.
+Gràfics que proposes tu, frase a frase, i que la persona revisa a la pestanya **Gràfics** de la pàgina: una graella de miniatures; en tocar-ne una s'obre amb **Canvia** (amb una nota per a tu) i **Treu**. Si no hi toca res, li va bé (es queda «proposat»; si el mou, li canvia l'estil o hi puja imatges, passa a «mantingut»). Els proposats ja surten a la vista prèvia i al vídeo; els trets, no. Es desen a l'estat del vídeo (`grafics`), lligats a paraules (si es mouen els talls, segueixen la seva frase), i es dibuixen amb `pagina/grafics.js`, el mateix codi a la vista prèvia i al vídeo final.
 
 **Tipus** (els de text no necessiten cap fitxer; la web i les fotos, imatges):
 - `frase`: una frase clau en gran (com a molt 140 lletres; millor menys de 60). El que va `*entre asteriscs*` surt amb la lletra d'accent i el color destacat. Mentre surt, els subtítols s'amaguen (`amaga_subtitols: false` si no ho vols).
@@ -214,7 +216,7 @@ Gràfics que proposes tu, frase a frase, i que la persona revisa a la pestanya *
     {"tipus": "frase", "paraula": 37, "fins": 41, "text": "no és mandra, és *cansament*", "estil": "scrapbook"},
     {"tipus": "crida", "estil": "mac"}]
    ```
-   `motiu` (opcional) és una frase curta que la persona veu a la pestanya: per què hi va. Un pla nou substitueix els proposats que hi havia; els mantinguts, els que tenen una nota i els trets es queden (amb `--de-nou`, tot de nou).
+   `motiu` (opcional) és una frase curta que la persona veu a la pestanya: per què hi va. Un pla nou substitueix els proposats que hi havia; els mantinguts, els que tenen una nota i els trets es queden (amb `--de-nou`, tot de nou). Com que la persona no ha de marcar els que li agraden, **si ja hi ha un pla, no en facis un de nou sencer sense preguntar-li-ho**: per atendre les notes o afegir-ne, fes servir `canvia`.
 4. Explica-li en dues o tres frases què hi has posat i que ho revisi a la pestanya Gràfics (la pàgina es posa al dia sola).
 
 **Les notes:** quan digui «mira les notes» (o similar), `tallat.py grafics --projecte X`: els que diuen `CANVIA` porten la nota a sota. Si una nota parla del lloc («més avall», «em tapa la cara»), mira'n el fotograma (`grafics fotogrames`) abans de triar-ne un altre. Fes el que demana cada nota i desa només aquells gràfics, amb el mateix `id` i sencers (tipus, paraula, text…), amb `tallat.py grafics canvia NOTES.json --projecte X`: la resta del pla no es toca. Un gràfic canviat torna a «proposat» i perd la nota. Si una nota demana un gràfic que encara no existeix (una finestra de web, imatges, el vídeo dins d'un marc…), digues-li que encara no n'hi ha i proposa-li el més semblant.

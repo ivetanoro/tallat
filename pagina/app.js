@@ -233,6 +233,10 @@ function aplicaTrams(r) {
   if (r.zoom) { zoomVideo = r.zoom; $(".pantalla").style.setProperty("--zoom", r.zoom); }
   if (r.blocs) blocsMuntatge = r.blocs;
   if (r.instruccions) { instruccions = r.instruccions; if (P) pintaInstruccions(); }
+  const [tramsAbans, acumAbans] = [trams, acum];
+  const canviats = JSON.stringify(r.trams) !== JSON.stringify(trams);
+  // On som de la gravació, amb els talls d'abans (el vídeo continu era d'aquells talls).
+  const onSom = canviats && continu() ? originalDe(tempsMuntatge(), tramsAbans, acumAbans) : null;
   trams = r.trams;
   duradaFinal = r.durada_final;
   registre("trams", { n: trams.length, primers: trams.slice(0, 3), durada: duradaFinal });
@@ -240,6 +244,11 @@ function aplicaTrams(r) {
   let t = 0;
   for (const [a, b] of trams) { acum.push(t); t += b - a; }
   $("#durada-final").textContent = fmt(duradaFinal);
+  if (canviats) {
+    previaLlesta = null;
+    if (onSom != null) passaAProxy(onSom);
+    programaPrevia();
+  }
   if (vista === "directe") { pintaMarques(trams, acum, duradaFinal); recolloca(); }
 }
 
@@ -481,10 +490,22 @@ function idsEntre(a, b) {
   return i === undefined || j === undefined ? [] : ids.slice(i, j + 1);
 }
 
+// Les paraules que toca la selecció normal del navegador (arrossegant, doble clic, triple clic, ⇧ + clic),
+// si és dins del text; en l'ordre de la pàgina.
+function idsSeleccioNativa() {
+  const sel = getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return [];
+  const rang = sel.getRangeAt(0);
+  const cont = $("#transcripcio");
+  if (!cont.contains(rang.commonAncestorContainer)) return [];
+  return [...cont.querySelectorAll(".p")].filter((s) => rang.intersectsNode(s)).map((s) => +s.dataset.id);
+}
+
 function pintaSeleccio() {
   for (const id of marcades) spans.get(id)?.classList.remove("seleccio");
   marcades.clear();
-  const ids = seleccio ? idsEntre(seleccio.inici, seleccio.fi) : seleccioFeta;
+  // Amb la selecció del navegador ja es veu què hi ha triat: només es pinta la paraula d'un clic.
+  const ids = seleccio ? idsEntre(seleccio.inici, seleccio.fi) : seleccioNativa ? [] : seleccioFeta;
   for (const id of ids || []) { spans.get(id)?.classList.add("seleccio"); marcades.add(id); }
   // La pista: què fa ⌫ amb les paraules marcades (com en un document de text).
   const n = seleccioFeta?.length || 0;
@@ -497,11 +518,12 @@ function pintaSeleccio() {
   }
 }
 
-// Com en un document de text: un clic marca la paraula (i sona des d'allà), ⇧ + clic allarga la
-// selecció i arrossegar en marca unes quantes; ⌫ les treu (o, si ja eren fora, les torna a posar).
-// El clic dret (o control + clic) també les treu o les recupera.
+// Com en un document de text: es selecciona com sempre (arrossegant, doble clic, triple clic, ⇧ + clic) i
+// ⌫ treu les paraules (o, si ja eren fora, les torna a posar). Un clic marca la paraula i sona des d'allà.
+// El clic dret (o control + clic) també les treu o les recupera; arrossegant-lo, totes les que s'hi passen.
 let seleccioFeta = null;  // ids de les paraules marcades, en l'ordre de la pàgina
-let ancoraSeleccio = null;  // on ha començat la selecció (per a ⇧ + clic)
+let seleccioNativa = false;  // si les ha triat la selecció del navegador (i no un clic)
+let clicParaula = null;  // {id, x, y}: on s'ha premut, per saber si ha estat un clic o una selecció
 
 function commutaIds(ids) {
   if (ids.length) commuta(ids, ids.some((id) => !esFora(id)));
@@ -510,6 +532,8 @@ function commutaIds(ids) {
 function deixaSeleccio() {
   seleccio = null;
   seleccioFeta = null;
+  seleccioNativa = false;
+  if (idsSeleccioNativa().length) getSelection().removeAllRanges();
   pintaSeleccio();
 }
 
@@ -546,19 +570,21 @@ function instalaText() {
       return;
     }
     const s = e.target.closest(".p");
-    if (!s) { seleccioFeta = null; pintaSeleccio(); return; }
-    const id = +s.dataset.id;
-    if (mode === "corregeix") { e.preventDefault(); editaParaula(s, id); return; }
-    if (mode === "destaca") { e.preventDefault(); commutaDestacada(id); return; }
-    e.preventDefault();
-    llegeixOrdreVisual();
-    if (e.shiftKey && ancoraSeleccio != null && spans.has(ancoraSeleccio)) {
-      seleccioFeta = idsEntre(ancoraSeleccio, id);
-      pintaSeleccio();
-      return;
-    }
-    seleccioFeta = null;
-    seleccio = { inici: id, fi: id, mogut: false };
+    if (s && mode === "corregeix") { e.preventDefault(); editaParaula(s, +s.dataset.id); return; }
+    if (s && mode === "destaca") { e.preventDefault(); commutaDestacada(+s.dataset.id); return; }
+    // La selecció la fa el navegador: aquí només s'apunta on s'ha premut (per si és un clic).
+    clicParaula = s && !e.shiftKey ? { id: +s.dataset.id, x: e.clientX, y: e.clientY } : null;
+    if (!seleccioNativa) { seleccioFeta = null; pintaSeleccio(); }
+  });
+  document.addEventListener("selectionchange", () => {
+    const ids = idsSeleccioNativa();
+    if (ids.length) {
+      seleccioFeta = ids;
+      seleccioNativa = true;
+    } else if (seleccioNativa) {
+      seleccioFeta = null;
+      seleccioNativa = false;
+    } else return;
     pintaSeleccio();
   });
   document.addEventListener("pointermove", (e) => {
@@ -566,31 +592,27 @@ function instalaText() {
     const s = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".p");
     if (s && +s.dataset.id !== seleccio.fi) { seleccio.fi = +s.dataset.id; seleccio.mogut = true; pintaSeleccio(); }
   });
-  document.addEventListener("pointerup", () => {
-    if (!seleccio) return;
-    const { inici, fi, mogut, dret } = seleccio;
-    if (dret) {  // botó dret: treu (o recupera) la paraula o totes les que s'hi han arrossegat
-      const ids = idsEntre(inici, fi);
-      deixaSeleccio();
-      commutaIds(ids);
-      return;
-    }
-    ancoraSeleccio = inici;
-    if (!mogut) {  // un clic: la paraula queda marcada i sona des d'allà
-      seleccio = null;
-      seleccioFeta = [inici];
+  document.addEventListener("pointerup", (e) => {
+    const clic = clicParaula;
+    clicParaula = null;
+    if (clic && !seleccio) {
+      // Un clic (sense arrossegar ni seleccionar res): la paraula queda marcada i sona des d'allà.
+      if (Math.hypot(e.clientX - clic.x, e.clientY - clic.y) > 4 || idsSeleccioNativa().length) return;
+      seleccioFeta = [clic.id];
+      seleccioNativa = false;
       pintaSeleccio();
-      reprodueixDes(inici);
+      reprodueixDes(clic.id);
       return;
     }
-    seleccioFeta = idsEntre(inici, fi);  // queda marcada fins al clic dret o ⌫
-    seleccio = null;  // l'arrossegament s'ha acabat: moure el ratolí ja no la canvia
-    pintaSeleccio();
+    if (!seleccio) return;
+    const { inici, fi } = seleccio;  // el botó dret: treu (o recupera) la paraula o les que s'hi han arrossegat
+    const ids = idsEntre(inici, fi);
+    deixaSeleccio();
+    commutaIds(ids);
   });
   document.addEventListener("pointercancel", () => {
-    if (!seleccio) return;
-    if (seleccio.dret) deixaSeleccio();
-    else { seleccio = null; pintaSeleccio(); }
+    clicParaula = null;
+    if (seleccio) deixaSeleccio();
   });
   cont.addEventListener("contextmenu", (e) => {
     // El clic dret el fa servir «pointerdown» per tallar: aquí només amaguem el menú.
@@ -598,6 +620,7 @@ function instalaText() {
   });
   document.addEventListener("keydown", (e) => {
     if (!seleccioFeta || mode !== "talla" || e.target.matches("input, textarea, select")) return;
+    if (["#full-final", "#full-marca", "#guia"].some((s) => !$(s).hidden)) return;  // hi ha una finestra a sobre
     if (e.key === "Escape") { deixaSeleccio(); return; }
     if (!["Backspace", "Delete"].includes(e.key)) return;
     e.preventDefault();
@@ -730,10 +753,132 @@ function actualitzaPropostes() {
 
 // --- Reproductor ------------------------------------------------------------------------
 
-// Un sol vídeo que salta de tros en tros. (Vam provar dos vídeos alternats per evitar la
-// micropausa dels salts, però al Safari el segon vídeo deixava de dir per on anava i
-// el muntatge sonava sencer, també el que estava tret.)
-const R = { v: $("#video-a"), k: 0, reproduint: false, aturaA: null, vigila: { t: -1, des: 0 }, salt: null, posat: false };
+// Dos vídeos, però només un sona: mentre s'edita, la còpia lleugera sencera, que salta de tros en tros
+// (#video-a); quan el servidor té el muntatge d'aquests talls en un sol vídeo continu, aquest
+// (#video-m), que sona sense salts: als salts, el Safari s'encalla uns quants dècims de segon.
+// (Vam provar dos vídeos alternats a cada tall, però al Safari el segon deixava de dir per on anava.)
+const R = { v: $("#video-a"), proxy: $("#video-a"), muntatge: $("#video-m"), k: 0, reproduint: false, aturaA: null,
+  vigila: { t: -1, des: 0 }, salt: null, posat: false };
+const continu = () => R.v === R.muntatge;
+let previaLlesta = null;  // {url, trams (JSON)} quan #video-m ja té el muntatge dels talls d'ara
+let esperaPrevia = null;  // el temporitzador de la petició
+
+// En quin tros del muntatge cau el temps m (amb uns talls i els seus inicis).
+function trosDe(m, llista = trams, inicis = acum) {
+  let k = 0;
+  while (k + 1 < llista.length && inicis[k + 1] <= m + 1e-6) k++;
+  return k;
+}
+// Temps del muntatge → temps de la gravació.
+const originalDe = (m, llista = trams, inicis = acum) => {
+  const k = trosDe(m, llista, inicis);
+  return llista[k] ? llista[k][0] + (m - inicis[k]) : 0;
+};
+
+function mostraVideoActiu() {
+  const directe = vista === "directe";
+  for (const v of [R.proxy, R.muntatge]) v.classList.toggle("amagat", !directe || v !== R.v);
+}
+
+// Demana el muntatge continu dels talls d'ara (un moment després de l'últim canvi).
+function programaPrevia(ms = 900) {
+  clearTimeout(esperaPrevia);
+  esperaPrevia = setTimeout(demanaPrevia, ms);
+}
+
+async function demanaPrevia() {
+  if (!trams.length) return;
+  try {
+    await cua;  // primer, que el servidor tingui els canvis
+    const r = await api("/api/previa", {});
+    if (JSON.stringify(r.trams) !== JSON.stringify(trams)) return;  // ja hi ha hagut un altre canvi
+    if (r.estat === "fent") { programaPrevia(800); return; }
+    if (r.estat !== "fet") return;
+    const json = JSON.stringify(r.trams);
+    if (R.muntatge.dataset.url !== r.url) {
+      R.muntatge.dataset.url = r.url;
+      R.muntatge.src = r.url;
+      await new Promise((resol, falla) => {
+        R.muntatge.addEventListener("loadeddata", resol, { once: true });
+        R.muntatge.addEventListener("error", falla, { once: true });
+      });
+    }
+    if (JSON.stringify(trams) !== json) return;
+    previaLlesta = { url: r.url, trams: json };
+    registre("previa", { url: r.url });
+    if (R.reproduint) passaAMuntatgeSonant(); else passaAMuntatge();
+  } catch (e) {
+    registre("previa-error", { msg: String(e?.message || e) });
+  }
+}
+
+// Al vídeo continu, al mateix punt i sense que es vegi el canvi (només amb el vídeo aturat).
+function passaAMuntatge() {
+  if (continu() || !previaLlesta || previaLlesta.trams !== JSON.stringify(trams) || R.reproduint) return;
+  const m = tempsMuntatge();
+  R.salt = null;
+  R.repren = false;
+  const fet = () => {
+    if (R.reproduint || continu() || previaLlesta?.trams !== JSON.stringify(trams)) return;
+    if (Math.abs(tempsMuntatge() - m) > 0.05) { passaAMuntatge(); return; }  // mentrestant s'ha mogut
+    R.proxy.pause();
+    R.v = R.muntatge;
+    R.k = trosDe(m);
+    mostraVideoActiu();
+    registre("continu", { m: +m.toFixed(3) });
+  };
+  if (Math.abs(R.muntatge.currentTime - m) < 0.02) { fet(); return; }
+  R.muntatge.addEventListener("seeked", fet, { once: true });
+  R.muntatge.currentTime = m;
+}
+
+// El mateix, però mentre sona: el vídeo continu es posa una mica més endavant, en silenci, i comença a
+// sonar just quan la còpia que salta hi arriba; llavors se'n canvia (sense que s'aturi ni es noti).
+let canviantSonant = false;
+function passaAMuntatgeSonant() {
+  if (canviantSonant || continu() || !previaLlesta || previaLlesta.trams !== JSON.stringify(trams) || !R.reproduint) return;
+  const M = R.muntatge;
+  const objectiu = tempsMuntatge() + 0.5;
+  if (objectiu >= duradaFinal - 0.6) return;
+  canviantSonant = true;
+  const plega = () => { canviantSonant = false; M.muted = false; };
+  const valid = () => R.reproduint && !continu() && previaLlesta?.trams === JSON.stringify(trams);
+  M.muted = true;
+  M.addEventListener("seeked", () => {
+    const espera = () => {
+      if (!valid()) { M.pause(); plega(); return; }
+      const ara = tempsMuntatge();
+      if (ara > objectiu + 0.2) { plega(); passaAMuntatgeSonant(); return; }  // s'ha passat (un salt lent): de nou
+      if (ara < objectiu - 0.12) { setTimeout(espera, 15); return; }
+      M.addEventListener("playing", () => {
+        if (!valid()) { M.pause(); plega(); return; }
+        M.muted = false;
+        R.proxy.pause();
+        R.v = M;
+        R.k = trosDe(M.currentTime);
+        mostraVideoActiu();
+        canviantSonant = false;
+        registre("continu", { m: +M.currentTime.toFixed(3), sonant: true });
+      }, { once: true });
+      M.play().catch(() => plega());
+    };
+    espera();
+  }, { once: true });
+  M.currentTime = objectiu;
+}
+
+// Els talls han canviat: el vídeo continu ja no hi correspon. Tornem a la còpia que salta, al mateix
+// moment de la gravació, i, si sonava, continua sonant.
+function passaAProxy(tOriginal) {
+  if (!continu()) return;
+  const sonava = R.reproduint;
+  R.muntatge.pause();
+  R.v = R.proxy;
+  mostraVideoActiu();
+  vesAOriginal(tOriginal);
+  if (sonava) R.v.play().catch(() => {});
+  registre("salts", { t: +tOriginal.toFixed(3) });
+}
 
 // El Safari s'encalla si li demanem un salt mentre encara en fa un altre (passa sobretot quan els
 // paràgrafs no van en l'ordre de la gravació i cal saltar enrere o lluny). Els fem d'un en un:
@@ -808,6 +953,7 @@ function indexTram(t, llista = trams) {
 function tempsMuntatge() {
   if (vista === "esborrany") return vE.currentTime || 0;
   if (!trams.length) return 0;
+  if (continu()) return Math.min(R.v.currentTime, duradaFinal);
   const k = Math.min(R.k, trams.length - 1);
   const [a, b] = trams[k];
   return acum[k] + limita(tempsVideo() - a, 0, b - a);
@@ -819,9 +965,10 @@ function vesA(m) {
   m = limita(m, 0, durada());
   if (vista === "esborrany") { vE.currentTime = m; return; }
   if (!trams.length) return;
-  let k = 0;
-  while (k + 1 < trams.length && acum[k + 1] <= m + 1e-6) k++;
+  R.posat = true;
+  const k = trosDe(m);
   R.k = k;
+  if (continu()) { R.v.currentTime = m; registre("vesA", { m: +m.toFixed(3), k, continu: true }); return; }
   posaTemps(trams[k][0] + (m - acum[k]));
   registre("vesA", { m: +m.toFixed(3), k, video: ev(R.v) });
 }
@@ -835,6 +982,7 @@ function vesAOriginal(t) {
 // Si s'ha editat mentre sonava, continuem pel tros que toca.
 function recolloca() {
   if (!trams.length) { atura(); return; }
+  if (continu()) return;
   const t = tempsVideo();
   const k = indexTram(t);
   registre("recolloca", { t: +t.toFixed(3), k, kAbans: R.k });
@@ -854,13 +1002,29 @@ function salta() {
 function reprodueix() {
   if (vista === "esborrany") { vE.play(); return; }
   if (!trams.length) return;
+  if (!continu() && previaLlesta?.trams === JSON.stringify(trams)) {  // el continu és a punt: hi passem ja
+    const m = R.posat && tempsMuntatge() < duradaFinal - 0.05 ? tempsMuntatge() : 0;
+    R.proxy.pause();
+    R.salt = null;
+    R.repren = false;
+    R.v = R.muntatge;
+    R.k = trosDe(m);
+    R.posat = true;
+    if (Math.abs(R.v.currentTime - m) < 0.01) mostraVideoActiu();
+    else {
+      R.v.addEventListener("seeked", mostraVideoActiu, { once: true });  // es veu quan ja hi és
+      R.v.currentTime = m;
+    }
+  }
   // Encara no s'ha posat enlloc (o ja s'ha acabat): comença pel principi del muntatge, que si els
   // paràgrafs s'han canviat d'ordre no és el principi de la gravació.
   if (!R.posat || tempsMuntatge() >= duradaFinal - 0.05) vesA(0);
-  const t = tempsVideo();
-  const k = indexTram(t);
-  if (k >= trams.length) vesA(0);
-  else { R.k = k; if (t < trams[k][0]) posaTemps(trams[k][0]); }
+  if (!continu()) {
+    const t = tempsVideo();
+    const k = indexTram(t);
+    if (k >= trams.length) vesA(0);
+    else { R.k = k; if (t < trams[k][0]) posaTemps(trams[k][0]); }
+  }
   R.reproduint = true;
   R.vigila = { t: -1, des: performance.now() };
   document.body.classList.add("reproduint");
@@ -879,6 +1043,7 @@ function atura() {
   R.reproduint = false;
   R.v.pause(); vE.pause();
   document.body.classList.remove("reproduint");
+  passaAMuntatge();
 }
 
 // Vigilant: si el vídeo diu que sona però el seu temps no avança, o un salt no acaba mai,
@@ -1100,7 +1265,9 @@ function pintaMostra(caixa, e, { paraules, alcada, mida }) {
 
 // El desplegable de lletres: les del kit que ha pujat la persona, les del Mac i les gratuïtes (les que
 // encara no són al kit porten «bib:»: triar-les les baixa). Amb `laDelsSubtitols`, també «la dels subtítols».
-function ompleLletres(select, valor, { laDelsSubtitols = false, buit = null } = {}) {
+// Amb `curta`, primer només les del teu estil (i les que has pujat) i «Més lletres…», que obre la llista sencera.
+function ompleLletres(select, valor, { laDelsSubtitols = false, buit = null, curta = false } = {}) {
+  select._omple = () => ompleLletres(select, valor, { laDelsSubtitols, buit, curta });
   select.textContent = "";
   const grup = (nom) => { const g = document.createElement("optgroup"); g.label = nom; select.append(g); return g; };
   const opcio = (on, v, text) => { const o = document.createElement("option"); o.value = v; o.textContent = text; on.append(o); };
@@ -1109,6 +1276,19 @@ function ompleLletres(select, valor, { laDelsSubtitols = false, buit = null } = 
   const alKit = new Set(fontsKit.map((f) => f.familia));
   const deLaBiblioteca = new Set(bibliotecaLletres.lletres.map((l) => l.nom));
   const meves = [...alKit].filter((f) => !deLaBiblioteca.has(f));
+  const delEstil = [...new Set(["lletra_titols", "lletra_text", "lletra_accent", "lletra_ma"]
+    .map((c) => estilMarca?.[c]).filter(Boolean).concat(meves))];
+  if (curta && delEstil.length && select.dataset.totes !== "1") {
+    const g = grup("Les del teu estil");
+    for (const f of delEstil) {
+      const l = bibliotecaLletres.lletres.find((x) => x.nom === f || x.id === f);
+      opcio(g, l && !alKit.has(l.nom) ? `bib:${l.id}` : l?.nom || f, l?.nom || f);
+    }
+    if (valor && ![...select.options].some((o) => o.value === valor)) opcio(select, valor, FONTS.find(([v]) => v === valor)?.[1] || valor);
+    opcio(select, "__mes__", "Més lletres…");
+    select.value = valor || "";
+    return;
+  }
   if (meves.length) { const g = grup("Les teves"); for (const f of meves) opcio(g, f, f); }
   const delMac = grup("Del Mac");
   for (const [v, text] of FONTS) opcio(delMac, v, text);
@@ -1123,6 +1303,16 @@ function ompleLletres(select, valor, { laDelsSubtitols = false, buit = null } = 
   select.value = actual;
 }
 
+// «Més lletres…»: la llista sencera, al mateix desplegable (abans que ho sàpiguen els altres «change»).
+document.addEventListener("change", (e) => {
+  const select = e.target;
+  if (!(select instanceof HTMLSelectElement) || select.value !== "__mes__") return;
+  e.stopImmediatePropagation();
+  select.dataset.totes = "1";
+  select._omple?.();
+  try { select.showPicker?.(); } catch { /* el Safari no el té: es torna a clicar */ }
+}, true);
+
 function marcaSegmentat(id, valor) {
   for (const b of $$(`#${id} button`)) b.setAttribute("aria-checked", String(b.dataset.valor === valor));
 }
@@ -1134,7 +1324,10 @@ function pintaPanellEstil() {
   const actual = predefinitActual();
   const cont = $("#estils");
   cont.textContent = "";
-  for (const p of estilsPredefinits) {
+  // Plegats, es veuen els 6 primers; si el triat és dels de més avall, ocupa el sisè lloc.
+  const ordre = [...estilsPredefinits];
+  if (!estilsMostrats && ordre.indexOf(actual) >= 6) ordre.splice(5, 0, ...ordre.splice(ordre.indexOf(actual), 1));
+  for (const p of ordre) {
     const valors = ambMarca("subtitols", p.valors);
     const mostra = botoEstil(cont, p, p === actual, () => canviaEstil(valors, true));
     if (window.TallatSubtitols) {
@@ -1144,8 +1337,7 @@ function pintaPanellEstil() {
         { paraules: n === 1 ? [MOSTRA[2]] : MOSTRA.slice(0, n), alcada: 675, mida: Math.min(0.2, v.mida * 1.6) });
     }
   }
-  // Es veuen els 6 primers; la resta, amb «Més estils» (o si el triat és un d'aquests).
-  const tots = estilsMostrats || estilsPredefinits.indexOf(actual) >= 6;
+  const tots = estilsMostrats;
   cont.classList.toggle("tots", tots);
   $("#mes-estils").hidden = estilsPredefinits.length <= 6;
   $("#mes-estils").textContent = tots ? "Menys estils" : `Més estils (${estilsPredefinits.length - 6})`;
@@ -1161,7 +1353,7 @@ function pintaPanellEstil() {
   $("#e-majuscules").setAttribute("aria-checked", String(!!e.majuscules));
   $("#e-ombra").setAttribute("aria-checked", String(!!e.ombra));
 
-  ompleLletres($("#e-font"), e.font);
+  ompleLletres($("#e-font"), e.font, { curta: true });
   $("#avis-lletra").hidden = !bibliotecaLletres.lletres.length;
 
   const pes = $("#e-pes");
@@ -1178,7 +1370,7 @@ function pintaPanellEstil() {
   $("#camps-clau").hidden = !e.clau_grans;
   $("#e-clau-mida").value = e.clau_mida ?? 1.4;
   $("#e-clau-color").value = (e.clau_color || e.color_actiu).toLowerCase();
-  ompleLletres($("#e-clau-font"), e.clau_font, { buit: "La mateixa" });
+  ompleLletres($("#e-clau-font"), e.clau_font, { buit: "La mateixa", curta: true });
   $("#e-clau-cursiva").setAttribute("aria-checked", String(!!e.clau_cursiva));
   $("#e-clau-sola").setAttribute("aria-checked", String(!!e.clau_sola));
   $("#e-posicio").value = e.posicio_y;
@@ -1383,14 +1575,14 @@ function pintaPanellTitol() {
   marcaSegmentat("t-corba-linies", e.corba_linies || "primera");
   $("#t-corba").value = e.corba ?? 0;
   $("#t-corba-linies").hidden = !e.corba;
-  ompleLletres($("#t-font"), e.font, { laDelsSubtitols: true });
+  ompleLletres($("#t-font"), e.font, { laDelsSubtitols: true, curta: true });
   const pes = $("#t-pes");
   if (![...pes.options].some((o) => +o.value === +e.pes)) {
     const o = document.createElement("option"); o.value = e.pes; o.textContent = `Gruix ${e.pes}`; pes.append(o);
   }
   pes.value = String(e.pes);
   $("#t-majuscules").setAttribute("aria-checked", String(!!e.majuscules));
-  ompleLletres($("#t-clau-font"), e.clau_font, { buit: "La mateixa" });
+  ompleLletres($("#t-clau-font"), e.clau_font, { buit: "La mateixa", curta: true });
   $("#t-clau-cursiva").setAttribute("aria-checked", String(!!e.clau_cursiva));
   $("#t-ombra").setAttribute("aria-checked", String(e.ombra !== false));
   $("#t-amaga").setAttribute("aria-checked", String(!!e.amaga_subtitols));
@@ -1836,7 +2028,7 @@ function instalaEstil() {
   if (!window.gsap) registre("sense-gsap", {});  // sense internet: subtítols sense animacions
   $("#grup-trets").addEventListener("toggle", pintaPla);  // les miniatures, quan es veuen
 
-  $("#mes-estils").addEventListener("click", () => { estilsMostrats = !$("#estils").classList.contains("tots"); pintaPanellEstil(); });
+  $("#mes-estils").addEventListener("click", () => { estilsMostrats = !estilsMostrats; pintaPanellEstil(); });
   const segmentat = (id, aplica, mostra) => {
     for (const b of $$(`#${id} button`)) b.addEventListener("click", () => canviaEstil(aplica(b.dataset.valor), mostra));
   };
@@ -1897,6 +2089,11 @@ function instalaEstil() {
 // ha avançat (per si el navegador alenteix el bucle de fotogrames).
 function comprovaTall() {
   if (R.aturaA != null && R.reproduint && tempsMuntatge() >= R.aturaA) { atura(); }
+  if (vista === "directe" && continu()) {  // el vídeo continu no salta: només cal saber on som
+    R.k = trosDe(tempsMuntatge());
+    if (R.reproduint && (R.v.ended || R.v.currentTime >= duradaFinal - 0.02)) atura();
+    return;
+  }
   if (vista === "directe" && R.reproduint && trams.length && !R.v.seeking && R.salt == null) {
     const t = R.v.currentTime;
     const [a, b] = trams[Math.min(R.k, trams.length - 1)];
@@ -1910,7 +2107,7 @@ function comprovaTall() {
 let paraulaMarcada = null;
 function paraulaActual() {
   let t;
-  if (vista === "directe") t = R.v.currentTime;
+  if (vista === "directe") t = continu() ? originalDe(tempsMuntatge()) : R.v.currentTime;
   else if (esborrany?.trams) {
     const m = vE.currentTime;
     let k = 0;
@@ -1960,17 +2157,22 @@ function pintaMarques(llista, inicis, total) {
 }
 
 function instalaReproductor() {
-  R.v.src = "/proxy.mp4";
-  for (const nom of ["play", "pause", "seeking", "seeked", "waiting", "stalled", "error", "ended"]) {
-    R.v.addEventListener(nom, () => registre("v-" + nom, ev(R.v)));
+  R.proxy.src = "/proxy.mp4";
+  for (const v of [R.proxy, R.muntatge]) {
+    for (const nom of ["play", "pause", "seeking", "seeked", "waiting", "stalled", "error", "ended"]) {
+      v.addEventListener(nom, () => registre("v-" + nom, ev(v)));
+    }
+    v.addEventListener("timeupdate", () => { if (v === R.v) comprovaTall(); });
   }
-  R.v.addEventListener("error", () => avis("No puc obrir la còpia lleugera del vídeo (proxy.mp4)."));
-  R.v.addEventListener("timeupdate", comprovaTall);
+  R.proxy.addEventListener("error", () => avis("No puc obrir la còpia lleugera del vídeo (proxy.mp4)."));
+  // Si el vídeo continu falla, es continua amb la còpia que salta.
+  R.muntatge.addEventListener("error", () => { previaLlesta = null; if (continu()) passaAProxy(originalDe(tempsMuntatge())); });
   // Si la pàgina deixa de veure's, el navegador alenteix els salts: parem perquè no soni el que s'ha tret.
   document.addEventListener("visibilitychange", () => { if (document.hidden && sona()) atura(); });
   // Primer salt quan ja hi ha dades (no només la informació general): el Safari ho agraeix.
-  R.v.addEventListener("loadeddata", () => { if (!R.posat) vesA(0); pintaTemps(); }, { once: true });
-  R.v.addEventListener("seeked", () => {
+  R.proxy.addEventListener("loadeddata", () => { if (!R.posat) vesA(0); pintaTemps(); programaPrevia(0); }, { once: true });
+  R.proxy.addEventListener("seeked", () => {
+    if (continu()) return;  // els salts són de la còpia lleugera
     if (R.salt != null) {  // el salt que esperava
       const t = R.salt;
       R.salt = null;
@@ -2020,7 +2222,7 @@ function canviaVista(nova) {
   vista = nova;
   for (const b of $$("#vista button")) b.setAttribute("aria-checked", String(b.dataset.vista === vista));
   const directe = vista === "directe";
-  R.v.classList.toggle("amagat", !directe);
+  mostraVideoActiu();
   vE.classList.toggle("amagat", directe);
   $("#escolta").hidden = !directe;
   if (directe) pintaMarques(trams, acum, duradaFinal);
@@ -2105,13 +2307,14 @@ async function consultaFeina() {
     seguimentFeina(feina);
     if (feina?.estat === "fet" && feina.fitxer && feina.fitxer !== consultaFeina.darrer) {
       consultaFeina.darrer = feina.fitxer;
+      if (feina.avis) setTimeout(() => avis(feina.avis, 8000), 6500);  // després de l'avís de «fet»
       pintaVersions(r.exports);
       pintaCarpeta(r);
       if (feina.qualitat === "editors") {
         mostraFet(feina, "Projecte per a altres editors a punt (hi ha un LLEGEIX-ME amb els passos)");
         mostraAlFinder(feina);
       } else if (feina.qualitat === "esborrany") {
-        avis("L'esborrany és a punt. Mira'l i digues a Claude què vols canviar (amb el segon, que veus sota el vídeo).", 6000);
+        avis(`L'esborrany és a punt${feina.copia ? " (també a la teva carpeta)" : ""}. Mira'l i digues a Claude què vols canviar (amb el segon, que veus sota el vídeo).`, 6000);
         carregaVersio(feina.fitxer);
       } else {
         mostraFet(feina, `Vídeo en ${QUALITATS[feina.qualitat]} a punt`);
@@ -2201,6 +2404,15 @@ function pintaReels() {
   $("#seccio-reels").hidden = !reels.length;  // si encara no n'hi ha, no ocupa lloc
   if (!reels.length) return;
   cont.textContent = "";
+  // El primer, el vídeo sencer (la gravació tal com és, sense separar-la en reels).
+  const sencer = document.createElement("div");
+  sencer.className = "item reel sencer" + (P.reel_actual ? "" : " obert");
+  sencer.innerHTML = `<span class="reel-text"><span class="reel-titol">Vídeo sencer</span>
+      <span class="reel-detall">Tota la gravació, sense separar-la en reels</span></span>
+    <span class="reel-durada">${P.origen?.durada ? fmt(P.origen.durada) : ""}</span>`;
+  sencer.addEventListener("click", () => obre(null));
+  fesClicable(sencer);
+  cont.append(sencer);
   for (const r of reels) {
     const item = document.createElement("div");
     item.className = "item reel" + (r.id === P.reel_actual ? " obert" : "");
@@ -2216,7 +2428,7 @@ function pintaReels() {
 }
 
 async function obre(reel) {
-  if (reel === P.reel_actual) return;
+  if ((reel || null) === (P.reel_actual || null)) return;
   atura();
   try {
     await cua;  // que no quedi cap canvi per desar
@@ -2457,7 +2669,8 @@ let previaGrafics = null;
 let notaOberta = null;     // l'id del gràfic que té la nota oberta
 const targetesGrafic = new Map();  // id → {el, sig}: només es refà la que canvia
 
-const ESTATS_GRAFIC = { mantingut: "Mantingut", canvia: "Per canviar" };
+const ESTATS_GRAFIC = { canvia: "Per canviar" };
+let graficTriat = null;  // el que està obert a la graella (amb «Canvia» i «Treu»)
 
 const graficDe = (id) => (estat?.grafics || []).find((g) => g.id === id);
 // Els trets desapareixen de seguida, sense esperar el servidor.
@@ -2483,20 +2696,24 @@ function textGrafic(g) {
   return `«${text}»`;
 }
 
+// Cada gràfic és una miniatura de la graella; en tocar-la, s'obre (i el vídeo hi va): què diu, les
+// imatges si en porta, «Canvia» (amb una nota per a Claude) i «Treu». Si no hi toques res, es queda.
 function targetaGrafic(g) {
   const s = graficsMuntatge.find((x) => x.id === g.id);
   const falta = !!dibuixosGrafics[g.id]?.falta;  // la web o el ventall sense imatges: no surt fins que n'hi hagi
+  const triat = graficTriat === g.id;
   const el = document.createElement("div");
-  el.className = `grafic ${g.estat}${s || g.estat === "tret" || falta ? "" : " fora"}`;
-  el.innerHTML = `<button class="mini-grafic"><span class="mg-host"></span></button>
-    <div class="grafic-cos">
+  el.className = `grafic ${g.estat}${s || g.estat === "tret" || falta ? "" : " fora"}${triat ? " triat" : ""}`;
+  el.innerHTML = `<button class="mini-grafic" aria-expanded="${triat}"><span class="mg-host"></span><span class="mg-avis" hidden></span></button>
+    <span class="grafic-peu"><span class="temps-petit"></span><strong></strong></span>
+    <div class="grafic-cos" ${triat ? "" : "hidden"}>
       <div class="grafic-cap"><strong></strong><span class="temps-petit"></span><span class="grafic-estat"></span></div>
       <p class="grafic-text"></p>
       <div class="grafic-imatges" hidden></div>
       <p class="grafic-nota" hidden></p>
       <p class="grafic-motiu" hidden></p>
       <div class="segmentat ample decisio" role="group" aria-label="Què en fem">
-        <button data-estat="mantingut">Mantén</button><button data-estat="canvia">Canvia</button><button data-estat="tret">Treu</button>
+        <button data-estat="canvia">Canvia</button><button data-estat="tret">Treu</button>
       </div>
       <button class="enllac torna" hidden>Torna'l a posar</button>
       <form class="nota-grafic" hidden>
@@ -2506,17 +2723,21 @@ function targetaGrafic(g) {
           <button type="button" class="enllac cancel">Cancel·la</button></div>
       </form>
     </div>`;
-  el.querySelector("strong").textContent = dibuixosGrafics[g.id]?.nom || g.tipus;
-  el.querySelector(".temps-petit").textContent = s ? fmtSegons(s.inici) : g.estat === "tret" ? ""
+  const nom = dibuixosGrafics[g.id]?.nom || g.tipus;
+  const quan = s ? fmtSegons(s.inici) : g.estat === "tret" ? ""
     : falta ? (g.tipus === "web" ? "falta la captura" : "falta alguna foto") : "ja no surt al vídeo";
+  for (const strong of el.querySelectorAll("strong")) strong.textContent = nom;
+  for (const t of el.querySelectorAll(".temps-petit")) t.textContent = quan;
+  // A la miniatura, un senyal petit: una nota per a Claude o que hi falten imatges.
+  const senyal = el.querySelector(".mg-avis");
+  if (g.estat === "canvia" || falta) Object.assign(senyal, { hidden: false, textContent: g.estat === "canvia" ? "✎" : "+" });
   if (g.tipus === "web" || g.tipus === "ventall") pintaImatgesGrafic(el.querySelector(".grafic-imatges"), g);
   el.querySelector(".grafic-estat").textContent = ESTATS_GRAFIC[g.estat] || "";
   el.querySelector(".grafic-text").textContent = textGrafic(g);
   if (g.nota) Object.assign(el.querySelector(".grafic-nota"), { hidden: false, textContent: `Nota: ${g.nota}` });
   if (g.motiu) Object.assign(el.querySelector(".grafic-motiu"), { hidden: false, textContent: g.motiu });
   const mini = el.querySelector(".mini-grafic");
-  mini.setAttribute("aria-label", s ? `Mira'l al vídeo (${fmtSegons(s.inici)})` : "Miniatura");
-  mini.disabled = !s;
+  mini.setAttribute("aria-label", `${nom}${s ? `, al ${fmtSegons(s.inici)}` : ""}: ${triat ? "tanca'l" : "obre'l"}`);
   for (const b of el.querySelectorAll(".decisio button")) b.setAttribute("aria-pressed", String(b.dataset.estat === g.estat));
   el.querySelector(".decisio").hidden = g.estat === "tret";
   el.querySelector(".torna").hidden = g.estat !== "tret";
@@ -2532,7 +2753,14 @@ function targetaGrafic(g) {
     if (boto) return decideixGrafic(g.id, boto.dataset.estat);
     if (e.target.closest(".torna")) return decideixGrafic(g.id, "proposat");
     if (e.target.closest(".cancel")) { notaOberta = null; form.hidden = true; return; }
-    if (e.target.closest(".mini-grafic, .grafic-text") && s) vesA(s.inici + Math.min(0.8, (s.final - s.inici) / 2));
+    if (e.target.closest(".mini-grafic, .grafic-peu")) {
+      graficTriat = triat ? null : g.id;
+      if (!graficTriat && notaOberta === g.id) notaOberta = null;
+      pintaPla();
+      if (graficTriat && s) vesA(s.inici + Math.min(0.8, (s.final - s.inici) / 2));
+      return;
+    }
+    if (e.target.closest(".grafic-text") && s) vesA(s.inici + Math.min(0.8, (s.final - s.inici) / 2));
   });
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -2573,29 +2801,21 @@ function pintaImatgesGrafic(cont, g) {
   cont.append(puja);
 }
 
+// Amb un camp de fitxers que viu a la pàgina (#fitxer-grafic): el Safari no sempre obre la finestra
+// des d'un camp que no hi és.
+let graficPerPujar = null;
 function triaImatgesGrafic(g) {
-  const tria = document.createElement("input");
-  Object.assign(tria, { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", multiple: g.tipus === "ventall" });
-  tria.addEventListener("change", () => pujaImatgesGrafic(g.id, [...tria.files]));
+  graficPerPujar = g.id;
+  const tria = $("#fitxer-grafic");
+  tria.multiple = g.tipus === "ventall";
   tria.click();
 }
 
 async function pujaImatgesGrafic(id, fitxers) {
   if (!fitxers.length) return;
   avis(fitxers.length > 1 ? `Pujant ${fitxers.length} imatges…` : "Pujant la imatge…", 20000);
-  try {
-    await cua;
-    let json = null;
-    for (const fitxer of fitxers) {
-      json = await resposta(await fetch(
-        `/api/grafics/imatge?grafic=${encodeURIComponent(id)}&nom=${encodeURIComponent(fitxer.name)}`,
-        { method: "POST", headers: capcaleres(), body: fitxer }));
-    }
-    estat = json.estat;
-    aplicaTrams(json);
-    refresca(true);
-    avis("Fet. Mira-ho al vídeo.");
-  } catch (e) { avis(e.message, 6000); }
+  const url = (f) => `/api/grafics/imatge?grafic=${encodeURIComponent(id)}&nom=${encodeURIComponent(f.name)}`;
+  if (await pujaFitxers(fitxers, url)) avis("Fet. Mira-ho al vídeo.");
 }
 
 // La miniatura: el gràfic dibuixat petit, amb el mateix codi que el vídeo. Torna la seva línia de
@@ -2625,7 +2845,7 @@ function ompleGrafics(cont, llista) {
   for (const el of [...cont.children]) if (!ids.has(el.dataset.id)) el.remove();
   for (const g of llista) {
     const s = graficsMuntatge.find((x) => x.id === g.id);
-    const sig = JSON.stringify([g, s, dibuixosGrafics[g.id], paletaGrafics, notaOberta === g.id,
+    const sig = JSON.stringify([g, s, dibuixosGrafics[g.id], paletaGrafics, notaOberta === g.id, graficTriat === g.id,
       g.tipus === "crida" && estilMarca?.crida]);
     let fet = targetesGrafic.get(g.id);
     if (!fet || fet.sig !== sig) {
@@ -2650,10 +2870,17 @@ function pintaPla() {
   const tots = estat.grafics || [];
   const vius = tots.filter((g) => g.estat !== "tret");
   const trets = tots.filter((g) => g.estat === "tret");
-  const perRevisar = vius.filter((g) => g.estat === "proposat").length;
   const notes = vius.filter((g) => g.estat === "canvia").length;
-  $("#compte-grafics").textContent = perRevisar ? `${perRevisar} per revisar` : vius.length ? String(vius.length) : "";
-  $("#punt-grafics").hidden = !perRevisar;
+  // El punt de la pestanya: hi ha gràfics nous que encara no has vist (els veus en obrir la pestanya).
+  const clauVistos = `tallat.grafics-vistos.${P?.clau_projecte || ""}`;
+  const vistos = new Set(llegeix(clauVistos, []));
+  if (!$("#pestanya-grafics").hidden) {
+    for (const g of vius) vistos.add(g.id);
+    desa(clauVistos, [...vistos].slice(-300));
+  }
+  $("#compte-grafics").textContent = vius.length ? String(vius.length) : "";
+  $("#punt-grafics").hidden = !vius.some((g) => g.estat === "proposat" && !vistos.has(g.id));
+  if (graficTriat && !tots.some((g) => g.id === graficTriat)) graficTriat = null;
   $("#ajuda-grafics").textContent = !tots.length
     ? "Encara no hi ha cap pla. Demana'l a Claude, al xat: «proposa'm gràfics»."
     : notes ? `Quan acabis, digues a Claude: «mira les notes dels gràfics» (${notes === 1 ? "n'hi ha una" : `n'hi ha ${notes}`}).`
@@ -2671,6 +2898,7 @@ function decideixGrafic(id, nou) {
   if (!g) return;
   if (nou === "canvia") {  // primer s'escriu la nota; l'estat canvia en desar-la
     notaOberta = notaOberta === id ? null : id;
+    if (notaOberta) graficTriat = id;  // la nota és dins la miniatura oberta
     pintaPla();
     if (notaOberta) targetesGrafic.get(id)?.el.querySelector("textarea").focus();
     return;
@@ -2820,7 +3048,7 @@ function pintaBarraCapa() {
   mes.addEventListener("click", () => {
     const q = quin;
     deixaCapa();
-    if (q === "titol") { triaPestanya("grafics"); obreTitol(); } else triaPestanya("subtitols");
+    if (q === "titol") { triaPestanya("grafics"); obreTitol(); } else { triaPestanya("subtitols"); $("#grup-e-mes").open = true; }
   });
   const tanca = document.createElement("button");
   tanca.className = "icona";
@@ -2937,7 +3165,7 @@ function pintaBarraGrafic(id) {
   const fila = document.createElement("div");
   fila.className = "barra-fila";
   barra.append(fila);
-  for (const [estat, text] of [["mantingut", "Mantén"], ["canvia", "Canvia"], ["tret", "Treu"]]) {
+  for (const [estat, text] of [["canvia", "Canvia"], ["tret", "Treu"]]) {
     const b = document.createElement("button");
     b.className = `boto petit decisio-${estat}`;
     b.textContent = text;
@@ -3015,7 +3243,7 @@ function instalaEdicioAlVideo() {
 // Surt sola el primer cop; després, amb el «?» de dalt.
 
 const PASSES_GUIA = [
-  ["#seccio-reels", "Aquí hi ha els reels que t'ha proposat Claude. Toca'n un per obrir-lo."],
+  ["#seccio-reels", "Aquí tries què edites: el vídeo sencer o un dels reels que t'ha proposat Claude."],
   [".text", "Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫."],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
   ["#pestanyes", "Aquí tens els subtítols, els gràfics i el so."],
@@ -3223,7 +3451,7 @@ function pintaAssistent() {
     if (fontsKit.length) {
       const b = opcioAssistent(graella, a.parella === "kit", () => { a.parella = "kit"; pintaAssistent(); });
       b.classList.add("lletres-opcio");
-      b.innerHTML = "<strong>Les meves</strong><span>Les lletres que ja tens al kit</span>";
+      b.innerHTML = "<strong>Les meves</strong><span>Les lletres que ja tens al teu estil</span>";
     }
   } else if (a.pas === 2) {
     const paleta = { ...(paletaGrafics || {}), text: a.colors.color_text, principal: a.colors.color_principal,
@@ -3315,18 +3543,28 @@ function instalaAssistent() {
 }
 
 let instruccioPerPujar = null;
-async function pujaBroll(iid, fitxer) {
-  avis(`Pujant «${fitxer.name}»…`, 20000);
+// Puja fitxers un darrere l'altre (el cos de la petició és el fitxer) i aplica la darrera resposta bona,
+// també si un dels del mig falla: els d'abans ja són al servidor.
+async function pujaFitxers(fitxers, url) {
+  let json = null;
   try {
     await cua;
-    const json = await resposta(await fetch(
-      `/api/broll/puja?instruccio=${encodeURIComponent(iid)}&nom=${encodeURIComponent(fitxer.name)}`,
-      { method: "POST", headers: capcaleres(), body: fitxer }));
-    estat = json.estat;
-    aplicaTrams(json);
-    refresca(true);
-    avis("Fet. Mira-ho al reproductor.");
-  } catch (e) { avis(e.message, 6000); }
+    for (const fitxer of fitxers) {
+      json = await resposta(await fetch(url(fitxer), { method: "POST", headers: capcaleres(), body: fitxer }));
+    }
+    return true;
+  } catch (e) {
+    avis(e.message, 6000);
+    return false;
+  } finally {
+    if (json) { estat = json.estat; aplicaTrams(json); refresca(true); }
+  }
+}
+
+async function pujaBroll(iid, fitxer) {
+  avis(`Pujant «${fitxer.name}»…`, 20000);
+  const url = (f) => `/api/broll/puja?instruccio=${encodeURIComponent(iid)}&nom=${encodeURIComponent(f.name)}`;
+  if (await pujaFitxers([fitxer], url)) avis("Fet. Mira-ho al reproductor.");
 }
 
 async function accioBroll(ruta, dades, missatge) {
@@ -3501,6 +3739,11 @@ function instalaControls() {
     canviaVista(b.dataset.vista);
   });
   $("#tornar").addEventListener("click", () => obre(null));
+  $("#fitxer-grafic").addEventListener("change", (e) => {
+    const fitxers = [...e.target.files];
+    e.target.value = "";
+    if (graficPerPujar) pujaImatgesGrafic(graficPerPujar, fitxers);
+  });
   $("#fitxer-broll").addEventListener("change", (e) => {
     const fitxer = e.target.files[0];
     if (fitxer && instruccioPerPujar) pujaBroll(instruccioPerPujar, fitxer);
@@ -3595,8 +3838,9 @@ function marcaPausa() {
   if (actual > 0) k = [1, 2, 3].reduce((millor, j) => (Math.abs(RITMES[j] - actual) < Math.abs(RITMES[millor] - actual) ? j : millor), 1);
   $("#ritme").value = String(k);
   $("#ritme").setAttribute("aria-valuetext", NOMS_RITME[k]);
-  $("#ritme").title = NOMS_RITME[k];
-  $("#nom-ritme").textContent = NOMS_RITME[k];
+  const aMida = actual > 0 && !RITMES.includes(actual);  // el teu estil en diu un altre (0,6 s…): es diu
+  $("#ritme").title = aMida ? `Els del teu estil (${String(actual).replace(".", ",")} s)` : NOMS_RITME[k];
+  $("#nom-ritme").textContent = aMida ? "Els del teu estil" : NOMS_RITME[k];
 }
 
 async function inicia() {

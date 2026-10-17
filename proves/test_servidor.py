@@ -92,6 +92,13 @@ class TestServidor(unittest.TestCase):
         self.assertEqual(self.peticio("GET", f"/imatges-grafics/{nom}")[1], "una foto")
         self.assertEqual(self.peticio("GET", "/imatges-grafics/../transcripcio.json")[0], 403)
 
+    def test_si_no_es_pot_copiar_a_la_carpeta_l_export_no_falla(self):
+        from motor import exporta
+        with mock.patch.object(exporta, "copia_a_carpeta", side_effect=PermissionError(13, "Permission denied")):
+            copia, avis = servidor._copia(self.carpeta / "video.mp4")
+        self.assertIsNone(copia)
+        self.assertIn("carpeta del projecte", avis)
+
     def test_nomes_amb_el_nom_d_aquest_mac(self):
         self.assertEqual(self.peticio("GET", "/api/projecte", host="dolenta.example")[0], 403)
 

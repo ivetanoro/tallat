@@ -184,24 +184,32 @@ def _blocs(paraules: list[dict], ordre) -> list[list[dict]]:
     """Agrupa les paraules en blocs que sonen en l'ordre indicat (per a reels muntats).
 
     Sense `ordre`, tot és un sol bloc en l'ordre de la gravació. Amb `ordre` (llista de
-    trossos [primera, última] d'ids), cada tros és un bloc. Si s'ha recuperat una paraula
-    de fora de tots els trossos, s'afegeix al bloc que la precedeix a la gravació."""
+    trossos [primera, última] d'ids), cada tros és un bloc. Les paraules de fora de tots els
+    trossos que s'han recuperat sonen al final, en l'ordre de la gravació: on les mostra la pàgina
+    (Projecte.paragrafs). Si sonessin enmig, el vídeo saltaria a un text que no es veu allà."""
     if not ordre:
         return [paraules]
     rangs = [(int(a), int(b)) for a, b in ordre]
     blocs: list[list[dict]] = [[] for _ in rangs]
+    fora: list[dict] = []
     for p in paraules:
         i = p["id"]
         k = next((n for n, (a, b) in enumerate(rangs) if a <= i <= b), None)
         if k is None:
-            if not p["conservada"]:
-                continue
-            anteriors = [n for n, (a, b) in enumerate(rangs) if b < i]
-            k = (max(anteriors, key=lambda n: rangs[n][1]) if anteriors
-                 else min(range(len(rangs)), key=lambda n: rangs[n][0]))
+            if p["conservada"]:
+                fora.append(p)
+            continue
         blocs[k].append(p)
     for b in blocs:
         b.sort(key=lambda p: p["id"])
+    tros: list[dict] = []
+    for p in sorted(fora, key=lambda p: p["id"]):  # els trossos seguits, cadascun un bloc
+        if tros and p["id"] != tros[-1]["id"] + 1:
+            blocs.append(tros)
+            tros = []
+        tros.append(p)
+    if tros:
+        blocs.append(tros)
     return blocs
 
 

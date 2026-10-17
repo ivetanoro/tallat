@@ -441,7 +441,7 @@ def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
     (desti / f"{nom}.srt").write_text(srt(linies), encoding="utf-8")
     capa = None
     titol = projecte.titol(trams)
-    situats = projecte.grafics(trams, linies)
+    situats = projecte.grafics(trams, linies, sense_bloc=True)  # aquí no hi ha el bloc de color
     if amb_capa and (linies or titol or situats):  # subtítols, títol del ganxo i gràfics (els stickers van a part)
         estil = projecte.estil()
         mov = subtitols.renderitza(linies, estil["subtitols"], sum(b - a for a, b in trams),

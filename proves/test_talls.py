@@ -200,3 +200,33 @@ class TestCarpetaDelsVideos(unittest.TestCase):
             finally:
                 exporta.tria_carpeta_exports(None)
         self.assertIsNone(exporta.carpeta_exports())  # si la carpeta ja no hi és, la del projecte
+
+
+class TestPreviaContinua(unittest.TestCase):
+    """El muntatge en un sol vídeo, perquè la pàgina el reprodueixi sense saltar."""
+
+    def test_dura_el_que_dura_el_muntatge(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=4",
+                            "-f", "lavfi", "-i", "sine=d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                            "-shortest", str(d / "proxy.mp4")], check=True)
+            trams = [(0.2, 1.0), (2.0, 3.5)]
+            sortida = exporta.fes_previa(d / "proxy.mp4", trams, d / "previa" / "p.mp4")
+            self.assertAlmostEqual(exporta.info_video(sortida)["durada"], 2.3, delta=0.08)
+            self.assertFalse(list((d / "previa").glob(".*")))  # cap fitxer a mitges
+
+
+class TestAlineadorMMS(unittest.TestCase):
+    """El temps de cada paraula (motor/transcripcio.py): el que entén el model i les vores als silencis."""
+
+    def test_el_text_que_entén_el_model(self):
+        self.assertEqual(transcripcio.romanitza("L'àvia,"), "l'avia")
+        self.assertEqual(transcripcio.romanitza("Col·legi!"), "collegi")
+        self.assertEqual(transcripcio.romanitza("25"), "")  # aquestes van amb el comodí
+
+    def test_les_vores_als_silencis(self):
+        veu = np.zeros(300, dtype=bool)
+        veu[100:150] = True  # veu d'1,00 a 1,50 s
+        self.assertEqual(transcripcio.retalla_als_silencis([(0.6, 1.8)], veu), [(1.0, 1.5)])
+        self.assertEqual(transcripcio.retalla_als_silencis([(2.0, 2.5)], veu), [(2.0, 2.5)])  # sense veu: com era

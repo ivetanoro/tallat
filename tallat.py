@@ -9,6 +9,7 @@
   python tallat.py guio --projecte CARPETA            (text per paràgrafs perquè l'assistent proposi reels)
   python tallat.py reels --projecte CARPETA           (valida reels.json i en mostra la durada)
   python tallat.py reel ID --projecte CARPETA         (crea el projecte d'un reel proposat)
+  python tallat.py realinea --projecte CARPETA         (torna a calcular el temps de cada paraula)
   python tallat.py afegeix TIPUS --paraula ID --projecte CARPETA [--text "…"] [--treu A-B]   (instrucció a mà)
   python tallat.py broll ID_INSTRUCCIO FITXER --projecte CARPETA [--durada 1.5]
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
@@ -96,6 +97,36 @@ def _enllaca(origen, desti) -> None:
         shutil.copy2(origen, desti)
 
 
+def ordre_realinea(args) -> None:
+    """Torna a calcular quan comença i acaba cada paraula (amb l'alineador d'ara), sense canviar el text
+    ni res de l'edició: els talls, els subtítols i els gràfics hi tornen a caure al lloc."""
+    projecte = _carrega(args)
+    path = (projecte.carpeta / TRANSCRIPCIO).resolve()  # en un reel, la de la gravació sencera
+    dades = json.loads(path.read_text(encoding="utf-8"))
+    paraules = dades["paraules"]
+    frases: dict[int, list[dict]] = {}
+    for p in paraules:
+        frases.setdefault(p["frase"], []).append(p)
+    segments = [{"start": ps[0]["inici"], "end": ps[-1]["final"], "text": " ".join(p["text"] for p in ps)}
+                for _, ps in sorted(frases.items())]
+    print(f"Calculant de nou el temps de {len(paraules)} paraules (pot trigar uns minuts; el primer cop baixa el model)…",
+          flush=True)
+    t0 = time.time()
+    noves = transcripcio.a_paraules(transcripcio.alinea(transcripcio.carrega_audio(Path(dades["video"])), segments))
+    if [p["text"] for p in noves] != [p["text"] for p in paraules]:
+        sys.exit("Les paraules no coincideixen amb les de la transcripció: no he canviat res.")
+    canvis = [abs(n["inici"] - p["inici"]) for n, p in zip(noves, paraules)]
+    copia = path.with_name(f"transcripcio-abans-{time.strftime('%Y%m%d-%H%M%S')}.json")
+    shutil.copy2(path, copia)
+    for p, n in zip(paraules, noves):
+        p["inici"], p["final"] = n["inici"], n["final"]
+    dades["font"] = str(dades.get("font", "")).replace("WhisperX", "MMS") or "alineació MMS"
+    path.write_text(json.dumps(dades, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"Fet en {minuts(time.time() - t0)}. {sum(c > 0.25 for c in canvis)} paraules s'han mogut més d'un quart de "
+          f"segon (la que més, {max(canvis):.1f} s). La d'abans és a {copia.name}.")
+    print("Si tens la pàgina de revisió oberta, tanca-la i torna-la a obrir.")
+
+
 def ordre_transcriu(args) -> None:
     video = Path(args.video).expanduser().resolve()
     carpeta = Path(args.projecte).expanduser().resolve()
@@ -115,7 +146,7 @@ def ordre_transcriu(args) -> None:
     audio = transcripcio.carrega_audio(video)
     if args.srt:
         frases = transcripcio.llegeix_srt(Path(args.srt).expanduser())
-        font = "text de l'SRT + alineació WhisperX"
+        font = "text de l'SRT + alineació MMS"
         print(f"Calculant el temps de cada paraula ({len(frases)} frases)…")
     else:
         print(f"Transcrivint amb WhisperX ({args.model}). En un Mac Intel pot trigar més que el vídeo…")
@@ -286,7 +317,11 @@ def ordre_exporta(args) -> None:
                     zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
                     blocs=projecte.blocs(trams), **projecte.opcions_so(trams))
     projecte.desa_talls(sortida, trams)
-    copia = exporta.copia_a_carpeta(sortida) if args.qualitat != "esborrany" else None
+    copia = None
+    try:
+        copia = exporta.copia_a_carpeta(sortida)
+    except OSError as e:
+        print(f"\nNo l'he pogut copiar a la teva carpeta ({e.strerror or e}): és a la del projecte.")
     print(f"\nFet en {minuts(time.time() - t0)}:\n  {copia or sortida}")
 
 
@@ -655,6 +690,10 @@ def main() -> None:
     t.add_argument("--forca", action="store_true", help="Refés la transcripció encara que ja n'hi hagi una")
     t.add_argument("--sense-neteja", action="store_true", help="No treguis el farciment automàticament")
     t.set_defaults(func=ordre_transcriu)
+
+    ra = sub.add_parser("realinea", help="Torna a calcular quan comença i acaba cada paraula (sense tocar l'edició)")
+    ra.add_argument("--projecte", required=True)
+    ra.set_defaults(func=ordre_realinea)
 
     r = sub.add_parser("revisa", help="Obre la pàgina de revisió al navegador")
     r.add_argument("--projecte", required=True)
