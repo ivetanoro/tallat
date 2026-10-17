@@ -45,7 +45,7 @@ class TestGrups(unittest.TestCase):
             trams = edicio.trams(p, fps=fps, durada=1.0)
             linies = subtitols.grups(p, trams, ESTIL)
             self.assertEqual([m["text"] for l in linies for m in l["paraules"]], ["Hola"])
-            self.assertEqual(linies[0]["inici"], 0.0)
+            self.assertAlmostEqual(linies[0]["inici"], 0.0, delta=1 / fps)
 
     def test_cap_linia_passa_del_final(self):
         p = paraules(("final", 0.0, 0.9))
@@ -122,6 +122,21 @@ class TestMemoriaDelRender(unittest.TestCase):
             font.write_bytes(b"lletra nova")
             self.assertNotEqual(subtitols.renderitza(linies, estil, 1.0, Path(d), "esborrany", fonts=fonts), primer)
             self.assertEqual(len(dibuixos), 2)
+
+    def test_si_el_navegador_triga_a_arrencar_el_primer_cop_s_hi_torna(self):
+        # El Mac revisa el navegador acabat de baixar i HyperFrames no l'espera prou.
+        intents = []
+
+        def hyperframes(ordre, **_):
+            intents.append(ordre)
+            if len(intents) == 1:
+                return mock.Mock(returncode=1, stdout="", stderr="✗  Chrome cannot start\n   (signal SIGTERM, ETIMEDOUT)")
+            Path(ordre[ordre.index("--output") + 1]).write_bytes(b"mov")
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(subtitols.subprocess, "run", hyperframes):
+            linies = [{"inici": 0.0, "final": 1.0, "paraules": [{"text": "hola", "inici": 0.0, "final": 1.0}]}]
+            self.assertTrue(subtitols.renderitza(linies, ESTIL, 1.0, Path(d), "esborrany").exists())
+        self.assertEqual(len(intents), 2)
 
 
 def frase(text: str, pas: float = 0.3):

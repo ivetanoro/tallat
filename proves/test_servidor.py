@@ -129,6 +129,42 @@ class TestServidor(unittest.TestCase):
         self.assertIn("previa_1.mp4", noms)
         self.assertEqual(previa.demana(projecte, [])["estat"], "no")
 
+    def test_escoltar_un_tall_fa_un_video_curt(self):
+        from motor import edicio, exporta
+
+        class Projecte_:
+            fps = 30.0
+
+            def __init__(self, carpeta):
+                self.carpeta = carpeta
+                self.t = [edicio.Tram(0.0, 2.0), edicio.Tram(5.0, 9.0, so=(5.2, 9.0))]
+
+            def trams(self):
+                return self.t
+
+            def previa(self, trams, nom="previa"):
+                return self.carpeta / "previa" / f"{nom}_{trams[0][0]}_{len(trams)}.mp4"
+
+        fets = []
+
+        def fes(proxy, trams, desti, curt=False):
+            fets.append(trams)
+            desti.parent.mkdir(exist_ok=True)
+            desti.write_bytes(b"mp4")
+
+        projecte = Projecte_(self.carpeta)
+        (self.carpeta / "proxy.mp4").write_bytes(b"x")
+        with mock.patch.object(exporta, "fes_previa", side_effect=fes):
+            r = servidor.escolta(projecte, 2.0)  # el tall entre els dos trossos
+            self.assertEqual((r["estat"], r["inici"], r["durada"]), ("fet", 0.5, 3.0))
+            self.assertEqual(fets[0], [(0.5, 2.0), (5.0, 6.5)])
+            self.assertEqual(fets[0][1].so, (5.2, 6.5))  # el so del segon tros, com al muntatge
+            servidor.escolta(projecte, 2.0)
+            self.assertEqual(len(fets), 1)  # ja era fet
+            for m in range(3, 10):
+                servidor.escolta(projecte, m)
+        self.assertLessEqual(len(list((self.carpeta / "previa").glob("escolta_*.mp4"))), 5)
+
     def test_si_no_es_pot_copiar_a_la_carpeta_l_export_no_falla(self):
         from motor import exporta
         with mock.patch.object(exporta, "copia_a_carpeta", side_effect=PermissionError(13, "Permission denied")):

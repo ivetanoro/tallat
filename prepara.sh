@@ -107,24 +107,30 @@ if [ "$(uname -m)" = "x86_64" ]; then
     fi
   done
 fi
-"$PY" -c 'import ctranslate2, torch, whisperx' 2>/dev/null || falla "WhisperX no arrenca. Executa «.venv/bin/python tallat.py comprova» per veure-hi més."
+# Abans de WhisperX, la llista de lletres del Mac que fa servir matplotlib (vegeu motor/entorn.py).
+(cd "$CARPETA" && "$PY" -c 'from motor import entorn; entorn.llista_de_lletres(); import ctranslate2, torch, whisperx') 2>/dev/null \
+  || falla "WhisperX no arrenca. Executa «.venv/bin/python tallat.py comprova» per veure-hi més."
 fet "WhisperX $("$PY" -c 'import importlib.metadata as m; print(m.version("whisperx"))') · torch $("$PY" -c 'import importlib.metadata as m; print(m.version("torch"))')"
 
 pas "5/6 · HyperFrames i el seu navegador (per dibuixar els subtítols)"
 npx --yes "hyperframes@$VERSIO_HYPERFRAMES" browser ensure >/dev/null 2>&1 \
   || falla "No he pogut preparar HyperFrames. Torna-ho a provar d'aquí a una estona."
+# El primer cop que s'obre un programa acabat de baixar, el Mac el revisa uns segons i HyperFrames no
+# l'espera prou (el primer esborrany fallaria): l'obrim ara un cop, sense pressa.
+NAVEGADOR="$(npx --yes "hyperframes@$VERSIO_HYPERFRAMES" browser path 2>/dev/null | tail -n 1)"
+if [ -x "$NAVEGADOR" ]; then "$NAVEGADOR" --version >/dev/null 2>&1 || true; fi
 fet "HyperFrames $VERSIO_HYPERFRAMES"
 
 pas "6/6 · Model de veu català (per saber quan es diu cada paraula)"
-HF_HUB_VERBOSITY=error TRANSFORMERS_VERBOSITY=error "$PY" - <<'PYTHON' || falla "No he pogut baixar el model de veu català."
+(cd "$CARPETA" && HF_HUB_VERBOSITY=error TRANSFORMERS_VERBOSITY=error "$PY" -) <<'PYTHON' || falla "No he pogut baixar el model de veu català."
 import warnings
 warnings.filterwarnings("ignore")
-import whisperx
-whisperx.load_align_model(language_code="ca", device="cpu")
+from motor import transcripcio
+transcripcio._whisperx().load_align_model(language_code="ca", device="cpu")
 PYTHON
 fet "model de Softcatalà"
 if [ "$AMB_WHISPER" = 1 ]; then
-  "$PY" -c 'import whisperx; whisperx.load_model("large-v3", "cpu", compute_type="int8", language="ca")' \
+  (cd "$CARPETA" && "$PY" -c 'from motor import transcripcio; transcripcio._whisperx().load_model("large-v3", "cpu", compute_type="int8", language="ca")') \
     || falla "No he pogut baixar el model de transcripció."
   fet "model de transcripció (large-v3)"
 fi

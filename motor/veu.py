@@ -7,6 +7,7 @@ el silenci real dins d'aquell forat.
 """
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -26,34 +27,57 @@ def llegeix_audio(video: Path) -> np.ndarray:
 
 
 MINIM_VEU = 0.3  # en una gravació parlant, com a mínim aquesta part és veu
+# Si la veu destaca tant del soroll de fons, el mapa és clar encara que hi hagi poca veu (p. ex. un
+# vídeo amb silencis llargs): n'hi ha prou que n'hi hagi aquesta part.
+CONTRAST_CLAR, MINIM_VEU_CLAR = 25, 0.03
+VERSIO_MAPA = 2  # puja si canvia com es calcula: els mapes desats d'abans es tornen a fer
 
 
 def mapa(audio: np.ndarray) -> np.ndarray:
     """Un booleà cada 10 ms: True si hi ha veu.
 
     El soroll de fons s'estima amb els trossos més fluixos. Si la gravació gairebé no té silencis,
-    el 10 % més fluix ja és veu i tot semblaria silenci: llavors es prova amb el 2 % més fluix i,
-    si encara no es distingeix, es dona tot per veu (així no s'escurça res que no s'hagi de tocar)."""
+    el 10 % més fluix ja és veu i tot semblaria silenci: llavors es prova amb el 2 % més fluix.
+    Si no es distingeix la veu del soroll (no ho sabem), es dona tot per veu: així no es retalla ni
+    s'escurça res que no s'hagi de tocar."""
     mida = int(SR * PAS)
     n = len(audio) // mida
+    if not n:
+        return np.ones(0, dtype=bool)
     trossos = audio[:n * mida].reshape(n, mida)
     db = 20 * np.log10(np.sqrt((trossos ** 2).mean(axis=1)) + 1e-9)
+    alt = float(np.percentile(db, 95))
     for percentil in (10, 2):
-        veu = db >= float(np.percentile(db, percentil)) + SOBRE_EL_SOROLL
-        if n and veu.mean() >= MINIM_VEU:
+        terra = float(np.percentile(db, percentil))
+        veu = db >= terra + SOBRE_EL_SOROLL
+        part = veu.mean()
+        if part >= MINIM_VEU or (part >= MINIM_VEU_CLAR and alt - terra >= CONTRAST_CLAR):
             return veu
     return np.ones(n, dtype=bool)
 
 
-def carrega(carpeta: Path, video: Path) -> np.ndarray:
-    """El mapa de veu del projecte (es calcula un cop i es desa a veu.npy)."""
-    path = carpeta / "veu.npy"
-    if path.exists():
+def carrega(carpeta: Path, video: Path, durada: float | None = None, alternativa: Path | None = None) -> np.ndarray:
+    """El mapa de veu del projecte. Es calcula un cop i es desa a veu.npy, amb veu.json al costat (la
+    durada del so i la versió del càlcul). Si el projecte ara és d'un altre vídeo (s'ha tornat a
+    transcriure, la durada no hi casa) o el càlcul ha canviat, es torna a fer. `alternativa`: d'on
+    llegir el so si el vídeo ja no hi és (la còpia lleugera, que té el mateix so)."""
+    path, path_meta = carpeta / "veu.npy", carpeta / "veu.json"
+    try:
+        meta = json.loads(path_meta.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        meta = {}
+    if path.exists() and meta.get("versio") == VERSIO_MAPA and (
+            durada is None or abs(float(meta.get("durada", -10)) - durada) < 1.0):
         desat = np.load(path)
-        if desat.size and desat.mean() >= MINIM_VEU:  # els d'abans que no es fiaven, es tornen a fer
+        if desat.size:
             return desat
-    m = mapa(llegeix_audio(video))
+    font = video if Path(video).exists() or alternativa is None else alternativa
+    m = mapa(llegeix_audio(font))
+    for p in (path, path_meta):  # un enllaç (els «anteriors-…» apunten al del projecte): no el trepitgem
+        if p.is_symlink():
+            p.unlink()
     np.save(path, m)
+    path_meta.write_text(json.dumps({"versio": VERSIO_MAPA, "durada": round(len(m) * PAS, 2)}), encoding="utf-8")
     return m
 
 

@@ -107,7 +107,8 @@ class Projecte:
         if not hasattr(self, "_veu"):
             from motor import veu
             try:
-                self._veu = veu.carrega((self.carpeta / TRANSCRIPCIO).resolve().parent, self.video)
+                arrel = (self.carpeta / TRANSCRIPCIO).resolve().parent
+                self._veu = veu.carrega(arrel, self.video, self.dades.get("durada"), arrel / PROXY)
             except Exception:  # sense el vídeo o sense so: escurcem els silencis com abans
                 self._veu = None
         return self._veu
@@ -547,12 +548,13 @@ class Projecte:
                            "data": time.strftime("%d/%m %H:%M", time.localtime(f.stat().st_mtime))})
         return llista
 
-    def previa(self, trams) -> Path:
+    def previa(self, trams, nom: str = "previa") -> Path:
         """On va (o és) el muntatge d'aquests talls en un sol vídeo (exporta.fes_previa). El nom diu els
-        talls i la còpia lleugera: si canvien, n'hi ha un altre."""
+        talls (també on comença i acaba el so de cadascun) i la còpia lleugera: si canvien, n'hi ha un altre."""
         proxy = self.carpeta / PROXY
-        empremta = json.dumps([[round(a, 4), round(b, 4)] for a, b in trams]) + str(proxy.stat().st_mtime_ns)
-        return self.carpeta / PREVIES / f"previa_{hashlib.sha1(empremta.encode()).hexdigest()[:12]}.mp4"
+        empremta = json.dumps([[round(a, 4), round(b, 4), *(round(x, 4) for x in edicio.so_del_tram(t))]
+                               for t in trams for a, b in [t]]) + str(proxy.stat().st_mtime_ns)
+        return self.carpeta / PREVIES / f"{nom}_{hashlib.sha1(empremta.encode()).hexdigest()[:12]}.mp4"
 
     def font(self, qualitat: str) -> Path:
         """Vídeo d'on es fa l'export. L'esborrany surt de la còpia lleugera (ja és vertical i

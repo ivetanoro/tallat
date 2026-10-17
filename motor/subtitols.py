@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+import bisect
+
 import functools
 import hashlib
 import html
@@ -123,12 +125,25 @@ def grups(paraules: list[dict], trams: list[tuple[float, float]], estil: dict) -
     for a, b in trams:
         acum.append(t)
         t += b - a
+    # Els trossos per ordre de la gravació, per trobar de pressa els que toquen una paraula (abans es
+    # miraven tots per a cada paraula: amb 5.000 paraules, uns quants segons a cada canvi).
+    per_inici = sorted(range(len(trams)), key=lambda k: trams[k][0])
+    inicis = [trams[k][0] for k in per_inici]
 
     def al_muntatge(inici: float, final: float):
         """On cau la paraula al muntatge. Va al tros amb què se solapa més: els talls s'arrodoneixen a
         fotogrames i una paraula pot començar uns mil·lisegons abans que el seu tros."""
+        j = bisect.bisect_right(inicis, max(final, inici + 0.01))
+        candidats = []
+        while j > 0:
+            j -= 1
+            k = per_inici[j]
+            if trams[k][1] <= inici - 1.0:  # els d'abans acaben encara més aviat
+                break
+            candidats.append(k)
         millor, solapament = None, 0.0
-        for k, (a, b) in enumerate(trams):
+        for k in sorted(candidats):  # en ordre del muntatge, com si es miressin tots
+            a, b = trams[k]
             s = min(final, b) - max(inici, a)
             if s > solapament or (millor is None and a - 0.01 <= inici < b):
                 millor, solapament = k, max(s, 0.0)
@@ -390,6 +405,10 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     if avis:
         avis("Dibuixant subtítols, gràfics i stickers amb HyperFrames…")
     r = subprocess.run(ordre, capture_output=True, text=True)
+    if r.returncode != 0 and "Chrome cannot start" in r.stderr + r.stdout:
+        # El primer cop que s'obre el navegador de HyperFrames, el Mac el revisa i HyperFrames no l'espera
+        # prou. Un segon intent ja el troba revisat.
+        r = subprocess.run(ordre, capture_output=True, text=True)
     if r.returncode != 0 or not temporal.exists():
         raise RuntimeError("HyperFrames no ha pogut dibuixar els subtítols:\n" + (r.stderr or r.stdout)[-2000:])
     temporal.replace(sortida)

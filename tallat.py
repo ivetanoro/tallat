@@ -82,7 +82,7 @@ def guarda_anteriors(carpeta: Path) -> Path | None:
     for nom in ("broll", "stickers"):  # els recursos, enllaçats (no ocupen el doble)
         if (carpeta / nom).is_dir():
             shutil.copytree(carpeta / nom, desti / nom, copy_function=_enllaca)
-    for nom in (PROXY, "veu.npy"):  # el mateix vídeo: n'hi ha prou amb apuntar-hi
+    for nom in (PROXY, "veu.npy", "veu.json"):  # el mateix vídeo: n'hi ha prou amb apuntar-hi
         if (carpeta / nom).exists():
             (desti / nom).symlink_to(Path("..") / nom)
     for nom in moure:
@@ -125,12 +125,38 @@ def ordre_realinea(args) -> None:
     copia = path.with_name(f"transcripcio-abans-{time.strftime('%Y%m%d-%H%M%S')}.json")
     shutil.copy2(path, copia)
     for p, n in zip(paraules, noves):
-        p["inici"], p["final"] = n["inici"], n["final"]
-    dades["font"] = str(dades.get("font", "")).replace("WhisperX", "MMS") or "alineació MMS"
+        p["inici"], p["final"], p["confianca"] = n["inici"], n["final"], n.get("confianca")
+    font = re.sub(r"\s*\+ alineació.*$", "", str(dades.get("font", "")))
+    dades["font"] = f"{font} + alineació de tot el text" if font else "alineació de tot el text"
     path.write_text(json.dumps(dades, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"Fet en {minuts(time.time() - t0)}. {sum(c > 0.25 for c in canvis)} paraules s'han mogut més d'un quart de "
           f"segon (la que més, {max(canvis):.1f} s). La d'abans és a {copia.name}.")
     print("Si tens la pàgina de revisió oberta, tanca-la i torna-la a obrir.")
+
+
+def ordre_compara_temps(args) -> None:
+    """Quant s'assemblen els temps de les paraules del projecte i els d'un SRT fet per una altra eina
+    (Descript). Amb un SRT d'una paraula per subtítol es comparen totes; amb subtítols de frases, només
+    l'inici de la primera paraula i el final de l'última de cada subtítol. On no coincideixen, val la pena
+    escoltar-ho: és la manera de saber quin dels dos encerta (vegeu transcripcio.compara_temps)."""
+    path = Path(args.projecte).expanduser().resolve() / TRANSCRIPCIO
+    if not path.exists():
+        sys.exit(f"No trobo la transcripció: {path}")
+    paraules = json.loads(path.read_text(encoding="utf-8"))["paraules"]
+    r = transcripcio.compara_temps(paraules, transcripcio.llegeix_srt(Path(args.srt).expanduser()))
+    if not r["n"]:
+        sys.exit("No he trobat paraules comunes entre la transcripció i l'SRT.")
+    print(f"{r['n']} vores comparades. Diferència mediana: {r['mediana'] * 1000:.0f} ms.")
+    print(f"  més d'una dècima: {r['mes_01']} ({r['mes_01'] / r['n']:.0%}) · més d'un quart de segon: {r['mes_025']}"
+          f" · més de mig segon: {r['mes_05']}")
+    if r["grans"]:
+        print("On més difereixen (escolta-ho per saber quin encerta):")
+        for g in r["grans"]:
+            print(f"  {minuts_i_segons(g['nostre'])}  «{g['text']}»: tallat {g['nostre']:.2f} s, SRT {g['srt']:.2f} s")
+
+
+def minuts_i_segons(t: float) -> str:
+    return f"{int(t // 60)}:{t % 60:05.2f}"
 
 
 def ordre_transcriu(args) -> None:
@@ -152,7 +178,7 @@ def ordre_transcriu(args) -> None:
     audio = transcripcio.carrega_audio(video)
     if args.srt:
         frases = transcripcio.llegeix_srt(Path(args.srt).expanduser())
-        font = "text de l'SRT + alineació MMS"
+        font = "text de l'SRT + alineació de tot el text"
         print(f"Calculant el temps de cada paraula ({len(frases)} frases)…")
     else:
         print(f"Transcrivint amb WhisperX ({args.model}). En un Mac Intel pot trigar més que el vídeo…")
@@ -323,6 +349,9 @@ def ordre_exporta(args) -> None:
                     zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
                     blocs=projecte.blocs(trams), **projecte.opcions_so(trams))
     projecte.desa_talls(sortida, trams)
+    avis = exporta.comprova_durades(sortida, sum(b - a for a, b in trams), projecte.dades["fps"])
+    if avis:
+        print(f"\nAvís: {avis}")
     copia = None
     try:
         copia = exporta.copia_a_carpeta(sortida)
@@ -700,6 +729,11 @@ def main() -> None:
     ra = sub.add_parser("realinea", help="Torna a calcular quan comença i acaba cada paraula (sense tocar l'edició)")
     ra.add_argument("--projecte", required=True)
     ra.set_defaults(func=ordre_realinea)
+
+    ct = sub.add_parser("compara-temps", help="Compara el temps de cada paraula amb el d'un SRT (p. ex. de Descript)")
+    ct.add_argument("--projecte", required=True)
+    ct.add_argument("--srt", required=True)
+    ct.set_defaults(func=ordre_compara_temps)
 
     r = sub.add_parser("revisa", help="Obre la pàgina de revisió al navegador")
     r.add_argument("--projecte", required=True)

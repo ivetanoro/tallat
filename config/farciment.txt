@@ -24,3 +24,7 @@ bueno
 pues
 a veure
 en plan
+# Amb una coma al final: només quan la paraula va seguida de coma («Bé, doncs…», «Doncs, mira»).
+# Sense coma solen ser paraules de debò («molt bé», «doncs ho farem»).
+doncs,
+bé,

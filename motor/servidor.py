@@ -32,7 +32,7 @@ RUTES_DEL_PROJECTE = {"/api/estat", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
-                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa"}
+                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/escolta"}
 mimetypes.add_type("audio/mp4", ".m4a")  # Python diu «audio/mp4a-latm», que els navegadors no reprodueixen
 mimetypes.add_type("audio/wav", ".wav")
 RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge"}  # el cos és el fitxer mateix
@@ -91,6 +91,8 @@ class Feina:
                             blocs=projecte.blocs(trams), **projecte.opcions_so(trams))
             projecte.desa_talls(sortida, trams)
             copia, avis = _copia(sortida)  # també l'esborrany: la carpeta que es tria és per a tot
+            durades = exporta.comprova_durades(sortida, sum(b - a for a, b in trams), projecte.dades["fps"])
+            avis = " ".join(x for x in (durades, avis) if x) or None
             self._actualitza(estat="fet", progres=100, fitxer=sortida.name, copia=copia, avis=avis)
         except Exception as e:  # el missatge arriba a la pàgina
             traceback.print_exc()
@@ -134,6 +136,26 @@ class Previa:
         finally:
             with self.bloqueig:
                 self.fent = None
+
+
+ESCOLTA = 1.5  # segons abans i després del tall que se senten en treure o recuperar paraules
+
+
+def escolta(projecte: Projecte, m: float) -> dict:
+    """El muntatge d'uns segons al voltant del moment m (un tall que s'acaba de fer), en un vídeo curt fet
+    ara mateix: en mig segon ja és a punt, i se sent com a l'export (el so tallat al punt exacte i amb els
+    fosos). Mentrestant el muntatge sencer encara no hi és, i la còpia que salta no fa fosos."""
+    proxy = projecte.carpeta / PROXY
+    trams, inici = edicio.finestra(projecte.trams(), max(0.0, m - ESCOLTA), m + ESCOLTA, projecte.fps)
+    if not trams or not proxy.exists():
+        return {"estat": "no"}
+    desti = projecte.previa(trams, nom="escolta")
+    if not desti.exists():
+        exporta.fes_previa(proxy, trams, desti, curt=True)
+        for vell in sorted(desti.parent.glob("escolta_*.mp4"), key=lambda p: p.stat().st_mtime)[:-5]:
+            vell.unlink(missing_ok=True)
+    return {"estat": "fet", "url": f"/previa/{desti.name}", "inici": inici,
+            "durada": round(sum(b - a for a, b in trams), 6)}
 
 
 def _copia(fitxer: Path) -> tuple[str | None, str | None]:
@@ -497,6 +519,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     return self._json(instantania())
                 if ruta == "/api/previa":  # el muntatge d'ara en un vídeo continu (si no hi és, es fa)
                     return self._json(previa.demana(projecte, projecte.trams()))
+                if ruta == "/api/escolta":  # uns segons al voltant d'un tall, amb el so com a l'export
+                    return self._json(escolta(projecte, float(cos.get("m", 0))))
                 if ruta == "/api/registre":  # què fa el reproductor al navegador (per trobar errors)
                     with (projecte.carpeta / "registre-pagina.log").open("a", encoding="utf-8") as f:
                         for e in cos.get("events", [])[:500]:

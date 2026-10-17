@@ -180,6 +180,43 @@ def importa_text(paraules: list[dict], text_editat: str) -> tuple[dict, list[str
 
 # --- Talls -------------------------------------------------------------------
 
+class Tram(tuple):
+    """Un tros conservat: (inici, final) en fotogrames sencers. És el que fa servir el vídeo i tot el que
+    va en temps del muntatge (subtítols, pàgina). `so` és el tros del so que se sent de debò: pot començar
+    una mica després i acabar una mica abans que els fotogrames quan al costat hi ha una paraula treta.
+    El vídeo no es pot tallar enmig d'un fotograma, però el so sí: així no es perd res del que es queda
+    ni se sent res del que s'ha tret (el bocí de fotograma de més queda en silenci, motor/exporta.py)."""
+
+    def __new__(cls, inici: float, final: float, so: tuple[float, float] | None = None):
+        tram = super().__new__(cls, (inici, final))
+        tram.so = tuple(so) if so else (inici, final)
+        return tram
+
+
+def so_del_tram(tram) -> tuple[float, float]:
+    """El tros del so que se sent (un tram sense `so`, p. ex. tornat de la pàgina: tots els fotogrames)."""
+    return getattr(tram, "so", None) or (tram[0], tram[1])
+
+
+def finestra(trams, m0: float, m1: float, fps: float) -> tuple[list, float]:
+    """Els trossos que sonen entre m0 i m1 del muntatge, retallats a fotogrames sencers, i on comença el
+    primer al muntatge. Per escoltar uns segons al voltant d'un tall sense refer tot el muntatge."""
+    sortida, inici, acum = [], None, 0.0
+    for tram in trams:
+        a, b = tram[0], tram[1]
+        d = b - a
+        if acum + d > m0 and acum < m1:
+            fa = a + math.floor((m0 - acum) * fps + 1e-6) / fps if m0 > acum else a
+            fb = a + math.ceil((m1 - acum) * fps - 1e-6) / fps if m1 < acum + d else b
+            sa, sb = so_del_tram(tram)
+            so = (max(sa, fa), min(sb, fb))
+            if fb - fa > 1e-6 and so[1] > so[0]:
+                inici = acum + (fa - a) if inici is None else inici
+                sortida.append(Tram(round(fa, 6), round(fb, 6), (round(so[0], 6), round(so[1], 6))))
+        acum += d
+    return sortida, round(inici or 0.0, 6)
+
+
 def _blocs(paraules: list[dict], ordre) -> list[list[dict]]:
     """Agrupa les paraules en blocs que sonen en l'ordre indicat (per a reels muntats).
 
@@ -289,20 +326,32 @@ def trams(paraules: list[dict], fps: float, durada: float, marge: float = MARGE,
                 final = real + marge / 2
         brut.append((max(0.0, inici), min(durada, final), tanca_inici, tanca_final))
 
-    # Ajustem a fotogrames sencers. Al costat d'una paraula esborrada arrodonim cap endins,
-    # perquè no se'n coli ni un fotograma (una «s» de 30 ms ja se sent).
-    # Es compta en fotogrames enters: en decimals, «13/30 − 12/30» dona una mica menys d'un
-    # fotograma i una paraula d'un sol fotograma desapareixia.
-    ajustats = []
+    # Ajustem a fotogrames sencers, sempre cap enfora: abans, al costat d'una paraula esborrada
+    # s'arrodonia cap endins i es perdien fins a 33 ms del principi o del final de la que es queda; i
+    # una paraula més curta que un fotograma s'arrodonia cap enfora i hi entrava un bocí de la treta.
+    # Ara el vídeo agafa el fotograma sencer i el so es talla al punt exacte (Tram.so).
+    # Es compta en fotogrames enters: en decimals, «13/30 − 12/30» dona una mica menys d'un fotograma.
+    ajustats = []  # [fa, fb, so_a, so_b, tanca_a, tanca_b]
     for a, b, tanca_a, tanca_b in brut:
-        fa = math.ceil(a * fps - 1e-6) if tanca_a else math.floor(a * fps + 1e-6)
-        fb = math.floor(b * fps + 1e-6) if tanca_b else math.ceil(b * fps - 1e-6)
-        if fb - fa < 1:  # una paraula més curta que un fotograma: millor un bocí de més que perdre-la
-            fa, fb = math.floor(a * fps + 1e-6), math.ceil(b * fps - 1e-6)
-        if fb - fa < 1:
+        fa, fb = math.floor(a * fps + 1e-6), math.ceil(b * fps - 1e-6)
+        so_a = a if tanca_a else fa / fps
+        so_b = b if tanca_b else fb / fps
+        # Només si comença dins de l'anterior: en un reel muntat, el tros següent pot ser d'abans a la gravació.
+        if ajustats and ajustats[-1][0] <= fa <= ajustats[-1][1]:
+            anterior = ajustats[-1]
+            if not (anterior[5] or tanca_a):  # continuació directa (no hi ha res tret entremig): un sol tros
+                anterior[1] = max(anterior[1], fb)
+                anterior[3] = max(anterior[3], so_b)
+                anterior[5] = tanca_b
+                continue
+            # Entremig hi ha una paraula treta tan curta que comparteixen fotograma: el vídeo continua on
+            # s'havia quedat i el so comença on toca.
+            fa = anterior[1]
+            fb = max(fb, fa + 1)
+            so_a = max(so_a, fa / fps)
+            so_b = min(max(so_b, so_a), fb / fps)
+        if fb - fa < 1 or so_b <= so_a:
             continue
-        if ajustats and ajustats[-1][0] <= fa <= ajustats[-1][1]:  # continuació directa: un sol tros
-            ajustats[-1] = (ajustats[-1][0], max(ajustats[-1][1], fb))
-        else:
-            ajustats.append((fa, fb))
-    return [(round(fa / fps, 4), round(fb / fps, 4)) for fa, fb in ajustats]
+        ajustats.append([fa, fb, so_a, so_b, tanca_a, tanca_b])
+    return [Tram(round(fa / fps, 6), round(fb / fps, 6), (round(sa, 6), round(sb, 6)))
+            for fa, fb, sa, sb, _, _ in ajustats]

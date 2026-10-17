@@ -374,6 +374,7 @@ body.movent, body.movent * { cursor: grabbing !important; }
 .p.fora { color: var(--tret); text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .p.fora.auto { color: var(--auto); text-decoration-color: var(--auto); }
 .p.proposta { box-shadow: inset 0 -2px 0 var(--proposta-ratlla); background: var(--proposta-suau); }
+.p.aprox:not(.fora) { text-decoration: underline dotted var(--text-2, currentColor); text-underline-offset: 3px; }
 .p.corregida { box-shadow: inset 0 -2px 0 var(--accent); }
 .p.actual { background: var(--accent); color: #fff; text-decoration-color: rgba(255, 255, 255, 0.7); }
 .p.seleccio { background: var(--accent-suau); }

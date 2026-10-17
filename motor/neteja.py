@@ -81,8 +81,15 @@ def carrega_llista(path: Path | None = None) -> dict[str, list[tuple[str, ...]]]
             actual = m.group(1)
             continue
         if actual in seccions:
-            seccions[actual].append(tuple(normalitza(t) for t in linia.split()))
+            amb_coma = linia.endswith(",")  # només quan va seguida de coma (vegeu config/farciment.txt)
+            clau = tuple(normalitza(t) for t in linia.rstrip(",").split())
+            seccions[actual].append(clau + ((COMA,) if amb_coma else ()))
     return seccions
+
+
+COMA = ","  # marca d'una expressió que només compta si va seguida de coma
+FI_DE_FRASE = re.compile(r"[.?!…]$")
+PAUSA_DINS_EXPRESSIO = 0.6  # segons: «o … sigui» amb més silenci entremig ja no és una expressió
 
 
 def detecta(paraules: list[dict], llista: dict) -> tuple[dict[int, str], dict[int, str]]:
@@ -91,12 +98,28 @@ def detecta(paraules: list[dict], llista: dict) -> tuple[dict[int, str], dict[in
     treure: dict[int, str] = {}
     proposar: dict[int, str] = {}
 
+    def seguides(i: int, j: int) -> bool:
+        """Les paraules i..j es diuen de seguida: dins de la mateixa frase i sense una pausa llarga.
+        (Revisió de Codex: «o» al final d'una frase i «sigui» deu segons després es proposaven com «o sigui».)"""
+        for k in range(i, j):
+            a, b = paraules[k], paraules[k + 1]
+            if FI_DE_FRASE.search(a["text"].rstrip("»\"'")):
+                return False
+            if a.get("final") is not None and b.get("inici") is not None and b["inici"] - a["final"] > PAUSA_DINS_EXPRESSIO:
+                return False
+        return True
+
     def coincidencies(expressions):
         for expr in sorted(expressions, key=len, reverse=True):
+            amb_coma = bool(expr) and expr[-1] == COMA
+            expr = expr[:-1] if amb_coma else expr
             n = len(expr)
             for i in range(len(norm) - n + 1):
-                if tuple(norm[i:i + n]) == expr:
-                    yield range(i, i + n)
+                if tuple(norm[i:i + n]) != expr or (n > 1 and not seguides(i, i + n - 1)):
+                    continue
+                if amb_coma and not paraules[i + n - 1]["text"].rstrip().endswith(","):
+                    continue
+                yield range(i, i + n)
 
     def dins_de_ratxa(i: int) -> bool:
         """Tres o més sons iguals seguits («uh, uh, uh») solen ser expressius, no dubtes."""

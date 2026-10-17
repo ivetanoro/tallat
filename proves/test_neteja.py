@@ -23,6 +23,19 @@ class TestNeteja(unittest.TestCase):
         self.assertEqual(treure, {})
         self.assertEqual(proposar, {3: "farciment?", 4: "farciment?", 5: "farciment?"})
 
+    def test_una_expressio_no_salta_d_una_frase_a_l_altra(self):
+        # Revisió de Codex: «o» al final d'una frase i «sigui» molt després es proposaven com «o sigui».
+        p = paraules("Tu", "o.", "Sigui", "com", "sigui")
+        self.assertEqual(neteja.detecta(p, LLISTA), ({}, {}))
+        p = [{"id": 0, "text": "o", "inici": 0.0, "final": 0.2, "frase": 0},
+             {"id": 1, "text": "sigui", "inici": 10.0, "final": 10.3, "frase": 1}]
+        self.assertEqual(neteja.detecta(p, LLISTA), ({}, {}))
+
+    def test_doncs_i_be_nomes_amb_coma(self):
+        p = paraules("Bé,", "doncs,", "està", "molt", "bé", "doncs", "ho", "farem.")
+        _, proposar = neteja.detecta(p, LLISTA)
+        self.assertEqual(proposar, {0: "farciment?", 1: "farciment?"})
+
     def test_sons_repetits_son_expressius(self):
         p = paraules("volta", "uh,", "uh,", "uh,", "DJ", "set.")
         treure, proposar = neteja.detecta(p, LLISTA)

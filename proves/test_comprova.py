@@ -1,4 +1,6 @@
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +27,24 @@ class TestEntorn(unittest.TestCase):
                 mock.patch.dict(os.environ, {"PATH": "/usr/bin"}):
             entorn.prepara()
             self.assertEqual(os.environ["PATH"], "/usr/bin")
+
+    @unittest.skipUnless(sys.platform == "darwin", "només al Mac")
+    def test_la_llista_de_lletres_no_depen_de_system_profiler(self):
+        # Un system_profiler que s'atura a mitges (Mac ocupat): torna una llista sense «_items».
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "bin").mkdir()
+            fals = d / "bin" / "system_profiler"
+            fals.write_text(f'#!/bin/sh\ntouch "{d}/cridat"\necho \'<plist version="1.0"><array><dict/></array></plist>\'\n')
+            fals.chmod(0o755)
+            arrel = Path(__file__).resolve().parent.parent
+            codi = f"import sys; sys.path.insert(0, {str(arrel)!r}); from motor import entorn; " \
+                   "entorn.llista_de_lletres(); import matplotlib.font_manager"
+            entorn_proves = {**os.environ, "PATH": f"{d / 'bin'}:/usr/bin:/bin", "MPLCONFIGDIR": str(d / "mpl")}
+            prova = subprocess.run([sys.executable, "-c", codi], env=entorn_proves, capture_output=True, text=True)
+            self.assertEqual(prova.returncode, 0, prova.stderr[-500:])
+            self.assertFalse((d / "cridat").exists())
+            self.assertTrue(list((d / "mpl").glob("fontlist-*.json")))  # desada: els altres cops ja no es fa
 
 
 class TestInforme(unittest.TestCase):

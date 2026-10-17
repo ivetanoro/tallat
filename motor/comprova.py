@@ -47,7 +47,9 @@ def _python() -> list[tuple]:
     if int(_versio("numpy").split(".")[0]) >= 2:
         resultat.append(("error", "numpy", f"cal la versió 1 (n'hi ha la {_versio('numpy')}) → {ARREGLA}"))
     # S'importa a part: a Mac Intel, si dues còpies d'OpenMP xoquen, el programa peta.
-    prova = _executa([sys.executable, "-c", "import ctranslate2, torch, whisperx"], temps=300)
+    arrel = str(Path(__file__).resolve().parent.parent)
+    prova = _executa([sys.executable, "-c", f"import sys; sys.path.insert(0, {arrel!r}); from motor import entorn; "
+                      "entorn.llista_de_lletres(); import ctranslate2, torch, whisperx"], temps=300)
     if prova is None or prova.returncode != 0:
         omp = prova is not None and (prova.returncode < 0 or "OMP" in prova.stderr)
         motiu = "dues còpies d'OpenMP xoquen (Mac Intel)" if omp else "no arrenca"

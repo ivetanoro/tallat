@@ -19,16 +19,20 @@ class TestTrams(unittest.TestCase):
         p = [{"id": 0, "text": "eh", "inici": 0.0, "final": 0.4, "frase": 0, "conservada": False},
              {"id": 1, "text": "sí", "inici": 0.4, "final": 0.45, "frase": 0, "conservada": True},
              {"id": 2, "text": "eh", "inici": 0.45, "final": 1.0, "frase": 0, "conservada": False}]
-        self.assertEqual(edicio.trams(p, fps=30, durada=1.0), [(0.4, 0.4333)])
+        # El vídeo, en fotogrames sencers cap enfora; el so, just el de la paraula.
+        (tram,) = edicio.trams(p, fps=30, durada=1.0)
+        self.assertEqual(tram, (0.4, 0.466667))
+        self.assertEqual(tram.so, (0.4, 0.45))
 
     def test_una_paraula_mes_curta_que_un_fotograma_tampoc(self):
         # Segona revisió de Codex: de 0,41 a 0,46 s no hi cap cap fotograma sencer i es perdia.
         p = [{"id": 0, "text": "eh", "inici": 0.0, "final": 0.41, "frase": 0, "conservada": False},
              {"id": 1, "text": "sí", "inici": 0.41, "final": 0.46, "frase": 0, "conservada": True},
              {"id": 2, "text": "eh", "inici": 0.46, "final": 1.0, "frase": 0, "conservada": False}]
-        (a, b), = edicio.trams(p, fps=30, durada=1.0)
-        self.assertLessEqual(a, 0.41)
-        self.assertGreaterEqual(b, 0.46)
+        (tram,) = edicio.trams(p, fps=30, durada=1.0)
+        self.assertLessEqual(tram[0], 0.41)
+        self.assertGreaterEqual(tram[1], 0.46)
+        self.assertEqual(tram.so, (0.41, 0.46))  # i no se sent res de les tretes
 
     def test_l_ultima_paraula_acaba_on_acaba_la_veu(self):
         # L'alineador diu que acaba a 0,4 s, però la veu continua fins a 0,85 s.
@@ -84,6 +88,45 @@ class TestMapaDeVeu(unittest.TestCase):
         m = veu.mapa(so)
         self.assertGreater(m.mean(), 0.8)
         self.assertFalse(m[:5].any())
+
+    def test_poca_veu_pero_clara(self):
+        # Revisió de Codex: amb només un 10 % de veu, tot sortia com a veu i no es podia escurçar res.
+        t = np.arange(veu.SR * 10) / veu.SR
+        so = (0.001 * np.sin(2 * np.pi * 50 * t)).astype(np.float32)  # soroll de fons fluix
+        so[:veu.SR] += (0.3 * np.sin(2 * np.pi * 220 * t[:veu.SR])).astype(np.float32)  # 1 s de veu
+        m = veu.mapa(so)
+        self.assertTrue(m[5:95].all())
+        self.assertFalse(m[105:].any())
+
+    def test_el_mapa_desat_d_un_altre_video_es_torna_a_fer(self):
+        # Revisió de Codex: veu.npy no deia de quin vídeo era; en tornar a transcriure amb un altre, es reaprofitava.
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            original = veu.llegeix_audio
+            try:
+                veu.llegeix_audio = lambda video: np.full(veu.SR * 2, 0.2, dtype=np.float32)
+                self.assertEqual(len(veu.carrega(d, d / "a.mov", durada=2.0)), 200)
+                veu.llegeix_audio = lambda video: self.fail("no l'havia de tornar a calcular")
+                self.assertEqual(len(veu.carrega(d, d / "a.mov", durada=2.0)), 200)
+                veu.llegeix_audio = lambda video: np.full(veu.SR * 5, 0.2, dtype=np.float32)
+                self.assertEqual(len(veu.carrega(d, d / "b.mov", durada=5.0)), 500)  # un altre vídeo
+            finally:
+                veu.llegeix_audio = original
+
+    def test_no_trepitja_el_mapa_on_apunta_un_enllac(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "anteriors").mkdir()
+            np.save(d / "veu.npy", np.zeros(300, dtype=bool))
+            (d / "anteriors" / "veu.npy").symlink_to(Path("..") / "veu.npy")
+            original = veu.llegeix_audio
+            veu.llegeix_audio = lambda video: np.full(veu.SR, 0.2, dtype=np.float32)
+            try:
+                veu.carrega(d / "anteriors", d / "x.mov", durada=1.0)
+            finally:
+                veu.llegeix_audio = original
+            self.assertEqual(len(np.load(d / "veu.npy")), 300)
+            self.assertFalse((d / "anteriors" / "veu.npy").is_symlink())
 
     def test_un_mapa_desat_dolent_es_torna_a_fer(self):
         with tempfile.TemporaryDirectory() as d:
@@ -202,6 +245,60 @@ class TestCarpetaDelsVideos(unittest.TestCase):
         self.assertIsNone(exporta.carpeta_exports())  # si la carpeta ja no hi és, la del projecte
 
 
+class TestSoExacte(unittest.TestCase):
+    """Revisió de Codex: el so anava lligat als fotogrames sencers i en un tros curt hi entrava un bocí
+    de les paraules tretes. Ara el vídeo agafa el fotograma sencer i el so es talla al punt exacte."""
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_no_se_sent_res_de_les_paraules_tretes(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            # So fort a les paraules tretes (fins a 0,41 s i des de 0,46 s) i silenci a la que es queda.
+            so_ = "0.5*sin(2*PI*1000*t)*(lt(t,0.41)+gte(t,0.46))"
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=1",
+                            "-f", "lavfi", "-i", f"aevalsrc='{so_}':s=48000:d=1", "-c:v", "libx264",
+                            "-pix_fmt", "yuv420p", "-c:a", "pcm_s16le", str(d / "proxy.mov")], check=True)
+            p = [{"id": 0, "text": "eh", "inici": 0.0, "final": 0.41, "frase": 0, "conservada": False},
+                 {"id": 1, "text": "sí", "inici": 0.41, "final": 0.46, "frase": 0, "conservada": True},
+                 {"id": 2, "text": "eh", "inici": 0.46, "final": 1.0, "frase": 0, "conservada": False}]
+            trams = edicio.trams(p, fps=30, durada=1.0)
+            sortida = exporta.fes_previa(d / "proxy.mov", trams, d / "p.mp4")
+            brut = subprocess.run(["ffmpeg", "-v", "error", "-i", str(sortida), "-ac", "1", "-f", "s16le", "-"],
+                                  capture_output=True, check=True).stdout
+            mostres = np.frombuffer(brut, dtype=np.int16).astype(np.float32) / 32768
+            self.assertGreater(len(mostres), 1000)
+            self.assertLess(float(np.abs(mostres).max()), 0.02)
+
+
+class TestMuntatgeALots(unittest.TestCase):
+    """Revisió de Codex: cada tros és una entrada d'ffmpeg i cadascuna guarda fotogrames a la memòria (amb
+    un vídeo 4K, 20 trossos ja passaven de 8 GB). Amb molts trossos, el muntatge es fa a lots."""
+
+    def test_quants_per_lot(self):
+        self.assertEqual(exporta.trossos_per_lot({"amplada": 3840, "alcada": 2160}), 8)
+        self.assertEqual(exporta.trossos_per_lot({"amplada": 720, "alcada": 1280}), 40)
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_a_lots_dura_el_mateix_i_no_perd_res(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=8",
+                            "-f", "lavfi", "-i", "sine=f=440:d=8", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                            "-c:a", "aac", "-shortest", str(d / "v.mp4")], check=True)
+            trams = [edicio.Tram(i * 0.6, i * 0.6 + 0.4) for i in range(11)]
+            esperat = sum(b - a for a, b in trams)
+            with mock.patch.object(exporta, "MEMORIA_LOT", 1):  # lots de 4 trossos
+                previa = exporta.fes_previa(d / "v.mp4", trams, d / "previa.mp4")
+                final = exporta.exporta(d / "v.mp4", trams, d / "final.mp4", "esborrany")
+            for fitxer in (previa, final):
+                info = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,duration",
+                                                  "-of", "json", str(fitxer)], capture_output=True, text=True).stdout)
+                durades = {s["codec_type"]: float(s["duration"]) for s in info["streams"]}
+                self.assertAlmostEqual(durades["video"], esperat, delta=0.05, msg=fitxer.name)
+                self.assertAlmostEqual(durades["audio"], esperat, delta=0.05, msg=fitxer.name)
+
+
 class TestPreviaContinua(unittest.TestCase):
     """El muntatge en un sol vídeo, perquè la pàgina el reprodueixi sense saltar."""
 
@@ -217,19 +314,81 @@ class TestPreviaContinua(unittest.TestCase):
             self.assertFalse(list((d / "previa").glob(".*")))  # cap fitxer a mitges
 
 
-class TestAlineadorMMS(unittest.TestCase):
-    """El temps de cada paraula (motor/transcripcio.py): el que entén el model i les vores als silencis."""
+class TestAlineador(unittest.TestCase):
+    """El temps de cada paraula (motor/transcripcio.py): el que entén el model, l'alineació i les vores als silencis."""
+
+    DICCIONARI = {"[pad]": 3, "|": 2, "a": 0, "b": 1, "à": 4, "'": 5, "·": 6, "l": 7}
 
     def test_el_text_que_entén_el_model(self):
-        self.assertEqual(transcripcio.romanitza("L'àvia,"), "l'avia")
-        self.assertEqual(transcripcio.romanitza("Col·legi!"), "collegi")
-        self.assertEqual(transcripcio.romanitza("25"), "")  # aquestes van amb el comodí
+        d = self.DICCIONARI
+        self.assertEqual(transcripcio.normalitza("L’à,", d), "l'à")
+        self.assertEqual(transcripcio.normalitza("Bâ·l!", d), "ba·l")  # «â» no hi és: va sense accent
+        self.assertEqual(transcripcio.normalitza("25", d), "")  # aquestes van amb el comodí
+
+    def test_alinea_amb_el_buit_i_el_separador_del_model(self):
+        import types
+        import torch
+
+        class Model:  # «a» a les trames 10-14, el separador a la 20, «b» a les 30-34 (trames de 20 ms)
+            def __call__(self, x):
+                logits = torch.full((1, x.shape[1] // 320, 8), -10.0)
+                logits[0, :, 3] = 10.0
+                for trames, lletra in ((range(10, 15), 0), (range(20, 21), 2), (range(30, 35), 1)):
+                    for t in trames:
+                        logits[0, t, 3], logits[0, t, lletra] = -10.0, 10.0
+                return types.SimpleNamespace(logits=logits)
+
+        temps, confiances = transcripcio.temps_paraules(np.zeros(16000, dtype=np.float32), ["A,", "b"],
+                                                        Model(), self.DICCIONARI)
+        self.assertEqual([tuple(round(x, 2) for x in t) for t in temps], [(0.2, 0.3), (0.6, 0.7)])
+        self.assertGreater(min(confiances), 0.9)
 
     def test_les_vores_als_silencis(self):
         veu = np.zeros(300, dtype=bool)
         veu[100:150] = True  # veu d'1,00 a 1,50 s
-        self.assertEqual(transcripcio.retalla_als_silencis([(0.6, 1.8)], veu), [(1.0, 1.5)])
+        # Amb una mica d'aire a cada costat, perquè no es retallin les consonants fluixes.
+        self.assertEqual(transcripcio.retalla_als_silencis([(0.6, 1.8)], veu), [(0.97, 1.55)])
         self.assertEqual(transcripcio.retalla_als_silencis([(2.0, 2.5)], veu), [(2.0, 2.5)])  # sense veu: com era
+
+
+class TestAjustaTemps(unittest.TestCase):
+    """Revisió de Codex: si fallava l'alineació de tot el text, l'alineador d'abans no retallava les vores, i
+    a les gravacions llargues (a trossos) una paraula podia començar abans que l'anterior."""
+
+    def test_retalla_i_no_va_enrere(self):
+        veu_ = np.zeros(400, dtype=bool)
+        veu_[100:150] = True
+        veu_[200:260] = True
+        segments = [{"start": 0.5, "end": 2.6, "words": [
+            {"word": "u", "start": 0.5, "end": 1.9, "score": 0.9},      # s'estira pel silenci
+            {"word": "dos", "start": 1.5, "end": 2.6, "score": 0.9},    # comença una mica abans que acabi «u»
+            {"word": "25", "start": None, "end": None}]}]
+        self.assertEqual(transcripcio.ajusta_temps(segments, veu_), 0)
+        u, dos, _ = segments[0]["words"]
+        self.assertEqual((u["start"], u["end"]), (0.97, 1.55))
+        self.assertGreaterEqual(dos["start"], u["end"])
+        self.assertEqual(segments[0]["start"], 0.97)
+
+    def test_compta_les_que_anaven_enrere(self):
+        segments = [{"words": [{"word": "a", "start": 5.0, "end": 5.5}, {"word": "b", "start": 2.0, "end": 2.4}]}]
+        self.assertEqual(transcripcio.ajusta_temps(segments, np.ones(1000, dtype=bool)), 1)
+        self.assertEqual(segments[0]["words"][1]["start"], 5.5)
+
+    def test_la_confianca_es_desa_i_el_comodi_no_se_sap(self):
+        p = transcripcio.a_paraules([{"start": 0, "end": 2, "words": [
+            {"word": "Hola", "start": 0.0, "end": 0.4, "score": 0.876}, {"word": "25", "start": 0.5, "end": 0.9, "score": None}]}])
+        self.assertEqual([x["confianca"] for x in p], [0.88, None])
+
+
+class TestComparaTemps(unittest.TestCase):
+    def test_compara_les_vores_amb_un_srt(self):
+        paraules = [{"text": t, "inici": a, "final": b} for t, a, b in
+                    [("Hola,", 0.0, 0.4), ("què", 0.5, 0.7), ("tal?", 0.8, 1.2), ("Bé.", 3.0, 3.3)]]
+        srt = [{"start": 0.02, "end": 1.21, "text": "Hola, què tal?"}, {"start": 3.3, "end": 3.6, "text": "Bé."}]
+        r = transcripcio.compara_temps(paraules, srt)
+        self.assertEqual(r["n"], 4)  # inici de «Hola», final de «tal?», i les dues vores de «Bé.»
+        self.assertEqual((r["mes_025"], r["mes_05"]), (2, 0))
+        self.assertEqual(r["grans"][0]["text"], "Bé.")
 
 
 class TestAlineadorSegur(unittest.TestCase):
@@ -247,12 +406,12 @@ class TestAlineadorSegur(unittest.TestCase):
         frases = [{"start": 0.0, "end": 2.0, "text": "u dos tres quatre"}]
         audio = np.zeros(16000 * 2, dtype=np.float32)
         temps = [(0.1, 0.2), (0.3, 0.4), (0.5, 0.6), (0.7, 0.8)]
-        with mock.patch.object(transcripcio, "model_mms", return_value=(None, None)):
-            with mock.patch.object(transcripcio, "temps_mms", return_value=(temps, [0.9, 0.1, 0.1, 0.9])):
+        with mock.patch.object(transcripcio, "model_alineador", return_value=(None, None)):
+            with mock.patch.object(transcripcio, "temps_paraules", return_value=(temps, [0.9, 0.1, 0.1, 0.9])):
                 with self.assertRaises(ValueError):
-                    transcripcio.alinea_mms(audio, frases)
-            with mock.patch.object(transcripcio, "temps_mms", return_value=(temps, [0.9, 0.9, 0.1, 0.9])):
-                segments = transcripcio.alinea_mms(audio, frases)
+                    transcripcio.alinea_global(audio, frases)
+            with mock.patch.object(transcripcio, "temps_paraules", return_value=(temps, [0.9, 0.9, 0.1, 0.9])):
+                segments = transcripcio.alinea_global(audio, frases)
         self.assertEqual([w["word"] for w in segments[0]["words"]], ["u", "dos", "tres", "quatre"])
 
 

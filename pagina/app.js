@@ -279,6 +279,8 @@ function pintaText() {
       const s = document.createElement("span");
       s.className = "p";
       s.dataset.id = id;
+      // Un número o un símbol: l'alineador no el pot escoltar i el temps és aproximat (confianca null).
+      if (P.paraules[id].confianca === null) s.classList.add("aprox");
       spans.set(id, s);
       par.append(s, " ");
     }
@@ -450,7 +452,8 @@ function actualitzaParaules() {
     if (s.textContent !== text) s.textContent = text;
     s.title = motiu ? MOTIUS[motiu] || motiu
       : proposta ? `${PROPOSTES[proposta] || "Proposta"}: toca-la per treure-la`
-      : correccio != null ? `Original: ${P.paraules[id].text}` : "";
+      : correccio != null ? `Original: ${P.paraules[id].text}`
+      : P.paraules[id].confianca === null ? "Temps aproximat: escolta-ho abans de tallar aquí" : "";
   }
   for (const { el, ids } of paragrafsEl) el.classList.toggle("tot-fora", ids.every(esFora));
 }
@@ -759,7 +762,7 @@ function actualitzaPropostes() {
 // (#video-m), que sona sense salts: als salts, el Safari s'encalla uns quants dècims de segon.
 // (Vam provar dos vídeos alternats a cada tall, però al Safari el segon deixava de dir per on anava.)
 const R = { v: $("#video-a"), proxy: $("#video-a"), muntatge: $("#video-m"), k: 0, reproduint: false, aturaA: null,
-  vigila: { t: -1, des: 0 }, salt: null, posat: false };
+  vigila: { t: -1, des: 0 }, salt: null, recarrega: null, posat: false };
 const continu = () => R.v === R.muntatge;
 let previaLlesta = null;  // {url, trams (JSON)} quan #video-m ja té el muntatge dels talls d'ara
 let esperaPrevia = null;  // el temporitzador de la petició
@@ -822,6 +825,8 @@ function activaMuntatge(m) {
   intentCanvi++;
   const M = R.muntatge;
   M.muted = false;
+  M.volume = 1;
+  M.playbackRate = 1;
   R.proxy.pause();
   R.salt = null;
   R.repren = false;
@@ -848,34 +853,69 @@ function passaAMuntatge() {
   R.muntatge.currentTime = m;
 }
 
-// Mentre sona: el vídeo continu es posa una mica més endavant, en silenci, i comença a sonar just quan
-// la còpia que salta hi arriba; llavors se'n canvia (sense que s'aturi ni es noti). Si mentrestant passa
-// qualsevol altra cosa (s'atura, es torna a fer play, canvien els talls), l'intent s'oblida sense tocar res.
+// Mentre sona: el vídeo continu es posa una mica més endavant i comença a sonar en silenci una mica
+// abans que la còpia que salta hi arribi. Llavors se n'ajusta la velocitat (en silenci no es nota) fins
+// que tots dos diuen el mateix moment, i el so passa de l'un a l'altre amb un fos curt. Abans canviava
+// tan bon punt arrencava, i es podien saltar o repetir fins a dues dècimes (revisió de Codex). Si
+// mentrestant passa qualsevol altra cosa (s'atura, es torna a fer play, canvien els talls), l'intent
+// s'oblida sense tocar res.
 function passaAMuntatgeSonant() {
   if (continu() || !previaAPunt() || !R.reproduint || vista !== "directe") return;
   const intent = ++intentCanvi;
   const M = R.muntatge;
   const objectiu = tempsMuntatge() + 0.5;
-  if (objectiu >= duradaFinal - 0.6) return;
+  if (objectiu >= duradaFinal - 1) return;
   const viu = () => intent === intentCanvi && R.reproduint && !continu() && previaAPunt();
-  const deixa = () => { if (M !== R.v) { M.pause(); M.muted = false; } };  // mai el que ja sona
+  const deixa = () => {  // mai el que ja sona
+    if (M !== R.v) { M.pause(); M.muted = false; M.volume = 1; M.playbackRate = 1; }
+    R.proxy.volume = 1;
+  };
   M.muted = true;
   M.addEventListener("seeked", () => {
     const espera = () => {
       if (!viu()) { deixa(); return; }
       const ara = tempsMuntatge();
-      if (ara > objectiu + 0.2) { deixa(); passaAMuntatgeSonant(); return; }  // s'ha passat (un salt lent): de nou
-      if (ara < objectiu - 0.12) { setTimeout(espera, 15); return; }
-      M.addEventListener("playing", () => {
-        if (!viu()) { deixa(); return; }
-        activaMuntatge(M.currentTime);
-        mostraVideoActiu();
-      }, { once: true });
-      M.play().catch(deixa);
+      if (ara > objectiu) { deixa(); passaAMuntatgeSonant(); return; }  // s'ha passat (un salt lent): de nou
+      if (ara < objectiu - 0.25) { setTimeout(espera, 15); return; }
+      M.play().then(() => requestAnimationFrame(ajusta)).catch(deixa);
     };
     espera();
   }, { once: true });
   M.currentTime = objectiu;
+
+  const t0 = performance.now();
+  function ajusta() {
+    if (!viu()) { deixa(); return; }
+    // Mentre la còpia salta d'un tros a l'altre, el seu temps no és de fiar: s'espera.
+    if (!R.proxy.seeking && R.salt == null) {
+      const d = M.currentTime - tempsMuntatge();  // > 0: el continu va per davant
+      if (Math.abs(d) <= 0.02 || performance.now() - t0 > 4000) {
+        registre("sincronitzat", { d: +d.toFixed(3), ms: Math.round(performance.now() - t0) });
+        M.playbackRate = 1;
+        fon();
+        return;
+      }
+      if (d > 0.6 || d < -0.6) { deixa(); passaAMuntatgeSonant(); return; }  // massa lluny: de nou
+      M.playbackRate = d > 0 ? 0.85 : 1.15;
+    }
+    requestAnimationFrame(ajusta);
+  }
+  function fon() {  // 60 ms: el continu puja i la còpia baixa, i llavors ja només sona el continu
+    const des = performance.now();
+    M.volume = 0;
+    M.muted = false;
+    const pas = () => {
+      if (!viu()) { deixa(); return; }
+      const x = Math.min(1, (performance.now() - des) / 60);
+      M.volume = x;
+      R.proxy.volume = 1 - x;
+      if (x < 1) { requestAnimationFrame(pas); return; }
+      activaMuntatge(M.currentTime);
+      R.proxy.volume = 1;
+      mostraVideoActiu();
+    };
+    requestAnimationFrame(pas);
+  }
 }
 
 // Els talls han canviat: el vídeo continu ja no hi correspon. Tornem a la còpia que salta, al mateix
@@ -916,7 +956,7 @@ function jaCarregat(t) {
   for (let i = 0; i < b.length; i++) if (t >= b.start(i) && t <= b.end(i) - 0.3) return true;
   return false;
 }
-const tempsVideo = () => R.salt ?? R.v.currentTime;  // on serà el vídeo quan acabi el salt
+const tempsVideo = () => R.recarrega ?? R.salt ?? R.v.currentTime;  // on serà el vídeo quan acabi el salt
 
 // --- Escoltar cada tall ---------------------------------------------------------------------
 // En treure o recuperar paraules amb el vídeo aturat, el reproductor fa sonar uns segons
@@ -940,14 +980,62 @@ function muntatgeDe(t) {
   return acum[k] + Math.max(0, t - trams[k][0]);
 }
 
-function escoltaTall(t) {
+// El servidor fa un vídeo curt d'aquests segons (en mig segon), amb el so tallat i fos com a l'export:
+// la còpia que salta no pot fer-ho, i el muntatge sencer encara no té el canvi. Sona en un vídeo a part
+// (#video-e); en acabar, el reproductor queda just després del tall. Si no es pot, com abans: saltant.
+const vEsc = $("#video-e");
+let escoltant = null;  // {inici: temps del muntatge on comença el vídeo curt, durada} mentre sona
+let intentEscolta = 0;
+
+async function escoltaTall(t) {
   if (!trams.length || sona()) return;
   const m = muntatgeDe(t);
+  const intent = ++intentEscolta;
   registre("escolta", { t, m: +m.toFixed(3) });
-  vesA(Math.max(0, m - 1.5));
-  reprodueix();
-  R.aturaA = Math.min(duradaFinal, m + 1.5);
+  let r = null;
+  try {
+    r = await api("/api/escolta", { m });
+    if (r.estat === "fet" && vEsc.dataset.url !== r.url) {
+      vEsc.dataset.url = r.url;
+      vEsc.src = r.url;
+      await new Promise((resol, falla) => {
+        vEsc.addEventListener("loadeddata", resol, { once: true });
+        vEsc.addEventListener("error", falla, { once: true });
+      });
+    }
+  } catch (e) {
+    registre("escolta-error", { msg: String(e?.message || e) });
+    r = null;
+  }
+  if (intent !== intentEscolta || sona() || vista !== "directe") return;
+  if (r?.estat !== "fet") {  // com abans: la còpia que salta
+    vesA(Math.max(0, m - 1.5));
+    reprodueix();
+    R.aturaA = Math.min(duradaFinal, m + 1.5);
+    return;
+  }
+  escoltant = { inici: r.inici, durada: r.durada };
+  vEsc.currentTime = 0;
+  for (const v of [R.proxy, R.muntatge]) v.classList.add("amagat");
+  vEsc.classList.remove("amagat");
+  document.body.classList.add("reproduint");
+  vEsc.play().catch(() => deixaEscolta());
 }
+
+// Para el vídeo curt i deixa el reproductor on era (o, si ha acabat, just al final del que s'ha escoltat).
+function deixaEscolta() {
+  if (!escoltant) return;
+  const m = escoltant.inici + Math.min(vEsc.currentTime, escoltant.durada);
+  escoltant = null;
+  intentEscolta++;
+  vEsc.pause();
+  vEsc.classList.add("amagat");
+  document.body.classList.remove("reproduint");
+  mostraVideoActiu();
+  vesA(m);
+  passaAMuntatge();
+}
+vEsc.addEventListener("ended", deixaEscolta);
 const vE = $("#video-esborrany");
 
 // Quin tros conté el temps original t. En un reel muntat els trossos no van en ordre
@@ -962,9 +1050,10 @@ function indexTram(t, llista = trams) {
 }
 
 function tempsMuntatge() {
+  if (escoltant) return escoltant.inici + Math.min(vEsc.currentTime, escoltant.durada);
   if (vista === "esborrany") return vE.currentTime || 0;
   if (!trams.length) return 0;
-  if (continu()) return Math.min(R.v.currentTime, duradaFinal);
+  if (continu()) return Math.min(R.recarrega ?? R.v.currentTime, duradaFinal);
   const k = Math.min(R.k, trams.length - 1);
   const [a, b] = trams[k];
   return acum[k] + limita(tempsVideo() - a, 0, b - a);
@@ -973,6 +1062,8 @@ function tempsMuntatge() {
 function durada() { return vista === "esborrany" ? (esborrany?.durada || vE.duration || 0) : duradaFinal; }
 
 function vesA(m) {
+  if (escoltant) { intentEscolta++; escoltant = null; vEsc.pause(); vEsc.classList.add("amagat");
+    document.body.classList.remove("reproduint"); mostraVideoActiu(); }
   m = limita(m, 0, durada());
   if (vista === "esborrany") { vE.currentTime = m; return; }
   if (!trams.length) return;
@@ -992,6 +1083,7 @@ function vesAOriginal(t) {
 
 // Si s'ha editat mentre sonava, continuem pel tros que toca.
 function recolloca() {
+  if (R.recarrega != null) return;  // el vídeo s'està recarregant: el seu temps no val
   if (!trams.length) { atura(); return; }
   if (continu()) return;
   const t = tempsVideo();
@@ -1000,6 +1092,18 @@ function recolloca() {
   if (k >= trams.length) { R.k = trams.length - 1; if (R.reproduint) atura(); return; }
   R.k = k;
   if (t < trams[k][0] - 0.01 && R.reproduint) posaTemps(trams[k][0]);
+}
+
+// El so torna a pujar en 40 ms després d'un salt de la còpia (vegeu comprovaTall).
+function pujaVolum(v) {
+  if (v.volume >= 1) return;
+  const des = performance.now(), de = v.volume;
+  const pas = () => {
+    const x = Math.min(1, (performance.now() - des) / 40);
+    v.volume = de + (1 - de) * x;
+    if (x < 1) requestAnimationFrame(pas);
+  };
+  requestAnimationFrame(pas);
 }
 
 function salta() {
@@ -1011,6 +1115,8 @@ function salta() {
 }
 
 function reprodueix() {
+  deixaEscolta();
+  R.proxy.volume = 1;  // si s'havia aturat enmig d'un fos
   if (vista === "esborrany") { vE.play(); return; }
   if (!trams.length) return;
   if (!continu() && previaAPunt()) {  // el continu és a punt: hi passem ja, abans de començar
@@ -1043,6 +1149,8 @@ function reprodueix() {
 }
 
 function atura() {
+  intentEscolta++;  // si s'estava preparant un vídeo curt per escoltar un tall, ja no sona
+  deixaEscolta();
   if (R.reproduint) registre("atura", { k: R.k, video: ev(R.v) });
   R.repren = false;
   R.aturaA = null;
@@ -1050,6 +1158,23 @@ function atura() {
   R.v.pause(); vE.pause();
   document.body.classList.remove("reproduint");
   passaAMuntatge();
+}
+
+// Recarrega el vídeo que sona i el torna al moment `objectiu` (un salt encallat que no es desencalla).
+// Mentre es recarrega, el vídeo diu que és al segon 0: R.recarrega guarda on ha de ser, perquè ningú no
+// es pensi que hi ha d'anar de debò (abans, el reproductor tornava a començar pel principi del muntatge).
+function recarregaVideo(objectiu) {
+  const v = R.v;
+  R.recarrega = objectiu;
+  const allibera = () => { if (R.recarrega === objectiu) R.recarrega = null; };
+  setTimeout(allibera, 8000);  // si no es recarrega mai, que el reproductor no quedi aturat per sempre
+  v.addEventListener("loadeddata", () => {
+    v.addEventListener("seeked", allibera, { once: true });
+    v.currentTime = objectiu;
+    if (R.reproduint && v === R.v) v.play().catch(() => {});
+  }, { once: true });
+  v.addEventListener("error", allibera, { once: true });
+  v.load();
 }
 
 // Vigilant: si el vídeo diu que sona però el seu temps no avança, o un salt no acaba mai,
@@ -1063,11 +1188,7 @@ function vigila() {
       R.vigila.salt.intents++;
       registre("salt-encallat", { intents: R.vigila.salt.intents, video: ev(R.v) });
       if (R.vigila.salt.intents >= 2) {  // segon intent: recarreguem el vídeo i hi tornem
-        R.v.load();
-        R.v.addEventListener("loadeddata", () => {
-          R.v.currentTime = objectiu;
-          if (R.reproduint) R.v.play().catch(() => {});
-        }, { once: true });
+        recarregaVideo(objectiu);
         R.vigila.salt = { des: performance.now() + 3000, intents: 0 };
       } else {
         R.v.currentTime = objectiu;
@@ -1087,7 +1208,7 @@ function vigila() {
   }
 }
 
-const sona = () => (vista === "esborrany" ? !vE.paused : R.reproduint);
+const sona = () => (escoltant ? true : vista === "esborrany" ? !vE.paused : R.reproduint);
 
 function reprodueixDes(id) {
   if (vista !== "directe") canviaVista("directe");
@@ -2100,20 +2221,23 @@ function comprovaTall() {
     if (R.reproduint && (R.v.ended || R.v.currentTime >= duradaFinal - 0.02)) atura();
     return;
   }
-  if (vista === "directe" && R.reproduint && trams.length && !R.v.seeking && R.salt == null) {
+  if (vista === "directe" && R.reproduint && trams.length && !R.v.seeking && R.salt == null && R.recarrega == null) {
     const t = R.v.currentTime;
     const [a, b] = trams[Math.min(R.k, trams.length - 1)];
     // Passat el final del tros, sempre al següent del muntatge, encara que el navegador hagi anat
     // tard: buscar per temps de la gravació s'hi saltaria els trossos que s'han mogut més amunt.
+    // Just abans del salt el so baixa (i després del salt torna a pujar, pujaVolum): sense aquest fos,
+    // a cada tall de la còpia que salta se sentia un clic.
     if (t >= b - 0.03) salta();
     else if (t < a - 0.3) recolloca();
+    else if (t >= b - 0.07) R.v.volume = limita((b - 0.03 - t) / 0.04, 0, 1);
   }
 }
 
 let paraulaMarcada = null;
 function paraulaActual() {
   let t;
-  if (vista === "directe") t = continu() ? originalDe(tempsMuntatge()) : R.v.currentTime;
+  if (vista === "directe") t = continu() || escoltant ? originalDe(tempsMuntatge()) : tempsVideo();
   else if (esborrany?.trams) {
     const m = vE.currentTime;
     let k = 0;
@@ -2179,6 +2303,7 @@ function instalaReproductor() {
   R.proxy.addEventListener("loadeddata", () => { if (!R.posat) vesA(0); pintaTemps(); programaPrevia(0); }, { once: true });
   R.proxy.addEventListener("seeked", () => {
     if (continu()) return;  // els salts són de la còpia lleugera
+    pujaVolum(R.proxy);
     if (R.salt != null) {  // el salt que esperava
       const t = R.salt;
       R.salt = null;
@@ -3251,6 +3376,8 @@ function instalaEdicioAlVideo() {
 const PASSES_GUIA = [
   ["#seccio-reels", "Aquí tries què edites: el vídeo sencer o un dels reels que t'ha proposat Claude."],
   [".text", "Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫."],
+  ["#escolta", "Quan treus una paraula, sonen uns segons al voltant del tall perquè sentis com queda, i s'atura. " +
+    "Si no ho vols, apaga això."],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
   ["#pestanyes", "Aquí tens els subtítols, els gràfics i el so."],
   ["#final", "Quan estigui a punt, toca Exporta: un esborrany per mirar-lo, el vídeo final o per a un altre editor."],

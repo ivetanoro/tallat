@@ -132,4 +132,5 @@ class TestFiDeLaVeu(unittest.TestCase):
         import numpy as np
         v = np.ones(200, dtype=bool)  # tot és veu: no sabem de qui és el so
         t = edicio.trams(self.paraules(), fps=30, durada=2, veu=v)
-        self.assertLessEqual(t[0][1], 0.45)
+        self.assertLessEqual(t[0].so[1], 0.45)  # el so no s'allarga (el fotograma sencer sí, en silenci)
+        self.assertLessEqual(t[0][1], 0.45 + 1 / 30)
