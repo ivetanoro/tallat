@@ -9,7 +9,7 @@
   python tallat.py guio --projecte CARPETA            (text per paràgrafs perquè l'assistent proposi reels)
   python tallat.py reels --projecte CARPETA           (valida reels.json i en mostra la durada)
   python tallat.py reel ID --projecte CARPETA         (crea el projecte d'un reel proposat)
-  python tallat.py realinea --projecte CARPETA         (torna a calcular el temps de cada paraula)
+  python tallat.py realinea --projecte CARPETA [--nomes-vores]   (torna a calcular el temps de cada paraula)
   python tallat.py afegeix TIPUS --paraula ID --projecte CARPETA [--text "…"] [--treu A-B]   (instrucció a mà)
   python tallat.py broll ID_INSTRUCCIO FITXER --projecte CARPETA [--durada 1.5]
   python tallat.py exporta --projecte CARPETA [--qualitat esborrany|1080|4k]
@@ -106,35 +106,46 @@ def _enllaca(origen, desti) -> None:
 
 def ordre_realinea(args) -> None:
     """Torna a calcular quan comença i acaba cada paraula (amb l'alineador d'ara), sense canviar el text
-    ni res de l'edició: els talls, els subtítols i els gràfics hi tornen a caure al lloc."""
+    ni res de l'edició: els talls, els subtítols i els gràfics hi tornen a caure al lloc. Amb --nomes-vores
+    no torna a escoltar el vídeo: només retalla les vores de les paraules als silencis amb el mapa de veu
+    del projecte (és qüestió de segons, i serveix per als projectes fets abans d'una millora d'aquest retall)."""
     projecte = _carrega(args)
     path = projecte.fitxer(TRANSCRIPCIO).resolve()  # en un reel, la de la gravació sencera
     dades = json.loads(path.read_text(encoding="utf-8"))
     paraules = dades["paraules"]
-    frases: dict[int, list[dict]] = {}
-    for p in paraules:
-        frases.setdefault(p["frase"], []).append(p)
-    segments = [{"start": ps[0]["inici"], "end": ps[-1]["final"], "text": " ".join(p["text"] for p in ps)}
-                for _, ps in sorted(frases.items())]
-    print(f"Calculant de nou el temps de {len(paraules)} paraules (pot trigar uns minuts; el primer cop baixa el model)…",
-          flush=True)
     t0 = time.time()
-    video = Path(dades["video"])
-    if not video.exists():  # s'ha mogut l'original: la còpia lleugera té el mateix so i el mateix temps
-        video = path.parent / PROXY
-        print(f"No trobo el vídeo original: faig servir la còpia lleugera ({video.name}).")
-    if not paraules or not video.exists():
-        sys.exit("No hi ha res per alinear (cap paraula, o ni el vídeo ni la còpia lleugera).")
-    noves = transcripcio.a_paraules(transcripcio.alinea(transcripcio.carrega_audio(video), segments))
-    if [p["text"] for p in noves] != [p["text"] for p in paraules]:
-        sys.exit("Les paraules no coincideixen amb les de la transcripció: no he canviat res.")
-    canvis = [abs(n["inici"] - p["inici"]) for n, p in zip(noves, paraules)]
+    if args.nomes_vores:
+        veu_ = projecte.veu()
+        if veu_ is None or not paraules:
+            sys.exit("No tinc el mapa de veu d'aquest vídeo: fes-ho sense --nomes-vores.")
+        temps = transcripcio.retalla_als_silencis([(p["inici"], p["final"]) for p in paraules], veu_,
+                                                  textos=[p["text"] for p in paraules])
+        noves = [{"inici": a, "final": b, "confianca": p.get("confianca")} for p, (a, b) in zip(paraules, temps)]
+    else:
+        frases: dict[int, list[dict]] = {}
+        for p in paraules:
+            frases.setdefault(p["frase"], []).append(p)
+        segments = [{"start": ps[0]["inici"], "end": ps[-1]["final"], "text": " ".join(p["text"] for p in ps)}
+                    for _, ps in sorted(frases.items())]
+        print(f"Calculant de nou el temps de {len(paraules)} paraules (pot trigar uns minuts; el primer cop baixa el model)…",
+              flush=True)
+        video = Path(dades["video"])
+        if not video.exists():  # s'ha mogut l'original: la còpia lleugera té el mateix so i el mateix temps
+            video = path.parent / PROXY
+            print(f"No trobo el vídeo original: faig servir la còpia lleugera ({video.name}).")
+        if not paraules or not video.exists():
+            sys.exit("No hi ha res per alinear (cap paraula, o ni el vídeo ni la còpia lleugera).")
+        noves = transcripcio.a_paraules(transcripcio.alinea(transcripcio.carrega_audio(video), segments))
+        if [p["text"] for p in noves] != [p["text"] for p in paraules]:
+            sys.exit("Les paraules no coincideixen amb les de la transcripció: no he canviat res.")
+    canvis = [max(abs(n["inici"] - p["inici"]), abs(n["final"] - p["final"])) for n, p in zip(noves, paraules)]
     copia = path.with_name(f"transcripcio-abans-{time.strftime('%Y%m%d-%H%M%S')}.json")
     shutil.copy2(path, copia)
     for p, n in zip(paraules, noves):
         p["inici"], p["final"], p["confianca"] = n["inici"], n["final"], n.get("confianca")
-    font = re.sub(r"\s*\+ alineació.*$", "", str(dades.get("font", "")))
-    dades["font"] = f"{font} + alineació de tot el text" if font else "alineació de tot el text"
+    if not args.nomes_vores:
+        font = re.sub(r"\s*\+ alineació.*$", "", str(dades.get("font", "")))
+        dades["font"] = f"{font} + alineació de tot el text" if font else "alineació de tot el text"
     path.write_text(json.dumps(dades, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"Fet en {minuts(time.time() - t0)}. {sum(c > 0.25 for c in canvis)} paraules s'han mogut més d'un quart de "
           f"segon (la que més, {max(canvis):.1f} s). La d'abans és a {copia.name}.")
@@ -736,6 +747,8 @@ def main() -> None:
 
     ra = sub.add_parser("realinea", help="Torna a calcular quan comença i acaba cada paraula (sense tocar l'edició)")
     ra.add_argument("--projecte", required=True)
+    ra.add_argument("--nomes-vores", action="store_true",
+                    help="Només retalla les vores als silencis, amb el mapa de veu que ja hi ha (no torna a escoltar el vídeo)")
     ra.set_defaults(func=ordre_realinea)
 
     ct = sub.add_parser("compara-temps", help="Compara el temps de cada paraula amb el d'un SRT (p. ex. de Descript)")

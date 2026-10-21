@@ -60,6 +60,23 @@ class TestTrams(unittest.TestCase):
         (a, b), = edicio.trams(p, fps=30, durada=10.0, veu=veu_)
         self.assertLess(b, 0.5)
 
+    def test_una_tecla_enmig_de_la_pausa_no_la_parteix(self):
+        # Una gravació fent coses a l'ordinador: 10 s de pausa amb clics de 20 ms. Abans només s'escurçava
+        # el tros de silenci més llarg i hi quedaven 6 s.
+        veu_ = np.zeros(1300, dtype=bool)
+        veu_[100:150] = True
+        veu_[1150:1200] = True
+        for k in (450, 700, 980):
+            veu_[k:k + 2] = True
+        p = [{"id": 0, "text": "Hola.", "inici": 1.0, "final": 1.5, "frase": 0, "conservada": True},
+             {"id": 1, "text": "Adéu.", "inici": 11.5, "final": 12.0, "frase": 1, "conservada": True}]
+        primer, segon = edicio.trams(p, fps=30, durada=13.0, pausa_maxima=0.4, veu=veu_)
+        self.assertAlmostEqual((primer[1] - primer[0]) + (segon[1] - segon[0]) - 1.0, 0.4, delta=0.15)
+        # Un so de debò (mig segon) sí que la parteix: no és cap soroll, i el so i l'altre silenci es queden.
+        veu_[700:750] = True
+        trossos = edicio.trams(p, fps=30, durada=13.0, pausa_maxima=0.4, veu=veu_)
+        self.assertGreater(sum(b - a for a, b in trossos), 5)
+
 
 class TestParaulesSenseTemps(unittest.TestCase):
     def test_es_reparteixen_el_forat(self):
@@ -460,6 +477,27 @@ class TestAlineador(unittest.TestCase):
         self.assertEqual(transcripcio.retalla_als_silencis([(0.6, 1.8)], veu), [(0.97, 1.55)])
         self.assertEqual(transcripcio.retalla_als_silencis([(2.0, 2.5)], veu), [(2.0, 2.5)])  # sense veu: com era
 
+    def test_una_paraula_estirada_per_sobre_d_una_pausa(self):
+        # Una gravació de proves: una paraula curta durava 8,8 s, amb 6 s de silenci a dins, i la pausa no es podia escurçar.
+        veu = np.zeros(1000, dtype=bool)
+        veu[100:130] = True  # la paraula, d'1,00 a 1,30 s
+        veu[400] = True      # un cop (10 ms) enmig del silenci
+        veu[895:900] = True  # l'arrencada de la paraula següent, a la vora
+        self.assertEqual(transcripcio.retalla_als_silencis([(1.0, 9.0)], veu, textos=["cafè"]), [(1.0, 1.35)])
+        self.assertEqual(transcripcio.retalla_als_silencis([(1.0, 9.0)], veu), [(1.0, 9.0)])  # sense textos: com abans
+
+    def test_si_comença_amb_un_soroll_es_queda_la_veu_de_despres(self):
+        veu = np.zeros(500, dtype=bool)
+        veu[20] = True       # un clic de 10 ms
+        veu[200:240] = True  # la paraula
+        self.assertEqual(transcripcio.retalla_als_silencis([(0.1, 4.5)], veu, textos=["hola"]), [(1.97, 2.45)])
+
+    def test_una_paraula_llarga_de_debo_no_es_parteix(self):
+        veu = np.zeros(300, dtype=bool)
+        veu[10:60] = True
+        veu[110:140] = True  # «pe… però»: mig segon de silenci, però la paraula no dura massa
+        self.assertEqual(transcripcio.retalla_als_silencis([(0.1, 1.4)], veu, textos=["però"]), [(0.1, 1.4)])
+
 
 class TestAjustaTemps(unittest.TestCase):
     """Revisió de Codex: si fallava l'alineació de tot el text, l'alineador d'abans no retallava les vores, i
@@ -560,9 +598,35 @@ class TestRealinea(unittest.TestCase):
                                    {"word": "tal?", "start": 2.2, "end": 2.9}]}]
             with mock.patch.object(tallat.transcripcio, "carrega_audio", return_value=None) as audio, \
                     mock.patch.object(tallat.transcripcio, "alinea", return_value=segments):
-                tallat.ordre_realinea(argparse.Namespace(projecte=str(d)))
+                tallat.ordre_realinea(argparse.Namespace(projecte=str(d), nomes_vores=False))
             self.assertEqual(audio.call_args[0][0].name, "proxy.mp4")  # l'original no hi és: la còpia lleugera
             dades = json.loads((d / "transcripcio.json").read_text(encoding="utf-8"))
             self.assertEqual([(p["text"], p["inici"], p["frase"]) for p in dades["paraules"]],
                              [("Hola,", 0.2, 0), ("què", 1.3, 0), ("tal?", 2.2, 0)])
+            self.assertEqual(len(list(d.glob("transcripcio-abans-*.json"))), 1)
+
+    def test_nomes_les_vores_amb_el_mapa_de_veu(self):
+        # Sense tornar a escoltar el vídeo: «cafè» s'havia estirat 8 s per sobre d'una pausa.
+        import argparse
+        from unittest import mock
+        import numpy as np
+        import tallat
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            paraules = [{"id": 0, "text": "cafè", "inici": 1.0, "final": 9.0, "frase": 0, "confianca": 0.3},
+                        {"id": 1, "text": "Ara", "inici": 9.0, "final": 9.3, "frase": 1, "confianca": 0.9}]
+            (d / "transcripcio.json").write_text(json.dumps({"video": str(d / "ja-no-hi-es.mov"), "fps": "30",
+                                                             "durada": 10.0, "font": "WhisperX", "paraules": paraules}),
+                                                 encoding="utf-8")
+            veu = np.zeros(1000, dtype=bool)
+            veu[100:130] = True
+            veu[900:930] = True
+            with mock.patch.object(tallat.Projecte, "veu", return_value=veu), \
+                    mock.patch.object(tallat.transcripcio, "alinea") as alinea:
+                tallat.ordre_realinea(argparse.Namespace(projecte=str(d), nomes_vores=True))
+            alinea.assert_not_called()
+            dades = json.loads((d / "transcripcio.json").read_text(encoding="utf-8"))
+            self.assertEqual([(p["inici"], p["final"], p["confianca"]) for p in dades["paraules"]],
+                             [(1.0, 1.35, 0.3), (9.0, 9.3, 0.9)])
+            self.assertEqual(dades["font"], "WhisperX")
             self.assertEqual(len(list(d.glob("transcripcio-abans-*.json"))), 1)

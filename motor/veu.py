@@ -93,12 +93,26 @@ def carrega(carpeta: Path, video: Path, durada: float | None = None, alternativa
     return m
 
 
-def silenci_mes_llarg(veu: np.ndarray, t0: float, t1: float) -> tuple[float, float] | None:
-    """El tros de silenci real més llarg entre t0 i t1 (segons), o None si no n'hi ha."""
+SOROLL = 0.1  # segons: dins d'una pausa, un so més curt (un clic, una tecla, un cop) no és veu
+
+
+def silenci_mes_llarg(veu: np.ndarray, t0: float, t1: float, soroll: float = SOROLL) -> tuple[float, float] | None:
+    """El tros de silenci real més llarg entre t0 i t1 (segons), o None si no n'hi ha. Els sons de menys
+    de `soroll` segons hi compten com a silenci: si no, una tecla enmig d'una pausa de 10 s la partia en
+    dues i només se n'escurçava la meitat (passava a les gravacions fent coses a l'ordinador)."""
     a, b = max(0, int(np.ceil(t0 / PAS))), min(len(veu), int(t1 / PAS))
+    tros = np.array(veu[a:b], dtype=bool) if b > a else np.zeros(0, dtype=bool)
+    curt, k = int(round(soroll / PAS)), 0
+    while k < len(tros):
+        j = k
+        while j < len(tros) and tros[j]:
+            j += 1
+        if j - k < curt:
+            tros[k:j] = False
+        k = j + 1
     millor, inici = None, None
     for k in range(a, b + 1):
-        silenci = k < b and not veu[k]
+        silenci = k < b and not tros[k - a]
         if silenci and inici is None:
             inici = k
         elif not silenci and inici is not None:
