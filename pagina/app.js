@@ -565,10 +565,17 @@ function colocaBarreta() {
   b.style.top = `${dalt < text.top + 4 ? r.bottom + 8 : dalt}px`;
 }
 
+// Les paraules es queden marcades: un altre ⌫ (o «Recupera», a la barreta) les torna a posar.
 function treuMarcades() {
-  if (!seleccioFeta?.length) return;
-  commutaIds(seleccioFeta);
-  deixaSeleccio();
+  const ids = seleccioFeta;
+  if (!ids?.length) return;
+  commutaIds(ids);
+  if (seleccioNativa) {  // la selecció del navegador passa a ser una marca, com la d'un clic
+    seleccioNativa = false;
+    getSelection().removeAllRanges();
+  }
+  seleccioFeta = ids;
+  pintaSeleccio();
 }
 
 function corregeixMarcada() {
@@ -740,6 +747,9 @@ function commutaDestacades(ids) {
   if (posa && !estilSub?.clau_grans) {
     canviaEstil({ clau_grans: true });
     avis("He activat les paraules destacades a l'estil dels subtítols.", 4000);
+  } else {  // si ja ho era, ⌘B la treu: que es vegi què ha passat
+    const n = dins.length === 1 ? "" : ` (${dins.length})`;
+    avis(posa ? `Destacada${n}: als subtítols surt més gran.` : `Ja no surt destacada${n}.`, 2200);
   }
 }
 
