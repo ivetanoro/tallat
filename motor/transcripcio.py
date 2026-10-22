@@ -88,9 +88,7 @@ def ajusta_temps(segments: list[dict], veu) -> int:
     poden trepitjar). Canvia `segments` i torna quantes paraules anaven enrere més d'una dècima."""
     paraules = [w for seg in segments for w in seg.get("words", [])
                 if w.get("start") is not None and w.get("end") is not None]
-    temps = retalla_als_silencis([(w["start"], w["end"]) for w in paraules], veu,
-                                 textos=[w.get("word", "") for w in paraules])
-    for w, (a, b) in zip(paraules, temps):
+    for w, (a, b) in zip(paraules, retalla_als_silencis([(w["start"], w["end"]) for w in paraules], veu)):
         w["start"], w["end"] = a, b
     endarrere, fi = 0, 0.0
     for w in paraules:
@@ -200,79 +198,17 @@ def temps_paraules(audio, textos: list[str], model=None, diccionari=None) -> tup
 PROTEGEIX_INICI, PROTEGEIX_FINAL = 0.03, 0.05
 
 
-# Una paraula dita a poc a poc no dura més de durada_maxima(). Si en dura més i a dins hi ha un silenci
-# d'almenys FORAT_DINS, l'alineador l'ha estirada per sobre d'una pausa i aquella pausa no es podria
-# escurçar: la paraula es queda amb la part que és la paraula (_part_de_la_paraula), si se sap quina és.
-FORAT_DINS = 0.5
-TOCA_EL_FINAL = 0.05  # segons: una part que acaba tan a prop del final pot ser l'arrencada de la paraula següent
-
-
-def durada_maxima(text: str) -> float:
-    return 1.0 + 0.12 * len(text)
-
-
-def _illes(veu, i0: int, i1: int) -> list[tuple[int, int]]:
-    """Els trossos seguits amb veu entre les mesures i0 i i1: [(primera, última + 1)]."""
-    illes, inici = [], None
-    for i in range(i0, i1 + 1):
-        if i < i1 and veu[i]:
-            if inici is None:
-                inici = i
-        elif inici is not None:
-            illes.append((inici, i))
-            inici = None
-    return illes
-
-
-def _nomes_clics(part: list[tuple[int, int]], pas: float) -> bool:
-    """Si tots els sons de la part són clics: els bocins separats per menys de veu.MINIM_SILENCI són un
-    mateix so, i un so de menys de veu.SOROLL segons és un clic (la mateixa regla que per escurçar pauses)."""
-    from motor import veu
-    sons = []
-    for x, y in part:
-        if sons and (x - sons[-1][1]) * pas < veu.MINIM_SILENCI:
-            sons[-1] = (sons[-1][0], y)
-        else:
-            sons.append((x, y))
-    return all((y - x) * pas < veu.SOROLL for x, y in sons)
-
-
-def _part_de_la_paraula(illes: list[tuple[int, int]], pas: float, final: int, continua: bool) -> list[tuple[int, int]] | None:
-    """De les illes de veu d'una paraula massa llarga (les parts se separen per silencis de FORAT_DINS o més),
-    la part que és la paraula, només si no hi ha dubte: l'única que no són només clics. L'última part no hi
-    compta si toca el final (`final`, en mesures) i la veu hi continua després (`continua`): és l'arrencada
-    de la paraula següent, fins on l'alineador ha estirat aquesta. En qualsevol altre cas (dues parts amb
-    so, un soroll llarg, un tros que la transcripció s'ha saltat) no se sap quina és la paraula: None, i
-    es queda com era. El mapa de veu només sap de volum: no pot dir quin so és la paraula (revisió de
-    Codex: un cop, o un soroll més llarg que la paraula, es prenien per la paraula)."""
-    parts = []
-    for x, y in illes:
-        if parts and (x - parts[-1][-1][1]) * pas < FORAT_DINS:
-            parts[-1].append((x, y))
-        else:
-            parts.append([(x, y)])
-    if len(parts) > 1 and continua and (final - parts[-1][-1][1]) * pas <= TOCA_EL_FINAL:
-        parts = parts[:-1]
-    amb_so = [p for p in parts if not _nomes_clics(p, pas)]
-    return amb_so[0] if len(amb_so) == 1 else None
-
-
-def retalla_als_silencis(temps: list[tuple[float, float]], veu, pas: float = 0.01,
-                         textos: list[str] | None = None) -> list[tuple[float, float]]:
+def retalla_als_silencis(temps: list[tuple[float, float]], veu, pas: float = 0.01) -> list[tuple[float, float]]:
     """Les vores de cada paraula, sense el silenci que hi hagi a dins (l'alineador sovint allarga una
     paraula fins a la següent, per sobre del silenci): l'inici, al primer moment amb veu; el final,
-    a l'últim (amb una mica d'aire, PROTEGEIX_*). Amb `textos`, una paraula massa llarga es queda amb
-    la part que és la paraula, si se sap (vegeu FORAT_DINS). Si dins la paraula no hi ha veu (o és molt
-    curta), es queda com era."""
+    a l'últim (amb una mica d'aire, PROTEGEIX_*). Si dins la paraula no hi ha veu (o és molt curta),
+    es queda com era."""
     sortida = []
-    for k, (a, b) in enumerate(temps):
-        i1 = min(len(veu), int(round(b / pas)))
-        illes = _illes(veu, int(a / pas), i1)
-        if illes and textos is not None and b - a > durada_maxima(textos[k]):
-            continua = i1 < len(veu) and bool(veu[i1])
-            illes = _part_de_la_paraula(illes, pas, i1, continua) or illes
-        if illes:
-            na, nb = illes[0][0] * pas, illes[-1][1] * pas
+    for a, b in temps:
+        i0, i1 = int(a / pas), min(len(veu), int(round(b / pas)))
+        amb_veu = [i for i in range(i0, i1) if veu[i]]
+        if amb_veu:
+            na, nb = amb_veu[0] * pas, (amb_veu[-1] + 1) * pas
             if nb - na >= MINIM_PARAULA:
                 a, b = max(a, na - PROTEGEIX_INICI), min(b, nb + PROTEGEIX_FINAL)
         sortida.append((round(a, 3), round(b, 3)))
