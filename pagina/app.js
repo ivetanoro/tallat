@@ -2105,13 +2105,14 @@ function pintaKits() {
 }
 
 // Tocar un estil: el fa servir aquest vídeo (si no el feia servir ja) i l'obre. Només es pot canviar
-// l'estil del vídeo; per tornar al d'abans, es toca aquell.
+// l'estil del vídeo; per tornar al d'abans, es toca aquell. Si encara no té colors, el panell ofereix
+// l'assistent dels 4 passos, però s'obre igualment (revisió de Codex: si no, no es podia gestionar).
 async function obreKit(k) {
   if (k.id !== kitActual) {
     await accioKit("/api/kit/tria", { kit: k.id }, `Aquest vídeo ara fa servir l'estil «${k.nom}».`);
     if (k.id !== kitActual) return;  // no s'ha pogut canviar (ja ho ha dit l'avís)
   }
-  if (marcaFeta()) obreMarca(); else obreAssistent();
+  obreMarca();
 }
 
 function respostaKit(r, missatge) {
@@ -2731,7 +2732,7 @@ function pintaReels() {
   const reels = P.reels || [];
   $("#compte-reels").textContent = reels.length || "";
   const obert = reels.find((r) => r.id === P.reel_actual);
-  $("#nom-reel").textContent = obert ? obert.titol : "Vídeo sencer";
+  $("#nom-reel").textContent = obert ? obert.titol : P.reel_actual ? "Aquest reel" : "Vídeo sencer";
   $("#marca").hidden = !P.reel_actual;
   if (P.reel_actual) {
     $("#nom-projecte").textContent = obert?.titol || P.nom;
@@ -2739,8 +2740,10 @@ function pintaReels() {
     document.title = `${obert?.titol || P.nom} · tallat`;
   }
   for (const e of P.errors_reels || []) avis(`reels.json: ${e}`, 6000);
-  $("#tria-reel").hidden = !reels.length;  // si encara no n'hi ha, no ocupa lloc
-  if (!reels.length) return;
+  // Si encara no n'hi ha, no ocupa lloc; però dins d'un reel sempre hi és, per tornar al vídeo sencer
+  // (revisió de Codex: si reels.json faltava o no es podia llegir, no hi havia manera de tornar-hi).
+  $("#tria-reel").hidden = !reels.length && !P.reel_actual;
+  if (!reels.length && !P.reel_actual) return;
   cont.textContent = "";
   // El primer, el vídeo sencer (la gravació tal com és, sense separar-la en reels).
   const sencer = document.createElement("div");
@@ -2763,6 +2766,24 @@ function pintaReels() {
     fesClicable(item);
     cont.append(item);
   }
+}
+
+// Els grups d'opcions (role=radiogroup: «Ritme», els dels panells) es fan servir amb les fletxes, com els
+// de debò, i les fletxes ja no arriben a les dreceres del reproductor (revisió de Codex: movien el vídeo).
+function instalaGrupsOpcions() {
+  document.addEventListener("keydown", (e) => {
+    const grup = e.target.closest?.('[role="radiogroup"]');
+    if (!grup || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+    const opcions = [...grup.querySelectorAll('[role="radio"]')].filter((b) => !b.disabled && b.offsetParent);
+    const i = opcions.indexOf(e.target.closest('[role="radio"]'));
+    if (i < 0) return;
+    e.preventDefault();
+    e.stopPropagation();  // a la captura: no arriba a cap altra drecera
+    const pas = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : -1;
+    const seguent = opcions[(i + pas + opcions.length) % opcions.length];
+    seguent.focus();
+    seguent.click();
+  }, true);
 }
 
 function instalaReels() {
@@ -4022,10 +4043,18 @@ function pintaRevisar() {
   $("#compte-revisar").textContent = pendents ? String(pendents) : "fet ✓";
 }
 
+// S'atura al primer error (revisió de Codex: deia que les havia acceptat totes encara que fallessin).
 async function acceptaInstruccions() {
   const pendents = instruccions.filter((i) => i.estat === "pendent" && !i.manual);
-  for (const ins of pendents) await decideixInstruccio(ins, "acceptada");
-  if (pendents.length) avis(`${pendents.length === 1 ? "Instrucció acceptada" : `${pendents.length} instruccions acceptades`}.`);
+  let fetes = 0;
+  for (const ins of pendents) {
+    if (!(await decideixInstruccio(ins, "acceptada"))) {
+      if (fetes) setTimeout(() => avis(`Només n'he acceptat ${fetes} de ${pendents.length}: torna-ho a provar.`, 5000), 3000);
+      return;
+    }
+    fetes++;
+  }
+  if (fetes) avis(`${fetes === 1 ? "Instrucció acceptada" : `${fetes} instruccions acceptades`}.`);
 }
 
 function pintaInstruccions() {
@@ -4073,6 +4102,7 @@ function pintaInstruccions() {
   }
 }
 
+// Torna true si el servidor l'ha desada (si no, ja ho ha dit l'avís).
 async function decideixInstruccio(ins, nou) {
   try {
     await cua;  // primer, que es desin els canvis pendents
@@ -4082,7 +4112,11 @@ async function decideixInstruccio(ins, nou) {
     refresca(true);
     if (nou === "acceptada" && ins.tipus === "talla") avis("Primer intent tret. El pots recuperar tocant-ne les paraules.");
     else if (nou === "acceptada" && ins.sense_paraula) avis("Fet: he tret la instrucció del vídeo.");
-  } catch (e) { avis(e.message); }
+    return true;
+  } catch (e) {
+    avis(e.message);
+    return false;
+  }
 }
 
 // --- Avisos -----------------------------------------------------------------------------------
@@ -4227,6 +4261,7 @@ async function inicia() {
   instalaText();
   instalaBarreta();
   instalaReels();
+  instalaGrupsOpcions();
   instalaReproductor();
   try {
     P = await api("/api/projecte");

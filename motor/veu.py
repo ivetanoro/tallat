@@ -97,19 +97,30 @@ SOROLL = 0.1  # segons: dins d'una pausa, un so més curt (un clic, una tecla, u
 
 
 def silenci_mes_llarg(veu: np.ndarray, t0: float, t1: float, soroll: float = SOROLL) -> tuple[float, float] | None:
-    """El tros de silenci real més llarg entre t0 i t1 (segons), o None si no n'hi ha. Els sons de menys
-    de `soroll` segons hi compten com a silenci: si no, una tecla enmig d'una pausa de 10 s la partia en
-    dues i només se n'escurçava la meitat (passava a les gravacions fent coses a l'ordinador)."""
+    """El tros de silenci real més llarg entre t0 i t1 (segons), o None si no n'hi ha. Un so de menys de
+    `soroll` segons hi compta com a silenci: si no, una tecla enmig d'una pausa de 10 s la partia en dues i
+    només se n'escurçava la meitat (passava a les gravacions fent coses a l'ordinador). Els bocins de so
+    separats per menys de MINIM_SILENCI són d'un mateix so (una paraula curta es pot partir en dos): es
+    mesuren junts, perquè la veu de debò no es prengui per un clic (revisió de Codex)."""
     a, b = max(0, int(np.ceil(t0 / PAS))), min(len(veu), int(t1 / PAS))
     tros = np.array(veu[a:b], dtype=bool) if b > a else np.zeros(0, dtype=bool)
-    curt, k = int(round(soroll / PAS)), 0
+    curt, junts = int(round(soroll / PAS)), int(round(MINIM_SILENCI / PAS))
+    sons, k = [], 0  # (inici, final) de cada so, amb els bocins propers junts
     while k < len(tros):
+        if not tros[k]:
+            k += 1
+            continue
         j = k
         while j < len(tros) and tros[j]:
             j += 1
-        if j - k < curt:
-            tros[k:j] = False
-        k = j + 1
+        if sons and k - sons[-1][1] < junts:
+            sons[-1] = (sons[-1][0], j)
+        else:
+            sons.append((k, j))
+        k = j
+    for x, y in sons:
+        if y - x < curt:
+            tros[x:y] = False
     millor, inici = None, None
     for k in range(a, b + 1):
         silenci = k < b and not tros[k - a]

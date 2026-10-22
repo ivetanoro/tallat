@@ -60,6 +60,17 @@ class TestTrams(unittest.TestCase):
         (a, b), = edicio.trams(p, fps=30, durada=10.0, veu=veu_)
         self.assertLess(b, 0.5)
 
+    def test_una_paraula_curta_partida_no_es_un_clic(self):
+        # Revisió de Codex: dos bocins de veu de 80 ms separats per 20 ms (una paraula curta) es tractaven com
+        # dos clics i el silenci més llarg els passava per sobre.
+        veu_ = np.zeros(1000, dtype=bool)
+        veu_[500:508] = True
+        veu_[510:518] = True
+        a, b = veu.silenci_mes_llarg(veu_, 1.0, 9.0)
+        self.assertTrue(b <= 5.0 or a >= 5.18, (a, b))
+        veu_[510:518] = False  # un bocí sol de 80 ms, sense res al costat: un clic
+        self.assertEqual(veu.silenci_mes_llarg(veu_, 1.0, 9.0), (1.0, 9.0))
+
     def test_una_tecla_enmig_de_la_pausa_no_la_parteix(self):
         # Una gravació fent coses a l'ordinador: 10 s de pausa amb clics de 20 ms. Abans només s'escurçava
         # el tros de silenci més llarg i hi quedaven 6 s.
@@ -491,6 +502,20 @@ class TestAlineador(unittest.TestCase):
         veu[20] = True       # un clic de 10 ms
         veu[200:240] = True  # la paraula
         self.assertEqual(transcripcio.retalla_als_silencis([(0.1, 4.5)], veu, textos=["hola"]), [(1.97, 2.45)])
+
+    def test_un_cop_al_principi_no_es_la_paraula(self):
+        # Revisió de Codex: un cop de 60 ms es prenia per la paraula i «hola» (2,0-2,4 s) quedava fora.
+        veu = np.zeros(500, dtype=bool)
+        veu[20:26] = True
+        veu[200:240] = True
+        self.assertEqual(transcripcio.retalla_als_silencis([(0.1, 4.5)], veu, textos=["hola"]), [(1.97, 2.45)])
+
+    def test_si_no_se_sap_quina_part_es_la_paraula_es_queda_com_era(self):
+        # Dues parts amb veu de debò (la paraula i un tros que la transcripció s'ha saltat): no es parteix.
+        veu = np.zeros(1000, dtype=bool)
+        veu[100:130] = True
+        veu[500:600] = True
+        self.assertEqual(transcripcio.retalla_als_silencis([(1.0, 9.0)], veu, textos=["cafè"]), [(1.0, 6.05)])
 
     def test_una_paraula_llarga_de_debo_no_es_parteix(self):
         veu = np.zeros(300, dtype=bool)
