@@ -188,6 +188,26 @@ kbd {
 
 .tornar { display: block; margin: 0 0 var(--e3); }
 
+/* Els reels, en un desplegable sota el nom: què s'edita (el vídeo sencer o un dels reels). */
+.tria-reel { position: relative; margin-top: var(--e2); }
+.boto-reel {
+  display: flex; align-items: center; gap: var(--e2); max-width: 100%; min-height: 30px; padding: 0 var(--e3);
+  border: 0; border-radius: var(--radi); background: var(--omplir); color: var(--text);
+  font: inherit; font-size: var(--t-ui); font-weight: 600; cursor: pointer;
+}
+.boto-reel:hover { background: var(--omplir-fort); }
+.boto-reel #nom-reel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boto-reel .xebro { width: 12px; height: 12px; }
+.menu-reels {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; padding: 5px;
+  border-radius: var(--radi-mitja); background: var(--superficie); box-shadow: var(--ombra-gran), 0 0 0 0.5px var(--linia);
+}
+.menu-reels .item { margin: 0; }
+
+/* «Per revisar»: les instruccions de veu i les paraules proposades, cada grup amb el seu títol petit. */
+.grup-revisar h3 { margin: var(--e3) 0 var(--e1); font-size: var(--t-peu); font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.grup-revisar > .enllac { margin-top: var(--e2); }
+
 /* L'inici: el que queda al vídeo i «Com es veu», una fila per panell amb el que hi ha triat. */
 .inici > .seccio:first-child { margin-top: var(--e5); }
 .mostra-estil.icona-fila { display: flex; align-items: center; justify-content: center; background: var(--accent-suau); color: var(--accent); }
@@ -860,7 +880,7 @@ body.reproduint .play .si-play { display: block; }
 .mostra-so[aria-pressed="true"] .icona-so { width: 8px; height: 10px; border: 0; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
 #panell-so .interruptor { white-space: normal; text-align: left; }
 #panell-so .camp { margin-top: var(--e3); }
-#panell-so input[type="range"], #ritme { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+#panell-so input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
 #panell-so code { font-size: 0.92em; word-break: break-all; }
 #llista-efectes { display: flex; flex-direction: column; margin: var(--e3) 0 var(--e2); }
 .efecte { display: flex; align-items: center; gap: var(--e2); padding: var(--e1) 0; border-top: 1px solid var(--linia); }

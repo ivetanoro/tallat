@@ -9,32 +9,33 @@
 <body>
   <aside class="barra" aria-label="Projecte">
     <header class="barra-cap">
-      <button class="enllac tornar" id="tornar" hidden>‹ Vídeo sencer</button>
       <p class="marca" id="marca" hidden></p>
       <div class="fila-nom">
         <h1 id="nom-projecte">…</h1>
         <button class="ajuda-guia" id="obre-guia" title="Com funciona" aria-label="Com funciona (visita guiada)">?</button>
       </div>
+      <div class="tria-reel" id="tria-reel" hidden>
+        <button class="boto-reel" id="boto-reel" aria-haspopup="true" aria-expanded="false" aria-controls="menu-reels">
+          <span id="nom-reel">Vídeo sencer</span><span class="compte" id="compte-reels"></span>
+          <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+        </button>
+        <div class="menu-reels" id="menu-reels" hidden><div id="reels"></div></div>
+      </div>
       <p class="durades" title="Durada de la gravació → durada del vídeo"><span id="durada-original">–</span><span class="fletxa" aria-hidden="true">→</span><strong id="durada-final">–</strong></p>
     </header>
 
     <div class="inici" id="inici">
-    <section class="seccio" data-seccio="reels" id="seccio-reels" hidden>
-      <h2>Vídeo sencer o reels <span class="compte" id="compte-reels"></span></h2>
-      <div id="reels"><p class="buit">Encara no hi ha cap reel proposat. Demana a Claude (o a Codex) el primer muntatge d'aquesta gravació.</p></div>
-    </section>
-    <section class="seccio" data-seccio="instruccions" id="seccio-instruccions" hidden>
-      <h2>Instruccions de veu <span class="compte" id="compte-instruccions"></span></h2>
-      <div id="instruccions"></div>
-    </section>
-    <section class="seccio" data-seccio="propostes" id="seccio-propostes">
-      <h2>Propostes <span class="compte" id="compte-propostes"></span></h2>
-      <div id="propostes"><p class="buit">No hi ha propostes pendents.</p></div>
-    </section>
-    <section class="seccio" data-seccio="silenci">
-      <h2>Silencis <span class="compte" id="nom-ritme"></span></h2>
-      <input type="range" id="ritme" min="0" max="3" step="1" aria-label="Com de llargs queden els silencis entre frases">
-      <div class="extrems" aria-hidden="true"><span>Llargs</span><span>Curts</span></div>
+    <section class="seccio" data-seccio="revisar" id="seccio-revisar" hidden>
+      <h2>Per revisar <span class="compte" id="compte-revisar"></span></h2>
+      <div class="grup-revisar" id="grup-instruccions" hidden>
+        <h3>Instruccions de veu</h3>
+        <div id="instruccions"></div>
+        <button class="enllac" id="accepta-instruccions" hidden>Accepta-les totes</button>
+      </div>
+      <div class="grup-revisar" id="grup-propostes" hidden>
+        <h3>Paraules que potser vols treure</h3>
+        <div id="propostes"></div>
+      </div>
     </section>
 
     <section class="seccio com-es-veu" aria-labelledby="titol-com-es-veu">
@@ -70,6 +71,16 @@
         <span class="fila-estil-text"><strong>So</strong><span id="nom-so"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
+    </section>
+    <section class="seccio" data-seccio="ritme">
+      <h2 id="titol-ritme">Ritme</h2>
+      <div class="segmentat ample" role="radiogroup" aria-labelledby="titol-ritme" id="ritme">
+        <button role="radio" data-valor="0">Original</button>
+        <button role="radio" data-valor="1">Pausat</button>
+        <button role="radio" data-valor="2">Normal</button>
+        <button role="radio" data-valor="3">Àgil</button>
+      </div>
+      <p class="detall" id="nota-ritme"></p>
     </section>
     </div>
 

@@ -825,11 +825,11 @@ function actualitzaPropostes() {
   const grups = {};
   for (const [k, motiu] of Object.entries(estat.propostes)) (grups[motiu] ||= []).push(+k);
   const total = Object.keys(estat.propostes).length;
-  $("#compte-propostes").textContent = total || "";
-  $("#seccio-propostes").hidden = !total;
+  $("#grup-propostes").hidden = !total;
+  pintaRevisar();
   const cont = $("#propostes");
   cont.textContent = "";
-  if (!total) { cont.innerHTML = '<p class="buit">No hi ha propostes pendents.</p>'; return; }
+  if (!total) return;
   for (const [motiu, ids] of Object.entries(grups)) {
     ids.sort((a, b) => a - b);
     const grup = document.createElement("div");
@@ -2731,7 +2731,7 @@ function pintaReels() {
   const reels = P.reels || [];
   $("#compte-reels").textContent = reels.length || "";
   const obert = reels.find((r) => r.id === P.reel_actual);
-  $("#tornar").hidden = !P.reel_actual;
+  $("#nom-reel").textContent = obert ? obert.titol : "Vídeo sencer";
   $("#marca").hidden = !P.reel_actual;
   if (P.reel_actual) {
     $("#nom-projecte").textContent = obert?.titol || P.nom;
@@ -2739,7 +2739,7 @@ function pintaReels() {
     document.title = `${obert?.titol || P.nom} · tallat`;
   }
   for (const e of P.errors_reels || []) avis(`reels.json: ${e}`, 6000);
-  $("#seccio-reels").hidden = !reels.length;  // si encara no n'hi ha, no ocupa lloc
+  $("#tria-reel").hidden = !reels.length;  // si encara no n'hi ha, no ocupa lloc
   if (!reels.length) return;
   cont.textContent = "";
   // El primer, el vídeo sencer (la gravació tal com és, sense separar-la en reels).
@@ -2765,7 +2765,26 @@ function pintaReels() {
   }
 }
 
+function instalaReels() {
+  const boto = $("#boto-reel");
+  const menu = $("#menu-reels");
+  const tanca = ({ focus = false } = {}) => {
+    menu.hidden = true;
+    boto.setAttribute("aria-expanded", "false");
+    if (focus) boto.focus();
+  };
+  boto.addEventListener("click", (e) => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+    boto.setAttribute("aria-expanded", String(!menu.hidden));
+    if (!menu.hidden) menu.querySelector(".item.obert, .item")?.focus();
+  });
+  document.addEventListener("click", (e) => { if (!menu.hidden && !menu.contains(e.target)) tanca(); });
+  menu.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); tanca({ focus: true }); } });
+}
+
 async function obre(reel) {
+  $("#menu-reels").hidden = true;
   if ((reel || null) === (P.reel_actual || null)) return;
   atura();
   try {
@@ -3594,7 +3613,8 @@ function instalaTecles() {
 // Surt sola el primer cop; després, amb el «?» de dalt.
 
 const PASSES_GUIA = [
-  ["#seccio-reels", "Aquí tries què edites: el vídeo sencer o un dels reels que t'ha proposat Claude."],
+  ["#tria-reel", "Aquí tries què edites: el vídeo sencer o un dels reels que t'ha proposat Claude."],
+  ["#seccio-revisar", "Aquí hi ha el que t'ha proposat tallat: les instruccions de veu i les paraules que potser vols treure."],
   [".text", `Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫. A sobre ` +
     `surt una barreta per destacar-les (${tecla("⌘B")}) o corregir-les (${tecla("↩")}).`],
   ["#escolta", "Quan treus una paraula, sonen uns segons al voltant del tall perquè sentis com queda, i s'atura. " +
@@ -3986,11 +4006,25 @@ const TIPUS_INSTRUCCIO = {
   altre: ["Altres", "Queda apuntada."],
 };
 
+// «Per revisar»: les instruccions de veu i les paraules proposades, junts. El compte és el que queda per decidir.
+function pintaRevisar() {
+  const propostes = Object.keys(estat?.propostes || {}).length;
+  const pendents = instruccions.filter((i) => i.estat === "pendent").length + propostes;
+  $("#seccio-revisar").hidden = !instruccions.length && !propostes;
+  $("#compte-revisar").textContent = pendents ? String(pendents) : "fet ✓";
+}
+
+async function acceptaInstruccions() {
+  const pendents = instruccions.filter((i) => i.estat === "pendent" && !i.manual);
+  for (const ins of pendents) await decideixInstruccio(ins, "acceptada");
+  if (pendents.length) avis(`${pendents.length === 1 ? "Instrucció acceptada" : `${pendents.length} instruccions acceptades`}.`);
+}
+
 function pintaInstruccions() {
-  const seccio = $("#seccio-instruccions");
-  seccio.hidden = !instruccions.length;
-  const pendents = instruccions.filter((i) => i.estat === "pendent").length;
-  $("#compte-instruccions").textContent = pendents ? `${pendents} per decidir` : "";
+  $("#grup-instruccions").hidden = !instruccions.length;
+  const pendents = instruccions.filter((i) => i.estat === "pendent" && !i.manual).length;
+  $("#accepta-instruccions").hidden = pendents < 2;
+  pintaRevisar();
   const cont = $("#instruccions");
   cont.textContent = "";
   for (const ins of instruccions) {
@@ -4057,14 +4091,16 @@ function avis(text, ms = 2600) {
 // --- Inici ------------------------------------------------------------------------------------
 
 const RITMES = [0, 0.5, 0.35, 0.25];  // el silenci més llarg que es deixa: del més tranquil (tots) al més àgil
-const NOMS_RITME = ["Sencers", "Llargs", "Normals", "Curts"];
+const NOTES_RITME = ["Deixa els silencis tal com són.", "Escurça els silencis de més de mig segon.",
+  "Escurça els silencis de més de 0,35 s.", "Escurça els silencis de més de 0,25 s."];
 
 function instalaControls() {
-  $("#ritme").addEventListener("input", () => {
-    const v = RITMES[Number($("#ritme").value)];
+  for (const b of $$("#ritme button")) b.addEventListener("click", () => {
+    const v = RITMES[Number(b.dataset.valor)];
     canvia((e) => { e.pausa_maxima = v > 0 ? v : null; }, { repinta: true });
     marcaPausa();
   });
+  $("#accepta-instruccions").addEventListener("click", acceptaInstruccions);
   for (const b of $$("#vista button")) b.addEventListener("click", () => {
     if (b.dataset.vista === "esborrany" && !esborrany) {
       const darrer = $$("#versions .item")[0];
@@ -4073,7 +4109,6 @@ function instalaControls() {
     }
     canviaVista(b.dataset.vista);
   });
-  $("#tornar").addEventListener("click", () => obre(null));
   $("#fitxer-grafic").addEventListener("change", (e) => {
     const fitxers = [...e.target.files];
     e.target.value = "";
@@ -4173,17 +4208,17 @@ function marcaPausa() {
   const actual = estat.pausa_maxima || 0;
   let k = 0;
   if (actual > 0) k = [1, 2, 3].reduce((millor, j) => (Math.abs(RITMES[j] - actual) < Math.abs(RITMES[millor] - actual) ? j : millor), 1);
-  $("#ritme").value = String(k);
-  $("#ritme").setAttribute("aria-valuetext", NOMS_RITME[k]);
+  marcaSegmentat("ritme", String(k));
   const aMida = actual > 0 && !RITMES.includes(actual);  // el teu estil en diu un altre (0,6 s…): es diu
-  $("#ritme").title = aMida ? `Els del teu estil (${String(actual).replace(".", ",")} s)` : NOMS_RITME[k];
-  $("#nom-ritme").textContent = aMida ? "Els del teu estil" : NOMS_RITME[k];
+  $("#nota-ritme").textContent = aMida
+    ? `El teu estil escurça els silencis de més de ${String(actual).replace(".", ",")} s.` : NOTES_RITME[k];
 }
 
 async function inicia() {
   instalaControls();
   instalaText();
   instalaBarreta();
+  instalaReels();
   instalaReproductor();
   try {
     P = await api("/api/projecte");
