@@ -106,7 +106,7 @@ let titolMuntatge = null;   // el títol d'aquest vídeo en temps del muntatge: 
 let editantTitol = false;   // el panell de l'estil del títol és obert
 let previaTitol = null;
 const MOSTRA_TITOL = { text: "El teu\n*títol*\naquí", inici: 0, final: 3 };  // mentre es tria l'estil sense títol
-let editantEstil = false;  // la pestanya Subtítols és oberta: el reproductor en mostra una línia d'exemple
+let editantEstil = false;  // el panell dels subtítols és obert: el reproductor en mostra una línia d'exemple
 let instruccions = [];     // instruccions de veu «Claude, …»
 let zoomsTram = [];        // quins trossos porten zoom
 let brollsMuntatge = [];   // b-rolls situats al muntatge: [{id, inici, durada, url}]
@@ -734,7 +734,6 @@ function actualitzaPropostes() {
   const total = Object.keys(estat.propostes).length;
   $("#compte-propostes").textContent = total || "";
   $("#seccio-propostes").hidden = !total;
-  actualitzaPestanyes();
   const cont = $("#propostes");
   cont.textContent = "";
   if (!total) { cont.innerHTML = '<p class="buit">No hi ha propostes pendents.</p>'; return; }
@@ -1520,7 +1519,8 @@ function marcaSegmentat(id, valor) {
 let estilsMostrats = false;  // «Més estils» desplegat
 function pintaPanellEstil() {
   const e = estilSub;
-  if (!e || $("#pestanya-subtitols").hidden) return;
+  pintaResumSub();
+  if (!e || $("#panell-estil").hidden) return;
   const actual = predefinitActual();
   const cont = $("#estils");
   cont.textContent = "";
@@ -1800,6 +1800,7 @@ function pintaPanellTitol() {
 }
 
 function obreTitol() {
+  tancaElQueHiHagi();
   editantTitol = true;
   previaBruta = true;
   if (vista !== "directe") canviaVista("directe");
@@ -1855,52 +1856,97 @@ function instalaTitol() {
   $("#restableix-titol").addEventListener("click", () => restableix("titol", "El títol ha tornat a l'estil de tallat."));
 }
 
-// --- Pestanyes de la columna de l'esquerra ------------------------------------------------------
-// Per tasques: Edita (què queda al vídeo), Subtítols, Gràfics (títol i b-roll) i So. Els vídeos
-// exportats són a «Exporta». Es recorda la darrera. A «Edita», un punt avisa si hi ha coses per decidir.
+// --- La columna de l'esquerra: l'inici i els panells --------------------------------------------
+// A l'inici, què queda al vídeo (reels, instruccions de veu, propostes i silencis) i «Com es veu»: una
+// fila per panell (l'estil, els subtítols, el títol, els gràfics, el b-roll i el so), amb el que hi ha
+// triat. Un panell s'obre al lloc de l'inici i «‹ Enrere» (o Esc) hi torna; mai n'hi ha dos d'oberts.
 
-function triaPestanya(nom, { focus = false } = {}) {
-  if (nom === "estil") nom = "subtitols";  // la pestanya d'abans
-  if (!$(`#pestanya-${nom}`)) nom = "edita";
-  for (const tab of $$("#pestanyes [role=tab]")) {
-    const triada = tab.dataset.pestanya === nom;
-    tab.setAttribute("aria-selected", String(triada));
-    tab.tabIndex = triada ? 0 : -1;
-    $(`#pestanya-${tab.dataset.pestanya}`).hidden = !triada;
-    if (triada && focus) tab.focus();
-  }
-  desa("tallat.pestanya", nom);
-  const subtitols = nom === "subtitols";
-  if (subtitols !== editantEstil) {
-    editantEstil = subtitols;
-    previaBruta = true;
-    previaTemps = NaN;
-    if (subtitols) {
-      if (vista !== "directe") canviaVista("directe");
-      pintaPanellEstil();
-    }
-  }
-  if (nom === "so" && typeof pintaSo === "function") pintaSo();
-  if (nom === "grafics" && estat) pintaPla();
+function tancaElQueHiHagi() {
+  if (editantMarca) tancaMarca();
+  if (editantTitol) tancaTitol();
+  if (editantBroll) tancaBroll();
+  if (editantEstil) tancaSubtitols();
+  for (const id of ["estils", "grafics", "so"]) $(`#panell-${id}`).hidden = true;
+  $(".barra").classList.remove("editant-estil");
 }
 
-function actualitzaPestanyes() {
-  const perDecidir = instruccions.some((i) => i.estat === "pendent") || Object.keys(estat?.propostes || {}).length > 0;
-  $("#punt-edita").hidden = !perDecidir;
-
+// Els panells que no canvien què ensenya el reproductor: la llista d'estils, els gràfics i el so.
+function obrePanell(id) {
+  tancaElQueHiHagi();
+  $(".barra").classList.add("editant-estil");
+  $(`#panell-${id}`).hidden = false;
+  $(".barra").scrollTop = 0;
+  $(`#tanca-${id}`).focus();
 }
 
-function instalaPestanyes() {
-  const tabs = $$("#pestanyes [role=tab]");
-  for (const tab of tabs) tab.addEventListener("click", () => triaPestanya(tab.dataset.pestanya));
-  $("#pestanyes").addEventListener("keydown", (e) => {  // fletxes, com qualsevol grup de pestanyes
-    const i = tabs.findIndex((t) => t.getAttribute("aria-selected") === "true");
-    const j = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : null;
-    if (j == null) return;
-    e.preventDefault();
-    triaPestanya(tabs[(j + tabs.length) % tabs.length].dataset.pestanya, { focus: true });
-  });
-  triaPestanya(llegeix("tallat.pestanya", "edita"));
+function tancaPanell(id) {
+  $(".barra").classList.remove("editant-estil");
+  $(`#panell-${id}`).hidden = true;
+  $(`#obre-${id}`).focus();
+}
+
+function obreEstils() {
+  obrePanell("estils");
+  pintaKits();
+}
+
+function obreGrafics() {
+  obrePanell("grafics");
+  if (estat) pintaPla();  // en obrir-lo, els gràfics nous ja s'han vist (el punt de la fila se'n va)
+}
+
+function obreSo() {
+  obrePanell("so");
+  pintaSo();
+}
+
+function obreSubtitols() {
+  tancaElQueHiHagi();
+  editantEstil = true;
+  previaBruta = true;
+  previaTemps = NaN;
+  if (vista !== "directe") canviaVista("directe");
+  $(".barra").classList.add("editant-estil");
+  $("#panell-estil").hidden = false;
+  $(".barra").scrollTop = 0;
+  pintaPanellEstil();
+  $("#tanca-subtitols").focus();
+}
+
+function tancaSubtitols() {
+  editantEstil = false;
+  previaBruta = true;
+  previaTemps = NaN;
+  $(".barra").classList.remove("editant-estil");
+  $("#panell-estil").hidden = true;
+  $("#obre-subtitols").focus();
+}
+
+// Del panell d'un estil, a la llista d'estils; de la resta, a l'inici. False si no n'hi havia cap d'obert.
+function tornaEnrere() {
+  if (editantMarca) { tancaMarca(); obreEstils(); return true; }
+  if (editantTitol) { tancaTitol(); return true; }
+  if (editantBroll) { tancaBroll(); return true; }
+  if (editantEstil) { tancaSubtitols(); return true; }
+  const obert = ["estils", "grafics", "so"].find((id) => !$(`#panell-${id}`).hidden);
+  if (obert) tancaPanell(obert);
+  return !!obert;
+}
+
+function pintaResumSub() {
+  if (!estat) return;
+  $("#nom-estil-sub").textContent = estat.subtitols === false ? "Sense subtítols" : (predefinitActual()?.nom ?? "Personalitzat");
+}
+
+function instalaColumna() {
+  $("#obre-estils").addEventListener("click", obreEstils);
+  $("#tanca-estils").addEventListener("click", () => tancaPanell("estils"));
+  $("#obre-subtitols").addEventListener("click", obreSubtitols);
+  $("#tanca-subtitols").addEventListener("click", tancaSubtitols);
+  $("#obre-grafics").addEventListener("click", obreGrafics);
+  $("#tanca-grafics").addEventListener("click", () => tancaPanell("grafics"));
+  $("#obre-so").addEventListener("click", obreSo);
+  $("#tanca-so").addEventListener("click", () => tancaPanell("so"));
   // Els grups plegables dels panells d'estil recorden si estaven oberts.
   const oberts = new Set(llegeix("tallat.grups-oberts", []));
   for (const d of $$("details.grup-estil")) {
@@ -1932,20 +1978,47 @@ let kitActual = null;    // el kit d'aquest vídeo
 let accioNomKit = null;  // «nou», «duplica» o «nom» mentre s'escriu un nom
 
 function pintaKits() {
-  const tria = $("#kit");
-  tria.textContent = "";
+  const llista = $("#llista-kits");
+  llista.textContent = "";
   for (const k of kits) {
-    const o = document.createElement("option");
-    o.value = k.id;
-    o.textContent = k.per_defecte ? `${k.nom} · per defecte` : k.nom;
-    tria.append(o);
+    const actual = k.id === kitActual;
+    const b = document.createElement("button");
+    b.className = "fila-estil";
+    const mostra = document.createElement("span");
+    mostra.className = `mostra-estil mostra-marca${actual ? " mostra-actual" : ""}`;
+    mostra.setAttribute("aria-hidden", "true");
+    for (let n = 0; n < 4; n++) {
+      const color = document.createElement("i");
+      color.style.background = k.colors?.[n] || "";
+      mostra.append(color);
+    }
+    const text = document.createElement("span");
+    text.className = "fila-estil-text";
+    const nom = document.createElement("strong");
+    nom.textContent = k.nom;
+    const detall = document.createElement("span");
+    detall.textContent = [actual && "En aquest vídeo", k.per_defecte && "Per defecte"].filter(Boolean).join(" · ");
+    text.append(nom, detall);
+    b.append(mostra, text);
+    b.insertAdjacentHTML("beforeend", '<svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>');
+    b.setAttribute("aria-label", `${k.nom}${actual ? ", el d'aquest vídeo" : ""}`);
+    b.addEventListener("click", () => obreKit(k));
+    llista.append(b);
   }
-  tria.value = kitActual;
-  tria.hidden = kits.length < 2;  // amb un sol kit, no cal triar
   const actual = kits.find((k) => k.id === kitActual);
   $("#kit-defecte").hidden = !!actual?.per_defecte;
   $("#kit-esborra").hidden = !!actual?.per_defecte;
-  $("#sep-treu-kit").hidden = !!actual?.per_defecte;
+  pintaResumMarca();
+}
+
+// Tocar un estil: el fa servir aquest vídeo (si no el feia servir ja) i l'obre. Només es pot canviar
+// l'estil del vídeo; per tornar al d'abans, es toca aquell.
+async function obreKit(k) {
+  if (k.id !== kitActual) {
+    await accioKit("/api/kit/tria", { kit: k.id }, `Aquest vídeo ara fa servir l'estil «${k.nom}».`);
+    if (k.id !== kitActual) return;  // no s'ha pogut canviar (ja ho ha dit l'avís)
+  }
+  if (marcaFeta()) obreMarca(); else obreAssistent();
 }
 
 function respostaKit(r, missatge) {
@@ -1971,6 +2044,7 @@ function demanaNomKit(accio) {
   const camp = $("#nom-kit");
   camp.value = accio === "nom" ? actual : accio === "duplica" ? `${actual} (còpia)` : "";
   camp.placeholder = accio === "nou" ? "Nom de l'estil nou" : "Nom de l'estil";
+  $(`#kit-${accio}`).closest(".accions-kit").after($("#form-kit"));
   $("#form-kit").hidden = false;
   camp.focus();
   camp.select();
@@ -1986,42 +2060,7 @@ async function importaKit(fitxer) {
   } catch (e) { avis(e.message, 6000); }
 }
 
-function instalaMenuKit() {
-  const boto = $("#menu-kit-boto");
-  const menu = $("#menu-kit");
-  const items = () => [...menu.querySelectorAll("button")].filter((b) => !b.hidden);
-  const tanca = ({ focus = false } = {}) => {
-    menu.hidden = true;
-    boto.setAttribute("aria-expanded", "false");
-    if (focus) boto.focus();
-  };
-  boto.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const obrir = menu.hidden;
-    menu.hidden = !obrir;
-    boto.setAttribute("aria-expanded", String(obrir));
-    if (obrir) items()[0]?.focus();
-  });
-  document.addEventListener("click", (e) => { if (!menu.hidden && !menu.contains(e.target)) tanca(); });
-  menu.addEventListener("keydown", (e) => {
-    const llista = items();
-    const i = llista.indexOf(document.activeElement);
-    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); tanca({ focus: true }); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); llista[(i + 1) % llista.length]?.focus(); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); llista[(i - 1 + llista.length) % llista.length]?.focus(); }
-  });
-  // Després de fer una acció, el menú es tanca (llevat del primer clic de «Treu-lo», que demana confirmació).
-  for (const b of menu.querySelectorAll("button")) {
-    b.addEventListener("click", () => setTimeout(() => { if (!b.classList.contains("confirma")) tanca(); }));
-  }
-}
-
 function instalaKits() {
-  instalaMenuKit();
-  $("#kit").addEventListener("change", (e) => {
-    const nom = kits.find((k) => k.id === e.target.value)?.nom || "";
-    accioKit("/api/kit/tria", { kit: e.target.value }, `Aquest vídeo fa servir l'estil «${nom}».`);
-  });
   $("#kit-duplica").addEventListener("click", () => demanaNomKit("duplica"));
   $("#kit-nou").addEventListener("click", () => demanaNomKit("nou"));
   $("#kit-nom").addEventListener("click", () => demanaNomKit("nom"));
@@ -2072,6 +2111,8 @@ function instalaKits() {
     confirma = null;
     treu.textContent = "Treu-lo";
     treu.classList.remove("confirma");
+    tancaMarca();
+    obreEstils();
     accioKit("/api/kit/esborra", { kit: kitActual }, "Estil tret. Aquest vídeo torna a fer servir el per defecte.");
   });
 }
@@ -2796,6 +2837,7 @@ function mostraBrollViu() {
 }
 
 function obreBroll() {
+  tancaElQueHiHagi();
   editantBroll = true;
   if (vista !== "directe") canviaVista("directe");
   $(".barra").classList.add("editant-estil");
@@ -3075,14 +3117,16 @@ function pintaPla() {
   const vius = tots.filter((g) => g.estat !== "tret");
   const trets = tots.filter((g) => g.estat === "tret");
   const notes = vius.filter((g) => g.estat === "canvia").length;
-  // El punt de la pestanya: hi ha gràfics nous que encara no has vist (els veus en obrir la pestanya).
+  // El punt de la fila: hi ha gràfics nous que encara no has vist (els veus en obrir el panell).
   const clauVistos = `tallat.grafics-vistos.${P?.clau_projecte || ""}`;
   const vistos = new Set(llegeix(clauVistos, []));
-  if (!$("#pestanya-grafics").hidden) {
+  if (!$("#panell-grafics").hidden) {
     for (const g of vius) vistos.add(g.id);
     desa(clauVistos, [...vistos].slice(-300));
   }
   $("#compte-grafics").textContent = vius.length ? String(vius.length) : "";
+  $("#nom-grafics").textContent = !vius.length ? "Encara no n'hi ha"
+    : `${vius.length} ${vius.length === 1 ? "gràfic" : "gràfics"}${notes ? ` · ${notes} per canviar` : ""}`;
   $("#punt-grafics").hidden = !vius.some((g) => g.estat === "proposat" && !vistos.has(g.id));
   if (graficTriat && !tots.some((g) => g.id === graficTriat)) graficTriat = null;
   $("#ajuda-grafics").textContent = !tots.length
@@ -3252,7 +3296,7 @@ function pintaBarraCapa() {
   mes.addEventListener("click", () => {
     const q = quin;
     deixaCapa();
-    if (q === "titol") { triaPestanya("grafics"); obreTitol(); } else { triaPestanya("subtitols"); $("#grup-e-mes").open = true; }
+    if (q === "titol") obreTitol(); else { obreSubtitols(); $("#grup-e-mes").open = true; }
   });
   const tanca = document.createElement("button");
   tanca.className = "icona";
@@ -3377,7 +3421,7 @@ function pintaBarraGrafic(id) {
     b.addEventListener("click", () => {
       if (estat === "canvia") {  // la nota s'escriu a la llista dels gràfics
         deixaCapa();
-        triaPestanya("grafics");
+        obreGrafics();
         decideixGrafic(id, "canvia");
         targetesGrafic.get(id)?.el.scrollIntoView({ block: "center", behavior: "smooth" });
         return;
@@ -3462,7 +3506,7 @@ const PASSES_GUIA = [
   ["#escolta", "Quan treus una paraula, sonen uns segons al voltant del tall perquè sentis com queda, i s'atura. " +
     "Si no ho vols, apaga això."],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
-  ["#pestanyes", "Aquí tens els subtítols, els gràfics i el so."],
+  [".com-es-veu", "Aquí tries com es veu: l'estil, els subtítols, el títol, els gràfics, el b-roll i el so."],
   ["#final", "Quan estigui a punt, toca Exporta: un esborrany per mirar-lo, el vídeo final o per a un altre editor."],
 ];
 let passaGuia = -1;
@@ -3891,7 +3935,6 @@ function pintaInstruccions() {
     fesClicable(item);
     cont.append(item);
   }
-  actualitzaPestanyes();
 }
 
 async function decideixInstruccio(ins, nou) {
@@ -3977,7 +4020,7 @@ function instalaControls() {
   instalaBroll();
   instalaSo();
   instalaMarca();
-  instalaPestanyes();
+  instalaColumna();
   setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
@@ -4022,9 +4065,7 @@ function instalaControls() {
     if (e.target.matches("input, textarea, select")) return;
     if (capaTriada && e.key === "Escape") { deixaCapa(); return; }
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
-    if (editantTitol && e.key === "Escape") { tancaTitol(); return; }
-    if (editantBroll && e.key === "Escape") { tancaBroll(); return; }
-    if (editantMarca && e.key === "Escape") { tancaMarca(); return; }
+    if (e.key === "Escape" && tornaEnrere()) return;
     if (ES_MAC ? e.ctrlKey && e.metaKey && e.code === "KeyS"  // ⌃⌘S, com al Finder
       : e.ctrlKey && e.shiftKey && !e.altKey && !ambAltGr(e) && e.code === "KeyE") {  // Ctrl+Maj+E
       e.preventDefault();
@@ -4048,6 +4089,7 @@ function instalaControls() {
 
 function marcaSubtitols() {
   $("#subtitols").setAttribute("aria-checked", String(estat.subtitols !== false));
+  pintaResumSub();
 }
 
 function marcaPausa() {
@@ -4158,8 +4200,15 @@ function carregaMostresSo() {
   })();
 }
 
+function pintaResumSo() {
+  if (!estilSo) return;
+  const efectes = { cap: "sense efectes", pocs: "pocs efectes", molts: "molts efectes" }[estilSo.efectes || "pocs"];
+  $("#nom-so").textContent = `${estilSo.neteja !== false ? "Veu neta" : "Veu sense netejar"} · ${efectes}`;
+}
+
 function pintaSo() {
-  if (!estilSo || $("#pestanya-so").hidden) return;
+  pintaResumSo();
+  if (!estilSo || $("#panell-so").hidden) return;
   const e = estilSo;
   const neteja = e.neteja !== false;
   $("#s-neteja").setAttribute("aria-checked", String(neteja));
@@ -4271,9 +4320,12 @@ function pintaResumMarca() {
   if (!m) return;
   pintaOfertaMarca();
   const colors = COLORS_MARCA.map(([, clau]) => m[clau]).filter(Boolean);
-  $$("#mostra-marca i").forEach((el, k) => { el.style.background = colors[k] || ""; });
-  const lletres = [...new Set([m.lletra_titols, m.lletra_text].filter(Boolean))].join(" · ");
-  $("#nom-marca").textContent = colors.length ? (lletres || "Colors i lletres") : "Encara no: toca aquí i fes-lo en 4 passos";
+  for (const mostra of $$("#mostra-marca, #llista-kits .mostra-actual")) {
+    mostra.querySelectorAll("i").forEach((el, k) => { el.style.background = colors[k] || ""; });
+  }
+  const nom = kits.find((k) => k.id === kitActual)?.nom || "El teu estil";
+  $("#titol-marca").textContent = nom;
+  $("#nom-marca").textContent = colors.length ? nom : `${nom} · encara sense colors`;
 }
 
 function pintaPanellMarca() {
@@ -4299,6 +4351,7 @@ function canviaMarca(canvis) {
 }
 
 function obreMarca() {
+  tancaElQueHiHagi();
   editantMarca = true;
   $(".barra").classList.add("editant-estil");
   $("#panell-marca").hidden = false;
@@ -4311,12 +4364,10 @@ function tancaMarca() {
   editantMarca = false;
   $(".barra").classList.remove("editant-estil");
   $("#panell-marca").hidden = true;
-  $("#obre-marca").focus();
 }
 
 function instalaMarca() {
-  $("#obre-marca").addEventListener("click", () => (marcaFeta() ? obreMarca() : obreAssistent()));
-  $("#tanca-marca").addEventListener("click", tancaMarca);
+  $("#tanca-marca").addEventListener("click", tornaEnrere);
   for (const [id, clau] of COLORS_MARCA) {
     $(`#${id}`).addEventListener("input", (e) => canviaMarca({ [clau]: e.target.value.toUpperCase() }));
   }

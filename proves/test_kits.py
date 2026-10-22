@@ -34,7 +34,7 @@ class TestKits(AmbKits):
         marca.USUARI.write_text(json.dumps({"subtitols": {"color": "#00FF00", "font": "Lletra",
                                                           "font_fitxer": str(self.casa / "fonts" / "Lletra.otf")}}),
                                 encoding="utf-8")
-        self.assertEqual(marca.kits(), [{"id": "el-meu-estil", "nom": "El meu estil", "per_defecte": True}])
+        self.assertEqual(marca.kits(), [{"id": "el-meu-estil", "nom": "El meu estil", "per_defecte": True, "colors": []}])
         estil = marca.carrega()["subtitols"]
         self.assertEqual(estil["color"], "#00FF00")
         self.assertEqual(marca.fitxer_font(estil), marca.KITS / "el-meu-estil" / "fonts" / "Lletra.otf")
@@ -42,6 +42,11 @@ class TestKits(AmbKits):
 
     def test_sense_estil_d_abans_el_primer_kit_es_neutre(self):
         self.assertEqual(marca.carrega(), marca.carrega(marca.PER_DEFECTE))
+
+    def test_la_llista_porta_els_colors_de_la_mostra(self):
+        # La pàgina ensenya cada estil amb quatre colors (els que tingui triats).
+        marca.desa("marca", {"color_text": "#FFFFFF", "color_destacat": "#FFD60A", "color_fosc": "#111111"})
+        self.assertEqual(marca.kits()[0]["colors"], ["#FFFFFF", "#FFD60A"])
 
     def test_crear_duplicar_canviar_el_nom_i_per_defecte(self):
         marca.desa("subtitols", {"color": "#112233"})
@@ -53,7 +58,7 @@ class TestKits(AmbKits):
         self.assertEqual(marca.crea_kit("Neutre"), "neutre-2")  # el nom es pot repetir; l'id, no
         marca.canvia_nom(neutre, "  Net   i   clar ")
         marca.fes_per_defecte(neutre)
-        self.assertEqual(marca.kits()[0], {"id": neutre, "nom": "Net i clar", "per_defecte": True})
+        self.assertEqual(marca.kits()[0], {"id": neutre, "nom": "Net i clar", "per_defecte": True, "colors": []})
         self.assertEqual(marca.carrega()["subtitols"]["color"], "#FFFFFF")  # sense dir-ne cap: el per defecte
         with self.assertRaises(ValueError):
             marca.crea_kit("   ")

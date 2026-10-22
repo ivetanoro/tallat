@@ -188,50 +188,18 @@ kbd {
 
 .tornar { display: block; margin: 0 0 var(--e3); }
 
-/* Cinc pestanyes per tasques, amb una icona gran: es reconeixen sense llegir. El punt («hi ha coses
-   per decidir») i el nombre de vídeos van a la cantonada. */
-.pestanyes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; margin: var(--e5) calc(-1 * var(--e1)) 0; }
-.pestanyes [role="tab"] {
-  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0;
-  padding: 8px 0 6px; border: 0; border-radius: var(--radi); background: none; cursor: pointer;
-  color: var(--text-2); font-size: 10.5px; font-weight: 500; line-height: 1.1; letter-spacing: -0.01em;
-  transition: background-color 120ms ease-out, color 120ms ease-out;
-}
-.pestanyes [role="tab"] span:not(.punt):not(.compte-pestanya) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.pestanyes [role="tab"] svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.pestanyes [role="tab"]:hover { background: var(--omplir); color: var(--text); }
-.pestanyes [role="tab"]:active { transform: scale(0.97); }
-.pestanyes [role="tab"][aria-selected="true"] { background: var(--accent-suau); color: var(--accent); }
-.pestanyes .punt { position: absolute; top: 6px; right: 10px; width: 7px; height: 7px; border-radius: 50%; background: var(--auto); }
-.pestanyes .compte-pestanya {
-  position: absolute; top: 3px; right: 4px; min-width: 15px; padding: 0 4px; border-radius: 8px;
-  font-size: 10px; line-height: 15px; background: var(--omplir-fort); color: var(--text-2); font-variant-numeric: tabular-nums;
-}
-.pestanyes .compte-pestanya:empty { display: none; }
-.pestanya > .seccio:first-child { margin-top: var(--e5); }
-/* Els subtítols tenen el panell directament a la pestanya. */
-.pestanya > .panell-estil { margin-top: var(--e5); }
-.pestanya > .panell-estil > .detall:first-child { margin-top: 0; }
-.kit-cap { margin-top: var(--e5); }
+/* L'inici: el que queda al vídeo i «Com es veu», una fila per panell amb el que hi ha triat. */
+.inici > .seccio:first-child { margin-top: var(--e5); }
+.mostra-estil.icona-fila { display: flex; align-items: center; justify-content: center; background: var(--accent-suau); color: var(--accent); }
+.icona-fila svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.fila-estil .punt { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--auto); }
 
-/* El kit: el desplegable i un menú «…» amb les accions (com els menús del Mac). */
-.fila-kit { display: flex; align-items: center; gap: var(--e1); position: relative; }
-.fila-kit .fila-estil { flex: 1; min-width: 0; }
-.tria-kit { width: 100%; margin-bottom: var(--e2); }
-.tria-kit[hidden] { display: none; }
-.menu-kit {
-  position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 220px;
-  display: flex; flex-direction: column; padding: 5px; border-radius: var(--radi-mitja);
-  background: var(--superficie); box-shadow: var(--ombra-gran), 0 0 0 0.5px var(--linia);
-}
-.menu-kit button {
-  padding: 5px var(--e3); border: 0; border-radius: var(--radi-petit); background: none; text-align: left;
-  font: inherit; font-size: var(--t-ui); color: var(--text); cursor: pointer;
-}
-.menu-kit button:hover, .menu-kit button:focus-visible { background: var(--accent); color: #fff; outline: none; }
-.menu-kit button.perill { color: var(--auto); }
-.menu-kit button.perill:hover, .menu-kit button.perill:focus-visible, .menu-kit button.confirma { background: var(--auto); color: #fff; }
-.menu-kit hr { margin: 4px var(--e2); border: 0; border-top: 0.5px solid var(--linia); }
+/* Els estils (kits): la llista, i les accions al peu de la llista i del panell de cada estil. */
+.llista-kits { display: flex; flex-direction: column; }
+.llista-kits .fila-estil { margin-top: 0; }
+.accions-kit { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e2); }
+.accions-kit .perill { color: var(--auto); }
+.accions-kit .perill.confirma { font-weight: 600; }
 .fila-estil + .fila-estil { margin-top: var(--e2); }
 
 /* Els panells d'estil: el bàsic a dalt; la resta, en grups que es pleguen. */
@@ -554,14 +522,14 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
 .panell-estil .interruptor .pista { flex: none; }
 .panell-estil #e-font { width: 100%; }
 .panell-estil .puja-font { margin: calc(-1 * var(--e1)) 0 0; align-self: flex-start; font-size: var(--t-petit); }
-.panell-estil select, select.tria-kit {
+.panell-estil select {
   height: 28px; padding: 0 var(--e7) 0 var(--e3); border: 0; border-radius: var(--radi);
   font: inherit; font-size: var(--t-ui); color: var(--text); cursor: pointer;
   background: var(--superficie) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3-3 3 3M3 7.5l3 3 3-3' fill='none' stroke='%2386868b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 8px center / 10px;
   box-shadow: 0 0 0 1px var(--linia), 0 1px 1px rgba(0, 0, 0, 0.04);
   -webkit-appearance: none; appearance: none;
 }
-.panell-estil select:hover, select.tria-kit:hover { box-shadow: 0 0 0 1px var(--omplir-fort), 0 1px 1px rgba(0, 0, 0, 0.04); }
+.panell-estil select:hover { box-shadow: 0 0 0 1px var(--omplir-fort), 0 1px 1px rgba(0, 0, 0, 0.04); }
 .panell-estil input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .text-titol, .camp-text {
   width: 100%; min-height: 64px; padding: var(--e2) var(--e3); border: 0; border-radius: var(--radi); resize: vertical;
@@ -885,10 +853,10 @@ body.reproduint .play .si-play { display: block; }
 .icona-so { width: 0; height: 0; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent currentColor; }
 .mostra-so[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .mostra-so[aria-pressed="true"] .icona-so { width: 8px; height: 10px; border: 0; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
-#pestanya-so .interruptor { white-space: normal; text-align: left; }
-#pestanya-so .camp { margin-top: var(--e3); }
-#pestanya-so input[type="range"], #ritme { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
-#pestanya-so code { font-size: 0.92em; word-break: break-all; }
+#panell-so .interruptor { white-space: normal; text-align: left; }
+#panell-so .camp { margin-top: var(--e3); }
+#panell-so input[type="range"], #ritme { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+#panell-so code { font-size: 0.92em; word-break: break-all; }
 #llista-efectes { display: flex; flex-direction: column; margin: var(--e3) 0 var(--e2); }
 .efecte { display: flex; align-items: center; gap: var(--e2); padding: var(--e1) 0; border-top: 1px solid var(--linia); }
 .efecte:first-child { border-top: 0; }

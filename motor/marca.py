@@ -145,15 +145,22 @@ def resol(kit: str | None) -> str:
     return kit if _existeix(kit) else kit_per_defecte()
 
 
+COLORS_MOSTRA = ("color_text", "color_principal", "color_destacat", "color_secundari")  # els de la mostra de cada kit
+
+
 def kits() -> list[dict]:
-    """[{id, nom, per_defecte}], amb el kit per defecte primer i els altres per ordre alfabètic."""
+    """[{id, nom, per_defecte, colors}], amb el kit per defecte primer i els altres per ordre alfabètic.
+    `colors`: els de la mostra que en fa la pàgina (COLORS_MOSTRA), els que el kit tingui triats."""
     defecte = kit_per_defecte()
     llista = []
     for carpeta in KITS.iterdir():
         if carpeta.is_dir() and _existeix(carpeta.name):
-            nom = _llegeix_json(carpeta / FITXER_KIT).get("nom")
+            dades = _llegeix_json(carpeta / FITXER_KIT)
+            nom = dades.get("nom")
+            marca_ = dades.get("marca") if isinstance(dades.get("marca"), dict) else {}
             llista.append({"id": carpeta.name, "nom": nom.strip() if isinstance(nom, str) and nom.strip() else carpeta.name,
-                           "per_defecte": carpeta.name == defecte})
+                           "per_defecte": carpeta.name == defecte,
+                           "colors": [c for c in (marca_.get(k) for k in COLORS_MOSTRA) if isinstance(c, str) and c]})
     return sorted(llista, key=lambda k: (not k["per_defecte"], k["nom"].lower()))
 
 
