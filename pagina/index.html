@@ -608,11 +608,6 @@
       <button class="icona" id="commuta-barra" title="Amaga la columna de l'esquerra (⌃⌘S)" aria-label="Columna de l'esquerra" aria-pressed="true">
         <svg viewBox="0 0 20 20"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M7.5 4v12"/></svg>
       </button>
-      <div class="segmentat" role="radiogroup" aria-label="Mode" id="mode">
-        <button role="radio" data-mode="talla" aria-checked="true">Talla</button>
-        <button role="radio" data-mode="corregeix" title="Corregeix com s'escriu una paraula als subtítols">Corregeix</button>
-        <button role="radio" data-mode="destaca" title="Tria quines paraules surten destacades als subtítols">Destaca</button>
-      </div>
       <div class="grup">
         <button class="icona" id="desfes" title="Desfés (⌘Z)" aria-label="Desfés" disabled>
           <svg viewBox="0 0 20 20"><path d="M7.5 5 3.5 9l4 4M4 9h7.5a4.5 4.5 0 0 1 0 9H9"/></svg>
@@ -639,9 +634,12 @@
         <svg viewBox="0 0 20 20"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M12.5 4v12"/></svg>
       </button>
     </div>
-    <p class="ajuda" id="ajuda" hidden></p>
     <div id="transcripcio" class="transcripcio" aria-live="off"></div>
-    <p class="pista-seleccio" id="pista-seleccio" role="status" hidden></p>
+    <div class="barreta" id="barreta" role="toolbar" aria-label="Què vols fer amb les paraules marcades" hidden>
+      <button id="b-destaca" aria-pressed="false">Destaca <kbd></kbd></button>
+      <button id="b-corregeix" aria-pressed="false">Corregeix <kbd></kbd></button>
+      <button id="b-treu"><span id="b-treu-text">Treu</span> <kbd>⌫</kbd></button>
+    </div>
   </main>
 
   <section class="reproductor" aria-label="Reproductor">

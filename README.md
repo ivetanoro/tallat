@@ -76,7 +76,8 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    |---|---|
    | escoltar des d'una paraula | clic a la paraula |
    | treure o recuperar paraules | selecciona-les com en un document (arrossegant, doble clic, ⇧ + clic) i prem ⌫ |
-   | destacar una paraula als subtítols (o deixar de destacar-la) | mode **Destaca**, a dalt, i clic a la paraula |
+   | destacar una paraula als subtítols (o deixar de destacar-la) | marca-la (un clic) i prem ⌘B, o **Destaca** a la barreta que surt a sobre |
+   | corregir com s'escriu una paraula | marca-la i prem ↩ (o **Corregeix**, a la barreta); ↩ desa, Esc ho deixa |
    | canviar l'ordre d'un paràgraf | arrossega'l per la nansa ⠿ de l'esquerra |
    | desfer / refer | ⌘Z / ⇧⌘Z |
    | reproduir o aturar | espai |

@@ -276,27 +276,30 @@ kbd {
   font-size: var(--t-petit); line-height: 1.5; color: var(--text-2);
 }
 .ajuda[hidden] { display: none; }
-/* Què fa ⌫ amb les paraules marcades: una píndola que flota a baix del text. */
-.pista-seleccio {
-  position: sticky; bottom: var(--e5); z-index: 4; width: fit-content; margin: -40px auto 0; padding: 6px 14px;
-  border-radius: 999px; font-size: var(--t-petit); color: var(--fons); background: var(--text);
-  box-shadow: var(--ombra-gran); animation: apareix 160ms ease-out; pointer-events: none;
+/* La barreta: sobre les paraules marcades, què s'hi pot fer (Destaca, Corregeix, Treu), amb la drecera. */
+.barreta {
+  position: fixed; z-index: 30; display: flex; gap: 2px; padding: 4px; border-radius: var(--radi-mitja);
+  background: var(--text); box-shadow: var(--ombra-gran); animation: apareix 120ms ease-out;
 }
-.pista-seleccio[hidden] { display: none; }
-.pista-seleccio kbd {
-  display: inline-block; min-width: 18px; margin-right: 4px; padding: 0 5px; border-radius: 5px; text-align: center;
-  font: inherit; font-weight: 600; color: inherit; border: 0; box-shadow: none;
-  background: color-mix(in srgb, currentColor 22%, transparent);
+.barreta[hidden] { display: none; }
+.barreta button {
+  display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--radi);
+  background: none; color: var(--fons); font: inherit; font-size: var(--t-petit); font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+.barreta button:hover:not(:disabled), .barreta button[aria-pressed="true"] { background: color-mix(in srgb, var(--fons) 18%, transparent); }
+.barreta button:disabled { opacity: 0.45; cursor: default; }
+.barreta kbd {
+  min-width: 0; padding: 0; border: 0; background: none; box-shadow: none;
+  font: inherit; font-size: var(--t-peu); color: color-mix(in srgb, var(--fons) 70%, transparent);
 }
 
 .transcripcio {
   max-width: 760px; margin: 0 auto; padding: var(--e5) var(--e8) 50vh;
   font-size: var(--t-lectura); line-height: 1.6;
-  user-select: none; -webkit-user-select: none;
+  /* El text se selecciona com sempre (arrossegant, doble clic, triple clic, ⇧ + clic) i ⌫ el treu.
+     Els silencis i les nanses no hi entren. */
+  user-select: text; -webkit-user-select: text;
 }
-/* A «Talla», el text se selecciona com sempre (arrossegant, doble clic, triple clic, ⇧ + clic) i ⌫ el treu.
-   Els silencis i les nanses no hi entren. */
-body:not(.mode-corregeix):not(.mode-destaca) .transcripcio { user-select: text; -webkit-user-select: text; }
 .transcripcio .pausa, .transcripcio .nansa, .transcripcio .marca-temps { user-select: none; -webkit-user-select: none; }
 .transcripcio ::selection { background: var(--accent-suau); }
 .paragraf {
@@ -344,6 +347,10 @@ body.movent, body.movent * { cursor: grabbing !important; }
 .p.proposta { box-shadow: inset 0 -2px 0 var(--proposta-ratlla); background: var(--proposta-suau); }
 .p.aprox:not(.fora) { text-decoration: underline dotted var(--text-2, currentColor); text-underline-offset: 3px; }
 .p.corregida { box-shadow: inset 0 -2px 0 var(--accent); }
+/* Les destacades sempre es veuen (no només en un mode), en negreta, com fa ⌘B en un document: tallat en tria
+   moltes soles, i en blau el text costava de llegir. */
+.p.clau, .editor.clau { font-weight: 650; }
+.p.clau.fora { font-weight: inherit; }
 .p.actual { background: var(--accent); color: #fff; text-decoration-color: rgba(255, 255, 255, 0.7); }
 .p.seleccio { background: var(--accent-suau); }
 .p.llum { animation: llum 1.2s var(--molla); }
@@ -359,9 +366,10 @@ body.movent, body.movent * { cursor: grabbing !important; }
   transition: background-color 120ms, color 120ms;
 }
 .pausa:hover { color: var(--text); background: var(--omplir-fort); }
+/* Escurçat, el silenci surt ratllat com una paraula treta; sencer (s'hi ha clicat), en blau. */
+.pausa:not(.sencera) { text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .pausa.sencera { background: var(--accent-suau); color: var(--accent); }
 
-body.mode-corregeix .p { cursor: text; }
 .editor {
   font: inherit; color: inherit;
   border: 0; outline: 2px solid var(--accent); border-radius: var(--radi-petit);
@@ -544,9 +552,6 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
 .sub-camps { display: flex; flex-direction: column; gap: var(--e2); padding-left: var(--e3); border-left: 2px solid var(--omplir); }
 .sub-camps[hidden] { display: none; }
 .sub-camps .detall { margin: 0; }
-body.mode-destaca .p { cursor: pointer; }
-body.mode-destaca .p.clau { color: var(--accent); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
-body.mode-destaca .p.clau.fora { color: var(--tret); box-shadow: none; font-weight: inherit; }
 .extrems { display: flex; justify-content: space-between; margin-top: calc(-1 * var(--e1)); font-size: var(--t-peu); color: var(--text-3); }
 .colors { display: flex; gap: var(--e4); }
 .color { display: flex; flex-direction: column; align-items: center; gap: var(--e1); font-size: var(--t-petit); color: var(--text-2); cursor: pointer; }

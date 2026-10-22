@@ -41,7 +41,8 @@ const ES_MAC = /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAge
 const GESTOR = ES_MAC ? "al Finder" : "a l'Explorador";
 // A Windows, Ctrl+Alt és AltGr (la tecla de @, € o # als teclats catalans): les dreceres de les columnes
 // van amb Ctrl+Maj (revisió de Codex).
-const TECLES_WINDOWS = { "⌘Z": "Ctrl+Z", "⇧⌘Z": "Ctrl+Maj+Z", "⌃⌘S": "Ctrl+Maj+E", "⌥⌘V": "Ctrl+Maj+V" };
+const TECLES_WINDOWS = { "⌘Z": "Ctrl+Z", "⇧⌘Z": "Ctrl+Maj+Z", "⌃⌘S": "Ctrl+Maj+E", "⌥⌘V": "Ctrl+Maj+V", "⌘B": "Ctrl+B",
+  "↩": "Retorn" };
 const ambAltGr = (e) => !!e.getModifierState?.("AltGraph");
 const tecla = (mac) => (ES_MAC ? mac : TECLES_WINDOWS[mac] || mac);
 
@@ -90,7 +91,6 @@ let acum = [];             // on comença cada tros dins del muntatge
 let duradaFinal = 0;
 const desfer = [];
 const refer = [];
-let mode = "talla";
 let vista = "directe";
 const spans = new Map();   // id de paraula → <span>
 let paragrafsEl = [];      // [{el, ids}] per marcar les frases tretes senceres
@@ -327,7 +327,7 @@ function nansa(k) {
 let mou = null;  // {de, a, y, mogut, el, indicador, vel}
 
 function comencaMou(e, k) {
-  if (e.button !== 0 || mode !== "talla") return;
+  if (e.button !== 0) return;
   e.preventDefault();
   e.currentTarget.setPointerCapture(e.pointerId);
   mou = { de: k, a: null, y: e.clientY, mogut: false, el: paragrafsEl[k].el, indicador: null, vel: 0, darrerY: e.clientY };
@@ -521,15 +521,81 @@ function pintaSeleccio() {
   // Amb la selecció del navegador ja es veu què hi ha triat: només es pinta la paraula d'un clic.
   const ids = seleccio ? idsEntre(seleccio.inici, seleccio.fi) : seleccioNativa ? [] : seleccioFeta;
   for (const id of ids || []) { spans.get(id)?.classList.add("seleccio"); marcades.add(id); }
-  // La pista: què fa ⌫ amb les paraules marcades (com en un document de text).
-  const n = seleccioFeta?.length || 0;
-  const pista = $("#pista-seleccio");
-  pista.hidden = !n || mode !== "talla";
-  if (n) {
-    const treu = seleccioFeta.some((id) => !esFora(id));
-    pista.innerHTML = `<kbd>⌫</kbd> ${treu ? `per treure ${n === 1 ? "la paraula" : `les ${n} paraules`}`
-      : `per tornar-${n === 1 ? "la" : "les"} a posar`}`;
-  }
+  pintaBarreta();
+}
+
+// --- La barreta de les paraules marcades ---------------------------------------------------------
+// Sobre les paraules marcades (amb un clic o seleccionant-les), el que s'hi pot fer, amb la seva drecera:
+// Destaca (⌘B, com la negreta d'un document), Corregeix (↩, com canviar el nom d'un fitxer; d'una en una)
+// i Treu (⌫; si ja eren fora, Recupera). Tot al mateix lloc: no cal canviar de mode.
+
+function claus() {
+  return new Set(liniesSub.flatMap((l) => l.paraules.filter((w) => w.clau).map((w) => w.id)));
+}
+
+function pintaBarreta() {
+  const b = $("#barreta");
+  const ids = seleccioFeta || [];
+  const editor = $("#transcripcio .editor");
+  if (!ids.length && !editor) { b.hidden = true; return; }
+  const totesFora = ids.length && ids.every((id) => esFora(id));
+  const destacades = claus();
+  $("#b-destaca").setAttribute("aria-pressed", String(ids.some((id) => !esFora(id)) &&
+    ids.filter((id) => !esFora(id)).every((id) => destacades.has(id))));
+  $("#b-corregeix").disabled = ids.length > 1;
+  $("#b-corregeix").title = ids.length > 1 ? "Es corregeix d'una en una: marca'n només una" : "";
+  $("#b-corregeix").setAttribute("aria-pressed", String(!!editor));
+  $("#b-treu-text").textContent = totesFora ? "Recupera" : "Treu";
+  b.hidden = false;
+  colocaBarreta();
+}
+
+// A sobre de la primera paraula marcada (o a sota, si a dalt no hi cap); s'amaga si queda fora de la vista.
+function colocaBarreta() {
+  const b = $("#barreta");
+  if (b.hidden) return;
+  const ancora = $("#transcripcio .editor") || spans.get(seleccioFeta?.[0]);
+  const text = $(".text").getBoundingClientRect();
+  const r = ancora?.getBoundingClientRect();
+  if (!r || !r.height || r.bottom < text.top || r.top > text.bottom) { b.style.visibility = "hidden"; return; }
+  b.style.visibility = "";
+  const x = Math.min(Math.max(r.left + r.width / 2 - b.offsetWidth / 2, text.left + 8), text.right - b.offsetWidth - 8);
+  const dalt = r.top - b.offsetHeight - 8;
+  b.style.left = `${x}px`;
+  b.style.top = `${dalt < text.top + 4 ? r.bottom + 8 : dalt}px`;
+}
+
+function treuMarcades() {
+  if (!seleccioFeta?.length) return;
+  commutaIds(seleccioFeta);
+  deixaSeleccio();
+}
+
+function corregeixMarcada() {
+  if (seleccioFeta?.length !== 1) return;
+  const id = seleccioFeta[0];
+  if (spans.get(id)?.isConnected) editaParaula(spans.get(id), id);
+}
+
+function instalaBarreta() {
+  $("#b-destaca").addEventListener("click", () => {
+    const editor = $("#transcripcio .editor");
+    if (editor) { editor.dispatchEvent(new KeyboardEvent("keydown", { key: "b", code: "KeyB", metaKey: ES_MAC, ctrlKey: !ES_MAC })); return; }
+    if (seleccioFeta?.length) commutaDestacades(seleccioFeta);
+  });
+  $("#b-corregeix").addEventListener("click", corregeixMarcada);
+  $("#b-treu").addEventListener("click", treuMarcades);
+  // Que un clic a la barreta no desfaci la selecció del text ni tregui el focus de la correcció.
+  $("#barreta").addEventListener("pointerdown", (e) => e.preventDefault());
+  for (const [id, mac] of [["b-destaca", "⌘B"], ["b-corregeix", "↩"]]) $(`#${id} kbd`).textContent = tecla(mac);
+  let pendent = false;
+  const recoloca = () => {
+    if (pendent) return;
+    pendent = true;
+    requestAnimationFrame(() => { pendent = false; colocaBarreta(); });
+  };
+  $(".text").addEventListener("scroll", recoloca, { passive: true });
+  addEventListener("resize", recoloca);
 }
 
 // Com en un document de text: es selecciona com sempre (arrossegant, doble clic, triple clic, ⇧ + clic) i
@@ -560,7 +626,7 @@ function instalaText() {
     if (dret) {
       // Al Mac el menú contextual surt en prémer: l'aturem a «contextmenu» i tallem en deixar anar.
       const s = e.target.closest(".p");
-      if (!s || mode !== "talla") return;
+      if (!s) return;
       e.preventDefault();
       const id = +s.dataset.id;
       if (seleccioFeta?.includes(id)) {
@@ -584,8 +650,6 @@ function instalaText() {
       return;
     }
     const s = e.target.closest(".p");
-    if (s && mode === "corregeix") { e.preventDefault(); editaParaula(s, +s.dataset.id); return; }
-    if (s && mode === "destaca") { e.preventDefault(); commutaDestacada(+s.dataset.id); return; }
     // La selecció la fa el navegador: aquí només s'apunta on s'ha premut (per si és un clic).
     clicParaula = s && !e.shiftKey ? { id: +s.dataset.id, x: e.clientX, y: e.clientY } : null;
     if (!seleccioNativa) { seleccioFeta = null; pintaSeleccio(); }
@@ -630,35 +694,50 @@ function instalaText() {
   });
   cont.addEventListener("contextmenu", (e) => {
     // El clic dret el fa servir «pointerdown» per tallar: aquí només amaguem el menú.
-    if (mode === "talla" && e.target.closest(".p")) e.preventDefault();
+    if (e.target.closest(".p")) e.preventDefault();
   });
   document.addEventListener("keydown", (e) => {
-    if (!seleccioFeta || mode !== "talla" || e.target.matches("input, textarea, select")) return;
+    if (!seleccioFeta || e.target.matches("input, textarea, select")) return;
     if (["#full-final", "#full-marca", "#guia"].some((s) => !$(s).hidden)) return;  // hi ha una finestra a sobre
     if (e.key === "Escape") { deixaSeleccio(); return; }
+    if (esDestaca(e)) { e.preventDefault(); commutaDestacades(seleccioFeta); return; }
+    // ↩ (o F2, com a Windows) corregeix; si el focus és en un botó, ↩ és d'aquell botó.
+    if ((e.key === "Enter" || e.key === "F2") && !e.target.closest?.("button, a, summary")) {
+      e.preventDefault();
+      corregeixMarcada();
+      return;
+    }
     if (!["Backspace", "Delete"].includes(e.key)) return;
     e.preventDefault();
-    commutaIds(seleccioFeta);
-    deixaSeleccio();
+    treuMarcades();
   });
   $(".text").addEventListener("wheel", () => { darrerDesplacamentManual = performance.now(); }, { passive: true });
 }
 
 // --- Paraules destacades ------------------------------------------------------------------------
-// Als subtítols, algunes paraules surten més grans i d'un altre color. tallat en tria soles; en el
-// mode «Destaca» se'n poden afegir o treure (i Claude també ho pot fer amb «tallat.py destaca»).
+// Als subtítols, algunes paraules surten més grans i d'un altre color. tallat en tria soles; amb la
+// barreta (o ⌘B) se'n poden afegir o treure (i Claude també ho pot fer amb «tallat.py destaca»).
 
 function marcaClaus() {
-  const claus = new Set(liniesSub.flatMap((l) => l.paraules.filter((w) => w.clau).map((w) => w.id)));
-  for (const [id, s] of spans) s.classList.toggle("clau", claus.has(id));
+  const destacades = claus();
+  for (const [id, s] of spans) s.classList.toggle("clau", destacades.has(id));
+  pintaBarreta();
 }
 
-function commutaDestacada(id) {
-  if (esFora(id)) { avis("Aquesta paraula no surt al vídeo."); return; }
-  const ara = liniesSub.some((l) => l.paraules.some((w) => w.id === id && w.clau));
-  canvia((e) => { e.destacades = { ...(e.destacades || {}), [String(id)]: !ara }; });
-  spans.get(id)?.classList.toggle("clau", !ara);  // es veu de seguida; el servidor ho confirma
-  if (!estilSub?.clau_grans) {
+// ⌘B (Ctrl+B a Windows), com la negreta d'un document.
+const esDestaca = (e) => e.code === "KeyB" && !e.altKey && !e.shiftKey && (ES_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+
+// Destaca les paraules (les que surten al vídeo) o, si ja ho eren totes, les deixa de destacar. Un sol pas de desfer.
+function commutaDestacades(ids) {
+  const dins = ids.filter((id) => !esFora(id));
+  if (!dins.length) { avis(ids.length === 1 ? "Aquesta paraula no surt al vídeo." : "Aquestes paraules no surten al vídeo."); return; }
+  const destacades = claus();
+  const posa = !dins.every((id) => destacades.has(id));
+  canvia((e) => { e.destacades = { ...(e.destacades || {}), ...Object.fromEntries(dins.map((id) => [String(id), posa])) }; });
+  for (const id of dins) spans.get(id)?.classList.toggle("clau", posa);  // es veu de seguida; el servidor ho confirma
+  $("#transcripcio .editor")?.classList.toggle("clau", posa);
+  $("#b-destaca").setAttribute("aria-pressed", String(posa));
+  if (posa && !estilSub?.clau_grans) {
     canviaEstil({ clau_grans: true });
     avis("He activat les paraules destacades a l'estil dels subtítols.", 4000);
   }
@@ -666,17 +745,20 @@ function commutaDestacada(id) {
 
 function editaParaula(s, id) {
   const entrada = document.createElement("input");
-  entrada.className = "editor";
+  entrada.className = s.classList.contains("clau") ? "editor clau" : "editor";
+  entrada.setAttribute("aria-label", "Corregeix la paraula (↩ per desar, Esc per deixar-ho)");
   entrada.value = estat.correccions[String(id)] ?? P.paraules[id].text;
   entrada.size = Math.max(3, entrada.value.length + 1);
   s.replaceWith(entrada);
   entrada.focus();
   entrada.select();
+  pintaBarreta();
   let acabat = false;
   const acaba = (desa) => {
     if (acabat) return;
     acabat = true;
     entrada.replaceWith(s);
+    pintaBarreta();
     const valor = entrada.value.trim();
     const actual = estat.correccions[String(id)] ?? P.paraules[id].text;
     if (desa && valor !== actual) {
@@ -689,6 +771,7 @@ function editaParaula(s, id) {
   entrada.addEventListener("input", () => { entrada.size = Math.max(3, entrada.value.length + 1); });
   entrada.addEventListener("keydown", (e) => {
     e.stopPropagation();
+    if (esDestaca(e)) { e.preventDefault(); commutaDestacades([id]); }
     if (e.key === "Enter") acaba(true);
     if (e.key === "Escape") acaba(false);
   });
@@ -3502,7 +3585,8 @@ function instalaTecles() {
 
 const PASSES_GUIA = [
   ["#seccio-reels", "Aquí tries què edites: el vídeo sencer o un dels reels que t'ha proposat Claude."],
-  [".text", "Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫."],
+  [".text", `Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫. A sobre ` +
+    `surt una barreta per destacar-les (${tecla("⌘B")}) o corregir-les (${tecla("↩")}).`],
   ["#escolta", "Quan treus una paraula, sonen uns segons al voltant del tall perquè sentis com queda, i s'atura. " +
     "Si no ho vols, apaga això."],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
@@ -3962,28 +4046,10 @@ function avis(text, ms = 2600) {
 
 // --- Inici ------------------------------------------------------------------------------------
 
-// Només als modes que canvien el que fa un clic (a «Talla», la pista surt quan hi ha paraules marcades).
-const AJUDES = {
-  talla: "",
-  corregeix: "Toca una paraula per corregir com s'escriu als subtítols.",
-  destaca: "Toca una paraula per destacar-la als subtítols (o per deixar de destacar-la).",
-};
 const RITMES = [0, 0.5, 0.35, 0.25];  // el silenci més llarg que es deixa: del més tranquil (tots) al més àgil
 const NOMS_RITME = ["Sencers", "Llargs", "Normals", "Curts"];
 
 function instalaControls() {
-  for (const b of $$("#mode button")) {
-    b.addEventListener("click", () => {
-      mode = b.dataset.mode;
-      for (const x of $$("#mode button")) x.setAttribute("aria-checked", String(x === b));
-      document.body.classList.toggle("mode-corregeix", mode === "corregeix");
-      document.body.classList.toggle("mode-destaca", mode === "destaca");
-      $("#ajuda").textContent = AJUDES[mode];
-      $("#ajuda").hidden = !AJUDES[mode];
-      pintaSeleccio();
-      if (mode === "destaca") marcaClaus();
-    });
-  }
   $("#ritme").addEventListener("input", () => {
     const v = RITMES[Number($("#ritme").value)];
     canvia((e) => { e.pausa_maxima = v > 0 ? v : null; }, { repinta: true });
@@ -4107,6 +4173,7 @@ function marcaPausa() {
 async function inicia() {
   instalaControls();
   instalaText();
+  instalaBarreta();
   instalaReproductor();
   try {
     P = await api("/api/projecte");
