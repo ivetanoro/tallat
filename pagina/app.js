@@ -1527,10 +1527,20 @@ const predefinitActual = (e = estilSub) => predefinitDe(estilsPredefinits, e, "s
 const predefinitTitol = (e = estilTitol) => predefinitDe(estilsTitol, e, "titol");
 const predefinitBroll = (e = estilBroll) => predefinitDe(estilsBroll, e, "broll");
 
+// Les galeries es tornen a dibuixar senceres (en triar, i quan arriba la resposta del desament): si el
+// focus era en una opció, torna a la mateixa (revisió de Codex: es perdia, i les fletxes movien el vídeo).
+let focusGaleria = null;  // {cont, nom}
+function buidaGaleria(cont) {
+  const b = cont.contains(document.activeElement) ? document.activeElement.closest(".estil") : null;
+  focusGaleria = b ? { cont, nom: b.dataset.nom } : null;
+  cont.textContent = "";
+}
+
 // Un botó de les galeries d'estils fets (subtítols, títol i b-roll). Torna la caixa de la mostra.
 function botoEstil(cont, p, actiu, tria) {
   const b = document.createElement("button");
   b.className = "estil";
+  b.dataset.nom = p.nom;
   b.setAttribute("role", "radio");
   b.setAttribute("aria-checked", String(actiu));
   b.title = p.descripcio;
@@ -1538,6 +1548,10 @@ function botoEstil(cont, p, actiu, tria) {
   b.querySelector(".estil-nom").textContent = p.nom;
   b.addEventListener("click", tria);
   cont.append(b);
+  if (focusGaleria?.cont === cont && focusGaleria.nom === p.nom) {
+    b.focus();
+    focusGaleria = null;
+  }
   return b.querySelector(".estil-mostra");
 }
 
@@ -1616,7 +1630,7 @@ function pintaPanellEstil() {
   if (!e || $("#panell-estil").hidden) return;
   const actual = predefinitActual();
   const cont = $("#estils");
-  cont.textContent = "";
+  buidaGaleria(cont);
   // Plegats, es veuen els 6 primers; si el triat és dels de més avall, ocupa el sisè lloc.
   const ordre = [...estilsPredefinits];
   if (!estilsMostrats && ordre.indexOf(actual) >= 6) ordre.splice(5, 0, ...ordre.splice(ordre.indexOf(actual), 1));
@@ -1855,7 +1869,7 @@ function pintaPanellTitol() {
   if (!e || $("#panell-titol").hidden) return;
   const actual = predefinitTitol();
   const cont = $("#estils-titol");
-  cont.textContent = "";
+  buidaGaleria(cont);
   for (const p of estilsTitol) {
     const valors = ambMarca("titol", p.valors);
     const mostra = botoEstil(cont, p, p === actual, () => canviaTitol(valors, true));
@@ -2932,7 +2946,7 @@ function pintaPanellBroll() {
   if (!e || $("#panell-broll").hidden) return;
   const actual = predefinitBroll();
   const cont = $("#estils-broll");
-  cont.textContent = "";
+  buidaGaleria(cont);
   for (const p of estilsBroll) {
     miniBroll(botoEstil(cont, p, p === actual, () => canviaBroll(ambMarca("broll", p.valors), true)), p.mostra);
   }
