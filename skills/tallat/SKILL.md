@@ -30,6 +30,8 @@ Quan la persona digui «instal·la tallat», o una ordre falli perquè falta una
 3. Executa `./prepara.sh` des de la carpeta de tallat (a **Windows**: `powershell -ExecutionPolicy Bypass -File prepara.ps1`, i `-AmbWhisper` en lloc de `--amb-whisper`). És llarg: fes-ho en una pestanya del terminal on la persona ho vegi, o en segon pla, i ves-li dient com va. Es pot tornar a executar sense por: només fa el que falta.
 4. En acabar, l'instal·lador mateix executa `tallat.py comprova`. Si hi ha cap ✗, llegeix el missatge, torna a executar l'instal·lador i, si continua, explica-li què passa amb paraules senzilles.
 
+**Actualitzar** («actualitza tallat», «hi ha una versió nova?»): si és un connector de Claude Code, `claude plugin update tallat@tallat` des del terminal (o que la persona escrigui `/plugin marketplace update tallat`) i després una sessió nova; perquè li arribin soles, que activi **Enable auto-update** a `/plugin` → **Marketplaces** → **tallat**. Si és una carpeta baixada, que la torni a baixar i la posi al lloc de l'antiga (si és un clon de git, `git pull`). Després, si `.venv` no hi és, l'instal·lador només refà l'enllaç.
+
 `tallat.py comprova` revisa en qualsevol moment que tot hi sigui (✓ bé, ! avís, ✗ cal arreglar). Descript és opcional: es connecta des de la configuració de connectors de l'assistent (a Claude, la de claude.ai).
 
 ## Ordres

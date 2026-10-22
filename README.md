@@ -58,6 +58,11 @@ Després escriu **«instal·la tallat»**.
 
 Tot funciona igual que amb Claude. Només canvien els connectors opcionals (Descript i les IA per al b-roll): depèn de si aquests serveis en tenen per a Codex.
 
+### Com tens les novetats
+
+- **Com a connector:** escriu `/plugin`, ves a **Marketplaces**, tria **tallat** i activa **Enable auto-update**. Així les versions noves t'arriben soles. Si no ho actives, de tant en tant escriu `/plugin marketplace update tallat` i obre una sessió nova.
+- **Si vas baixar la carpeta** (o fas servir Codex): torna-la a baixar, posa-la al lloc de l'antiga i escriu **«instal·la tallat»**. No perds res: les eines, els teus estils i els projectes són fora de la carpeta (a `~/.tallat` i on els tinguis), i la instal·lació només refà el que falta.
+
 ### Què fa la instal·lació
 
 Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el vídeo), Python i WhisperX (per transcriure), el model de veu català de Softcatalà, i HyperFrames (per dibuixar els subtítols). Són uns 2-3 GB i 10-20 minuts la primera vegada. Tot va a una carpeta teva, `~/.tallat` (a Windows, `.tallat` dins de la teva carpeta d'usuari), i no et demana mai la contrasenya del Mac. Tu només has de clicar **«Permet»** quan Claude et demani permís per fer alguna cosa.
