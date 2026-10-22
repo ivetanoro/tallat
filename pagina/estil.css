@@ -291,11 +291,6 @@ kbd {
 .espai { flex: 1; }
 .grup { display: flex; align-items: center; gap: var(--e1); }
 
-.ajuda {
-  max-width: 760px; margin: 0 auto; padding: var(--e1) var(--e8) 0;
-  font-size: var(--t-petit); line-height: 1.5; color: var(--text-2);
-}
-.ajuda[hidden] { display: none; }
 /* La barreta: sobre les paraules marcades, què s'hi pot fer (Destaca, Corregeix, Treu), amb la drecera. */
 .barreta {
   position: fixed; z-index: 30; display: flex; gap: 2px; padding: 4px; border-radius: var(--radi-mitja);

@@ -3621,10 +3621,13 @@ const PASSES_GUIA = [
     "Si no ho vols, apaga això."],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
   [".com-es-veu", "Aquí tries com es veu: l'estil, els subtítols, el títol, els gràfics, el b-roll i el so."],
+  ['[data-seccio="ritme"]', "I aquí, el ritme: com de curts vols els silencis entre frases."],
   ["#final", "Quan estigui a punt, toca Exporta: un esborrany per mirar-lo, el vídeo final o per a un altre editor."],
 ];
 let passaGuia = -1;
 let passesVisibles = [];
+// Puja quan la pàgina canvia prou perquè qui ja havia vist la visita la torni a veure (2: la pàgina simplificada).
+const VERSIO_GUIA = 2;
 
 function esVeu(el) {
   if (!el) return false;
@@ -3644,13 +3647,18 @@ function obreGuia() {
 function tancaGuia() {
   passaGuia = -1;
   $("#guia").hidden = true;
-  desa("tallat.guia-vista", true);
+  desa("tallat.guia-vista", VERSIO_GUIA);
 }
 
 function pintaGuia() {
   if (passaGuia < 0) return;
   const [sel, text] = passesVisibles[passaGuia];
-  const r = $(sel).getBoundingClientRect();
+  const el = $(sel);
+  let r = el.getBoundingClientRect();
+  if (r.top < 0 || r.bottom > innerHeight) {  // més avall de la columna («Com es veu», «Ritme»): s'hi baixa
+    el.scrollIntoView({ block: "nearest" });
+    r = el.getBoundingClientRect();
+  }
   const marge = 6;
   Object.assign($("#guia-forat").style, {
     left: `${r.left - marge}px`, top: `${r.top - marge}px`, width: `${r.width + 2 * marge}px`, height: `${r.height + 2 * marge}px`,
@@ -4257,7 +4265,8 @@ async function inicia() {
   pintaInstruccions();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;
-  if (!llegeix("tallat.guia-vista", false)) setTimeout(obreGuia, 600);  // el primer cop, la visita guiada
+  // El primer cop (i un cop més si la pàgina ha canviat: abans s'hi desava «true»), la visita guiada.
+  if (Number(llegeix("tallat.guia-vista", 0)) < VERSIO_GUIA) setTimeout(obreGuia, 600);
 }
 
 
