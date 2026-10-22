@@ -2780,9 +2780,14 @@ function instalaGrupsOpcions() {
     e.preventDefault();
     e.stopPropagation();  // a la captura: no arriba a cap altra drecera
     const pas = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : -1;
-    const seguent = opcions[(i + pas + opcions.length) % opcions.length];
-    seguent.focus();
-    seguent.click();
+    const j = (i + pas + opcions.length) % opcions.length;
+    opcions[j].click();
+    // Les galeries d'estils (i l'assistent) es tornen a dibuixar en triar: el focus va a l'opció nova
+    // (revisió de Codex: es perdia, i la fletxa següent tornava a moure el vídeo).
+    const ara = grup.isConnected ? grup : grup.id ? document.getElementById(grup.id)
+      : document.querySelector(`[role="radiogroup"][aria-label="${CSS.escape(grup.getAttribute("aria-label") || "")}"]`);
+    const noves = ara ? [...ara.querySelectorAll('[role="radio"]')].filter((b) => !b.disabled && b.offsetParent) : [];
+    (opcions[j].isConnected ? opcions[j] : noves[j])?.focus();
   }, true);
 }
 

@@ -517,6 +517,28 @@ class TestAlineador(unittest.TestCase):
         veu[500:600] = True
         self.assertEqual(transcripcio.retalla_als_silencis([(1.0, 9.0)], veu, textos=["cafè"]), [(1.0, 6.05)])
 
+    def test_la_paraula_de_debo_al_final_no_es_perd(self):
+        # Segona revisió de Codex: soroll de 0,2-0,4 s i «hola» de debò a 4,0-4,4 s, tocant el final. Com que
+        # la veu no continua després, no és l'arrencada de la següent: no se sap quina és, i es queda com era.
+        veu = np.zeros(600, dtype=bool)
+        veu[20:40] = True
+        veu[400:440] = True
+        self.assertEqual(transcripcio.retalla_als_silencis([(0.1, 4.4)], veu, textos=["hola"]), [(0.17, 4.4)])
+
+    def test_un_soroll_mes_llarg_que_la_paraula_no_la_substitueix(self):
+        # Segona revisió de Codex: «gràcies» dita ràpid (0,2 s) i un soroll de 0,3 s: es queda com era.
+        veu = np.zeros(600, dtype=bool)
+        veu[20:50] = True
+        veu[300:320] = True
+        self.assertEqual(transcripcio.retalla_als_silencis([(0.1, 4.4)], veu, textos=["gràcies"]), [(0.17, 3.25)])
+
+    def test_l_arrencada_de_la_paraula_seguent_no_compta(self):
+        # El so del final continua dins de la paraula següent: és seu, i la paraula és la part del principi.
+        veu = np.zeros(1000, dtype=bool)
+        veu[100:130] = True
+        veu[880:930] = True
+        self.assertEqual(transcripcio.retalla_als_silencis([(1.0, 9.0)], veu, textos=["cafè"]), [(1.0, 1.35)])
+
     def test_una_paraula_llarga_de_debo_no_es_parteix(self):
         veu = np.zeros(300, dtype=bool)
         veu[10:60] = True
