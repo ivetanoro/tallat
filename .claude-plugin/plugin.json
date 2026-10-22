@@ -2,7 +2,7 @@
   "name": "tallat",
   "displayName": "tallat",
   "description": "Editor de reels en català, per paraules: transcriu, treu el farciment, proposa reels, hi posa subtítols, b-roll i stickers, i exporta en vertical. Tot en aquest ordinador.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "author": {
     "name": "Ivet Anoro",
     "url": "https://github.com/ivetanoro"
