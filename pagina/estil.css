@@ -795,7 +795,7 @@ body.reproduint .play .si-play { display: block; }
 /* Notes per a Claude, sota el vídeo. El número i el color de cada nota són els mateixos a la llista i a la
    línia de temps: gris per enviar, blau a Claude, verd feta, taronja quan Claude et pregunta alguna cosa. */
 .notes {
-  width: 100%; flex: 0 1 auto; min-height: 0; max-height: 40%;
+  width: 100%; flex: 0 1 auto; min-height: 0; max-height: 48%;
   display: flex; flex-direction: column; gap: var(--e2);
   padding-top: var(--e3); border-top: 1px solid var(--linia);
 }
@@ -825,11 +825,48 @@ body.reproduint .play .si-play { display: block; }
   -webkit-user-select: text; user-select: text;
 }
 #text-nota::placeholder { color: var(--text-3); }
-.llista-notes { list-style: none; margin: 0; padding: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--e1); }
-.nota { flex: none; padding: var(--e2); border-radius: var(--radi); background: var(--superficie); box-shadow: 0 0 0 0.5px var(--linia); }
+.llista-notes { margin: 0 calc(-1 * var(--e1)); padding: 0 var(--e1); min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.noves-notes { color: var(--accent); font-weight: 600; }
+.grup-notes {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--e2); flex: none;
+  margin: 6px 0 0; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2);
+}
+.grup-notes:first-child { margin-top: 0; }
+.grup-necessita { color: var(--auto); }
+.grup-notes .boto { text-transform: none; letter-spacing: 0; height: 24px; font-size: var(--t-petit); }
+.cua-notes { flex: none; margin: 2px 0 0; }
+/* Una nota, una línia: es toca per obrir-la. */
+.linia-nota {
+  flex: none; display: flex; align-items: center; gap: 7px; width: 100%; min-height: 27px; padding: 0 6px;
+  border: 0; border-radius: var(--radi-petit); background: none; color: var(--text); text-align: left; cursor: pointer;
+  font-size: var(--t-ui); transition: background-color 120ms ease-out;
+}
+.linia-nota:hover { background: var(--omplir); }
+.linia-nota:active { background: var(--omplir-fort); }
+.linia-temps-nota { flex: none; color: var(--accent); font-size: var(--t-peu); font-weight: 600; font-variant-numeric: tabular-nums; }
+.linia-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.estat-enviada.linia-nota .linia-text, .estat-treballant.linia-nota .linia-text { color: var(--text-2); }
+.punt-nou { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.roda-nota {
+  flex: none; width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid var(--accent-suau); border-top-color: var(--accent); animation: gira-nota 0.9s linear infinite;
+}
+@keyframes gira-nota { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .roda-nota { animation: none; border-color: var(--accent); } }
+.fila-fetes {
+  flex: none; display: flex; align-items: center; gap: 7px; width: 100%; min-height: 28px; margin-top: 6px; padding: 0 8px;
+  border: 0; border-radius: var(--radi-petit); background: var(--omplir); color: var(--text-2); cursor: pointer; font-size: var(--t-ui);
+}
+.fila-fetes:hover { background: var(--omplir-fort); }
+.fila-fetes .ok { color: var(--verd); font-weight: 700; }
+.fila-fetes .xebro { width: 12px; height: 12px; margin-left: auto; transition: transform 150ms var(--molla); }
+.fila-fetes[aria-expanded="true"] .xebro { transform: rotate(90deg); }
+.nota-plega { flex: none; display: inline-flex; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 8px; }
+.nota-al-xat { margin: var(--e2) 0 0; padding: 6px 8px; border-radius: var(--radi-petit); background: var(--auto-suau); font-size: var(--t-petit); }
+.nota { flex: none; margin: 2px 0; padding: var(--e2); border-radius: var(--radi); background: var(--superficie); box-shadow: 0 0 0 0.5px var(--linia), 0 1px 3px rgba(0, 0, 0, 0.06); }
 .nota.llum { animation: llum-nota 1.2s var(--molla); }
 @keyframes llum-nota { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0.5px var(--linia); } }
-.nota-cap { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-peu); color: var(--text-2); }
+.nota-cap { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-peu); color: var(--text-2); cursor: pointer; }
 .num-nota, .marca-nota {
   flex: none; display: inline-flex; align-items: center; justify-content: center; height: 16px; min-width: 16px; padding: 0 4px;
   border: 0; border-radius: 8px 8px 8px 2px; background: var(--text-3); color: #fff; font-size: 10px; font-weight: 700; line-height: 1;

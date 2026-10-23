@@ -168,7 +168,8 @@ class TestNotes(unittest.TestCase):
             notes.envia(self.carpeta)
 
         threading.Thread(target=envia_despres).start()
-        preses = notes.espera(self.carpeta, 5, cada=0.05)
+        with mock.patch.object(notes, "AGRUPA", 0):
+            preses = notes.espera(self.carpeta, 5, cada=0.05)
         self.assertEqual([p["fil"][0]["text"] for p in preses], ["ja"])
         self.assertEqual(estats, [True])  # mentre esperava, la pàgina deia «Connectat amb Claude»
         self.assertFalse(notes.connectat(self.carpeta))  # en acabar, ja no
@@ -189,6 +190,29 @@ class TestNotes(unittest.TestCase):
         with mock.patch("motor.notes.os.replace", side_effect=PermissionError("en ús")), mock.patch("motor.notes.time.sleep"):
             notes.marca_connexio(self.carpeta)  # el senyal de connexió es perd un segon, però l'espera continua
 
+    def test_les_que_s_envien_seguides_arriben_juntes(self):
+        # Qui les envia d'una en una (cada nota, «Envia») les rep juntes: l'espera dona uns segons per si n'hi ha més.
+        def envia_dues():
+            for text in ("una", "dues"):
+                notes.afegeix(self.carpeta, text)
+                notes.envia(self.carpeta)
+                time.sleep(0.15)
+        with mock.patch.object(notes, "AGRUPA", 0.4):
+            threading.Thread(target=envia_dues).start()
+            preses = notes.espera(self.carpeta, 5, cada=0.05)
+        self.assertEqual([p["fil"][0]["text"] for p in preses], ["una", "dues"])
+
+    def test_un_permis_es_pregunta_al_xat(self):
+        notes.afegeix(self.carpeta, "posa aquesta imatge d'internet")
+        notes.envia(self.carpeta)
+        notes.pren(self.carpeta)
+        notes.respon(self.carpeta, 1, "T'ho pregunto al xat.", al_xat=True)
+        nota = notes.llegeix(self.carpeta)["notes"][0]
+        self.assertEqual((nota["estat"], nota["al_xat"]), ("pregunta", True))
+        notes.respon(self.carpeta, 1, "Fet.")
+        nota = notes.llegeix(self.carpeta)["notes"][0]
+        self.assertEqual((nota["estat"], nota["al_xat"]), ("feta", False))
+
     def test_l_espera_s_acaba_encara_que_no_n_arribi_cap(self):
         t0 = time.time()
         self.assertEqual(notes.espera(self.carpeta, 0.2, cada=0.05), [])
@@ -206,7 +230,8 @@ class TestOrdreNotes(unittest.TestCase):
 
     def ordre(self, **kw):
         import tallat
-        args = argparse.Namespace(projecte=str(self.carpeta), espera=False, minuts=9, respon=None, pregunta=False)
+        args = argparse.Namespace(projecte=str(self.carpeta), espera=False, minuts=9, respon=None, pregunta=False,
+                                  al_xat=False)
         for k, v in kw.items():
             setattr(args, k, v)
         sortida = io.StringIO()

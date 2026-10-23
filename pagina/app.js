@@ -2349,6 +2349,7 @@ function mostraColumna(nom, visible) {
   $(c.boto).title = (visible ? "Amaga " : "Mostra ") +
     (nom === "barra" ? `la columna de l'esquerra (${tecla("⌃⌘S")})` : `el vídeo (${tecla("⌥⌘V")})`);
   desa(`tallat.amaga.${nom}`, !visible);
+  if (nom === "reproductor" && visible) notesTornenASortir();
 }
 
 function instalaColumnes() {
@@ -4217,6 +4218,8 @@ async function decideixInstruccio(ins, nou) {
 // quan acaba, les envia. Claude les espera des del xat (`tallat.py notes --espera`), les fa i hi respon:
 // aquí es veu la resposta a sota de cada nota. Es desen a notes.json, a la gravació sencera; la pàgina
 // ensenya les del que s'edita (el vídeo sencer o un reel). Cada nota va a la paraula que sonava.
+// Sota el vídeo hi ha poc lloc: cada nota és una línia (en tocar-la, s'obre la conversa, una sola alhora),
+// agrupades pel que toca fer; les fetes, plegades en una fila.
 
 let notesTotes = [];
 let projecteNotes = null;      // la carpeta del que s'edita: se'n veuen les notes
@@ -4224,7 +4227,11 @@ let versioNotes = null;
 let notesCarregades = false;
 let claudeConnectat = false;   // Claude espera les notes ara mateix
 let momentNota = null;         // on va la nota que s'escriu: {paraula, m} o {tot: true}; null: on és el vídeo
+let notaDesplegada = null;         // la nota que es veu sencera (la resta, d'una línia)
+let fetesObertes = false;
+let vistes = null;             // {id: missatges que s'han vist}: les respostes de Claude encara no vistes porten un punt
 const respostesObertes = new Set();  // notes fetes on s'ha tocat «Respon»
+const esborranysResposta = new Map(); // el que s'escriu a cada resposta: no es perd en plegar-la o obrir-ne una altra
 const ESTATS_NOTA = { esborrany: "Per enviar", enviada: "Enviada", treballant: "Claude hi treballa…", feta: "Feta",
   pregunta: "Et pregunta" };
 
@@ -4249,7 +4256,25 @@ function respostaNotes(r) {
   if ("connectat" in r) claudeConnectat = r.connectat;
   if (notesCarregades) avisaRespostes(abans);
   notesCarregades = true;
+  carregaVistes();
   pintaNotes();
+}
+
+// El primer cop en aquest navegador, el que ja hi ha es dona per vist (si no, tot sortiria com a nou).
+const clauVistes = () => `tallat.notes-vistes.${projecteNotes}`;
+function carregaVistes() {
+  if (vistes) return;
+  vistes = llegeix(clauVistes(), null);
+  if (!vistes) {
+    vistes = Object.fromEntries(notesTotes.map((n) => [n.id, n.fil.length]));
+    desa(clauVistes(), vistes);
+  }
+}
+const esNova = (n) => n.fil.at(-1)?.de === "claude" && (vistes?.[n.id] ?? 0) < n.fil.length;
+function marcaVista(n) {
+  if (!vistes || vistes[n.id] === n.fil.length) return;
+  vistes[n.id] = n.fil.length;
+  desa(clauVistes(), vistes);
 }
 
 // Quan Claude acaba una nota o pregunta alguna cosa, un avís curt (la nota es veu a la llista).
@@ -4262,6 +4287,8 @@ function avisaRespostes(abans) {
 }
 
 function etiquetaEstat(n) {
+  if (n.estat === "pregunta" && n.al_xat) return "Respon-li al xat";
+  if (n.estat === "enviada" && notesVisibles().some((m) => m.estat === "treballant")) return "A la cua";
   if (n.estat === "enviada" && !claudeConnectat) return "S'espera Claude";
   return ESTATS_NOTA[n.estat] || n.estat;
 }
@@ -4272,40 +4299,161 @@ function ordreNotes(a, b) {
   return a.inici == null ? a.id - b.id : muntatgeDe(a.inici) - muntatgeDe(b.inici) || a.id - b.id;
 }
 
+// Els grups, per ordre: el que et necessita, el que encara no has enviat, el que té Claude i el que espera torn
+// (si Claude ja en té, les noves no s'hi barregen: van a la cua). Les fetes, al final i plegades.
 function pintaNotes() {
   const visibles = notesVisibles().sort(ordreNotes);
   const llista = $("#llista-notes");
-  // El que s'està escrivint en una resposta no es perd quan arriben novetats.
-  const escrits = new Map($$(".respon-nota textarea").map((t) => [t.dataset.id, t.value]));
-  const ambFocus = document.activeElement?.closest?.(".respon-nota")?.querySelector("textarea")?.dataset.id;
+  // Repintar no ha de fer perdre on era el teclat: cada control porta una clau i, després, es torna a enfocar.
+  const actiu = document.activeElement;
+  const focus = actiu?.closest?.("#llista-notes") ? actiu.dataset.focus : null;
+  const cursor = actiu?.tagName === "TEXTAREA" ? actiu.selectionStart : null;
+  if (notaDesplegada != null && !visibles.some((n) => n.id === notaDesplegada)) notaDesplegada = null;
   llista.textContent = "";
-  for (const n of visibles) llista.append(elementNota(n, escrits.get(String(n.id)) || ""));
-  if (ambFocus) {
-    const t = llista.querySelector(`.respon-nota textarea[data-id="${ambFocus}"]`);
-    if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+  const de = (...estats) => visibles.filter((n) => estats.includes(n.estat));
+  const treballant = de("treballant");
+  const grups = [
+    ["necessita", "Et necessita", de("pregunta")],
+    ["enviar", "Per enviar", de("esborrany")],
+    ["claude", "A Claude", treballant.length ? treballant : de("enviada")],
+    ["cua", "A la cua", treballant.length ? de("enviada") : []],
+  ];
+  for (const [clau, titol, notes] of grups) {
+    if (!notes.length) continue;
+    llista.append(capGrup(clau, titol, notes.length));
+    for (const n of notes) llista.append(notaALaLlista(n));
+    if (clau === "cua") {
+      const p = document.createElement("p");
+      p.className = "detall cua-notes";
+      p.textContent = `Claude les farà quan acabi ${treballant.length === 1 ? "la que té ara" : `les ${treballant.length} d'ara`}.`;
+      llista.append(p);
+    }
   }
+  const fetes = de("feta");
+  if (fetes.length) {
+    const fila = document.createElement("button");
+    fila.className = "fila-fetes";
+    fila.dataset.focus = "fetes";
+    fila.setAttribute("aria-expanded", String(fetesObertes));
+    fila.innerHTML = '<span class="ok" aria-hidden="true">✓</span><span></span>'
+      + '<svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>';
+    fila.children[1].textContent = fetes.length === 1 ? "1 feta" : `${fetes.length} fetes`;
+    fila.addEventListener("click", () => { fetesObertes = !fetesObertes; pintaNotes(); });
+    llista.append(fila);
+    // Plegades, menys les que tenen una resposta que encara no has vist (o la que tens oberta).
+    const aLaVista = fetesObertes ? fetes : fetes.filter((n) => esNova(n) || n.id === notaDesplegada);
+    for (const n of aLaVista) llista.append(notaALaLlista(n));
+  }
+  if (focus) {
+    const el = llista.querySelector(`[data-focus="${focus}"]`);
+    if (el) {
+      el.focus({ preventScroll: true });
+      if (cursor != null && el.tagName === "TEXTAREA") el.setSelectionRange(cursor, cursor);
+    }
+  }
+  // Si es veu sencera, la resposta ja s'ha vist; però no si la columna del vídeo està amagada (Codex).
+  const oberta = visibles.find((n) => n.id === notaDesplegada);
+  if (oberta && notesALaVista()) marcaVista(oberta);
   $("#compte-notes").textContent = visibles.length ? String(visibles.length) : "";
-  const perEnviar = visibles.filter((n) => n.estat === "esborrany").length;
-  const envia = $("#envia-notes");
-  envia.hidden = !perEnviar;
-  envia.textContent = `Envia a Claude (${perEnviar})`;
+  const noves = visibles.filter(esNova).length;
+  $("#noves-notes").textContent = noves ? `· ${noves === 1 ? "1 nova" : `${noves} noves`}` : "";
   pintaConnexio();
   pintaMarquesNotes();
 }
 
+function capGrup(clau, titol, quantes) {
+  const cap = document.createElement("h3");
+  cap.className = `grup-notes grup-${clau}`;
+  cap.textContent = titol;
+  if (clau === "enviar") {
+    const b = document.createElement("button");
+    b.className = "boto suau petit";
+    b.id = "envia-notes";
+    b.dataset.focus = "envia";
+    b.textContent = `Envia a Claude (${quantes})`;
+    b.addEventListener("click", enviaNotes);
+    cap.append(b);
+  }
+  return cap;
+}
+
+function notaALaLlista(n) {
+  return n.id === notaDesplegada ? elementNota(n, esborranysResposta.get(n.id) || "") : liniaNota(n);
+}
+
+const notesALaVista = () => !document.hidden && !!$("#notes").offsetParent;
+
+// Una nota en una línia: el número, el moment i de què va (si Claude pregunta, la pregunta); a la dreta, un punt
+// si hi ha una resposta que no has vist, o la rodeta si Claude hi treballa.
+function liniaNota(n) {
+  const b = document.createElement("button");
+  b.className = `linia-nota estat-${n.estat}`;
+  b.dataset.id = n.id;
+  b.dataset.focus = `linia-${n.id}`;
+  b.setAttribute("aria-expanded", "false");
+  const num = document.createElement("span");
+  num.className = "num-nota";
+  num.textContent = n.id;
+  const temps = document.createElement("span");
+  temps.className = "linia-temps-nota";
+  temps.textContent = n.inici != null ? fmt(muntatgeDe(n.inici)) : "Tot";
+  const text = document.createElement("span");
+  text.className = "linia-text";
+  const darrer = n.fil.at(-1);
+  text.textContent = n.estat === "pregunta" && darrer?.de === "claude" ? `Claude: ${darrer.text}` : n.fil[0]?.text || "";
+  b.append(num, temps, text);
+  if (esNova(n)) {
+    const punt = document.createElement("span");
+    punt.className = "punt-nou";
+    punt.setAttribute("aria-label", "resposta nova");
+    b.append(punt);
+  } else if (n.estat === "treballant") {
+    const roda = document.createElement("span");
+    roda.className = "roda-nota";
+    roda.setAttribute("aria-label", "Claude hi treballa");
+    b.append(roda);
+  }
+  b.setAttribute("aria-label", `Nota ${n.id}, ${n.inici != null ? `al ${temps.textContent}` : "per a tot el vídeo"}: `
+    + `${text.textContent.replace(/[.!?…]+$/, "")}. ${etiquetaEstat(n)}`);
+  b.addEventListener("click", () => mostraNota(n.id));
+  return b;
+}
+
+// Obre una nota sencera (i tanca la que hi hagués oberta); si ja ho era, la torna a plegar. El focus va a la
+// capçalera de la nota oberta, o a la línia de la que s'ha plegat.
+function mostraNota(id, { obre = false } = {}) {
+  notaDesplegada = obre || notaDesplegada !== id ? id : null;
+  pintaNotes();
+  const el = $(`#llista-notes [data-id="${id}"]`);
+  el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  (el?.querySelector(".nota-plega") || el)?.focus({ preventScroll: true, focusVisible: false });
+}
+
+// Quan la columna del vídeo torna a sortir (o la pestanya), la nota oberta es veu: ja compta com a vista.
+function notesTornenASortir() { if (notesCarregades) pintaNotes(); }
+
 function elementNota(n, escrit) {
-  const li = document.createElement("li");
+  const li = document.createElement("div");
   li.className = `nota estat-${n.estat}`;
   li.dataset.id = n.id;
   const cap = document.createElement("div");
   cap.className = "nota-cap";
+  const plega = document.createElement("button");
+  plega.className = "nota-plega";
+  plega.dataset.focus = `plega-${n.id}`;
+  plega.setAttribute("aria-expanded", "true");
+  plega.setAttribute("aria-label", `Plega la nota ${n.id}`);
+  // Tocar la capçalera (menys el temps, que porta el vídeo a aquell moment) la torna a plegar.
+  cap.addEventListener("click", (e) => { if (!e.target.closest(".nota-temps")) mostraNota(n.id); });
   const num = document.createElement("span");
   num.className = "num-nota";
   num.textContent = n.id;
-  cap.append(num);
+  plega.append(num);
+  cap.append(plega);
   if (n.inici != null) {
     const temps = document.createElement("button");
     temps.className = "nota-temps";
+    temps.dataset.focus = `temps-${n.id}`;
     temps.textContent = fmt(muntatgeDe(n.inici));
     temps.title = "Ves a aquest moment del vídeo";
     temps.addEventListener("click", () => vesANota(n));
@@ -4329,7 +4477,12 @@ function elementNota(n, escrit) {
     }
     li.append(p);
   }
-  if (n.estat === "pregunta" || (n.estat === "feta" && respostesObertes.has(n.id))) li.append(formResposta(n, escrit));
+  if (n.estat === "pregunta" && n.al_xat) {
+    const p = document.createElement("p");
+    p.className = "nota-al-xat";
+    p.textContent = "Aquesta pregunta respon-la al xat de Claude, no aquí: és un permís (per exemple, baixar un fitxer d'internet).";
+    li.append(p);
+  } else if (n.estat === "pregunta" || (n.estat === "feta" && respostesObertes.has(n.id))) li.append(formResposta(n, escrit));
   const peu = document.createElement("div");
   peu.className = "nota-peu";
   const xip = document.createElement("span");
@@ -4339,6 +4492,7 @@ function elementNota(n, escrit) {
   const enllac = (text, fn) => {
     const b = document.createElement("button");
     b.className = "enllac";
+    b.dataset.focus = `${text}-${n.id}`;
     b.textContent = text;
     b.addEventListener("click", fn);
     peu.append(b);
@@ -4362,14 +4516,16 @@ function formResposta(n, escrit) {
   Object.assign(camp, { rows: 1, maxLength: 4000, value: escrit,
     placeholder: n.estat === "pregunta" ? "Respon…" : "Què vols que hi canviï?" });
   camp.dataset.id = n.id;
+  camp.dataset.focus = `resposta-${n.id}`;
   camp.setAttribute("aria-label", `Resposta a la nota ${n.id}`);
   const b = document.createElement("button");
   b.type = "submit";
+  b.dataset.focus = `envia-${n.id}`;
   b.className = "boto petit";
   b.textContent = "Envia";
   form.append(camp, b);
   form.addEventListener("submit", (e) => { e.preventDefault(); respon(n.id, camp); });
-  camp.addEventListener("input", () => ajustaAlcada(camp));
+  camp.addEventListener("input", () => { esborranysResposta.set(n.id, camp.value); ajustaAlcada(camp); });
   camp.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); respon(n.id, camp); }
     else if (e.key === "Escape") { e.stopPropagation(); camp.blur(); }
@@ -4399,6 +4555,7 @@ async function respon(id, camp) {
   } finally {
     enviantResposta.delete(id);
   }
+  esborranysResposta.delete(id);
   if (respostesObertes.delete(id)) pintaNotes();
   avis(claudeConnectat ? "Resposta enviada a Claude." : "Resposta desada: Claude la veurà quan miri les notes.");
 }
@@ -4413,11 +4570,11 @@ async function enviaNotes() {
 }
 
 // Si Claude hi és connectat (espera les notes), si hi treballa o si no hi és. Sense notes i sense Claude, no
-// cal dir res. Si s'han enviat notes i Claude no hi és, què li has de dir al xat.
+// cal dir res. Si s'han enviat notes i Claude no hi és (ni hi treballa), què li has de dir al xat.
 function pintaConnexio() {
   const visibles = notesVisibles();
   const treballa = visibles.some((n) => n.estat === "treballant");
-  const espera = visibles.some((n) => n.estat === "enviada");
+  const espera = !treballa && visibles.some((n) => n.estat === "enviada");
   const el = $("#connexio");
   el.hidden = !claudeConnectat && !visibles.length;
   el.classList.toggle("connectat", claudeConnectat);
@@ -4445,17 +4602,18 @@ function pintaMarquesNotes() {
   }
 }
 
+// Des del número de la línia de temps (o del temps d'una nota): el vídeo hi va i la nota s'obre.
 function vesANota(n) {
   if (n.inici != null) {
     if (vista !== "directe") canviaVista("directe");
     vesAOriginal(n.inici);
   }
-  const li = $(`#llista-notes [data-id="${n.id}"]`);
-  if (!li) return;
-  li.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  li.classList.remove("llum");
-  void li.offsetWidth;  // perquè l'animació torni a començar
-  li.classList.add("llum");
+  mostraNota(n.id, { obre: true });
+  const el = $(`#llista-notes [data-id="${n.id}"]`);
+  if (!el) return;
+  el.classList.remove("llum");
+  void el.offsetWidth;  // perquè l'animació torni a començar
+  el.classList.add("llum");
 }
 
 // En començar a escriure, la nota es queda al moment on era el vídeo (i el vídeo s'atura). Sempre on és el
@@ -4524,6 +4682,7 @@ function instalaNotes() {
     else if (e.key === "Escape") { e.stopPropagation(); camp.blur(); }
   });
   $("#nova-nota").addEventListener("submit", (e) => { e.preventDefault(); desaNota(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) notesTornenASortir(); });
   const moment = $("#temps-nota");
   moment.addEventListener("pointerdown", (e) => e.preventDefault());  // que no es perdi el focus del text
   moment.addEventListener("click", () => {
@@ -4531,7 +4690,6 @@ function instalaNotes() {
     else { if (sona()) atura(); momentNota = { tot: true }; pintaMomentNota(); }
     camp.focus();
   });
-  $("#envia-notes").addEventListener("click", enviaNotes);
   $("#copia-frase").addEventListener("click", async () => {
     const frase = $("#frase-connexio").textContent;
     try {

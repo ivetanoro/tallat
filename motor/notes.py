@@ -36,6 +36,7 @@ CONNEXIO = "connexio.json"
 VIU = 15            # segons: si Claude no ha dit res en aquest temps, ja no hi és connectat
 ESPERA_BLOQUEIG = 20  # segons: més, i és que alguna cosa ha anat malament
 REAGAFA = 20 * 60   # segons: una nota agafada fa més temps i sense resposta es torna a donar (Claude es va aturar)
+AGRUPA = 10         # segons: si la persona n'acaba d'enviar una, s'espera aquesta estona per si n'envia més (i van juntes)
 ESTATS = ("esborrany", "enviada", "treballant", "feta", "pregunta")
 
 
@@ -163,7 +164,7 @@ def respon_persona(carpeta: Path, id_: int, text: str) -> dict:
         nota = _troba(notes, id_)
         nota["fil"].append(_missatge("persona", text))
         if nota["estat"] in ("feta", "pregunta"):
-            nota["estat"] = "enviada"
+            nota.update(estat="enviada", enviada_quan=time.time(), al_xat=False)
         return nota
     return _canvia(carpeta, fes)
 
@@ -175,7 +176,7 @@ def envia(carpeta: Path, projecte: str | None = None) -> int:
         n = 0
         for nota in notes:
             if nota["estat"] == "esborrany" and (projecte is None or nota.get("projecte") == projecte):
-                nota["estat"] = "enviada"
+                nota.update(estat="enviada", enviada_quan=time.time())
                 n += 1
         return n
     return _canvia(carpeta, fes)
@@ -208,11 +209,13 @@ def pren(carpeta: Path) -> list[dict]:
     return _canvia(carpeta, fes)
 
 
-def respon(carpeta: Path, id_: int, text: str, pregunta: bool = False, cop: int | None = None) -> dict:
+def respon(carpeta: Path, id_: int, text: str, pregunta: bool = False, cop: int | None = None,
+           al_xat: bool = False) -> dict:
     """La resposta de Claude a una nota: «feta» o, si pregunta alguna cosa, «pregunta». Però si mentrestant la
     persona hi ha escrit alguna cosa que Claude no ha vist, la nota li torna a arribar (amb tota la conversa).
     `cop` diu de quina vegada que se li va donar és la resposta: si és d'una d'abans (la nota s'ha tornat a donar,
-    potser a un altre Claude), la resposta es desa però no la tanca (revisió de Codex)."""
+    potser a un altre Claude), la resposta es desa però no la tanca (revisió de Codex). `al_xat`: és una pregunta
+    que s'ha de respondre al xat (un permís, com baixar un fitxer d'internet), i la pàgina ho diu."""
     def fes(notes):
         nota = _troba(notes, id_)
         vella = cop is not None and cop != nota.get("cops", 0)
@@ -220,7 +223,10 @@ def respon(carpeta: Path, id_: int, text: str, pregunta: bool = False, cop: int 
         noves = any(m["de"] == "persona" for m in nota["fil"][vistos:])
         nota["fil"].append(_missatge("claude", text))
         if not vella:
-            nota["estat"] = "enviada" if noves else "pregunta" if pregunta else "feta"
+            if noves:
+                nota.update(estat="enviada", enviada_quan=time.time(), al_xat=False)
+            else:
+                nota.update(estat="pregunta" if pregunta or al_xat else "feta", al_xat=bool(al_xat))
         return nota
     return _canvia(carpeta, fes)
 
@@ -263,12 +269,20 @@ def espera(carpeta: Path, segons: float, cada: float = 1.0, avis=None) -> list[d
     try:
         while True:
             marca_connexio(carpeta)
-            preses = pren(carpeta)
-            if preses or time.time() >= fi:
-                return preses
+            # Si n'acaba d'enviar una, s'espera una mica: qui les envia d'una en una les té juntes en una sola tongada.
+            if time.time() >= fi or not _acabades_d_enviar(carpeta):
+                preses = pren(carpeta)
+                if preses or time.time() >= fi:
+                    return preses
             time.sleep(min(cada, max(0.0, fi - time.time())))
     finally:
         deixa_connexio(carpeta)
+
+
+def _acabades_d_enviar(carpeta: Path) -> bool:
+    ara = time.time()
+    with _bloquejat(carpeta):
+        return any(n["estat"] == "enviada" and ara - n.get("enviada_quan", 0) < AGRUPA for n in _llegeix(carpeta)["notes"])
 
 
 def id_per_respondre(nota: dict) -> str:

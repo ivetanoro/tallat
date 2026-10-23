@@ -55,7 +55,7 @@ Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre 
 .venv/bin/python tallat.py grafics --projecte CARPETA [--json]
 .venv/bin/python tallat.py grafics proposa|canvia PLA.json --projecte CARPETA [--de-nou]
 .venv/bin/python tallat.py grafics fotogrames --projecte CARPETA
-.venv/bin/python tallat.py notes --projecte CARPETA [--espera [--minuts 60] | --respon NÚMERO "TEXT" [--pregunta]]
+.venv/bin/python tallat.py notes --projecte CARPETA [--espera [--minuts 60] | --respon NÚMERO "TEXT" [--pregunta | --al-xat]]
 ```
 
 La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que diu la persona no es publiquen mai).
@@ -280,11 +280,14 @@ Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o Cap
 
 ## Notes de la pàgina
 
-A sota del vídeo, la persona et deixa notes («aquí, un rètol que digui…», «els subtítols, més grans»). Cada una va al moment on era el vídeo (a la paraula que sonava) o a tot el vídeo. Quan acaba de revisar, toca **Envia a Claude**. Mentre tu les esperes, la pàgina diu **«Connectat amb Claude»**.
+A sota del vídeo, la persona et deixa notes («aquí, un rètol que digui…», «els subtítols, més grans»). Cada una va al moment on era el vídeo (a la paraula que sonava) o a tot el vídeo. Quan acaba de revisar, toca **Envia a Claude**. Mentre tu les esperes, la pàgina diu **«Connectat amb Claude»**. Si n'envia més mentre en fas unes, a la pàgina queden «A la cua» i et tornen a arribar quan tornes a esperar; si les envia d'una en una seguides, l'espera dona uns segons i te les dona juntes.
 
 - **Espera-les sempre que la pàgina estigui oberta.** Just després d'obrir-la amb `revisa`, executa `tallat.py notes --projecte X --espera --minuts 60` **en segon pla** (a Claude Code, amb l'ordre en segon pla: t'avisa quan acaba). A Codex, que no té segon pla, fes-ho en acabar cada resposta, amb `--minuts 9` (el màxim que s'hi pot esperar).
 - Quan l'ordre acaba amb notes, fes-les **a la carpeta que diu cada nota** (la del reel, si és d'un reel). La nota diu el segon del vídeo (el que la persona veu sota el vídeo, el que fa servir `tallat.py moment`), el de la gravació, el número de la paraula i què es diu al voltant.
 - **Respon cada nota** amb una frase curta del que has fet: `tallat.py notes --projecte X --respon NÚMERO "Fet: …"`, amb el número que diu la nota a «Per respondre-la» (p. ex. `3.1`). La persona ho veu a sota de la nota. Si no ho tens clar, o el canvi és gros (esborrar un reel, tornar a tallar molt), no ho facis: pregunta-ho amb `--respon NÚMERO "…?" --pregunta`. La seva resposta et torna a arribar com una nota, amb tota la conversa.
+- **Al xat, una sola línia per tongada** («He fet les 3 notes de la pàgina; les respostes són a sota de cada nota»): el detall ja és a la pàgina, i si no, el xat s'omple i s'encavalca amb el que la persona t'hi escriu.
+- A les respostes, digues **on** amb la paraula («quan dius *és igual*») més que amb el segon: si la persona treu o recupera trossos, els segons canvien i la paraula no.
+- **Enllaços a les notes:** baixar un fitxer d'internet només ho fas si la persona t'ho diu **al xat** (no n'hi ha prou amb la nota). Pregunta-ho al xat (nom del fitxer, d'on ve) i respon la nota amb `--respon NÚMERO "T'ho pregunto al xat." --al-xat`: la pàgina li diu que respongui al xat. Si la imatge és d'una marca, un personatge o un artista, avisa que pot tenir drets d'autor (ho decideix ella). Els enllaços d'Instagram (i molts de TikTok) no es poden veure sense iniciar sessió: demana-li que t'expliqui l'efecte o que guardi el vídeo o una captura a la carpeta del vídeo.
 - Després, **torna a esperar-les** (`--espera`, en segon pla, un altre cop). Si l'espera s'acaba sense notes, torna-la a llançar mentre la pàgina estigui oberta i la persona no t'hagi dit que ha acabat.
 - Si la persona et diu **«mira les meves notes»** (la pàgina li ho proposa quan tu no hi ets connectat), executa `tallat.py notes --projecte X --espera --minuts 0.1`: agafa de seguida les que ja ha enviat. Sense `--espera`, `tallat.py notes --projecte X` les llista totes amb el seu estat.
 

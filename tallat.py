@@ -24,7 +24,7 @@
   python tallat.py grafics fotogrames --projecte CARPETA        (el fotograma de cada gràfic, per triar-ne el lloc)
   python tallat.py grafics captura URL [--grafic g3] --projecte CARPETA  (la captura d'una web, per al gràfic «web»)
   python tallat.py notes --projecte CARPETA [--espera [--minuts 9]]      (les notes de la pàgina per a l'assistent)
-  python tallat.py notes --projecte CARPETA --respon NÚMERO "TEXT" [--pregunta]
+  python tallat.py notes --projecte CARPETA --respon NÚMERO "TEXT" [--pregunta | --al-xat]
 
 La carpeta del projecte ha de ser fora del repositori (els vídeos i el que dius no es publiquen).
 """
@@ -653,7 +653,7 @@ def ordre_notes(args) -> None:
         id_, text = args.respon
         try:  # «3» o «3.2» (la nota 3, la segona vegada que se t'ha donat: la que diu --espera)
             num, _, cop = id_.partition(".")
-            notes.respon(carpeta, int(num), text, pregunta=args.pregunta, cop=int(cop) if cop else None)
+            notes.respon(carpeta, int(num), text, pregunta=args.pregunta, cop=int(cop) if cop else None, al_xat=args.al_xat)
         except (KeyError, ValueError) as e:
             sys.exit(str(e).strip("'\""))
         print(f"Resposta desada a la nota {num}: la persona la veu a la pàgina.")
@@ -951,6 +951,8 @@ def main() -> None:
     no.add_argument("--minuts", type=float, default=9, help="Amb --espera: com a molt quant temps (per defecte, 9)")
     no.add_argument("--respon", nargs=2, metavar=("NÚMERO", "TEXT"), help="Respon una nota (el número que diu --espera, p. ex. 3.1)")
     no.add_argument("--pregunta", action="store_true", help="Amb --respon: és una pregunta, que la persona ha de contestar")
+    no.add_argument("--al-xat", action="store_true",
+                    help="Amb --respon: la pregunta (un permís) es respon al xat; la pàgina li ho diu")
     no.set_defaults(func=ordre_notes)
 
     args = p.parse_args()
