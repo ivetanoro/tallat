@@ -59,6 +59,7 @@ class Projecte:
         self.dades = json.loads(self.fitxer(TRANSCRIPCIO).read_text(encoding="utf-8"))
         self.estat = self._carrega_estat()
         self._versio_al_disc = self._versio_estat()
+        self._instruccions_al_disc = self._versio_instruccions()
 
     @property
     def nom(self) -> str:
@@ -104,16 +105,31 @@ class Projecte:
         except OSError:
             return None
 
+    def _versio_instruccions(self):
+        try:
+            return (self.carpeta_instruccions() / instruccions.FITXER).stat().st_mtime_ns
+        except OSError:
+            return None
+
+    def _desa_instruccions(self, carpeta: Path, llista: list[dict]) -> None:
+        instruccions.desa(carpeta, llista)
+        self._instruccions_al_disc = self._versio_instruccions()  # és d'aquí: no és un canvi de fora
+
     def al_dia(self) -> bool:
-        """Si algú altre ha canviat edicio.json (Claude, amb una ordre, mentre la pàgina és oberta),
-        el torna a llegir. La revisió puja: la pàgina, en desar, veurà que hi ha canvis més nous."""
+        """Si algú altre ha canviat edicio.json o instruccions.json (Claude, amb una ordre, mentre la pàgina és
+        oberta: posar un zoom o un sticker només toca les instruccions), ho torna a llegir. La revisió puja: la
+        pàgina ho veu i es posa al dia, i en desar veurà que hi ha canvis més nous."""
         versio = self._versio_estat()
-        if versio is None or versio == self._versio_al_disc:
+        ins = self._versio_instruccions()
+        canvi_estat = versio is not None and versio != self._versio_al_disc
+        if not canvi_estat and ins == self._instruccions_al_disc:
             return False
         revisio = self.estat.get("revisio", 0)
-        self.estat = self._carrega_estat()
+        if canvi_estat:
+            self.estat = self._carrega_estat()
+            self._versio_al_disc = versio
         self.estat["revisio"] = max(self.estat.get("revisio", 0), revisio) + 1
-        self._versio_al_disc = versio
+        self._instruccions_al_disc = ins
         return True
 
     def paraules(self) -> list[dict]:
@@ -391,7 +407,7 @@ class Projecte:
     def detecta_instruccions(self) -> list[dict]:
         """Detecta les instruccions «Claude, …», les treu del vídeo i en desa les propostes."""
         noves = instruccions.fusiona(instruccions.detecta(self.dades["paraules"]), self.instruccions())
-        instruccions.desa(self.carpeta_instruccions(), noves)
+        self._desa_instruccions(self.carpeta_instruccions(), noves)
         self.estat = instruccions.aplica_a_estat(self.estat, noves)
         return noves
 
@@ -403,7 +419,7 @@ class Projecte:
             raise KeyError(iid)
         ins["estat"] = nou_estat
         self.estat = instruccions.aplica_decisio(self.estat, ins)
-        instruccions.desa(self.carpeta_instruccions(), llista)
+        self._desa_instruccions(self.carpeta_instruccions(), llista)
         return llista
 
     def carpeta_instruccions(self) -> Path:
@@ -426,7 +442,7 @@ class Projecte:
             self.desa()
         llista.append(ins)
         llista.sort(key=lambda i: i["inici"])
-        instruccions.desa(self.carpeta_instruccions(), llista)
+        self._desa_instruccions(self.carpeta_instruccions(), llista)
         return ins
 
     def assigna_broll(self, iid: str, origen: Path, durada: float | None = None) -> dict:
@@ -443,7 +459,7 @@ class Projecte:
         # Amb barres «/» (as_posix): el mateix projecte s'ha de poder obrir al Mac i a Windows.
         ins.update(fitxer=clip.relative_to(base).as_posix(), original=original.relative_to(base).as_posix(),
                    durada=d, estat="acceptada", tipus="broll")
-        instruccions.desa(base, llista)
+        self._desa_instruccions(base, llista)
         return ins
 
     def treu_broll(self, iid: str) -> None:
@@ -452,7 +468,7 @@ class Projecte:
         for ins in llista:
             if ins["id"] == iid:
                 ins.pop("fitxer", None)
-        instruccions.desa(self.carpeta_instruccions(), llista)
+        self._desa_instruccions(self.carpeta_instruccions(), llista)
 
     def assigna_sticker(self, iid: str, origen: Path, durada: float | None = None) -> dict:
         llista = self.instruccions()
@@ -466,7 +482,7 @@ class Projecte:
         d = float(durada or ins.get("durada") or self.estil().get("stickers", {}).get("durada", 2.0))
         copia = stickers.copia(origen, base, iid)
         ins.update(fitxer=copia.relative_to(base).as_posix(), durada=d, estat="acceptada", tipus="sticker")
-        instruccions.desa(base, llista)
+        self._desa_instruccions(base, llista)
         stickers.retira_anteriors(copia)
         return ins
 

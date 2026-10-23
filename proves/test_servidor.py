@@ -145,6 +145,15 @@ class TestServidor(unittest.TestCase):
         self.assertEqual(afegeix(2.03)[0], 200)
         self.assertEqual(afegeix(2.5)[0], 400)
 
+    def test_un_zoom_posat_des_del_xat_arriba_a_la_pagina_oberta(self):
+        # Posar un zoom o un sticker amb una ordre només toca instruccions.json: la pàgina oberta també ho ha de saber.
+        abans = json.loads(self.peticio("GET", "/api/novetats")[1])["revisio"]
+        Projecte(self.carpeta).afegeix_instruccio("zoom", 2, "més a prop", None)
+        self.assertGreater(json.loads(self.peticio("GET", "/api/novetats")[1])["revisio"], abans)
+        # I el que la pàgina mateixa canvia no compta com un canvi de fora.
+        ara = json.loads(self.peticio("GET", "/api/novetats")[1])["revisio"]
+        self.assertEqual(json.loads(self.peticio("GET", "/api/novetats")[1])["revisio"], ara)
+
     def test_les_imatges_dels_grafics(self):
         from motor import grafics
         p = Projecte(self.carpeta)
