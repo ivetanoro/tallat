@@ -649,6 +649,7 @@ button.opcio-export:active { transform: scale(0.98); }
   container-type: size;
   display: grid; place-items: center;
   margin-top: var(--e1);
+  isolation: isolate;  /* els vídeos de sota (z-index -1) no surten de la pantalla */
 }
 .pantalla video {
   grid-area: 1 / 1;
@@ -657,7 +658,11 @@ button.opcio-export:active { transform: scale(0.98); }
   border-radius: var(--radi-gran); background: #000; box-shadow: var(--ombra);
   object-fit: cover; overflow: hidden;
 }
-.pantalla video.amagat { visibility: hidden; opacity: 0; }
+/* Els vídeos que no es veuen queden just a sota del que es veu, tapats (també pel bloc de color, que els queda a
+   sobre), en lloc d'amagats: el Safari no deixa preparar un vídeo amagat (saltar al punt, sonar en silenci), i la
+   còpia sense salts no arribava mai a prendre el relleu. */
+.pantalla video { z-index: 0; }
+.pantalla video.amagat { z-index: -1; pointer-events: none; }
 /* Zoom (instrucció de veu acceptada): ampliem el vídeo i en retallem les vores
    perquè la caixa arrodonida es quedi igual. */
 .pantalla video.zoom {

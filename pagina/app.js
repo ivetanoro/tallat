@@ -1008,6 +1008,11 @@ function passaAMuntatgeSonant() {
   };
   const deNou = () => { deixa(); passaAMuntatgeSonant(); };
   M.muted = true;
+  // Si el salt del continu no acaba (el Safari, de vegades), no s'espera per sempre: es torna a provar (com a molt
+  // 3 cops; si no, es canvia quan s'aturi).
+  setTimeout(() => {
+    if (viu() && R.preparant === intent && M.seeking) { registre("salt-continu-encallat", { video: ev(M) }); deNou(); }
+  }, 2500);
   M.addEventListener("seeked", () => {
     const espera = () => {
       if (!viu()) { deixa(); return; }
@@ -1376,7 +1381,9 @@ function pintaCarrega() {
     carrega.visible = encallat;
     $("#carregant").hidden = !encallat;
   }
-  const preparant = vista === "directe" && R.reproduint && !continu() && trams.length > 1;
+  // Només mentre de debò es prepara: si ja s'ha provat tres cops mentre sonava, es canviarà quan s'aturi.
+  const preparant = vista === "directe" && R.reproduint && !continu() && trams.length > 1
+    && (!previaAPunt() || intentsSonant < 3);
   if ($("#preparant").hidden === preparant) $("#preparant").hidden = !preparant;
 }
 
