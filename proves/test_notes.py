@@ -96,6 +96,8 @@ class TestNotes(unittest.TestCase):
         notes.respon(self.carpeta, 1, "Fet: blau.", cop=1)
         nota = notes.llegeix(self.carpeta)["notes"][0]
         self.assertEqual((nota["estat"], nota["fil"][-1]["text"]), ("treballant", "Fet: blau."))
+        with self.assertRaises(ValueError):  # un número de vegada que no existeix no la deixa encallada en silenci
+            notes.respon(self.carpeta, 1, "Fet.", cop=de_b["cops"] + 1)
         notes.respon(self.carpeta, 1, "Fet: vermell.", cop=de_b["cops"])
         self.assertEqual(notes.llegeix(self.carpeta)["notes"][0]["estat"], "feta")
 

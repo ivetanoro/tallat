@@ -218,6 +218,9 @@ def respon(carpeta: Path, id_: int, text: str, pregunta: bool = False, cop: int 
     que s'ha de respondre al xat (un permís, com baixar un fitxer d'internet), i la pàgina ho diu."""
     def fes(notes):
         nota = _troba(notes, id_)
+        if cop is not None and cop > nota.get("cops", 0):  # una vegada que no ha passat: no es pot deixar encallada
+            raise ValueError(f"La nota {id_} només se t'ha donat {nota.get('cops', 0)} cops: "
+                             f"respon amb {id_per_respondre(nota)}.")
         vella = cop is not None and cop != nota.get("cops", 0)
         vistos = nota.get("vistos", len(nota["fil"]))
         noves = any(m["de"] == "persona" for m in nota["fil"][vistos:])
