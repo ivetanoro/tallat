@@ -864,7 +864,7 @@ function actualitzaPropostes() {
 // (#video-m), que sona sense salts: als salts, el Safari s'encalla uns quants dècims de segon.
 // (Vam provar dos vídeos alternats a cada tall, però al Safari el segon deixava de dir per on anava.)
 const R = { v: $("#video-a"), proxy: $("#video-a"), muntatge: $("#video-m"), k: 0, reproduint: false, aturaA: null,
-  vigila: { t: -1, des: 0 }, salt: null, recarrega: null, preparant: null, posat: false };
+  vigila: { t: -1, des: 0 }, rescats: null, salt: null, recarrega: null, preparant: null, posat: false };
 const continu = () => R.v === R.muntatge;
 let previaLlesta = null;  // {url, trams (JSON)} quan #video-m ja té el muntatge dels talls d'ara
 let esperaPrevia = null;  // el temporitzador de la petició
@@ -935,6 +935,7 @@ function activaMuntatge(m) {
   M.playbackRate = 1;
   R.proxy.pause();
   R.salt = null;
+  R.rescats = null;
   R.repren = false;
   R.v = M;
   R.k = trosDe(m);
@@ -946,6 +947,8 @@ function activaMuntatge(m) {
 // Només a la vista en directe: a la de l'esborrany, el temps és el d'un altre vídeo.
 function passaAMuntatge() {
   if (continu() || !previaAPunt() || R.reproduint || vista !== "directe") return;
+  // Mai un salt a sobre d'un altre (el Safari s'hi encalla i després ja no diu per on va): primer, que acabi.
+  if (R.muntatge.seeking) { R.muntatge.addEventListener("seeked", passaAMuntatge, { once: true }); return; }
   const intent = ++intentCanvi;
   R.preparant = intent;  // el continu és d'aquest intent: els d'abans ja no el poden tocar
   const m = tempsMuntatge();
@@ -971,6 +974,7 @@ let intentsSonant = 0;  // intents seguits sense poder sincronitzar (el Mac va m
 function passaAMuntatgeSonant() {
   if (continu() || !previaAPunt() || !R.reproduint || vista !== "directe") return;
   if (intentsSonant >= 3) return;  // ja es canviarà quan s'aturi (passaAMuntatge)
+  if (R.muntatge.seeking) return;  // encara salta (un salt a sobre d'un altre l'encallaria): quan s'aturi
   intentsSonant++;
   const intent = ++intentCanvi;
   R.preparant = intent;
@@ -1048,6 +1052,8 @@ function passaAProxy(tOriginal) {
   if (!continu()) return;
   oblidaRecarrega();
   R.muntatge.pause();
+  R.salt = null;  // un salt del continu que esperava: ja no és d'aquest vídeo
+  R.rescats = null;
   R.v = R.proxy;
   mostraVideoActiu();
   // El salt el fa posaTemps: si sona, continua sonant quan el salt ha acabat (no abans: el Safari s'encalla).
@@ -1196,7 +1202,7 @@ function tempsMuntatge() {
   if (escoltant) return escoltant.inici + Math.min(vEsc.currentTime, escoltant.durada);
   if (vista === "esborrany") return vE.currentTime || 0;
   if (!trams.length) return 0;
-  if (continu()) return Math.min(R.recarrega ?? R.v.currentTime, duradaFinal);
+  if (continu()) return Math.min(tempsVideo(), duradaFinal);
   const k = Math.min(R.k, trams.length - 1);
   const [a, b] = trams[k];
   return acum[k] + limita(tempsVideo() - a, 0, b - a);
@@ -1215,7 +1221,10 @@ function vesA(m) {
   R.k = k;
   if (continu()) {
     if (R.recarrega != null) R.recarrega = m;  // s'hi anirà quan s'acabi de recarregar
-    else R.v.currentTime = m;
+    // Arrossegant la barra arriben trenta salts per segon: si n'hi ha un en marxa, només es fa l'últim
+    // quan acabi (un a sobre de l'altre encallaven el Safari: sonava, però el temps no avançava).
+    else if (R.v.seeking) R.salt = m;
+    else { R.salt = null; R.v.currentTime = m; }
     registre("vesA", { m: +m.toFixed(3), k, continu: true });
     return;
   }
@@ -1267,7 +1276,8 @@ function reprodueix() {
   R.proxy.volume = 1;  // si s'havia aturat enmig d'un fos
   if (vista === "esborrany") { vE.play(); return; }
   if (!trams.length) return;
-  if (!continu() && previaAPunt()) {  // el continu és a punt: hi passem ja, abans de començar
+  // El continu és a punt (i no salta encara: un salt a sobre d'un altre l'encallaria): hi passem ja.
+  if (!continu() && previaAPunt() && !R.muntatge.seeking) {
     const m = R.posat && tempsMuntatge() < duradaFinal - 0.05 ? tempsMuntatge() : 0;
     activaMuntatge(m);
     if (Math.abs(R.v.currentTime - m) < 0.01) mostraVideoActiu();
@@ -1334,6 +1344,34 @@ function oblidaRecarrega() {
   R.recarrega = null;
 }
 
+// Quantes vegades seguides l'hem hagut de despertar al mateix lloc. Abans, el salt encallat i el vídeo
+// congelat es despertaven l'un a l'altre per torns i el comptador tornava a zero a cada torn: el Safari
+// es quedava així per sempre (sonava, però el temps i els subtítols no avançaven).
+function rescat() {
+  const t = tempsVideo();
+  if (R.rescats && Math.abs(t - R.rescats.t) < 0.3) R.rescats.n++;
+  else R.rescats = { t, n: 1 };
+  return R.rescats.n;
+}
+
+// Tres vegades al mateix lloc: el vídeo continu es deixa per la còpia que salta (que funciona) i es
+// tornarà a carregar de nou amb el canvi següent; la còpia, es recarrega.
+function rendeixte() {
+  const objectiu = tempsVideo();
+  R.rescats = null;
+  R.vigila.salt = null;
+  registre("rendeix", { continu: continu(), video: ev(R.v) });
+  if (continu()) {
+    previaLlesta = null;
+    R.muntatge.dataset.url = "";  // la propera vista prèvia el torna a carregar sencer
+    passaAProxy(originalDe(objectiu));
+  } else {
+    R.salt = null;
+    recarregaVideo(objectiu);
+    R.vigila.salt = { des: performance.now() + 3000, intents: 0 };
+  }
+}
+
 // Vigilant: si el vídeo diu que sona però el seu temps no avança, o un salt no acaba mai,
 // el despertem (el Safari, de vegades, es queda esperant).
 function vigila() {
@@ -1344,10 +1382,12 @@ function vigila() {
     R.vigila.salt ??= { des: performance.now(), intents: 0 };
     if (performance.now() - R.vigila.salt.des > 800) {
       const objectiu = tempsVideo();
-      R.salt = null;
       R.vigila.salt.intents++;
       registre("salt-encallat", { intents: R.vigila.salt.intents, video: ev(R.v) });
-      if (R.vigila.salt.intents >= 2) {  // segon intent: recarreguem el vídeo i hi tornem
+      if (rescat() >= 3) { rendeixte(); return; }
+      R.salt = null;
+      // El vídeo continu es recarrega de seguida: un salt a sobre del que no acaba l'encalla més.
+      if (continu() || R.vigila.salt.intents >= 2) {  // la còpia: al segon intent
         recarregaVideo(objectiu);
         R.vigila.salt = { des: performance.now() + 3000, intents: 0 };
       } else {
@@ -1360,10 +1400,12 @@ function vigila() {
   R.vigila.salt = null;
   if (!R.reproduint || R.v.paused || R.v.seeking || R.v.readyState < 3) { R.vigila.des = performance.now(); return; }
   const t = R.v.currentTime;
+  if (R.rescats && t > R.rescats.t + 0.3) R.rescats = null;  // ara sí que avança
   if (t !== R.vigila.t) { R.vigila = { t, des: performance.now() }; return; }
   if (performance.now() - R.vigila.des > 600) {
     registre("congelat", { video: ev(R.v) });
     R.vigila.des = performance.now();
+    if (rescat() >= 3) { rendeixte(); return; }
     R.v.currentTime = t + 0.001;
   }
 }
@@ -2519,6 +2561,13 @@ function instalaReproductor() {
   R.proxy.addEventListener("error", () => avis("No puc obrir la còpia lleugera del vídeo (proxy.mp4)."));
   // Si el vídeo continu falla, es continua amb la còpia que salta.
   R.muntatge.addEventListener("error", () => { previaLlesta = null; if (continu()) passaAProxy(originalDe(tempsMuntatge())); });
+  // El salt del vídeo continu que esperava que acabés l'anterior (vegeu vesA).
+  R.muntatge.addEventListener("seeked", () => {
+    if (!continu() || R.salt == null || R.recarrega != null) return;
+    const m = R.salt;
+    R.salt = null;
+    R.muntatge.currentTime = m;
+  });
   // Si la pàgina deixa de veure's, el navegador alenteix els salts: parem perquè no soni el que s'ha tret.
   document.addEventListener("visibilitychange", () => { if (document.hidden && sona()) atura(); });
   // Primer salt quan ja hi ha dades (no només la informació general): el Safari ho agraeix.
