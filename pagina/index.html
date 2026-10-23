@@ -683,6 +683,10 @@
       <button class="gran-play" id="gran-play" aria-label="Reprodueix">
         <svg viewBox="0 0 40 40"><path d="M15 11.5v17l13-8.5z"/></svg>
       </button>
+      <!-- Si el vídeo s'encalla una estona (carrega, o un salt lent), una rodeta: que es vegi que carrega. I mentre
+           sona la còpia que salta de tros en tros, que es digui que s'està preparant la que no salta. -->
+      <div class="carregant" id="carregant" hidden><span class="roda-carrega" aria-hidden="true"></span><span class="text-carrega">Carregant…</span></div>
+      <div class="preparant" id="preparant" role="status" hidden>Preparant el vídeo sense salts…</div>
     </div>
     <div class="marques-notes" id="marques-notes" aria-label="Notes per a Claude al vídeo" hidden></div>
     <div class="linia-temps" id="linia-temps" role="slider" aria-label="Posició" tabindex="0">
@@ -752,7 +756,8 @@
     </div>
     <div class="revisa-cos" id="revisa-cos" hidden>
       <div class="revisa-monitor">
-        <div class="revisa-pantalla"><video id="video-revisa" playsinline preload="auto"></video></div>
+        <div class="revisa-pantalla"><video id="video-revisa" playsinline preload="auto"></video>
+          <div class="carregant" id="carregant-revisa" hidden><span class="roda-carrega" aria-hidden="true"></span><span class="text-carrega">Carregant…</span></div></div>
         <div class="revisa-barra" id="revisa-barra">
           <div class="marques-notes" id="marques-revisa" aria-label="Notes d'aquesta versió"></div>
           <div class="linia-temps" id="linia-revisa" role="slider" aria-label="Posició" tabindex="0">

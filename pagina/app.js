@@ -1455,7 +1455,26 @@ function bucle() {
   pintaStickers();
   sonaEfectes();
   pintaMarcCapa();
+  pintaCarrega();
   R.v.classList.toggle("zoom", vista === "directe" && !!zoomsTram[Math.min(R.k, trams.length - 1)]);
+}
+
+// Si el vídeo que sona no avança durant més de 0,3 s (carrega, o un salt lent del Safari), surt la rodeta: que es
+// vegi que carrega i no sembli que tallat va malament. Per sota, no (a cada tall faria pampallugues). I mentre
+// sona la còpia que salta de tros en tros (just després d'un canvi), el rètol diu que es prepara la que no salta.
+let carrega = { t: -1, des: 0, visible: false };
+function pintaCarrega() {
+  const v = vista === "esborrany" ? vE : R.v;
+  const ara = performance.now();
+  let encallat = false;
+  if (!sona() || escoltant || v.currentTime !== carrega.t) carrega = { ...carrega, t: v.currentTime, des: ara };
+  else encallat = ara - carrega.des > 300;
+  if (encallat !== carrega.visible) {
+    carrega.visible = encallat;
+    $("#carregant").hidden = !encallat;
+  }
+  const preparant = vista === "directe" && R.reproduint && !continu() && trams.length > 1 && !escoltant;
+  if ($("#preparant").hidden === preparant) $("#preparant").hidden = !preparant;
 }
 
 // --- Subtítols en directe ------------------------------------------------------------------------
@@ -5047,6 +5066,15 @@ function instalaRevisa() {
   for (const nom of ["timeupdate", "seeked", "loadedmetadata", "play", "pause"]) v.addEventListener(nom, pintaTempsRevisa);
   v.addEventListener("loadedmetadata", () => { pintaNotesRevisa(); ajustaBarraRevisa(); });  // els números necessiten la durada
   const bucle = () => { if (!v.paused) { pintaTempsRevisa(); requestAnimationFrame(bucle); } };
+  let esperaCarrega = null;
+  const carregant = (si) => {
+    clearTimeout(esperaCarrega);
+    if (si) esperaCarrega = setTimeout(() => { $("#carregant-revisa").hidden = false; }, 300);
+    else $("#carregant-revisa").hidden = true;
+  };
+  v.addEventListener("waiting", () => carregant(!v.paused));
+  v.addEventListener("seeking", () => carregant(!v.paused));
+  for (const nom of ["playing", "seeked", "pause", "canplay", "emptied"]) v.addEventListener(nom, () => carregant(false));
   v.addEventListener("play", () => requestAnimationFrame(bucle));
   const commuta = () => { v.paused ? v.play().catch(() => {}) : v.pause(); };
   v.addEventListener("click", commuta);

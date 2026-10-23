@@ -903,6 +903,29 @@ body.reproduint .play .si-play { display: block; }
 .boto.suau { background: var(--accent-suau); color: var(--accent); font-weight: 600; }
 .boto.suau:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .boto.ample { flex: none; width: 100%; height: 32px; }
+/* Carregant: una rodeta damunt del vídeo quan s'encalla (com als reproductors de sempre), i un rètol quan sona la
+   còpia que salta mentre es prepara la que no. Tots dos, a sobre del vídeo i sense tapar els clics. */
+.carregant {
+  position: absolute; inset: 0; z-index: 4; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--e2);
+  animation: apareix 150ms ease-out;
+}
+.roda-carrega {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.35); border-top-color: #fff;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.45)); animation: gira-nota 0.9s linear infinite;
+}
+.text-carrega { color: #fff; font-size: var(--t-petit); font-weight: 600; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
+@media (prefers-reduced-motion: reduce) { .roda-carrega { animation: none; } }
+.preparant {
+  position: absolute; left: 50%; z-index: 4; transform: translateX(-50%); pointer-events: none;
+  top: calc((100cqh - min(100cqh, 100cqw * 16 / 9)) / 2 + var(--e3));
+  padding: 5px var(--e3); border-radius: var(--radi); background: rgba(29, 29, 31, 0.78); color: #fff;
+  font-size: var(--t-peu); font-weight: 500; white-space: nowrap;
+  animation: apareix-tard 1.2s ease-out;  /* si el canvi és ràpid, ni es veu */
+}
+@keyframes apareix-tard { 0%, 50% { opacity: 0; } 100% { opacity: 1; } }
+
 /* --- Revisa: l'esborrany gran a l'esquerra, les notes de la versió a la dreta ------------------------------- */
 body.revisant { grid-template-columns: minmax(0, 1fr); }
 body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revisant .divisor { display: none !important; }
