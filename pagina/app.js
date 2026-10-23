@@ -1109,12 +1109,12 @@ const tempsVideo = () => R.recarrega ?? R.salt ?? R.v.currentTime;  // on serà 
 
 // --- Escoltar cada tall ---------------------------------------------------------------------
 // En treure o recuperar paraules amb el vídeo aturat, el reproductor fa sonar uns segons
-// al voltant del tall perquè se senti l'efecte al moment.
+// al voltant del tall perquè se senti l'efecte al moment. Sempre: el botó per apagar-ho ocupava un lloc
+// sota el vídeo que ara és de les notes, i gairebé ningú no l'apagava.
 let escoltaPendent = null;
-let escoltaActiva = (() => { try { return localStorage.getItem("tallat.escolta") !== "no"; } catch { return true; } })();
 
 function demanaEscolta(id) {
-  if (!escoltaActiva || sona()) return;
+  if (sona()) return;
   escoltaPendent = P.paraules[id].inici;
   if (vista !== "directe") {
     canviaVista("directe");
@@ -2674,7 +2674,6 @@ function canviaVista(nova) {
   const directe = vista === "directe";
   mostraVideoActiu();
   vE.classList.toggle("amagat", directe);
-  $("#escolta").hidden = !directe;
   if (directe) { pintaMarques(trams, acum, duradaFinal); passaAMuntatge(); }
   else if (esborrany) pintaMarques(esborrany.trams || [], esborrany.acum || [], esborrany.durada);
   pintaMarquesNotes();
@@ -3761,10 +3760,9 @@ function instalaTecles() {
 const PASSES_GUIA = [
   ["#tria-reel", "Aquí tries què edites: el vídeo sencer o un dels reels que t'ha proposat Claude."],
   ["#seccio-revisar", "Aquí hi ha el que t'ha proposat tallat: les instruccions de veu i les paraules que potser vols treure."],
-  [".text", `Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫. A sobre ` +
-    `surt una barreta per destacar-les (${tecla("⌘B")}) o corregir-les (${tecla("↩")}).`],
-  ["#escolta", "Quan treus una paraula, sonen uns segons al voltant del tall perquè sentis com queda, i s'atura. " +
-    "Si no ho vols, apaga això."],
+  [".text", `Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫: sonarà ` +
+    `el tall perquè sentis com queda. A sobre surt una barreta per destacar-les (${tecla("⌘B")}) o corregir-les ` +
+    `(${tecla("↩")}).`],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
   ["#notes", "Per demanar-li coses a Claude: atura el vídeo on vulguis, escriu una nota (o prem N) i, quan acabis, " +
     "toca Envia a Claude. Claude les fa i et respon a sota de cada una."],
@@ -5177,14 +5175,6 @@ function instalaControls() {
     canvia((e) => { e.subtitols = e.subtitols === false; });
     marcaSubtitols();
     avis(estat.subtitols ? "Els renders portaran subtítols." : "Els renders sortiran sense subtítols.");
-  });
-  const interruptor = $("#escolta");
-  interruptor.setAttribute("aria-checked", String(escoltaActiva));
-  interruptor.addEventListener("click", () => {
-    escoltaActiva = !escoltaActiva;
-    interruptor.setAttribute("aria-checked", String(escoltaActiva));
-    try { localStorage.setItem("tallat.escolta", escoltaActiva ? "si" : "no"); } catch { /* sense memòria del navegador */ }
-    avis(escoltaActiva ? "Sentiràs cada tall en fer-lo." : "Ja no sonarà res en fer un tall.");
   });
   $("#desfes").addEventListener("click", desfes);
   $("#refes").addEventListener("click", refes);
