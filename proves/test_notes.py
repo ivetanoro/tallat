@@ -46,6 +46,8 @@ class TestNotes(unittest.TestCase):
         self.assertEqual(notes.llegeix(self.carpeta)["notes"][0]["estat"], "enviada")
         nota = notes.pren(self.carpeta)[0]
         self.assertEqual([m["text"] for m in nota["fil"]], ["canvia el color", "De quin color el vols?", "blau"])
+        # Li arriba per segon cop perquè la persona hi ha respost, no perquè Claude no l'hagués resposta.
+        self.assertNotIn("Ja te l'havia donat", notes.text_per_a_claude(nota, lambda t: "0:00"))
         text = notes.text_per_a_claude(nota, lambda t: "0:00")
         self.assertIn("Nota 1 (per a tot el vídeo)", text)
         nota["inici"] = 7.9

@@ -197,7 +197,9 @@ def pren(carpeta: Path) -> list[dict]:
         preses = []
         for nota in notes:
             if _per_agafar(nota, ara):
-                nota.update(estat="treballant", agafada=ara, cops=nota.get("cops", 0) + 1, vistos=len(nota["fil"]))
+                # «reagafada»: Claude ja la tenia i no l'ha resposta (no és que la persona hi hagi tornat a escriure).
+                nota.update(estat="treballant", agafada=ara, cops=nota.get("cops", 0) + 1, vistos=len(nota["fil"]),
+                            reagafada=nota["estat"] == "treballant")
                 preses.append(nota)
         return [json.loads(json.dumps(n)) for n in preses]
     with _bloquejat(carpeta):  # si no n'hi ha cap, no cal reescriure el fitxer
@@ -291,7 +293,7 @@ def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None) ->
     linies = [f"Nota {nota['id']} ({on}):"]
     for m in nota["fil"]:
         linies.append(f"  {'Tu' if m['de'] == 'claude' else 'La persona'}: {m['text']}")
-    if nota.get("cops", 0) > 1 and nota["fil"][-1]["de"] == "persona":
+    if nota.get("reagafada"):
         linies.append("  (Ja te l'havia donat i no l'has resposta: mira si ja l'havies feta abans de tornar-la a fer.)")
     if nota["estat"] == "treballant":
         linies.append(f"  Per respondre-la: --respon {id_per_respondre(nota)}")
