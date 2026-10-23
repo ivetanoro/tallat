@@ -223,25 +223,6 @@ def cap_endins(trams, fps: float) -> list:
     return sortida
 
 
-def finestra(trams, m0: float, m1: float, fps: float) -> tuple[list, float]:
-    """Els trossos que sonen entre m0 i m1 del muntatge, retallats a fotogrames sencers, i on comença el
-    primer al muntatge. Per escoltar uns segons al voltant d'un tall sense refer tot el muntatge."""
-    sortida, inici, acum = [], None, 0.0
-    for tram in trams:
-        a, b = tram[0], tram[1]
-        d = b - a
-        if acum + d > m0 and acum < m1:
-            fa = a + math.floor((m0 - acum) * fps + 1e-6) / fps if m0 > acum else a
-            fb = a + math.ceil((m1 - acum) * fps - 1e-6) / fps if m1 < acum + d else b
-            sa, sb = so_del_tram(tram)
-            so = (max(sa, fa), min(sb, fb))
-            if fb - fa > 1e-6 and so[1] > so[0]:
-                inici = acum + (fa - a) if inici is None else inici
-                sortida.append(Tram(round(fa, 6), round(fb, 6), (round(so[0], 6), round(so[1], 6))))
-        acum += d
-    return sortida, round(inici or 0.0, 6)
-
-
 def _blocs(paraules: list[dict], ordre) -> list[list[dict]]:
     """Agrupa les paraules en blocs que sonen en l'ordre indicat (per a reels muntats).
 

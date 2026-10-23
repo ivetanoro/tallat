@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import collections
-import functools
 import json
 import os
 import shutil
@@ -143,16 +142,14 @@ def codec_video(us: str, bitrate: str) -> list[str]:
     no n'hi ha i es fa amb el processador (x264), amb un preset més ràpid per al que només es mira a la pàgina.
 
     `us`: «final» (l'export), «lot» (el muntatge a lots, que després es torna a comprimir), «copia» (la còpia
-    lleugera), «previa» (la vista prèvia contínua) o «curt» (els segons d'escoltar un tall). La còpia, la
-    vista prèvia i l'escolta porten un fotograma clau cada mig segon perquè els salts siguin instantanis."""
-    gop = ["-g", "15"] if us in ("copia", "previa", "curt") else []
-    if us == "curt" and _te_x264():  # la gràfica tarda mig segon a arrencar i x264 no
-        return ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", *gop, "-pix_fmt", "yuv420p"]
+    lleugera) o «previa» (la vista prèvia contínua). La còpia i la vista prèvia porten un fotograma clau cada
+    mig segon perquè els salts siguin instantanis."""
+    gop = ["-g", "15"] if us in ("copia", "previa") else []
     if sys.platform == "darwin":
         # -allow_sw: si la gràfica és ocupada (o no n'hi ha, com en un Mac virtual), amb el processador.
         extra = {"final": ["-maxrate", bitrate, "-profile:v", "high"], "lot": ["-profile:v", "high"]}.get(us, [])
         return ["-c:v", "h264_videotoolbox", "-b:v", bitrate, *extra, *gop, "-allow_sw", "1"]
-    preset = {"final": "medium", "lot": "veryfast", "copia": "veryfast", "previa": "veryfast", "curt": "ultrafast"}[us]
+    preset = {"final": "medium", "lot": "veryfast", "copia": "veryfast", "previa": "veryfast"}[us]
     extra = ["-maxrate", bitrate, "-bufsize", f"{int(bitrate.rstrip('M')) * 2}M", "-profile:v", "high"] \
         if us in ("final", "lot") else []
     return ["-c:v", "libx264", "-preset", preset, "-b:v", bitrate, *extra, *gop, "-pix_fmt", "yuv420p"]
@@ -500,23 +497,14 @@ def _exporta(entrades_base, durada, sortida, qualitat, info, filtre, brolls, pec
     treu_rotacio(sortida)
 
 
-@functools.lru_cache(maxsize=1)
-def _te_x264() -> bool:
-    try:
-        return "libx264" in subprocess.run(["ffmpeg", "-hide_banner", "-encoders"], capture_output=True,
-                                           text=True, encoding="utf-8", errors="replace", timeout=20).stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-
-
-def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, curt: bool = False) -> Path:
+def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path) -> Path:
     """El muntatge en un sol vídeo continu (de la còpia lleugera, sense subtítols ni res), perquè la pàgina
     el pugui reproduir sense saltar: als salts, el Safari s'encalla uns quants dècims de segon. Els talls
     i els fosos del so, com a l'export (el temps del muntatge és el mateix)."""
     if not trams:
         raise ValueError("No queda cap paraula")
     info = info_video(proxy)
-    codec = codec_video("curt" if curt else "previa", "3M")
+    codec = codec_video("previa", "3M")
     sortida.parent.mkdir(parents=True, exist_ok=True)
     # Un nom propi per a cada feina: dues peticions iguals alhora no s'han de trepitjar el fitxer a mitges.
     temporal = sortida.with_name(f".{sortida.stem}.{os.getpid()}-{threading.get_ident()}.fent{sortida.suffix}")
@@ -535,8 +523,7 @@ def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, cur
                      *codec]
         ordre += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", str(temporal)]
         try:
-            # Un vídeo curt (l'escolta d'un tall) que no surt en mig minut, ja no cal: la pàgina se'n surt sense.
-            r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30 if curt else None)
+            r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace")
             if r.returncode != 0:
                 raise RuntimeError("ffmpeg no ha pogut fer la previsualització:\n" + r.stderr[-1500:])
             temporal.replace(sortida)

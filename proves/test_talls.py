@@ -395,8 +395,6 @@ class TestCodificadorPerSistema(unittest.TestCase):
             for us in ("copia", "previa"):
                 self.assertEqual(exporta.codec_video(us, "3M"),
                                  ["-c:v", "h264_videotoolbox", "-b:v", "3M", "-g", "15", "-allow_sw", "1"])
-            if exporta._te_x264():  # l'escolta d'un tall, amb x264 (la gràfica tarda a arrencar)
-                self.assertEqual(exporta.codec_video("curt", "3M")[:2], ["-c:v", "libx264"])
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
     def test_a_windows_amb_x264_tambe_a_lots(self):

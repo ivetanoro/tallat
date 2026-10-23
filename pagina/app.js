@@ -129,7 +129,6 @@ function sincronitza() {
       errorDesant = null;
       estat.revisio = r.estat.revisio;
       aplicaTrams(r);
-      if (!pendent && escoltaPendent != null) { escoltaTall(escoltaPendent); escoltaPendent = null; }
     } catch (e) {
       if (e.codi !== 409 || e.dades?.error === "projecte-canviat") throw e;
       // La pàgina també és oberta en una altra pestanya i allà s'ha desat després.
@@ -263,7 +262,6 @@ function aplicaTrams(r) {
   $("#durada-final").textContent = fmt(duradaFinal);
   if (canviats) {
     previaLlesta = null;
-    intentEscolta++;  // una escolta que s'estigués preparant era dels talls d'abans
     if (onSom != null) passaAProxy(onSom);
     // En un vídeo llarg, refer el continu costa: s'espera que s'hagi acabat de retallar una estona.
     programaPrevia(duradaFinal > 300 ? 4000 : 900);
@@ -478,7 +476,7 @@ function actualitzaParaules() {
 }
 
 function commuta(ids, treure) {
-  demanaEscolta(Math.min(...ids));
+  passaADirecte(Math.min(...ids));
   canvia((e) => {
     for (const id of ids) {
       const k = String(id);
@@ -828,7 +826,7 @@ function context(id) {
 }
 
 function decideix(ids, treure) {
-  if (ids.length === 1 && treure) demanaEscolta(ids[0]);
+  if (ids.length === 1 && treure) passaADirecte(ids[0]);
   canvia((e) => {
     for (const id of ids) {
       const k = String(id);
@@ -1107,102 +1105,16 @@ function jaCarregat(t) {
 }
 const tempsVideo = () => R.recarrega ?? R.salt ?? R.v.currentTime;  // on serà el vídeo quan acabi el salt
 
-// --- Escoltar cada tall ---------------------------------------------------------------------
-// En treure o recuperar paraules amb el vídeo aturat, el reproductor fa sonar uns segons
-// al voltant del tall perquè se senti l'efecte al moment. Sempre: el botó per apagar-ho ocupava un lloc
-// sota el vídeo que ara és de les notes, i gairebé ningú no l'apagava.
-let escoltaPendent = null;
-
-function demanaEscolta(id) {
-  if (sona()) return;
-  escoltaPendent = P.paraules[id].inici;
-  if (vista !== "directe") {
-    canviaVista("directe");
-    avis("Ara veus el muntatge en directe. L'esborrany no té aquest canvi.");
-  }
+// Si es treuen o es recuperen paraules mirant l'esborrany, es passa al muntatge en directe (és on es veu el canvi),
+// aturat al tall que s'acaba de fer: si no, quedava on era el directe i calia tornar a buscar-lo (Codex).
+// (Abans, a més, sonaven uns segons al voltant del tall; l'Ivet ho va treure: prenia el control a qui ho
+// comprova pel seu compte.)
+function passaADirecte(id) {
+  if (sona() || vista === "directe") return;
+  canviaVista("directe");
+  if (id != null) vesAOriginal(P.paraules[id].inici);
+  avis("Ara veus el muntatge en directe. L'esborrany no té aquest canvi.");
 }
-
-// Temps del vídeo original → temps del muntatge (si cau dins d'un tall, l'inici del tros següent).
-function muntatgeDe(t) {
-  const k = indexTram(t);
-  if (k >= trams.length) return duradaFinal;
-  return acum[k] + Math.max(0, t - trams[k][0]);
-}
-
-// El servidor fa un vídeo curt d'aquests segons (en mig segon), amb el so tallat i fos com a l'export:
-// la còpia que salta no pot fer-ho, i el muntatge sencer encara no té el canvi. Sona en un vídeo a part
-// (#video-e); en acabar, el reproductor queda just després del tall. Si no es pot, com abans: saltant.
-const vEsc = $("#video-e");
-let escoltant = null;  // {inici: temps del muntatge on comença el vídeo curt, durada, intent} mentre sona
-let intentEscolta = 0;  // cada petició d'escolta té el seu número: navegar, editar o reproduir l'invalida
-
-// Com abans de tenir el vídeo curt: la còpia que salta sona de m - 1,5 a m + 1,5.
-function escoltaSaltant(m) {
-  vesA(Math.max(0, m - 1.5));
-  reprodueix();
-  R.aturaA = Math.min(duradaFinal, m + 1.5);
-}
-
-async function escoltaTall(t) {
-  if (!trams.length || sona()) return;
-  const m = muntatgeDe(t);
-  const intent = ++intentEscolta;
-  // Després de cada espera es comprova que sigui encara la petició d'ara, abans de tocar res: una resposta
-  // antiga no ha de canviar el vídeo d'una de nova (revisió de Codex).
-  const vigent = () => intent === intentEscolta && !sona() && vista === "directe";
-  registre("escolta", { t, m: +m.toFixed(3) });
-  let r = null;
-  try {
-    r = await api("/api/escolta", { m });
-  } catch (e) {
-    registre("escolta-error", { msg: String(e?.message || e) });
-  }
-  if (!vigent()) return;
-  if (r?.estat === "fet" && vEsc.dataset.url !== r.url) {
-    vEsc.dataset.url = r.url;
-    vEsc.src = r.url;
-    try {
-      await new Promise((resol, falla) => {
-        vEsc.addEventListener("loadeddata", resol, { once: true });
-        vEsc.addEventListener("error", falla, { once: true });
-      });
-    } catch {
-      vEsc.dataset.url = "";
-      r = null;
-    }
-    if (!vigent()) return;
-  }
-  if (r?.estat !== "fet") { escoltaSaltant(m); return; }
-  escoltant = { inici: r.inici, durada: r.durada, intent };
-  vEsc.currentTime = 0;
-  for (const v of [R.proxy, R.muntatge]) v.classList.add("amagat");
-  vEsc.classList.remove("amagat");
-  document.body.classList.add("reproduint");
-  vEsc.play().catch(() => {
-    // El Safari pot no deixar sonar sol un vídeo nou: llavors com abans, amb el que ja ha sonat.
-    if (escoltant?.intent !== intent) return;
-    deixaEscolta();
-    if (vista === "directe" && !sona()) escoltaSaltant(m);
-  });
-}
-
-// Para el vídeo curt i deixa el reproductor on era (o, si ha acabat, just al final del que s'ha escoltat).
-function deixaEscolta() {
-  if (!escoltant) return;
-  const m = escoltant.inici + Math.min(vEsc.currentTime, escoltant.durada);
-  amagaEscolta();
-  vesA(m);
-  passaAMuntatge();
-}
-function amagaEscolta() {
-  escoltant = null;
-  vEsc.pause();
-  vEsc.classList.add("amagat");
-  document.body.classList.remove("reproduint");
-  mostraVideoActiu();
-}
-vEsc.addEventListener("ended", deixaEscolta);
-vEsc.addEventListener("error", deixaEscolta);  // si el vídeo curt falla, que no quedi com si sonés
 const vE = $("#video-esborrany");
 
 // Quin tros conté el temps original t. En un reel muntat els trossos no van en ordre
@@ -1217,7 +1129,6 @@ function indexTram(t, llista = trams) {
 }
 
 function tempsMuntatge() {
-  if (escoltant) return escoltant.inici + Math.min(vEsc.currentTime, escoltant.durada);
   if (vista === "esborrany") return vE.currentTime || 0;
   if (!trams.length) return 0;
   if (continu()) return Math.min(tempsVideo(), duradaFinal);
@@ -1229,8 +1140,6 @@ function tempsMuntatge() {
 function durada() { return vista === "esborrany" ? (esborrany?.durada || vE.duration || 0) : duradaFinal; }
 
 function vesA(m) {
-  intentEscolta++;  // anar a un altre lloc cancel·la l'escolta, també la que encara s'està preparant
-  if (escoltant) amagaEscolta();
   m = limita(m, 0, durada());
   if (vista === "esborrany") { vE.currentTime = m; return; }
   if (!trams.length) return;
@@ -1290,7 +1199,6 @@ function salta() {
 }
 
 function reprodueix() {
-  deixaEscolta();
   R.proxy.volume = 1;  // si s'havia aturat enmig d'un fos
   if (vista === "esborrany") { vE.play(); return; }
   if (!trams.length) return;
@@ -1325,9 +1233,7 @@ function reprodueix() {
 }
 
 function atura() {
-  intentEscolta++;  // si s'estava preparant un vídeo curt per escoltar un tall, ja no sona
   intentsSonant = 0;
-  deixaEscolta();
   if (R.reproduint) registre("atura", { k: R.k, video: ev(R.v) });
   R.repren = false;
   R.aturaA = null;
@@ -1393,9 +1299,6 @@ function rendeixte() {
 // Vigilant: si el vídeo diu que sona però el seu temps no avança, o un salt no acaba mai,
 // el despertem (el Safari, de vegades, es queda esperant).
 function vigila() {
-  // El vídeo curt d'escolta s'ha aturat sense acabar (s'ha interromput la càrrega, el Safari l'ha aturat):
-  // que el reproductor no quedi com si sonés.
-  if (escoltant && vEsc.paused && !vEsc.ended) deixaEscolta();
   if (R.v.seeking && R.reproduint) {
     R.vigila.salt ??= { des: performance.now(), intents: 0 };
     if (performance.now() - R.vigila.salt.des > 800) {
@@ -1428,7 +1331,7 @@ function vigila() {
   }
 }
 
-const sona = () => (escoltant ? true : vista === "esborrany" ? !vE.paused : R.reproduint);
+const sona = () => (vista === "esborrany" ? !vE.paused : R.reproduint);
 
 function reprodueixDes(id) {
   if (vista !== "directe") canviaVista("directe");
@@ -1467,13 +1370,13 @@ function pintaCarrega() {
   const v = vista === "esborrany" ? vE : R.v;
   const ara = performance.now();
   let encallat = false;
-  if (!sona() || escoltant || v.currentTime !== carrega.t) carrega = { ...carrega, t: v.currentTime, des: ara };
+  if (!sona() || v.currentTime !== carrega.t) carrega = { ...carrega, t: v.currentTime, des: ara };
   else encallat = ara - carrega.des > 300;
   if (encallat !== carrega.visible) {
     carrega.visible = encallat;
     $("#carregant").hidden = !encallat;
   }
-  const preparant = vista === "directe" && R.reproduint && !continu() && trams.length > 1 && !escoltant;
+  const preparant = vista === "directe" && R.reproduint && !continu() && trams.length > 1;
   if ($("#preparant").hidden === preparant) $("#preparant").hidden = !preparant;
 }
 
@@ -2538,7 +2441,7 @@ function comprovaTall() {
 
 // El segon de la gravació que es veu ara (al muntatge o a l'esborrany).
 function tempsOriginalAra() {
-  if (vista === "directe") return continu() || escoltant ? originalDe(tempsMuntatge()) : tempsVideo();
+  if (vista === "directe") return continu() ? originalDe(tempsMuntatge()) : tempsVideo();
   if (!esborrany?.trams) return null;
   const m = vE.currentTime;
   let k = 0;
@@ -3760,9 +3663,8 @@ function instalaTecles() {
 const PASSES_GUIA = [
   ["#tria-reel", "Aquí tries què edites: el vídeo sencer o un dels reels que t'ha proposat Claude."],
   ["#seccio-revisar", "Aquí hi ha el que t'ha proposat tallat: les instruccions de veu i les paraules que potser vols treure."],
-  [".text", `Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫: sonarà ` +
-    `el tall perquè sentis com queda. A sobre surt una barreta per destacar-les (${tecla("⌘B")}) o corregir-les ` +
-    `(${tecla("↩")}).`],
+  [".text", `Això és el que dius. Toca una paraula per escoltar-la. Per treure'n, selecciona-les i prem ⌫. A sobre ` +
+    `surt una barreta per destacar-les (${tecla("⌘B")}) o corregir-les (${tecla("↩")}).`],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
   ["#notes", "Per demanar-li coses a Claude: atura el vídeo on vulguis, escriu una nota (o prem N) i, quan acabis, " +
     "toca Envia a Claude. Claude les fa i et respon a sota de cada una."],
