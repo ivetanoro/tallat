@@ -362,12 +362,13 @@ body.movent, body.movent * { cursor: grabbing !important; }
 .p.proposta { box-shadow: inset 0 -2px 0 var(--proposta-ratlla); background: var(--proposta-suau); }
 .p.aprox:not(.fora) { text-decoration: underline dotted var(--text-2, currentColor); text-underline-offset: 3px; }
 .p.corregida { box-shadow: inset 0 -2px 0 var(--accent); }
-/* Les destacades sempre es veuen (no només en un mode), en negreta, com fa ⌘B en un document: tallat en tria
-   moltes soles, i en blau el text costava de llegir. */
-.p.clau, .editor.clau { font-weight: 700; }
+/* Les destacades sempre es veuen (no només en un mode): les que tries tu, en negreta, com fa ⌘B en un
+   document; les que tria tallat sol, una mica més gruixudes (n'hi ha moltes, i en negreta carregaven el text). */
+.p.clau { font-weight: 500; }
+.p.clau.clau-teva, .editor.clau { font-weight: 700; }
 .p.clau.fora { font-weight: inherit; }
 .p.actual { background: var(--accent); color: #fff; text-decoration-color: rgba(255, 255, 255, 0.7); }
-.p.seleccio { background: var(--accent-suau); }
+.p.seleccio:not(.actual) { background: var(--accent-suau); }  /* si també sona, es queda el blau fort (la lletra és blanca) */
 .p.llum { animation: llum 1.2s var(--molla); }
 @keyframes llum { 0% { background: var(--accent); color: #fff; } 100% { background: transparent; } }
 
@@ -381,8 +382,9 @@ body.movent, body.movent * { cursor: grabbing !important; }
   transition: background-color 120ms, color 120ms;
 }
 .pausa:hover { color: var(--text); background: var(--omplir-fort); }
-/* Escurçat, el silenci surt ratllat com una paraula treta; sencer (s'hi ha clicat), en blau. */
-.pausa:not(.sencera) { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+/* Escurçat (el que passa sol), el silenci surt fluix, només amb la vora: no és res que s'hagi de fer.
+   Sencer (s'hi ha clicat), en blau. */
+.pausa:not(.sencera) { background: transparent; box-shadow: inset 0 0 0 1px var(--linia); }
 .pausa.sencera { background: var(--accent-suau); color: var(--accent); }
 
 .editor {

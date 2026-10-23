@@ -725,9 +725,15 @@ function instalaText() {
 // Als subtítols, algunes paraules surten més grans i d'un altre color. tallat en tria soles; amb la
 // barreta (o ⌘B) se'n poden afegir o treure (i Claude també ho pot fer amb «tallat.py destaca»).
 
+// Les destacades es veuen sempre: en negreta les que has triat tu, i una mica més gruixudes les que tria
+// tallat sol (n'hi ha moltes: en negreta, el text costava de llegir).
 function marcaClaus() {
   const destacades = claus();
-  for (const [id, s] of spans) s.classList.toggle("clau", destacades.has(id));
+  const teves = estat?.destacades || {};
+  for (const [id, s] of spans) {
+    s.classList.toggle("clau", destacades.has(id));
+    s.classList.toggle("clau-teva", destacades.has(id) && teves[String(id)] === true);
+  }
   pintaBarreta();
 }
 
@@ -741,7 +747,10 @@ function commutaDestacades(ids) {
   const destacades = claus();
   const posa = !dins.every((id) => destacades.has(id));
   canvia((e) => { e.destacades = { ...(e.destacades || {}), ...Object.fromEntries(dins.map((id) => [String(id), posa])) }; });
-  for (const id of dins) spans.get(id)?.classList.toggle("clau", posa);  // es veu de seguida; el servidor ho confirma
+  for (const id of dins) {  // es veu de seguida; el servidor ho confirma
+    spans.get(id)?.classList.toggle("clau", posa);
+    spans.get(id)?.classList.toggle("clau-teva", posa);
+  }
   $("#transcripcio .editor")?.classList.toggle("clau", posa);
   $("#b-destaca").setAttribute("aria-pressed", String(posa));
   if (posa && !estilSub?.clau_grans) {
