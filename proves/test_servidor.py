@@ -102,6 +102,49 @@ class TestServidor(unittest.TestCase):
         self.assertEqual(dades["notes"][0]["estat"], "feta")
         self.assertGreater(dades["versio_notes"], novetats["versio_notes"])
 
+    def test_les_notes_de_revisa(self):
+        # A Revisa, la nota és d'una versió (un esborrany) i d'un segon d'aquell vídeo: la paraula surt dels talls
+        # d'aquella versió, i es desa la miniatura. «Envia» des de Revisa només envia les d'aquella versió.
+        import base64
+        exports = self.carpeta / "exports"
+        exports.mkdir()
+        (exports / "prova_esborrany_1.mp4").write_bytes(b"video")
+        (exports / "prova_esborrany_1.talls.json").write_text("[[0.5, 3.0]]", encoding="utf-8")
+        jpeg = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff una foto").decode()
+        estat, cos = self.peticio("POST", "/api/notes", {"accio": "afegeix", "text": "aquí més gran",
+                                                         "versio": "prova_esborrany_1.mp4", "t": 0.6,
+                                                         "miniatura": jpeg}, self.bones())
+        self.assertEqual(estat, 200)
+        nota = json.loads(cos)["notes"][0]
+        self.assertEqual((nota["versio"], nota["t_versio"], nota["paraula"]), ("prova_esborrany_1.mp4", 0.6, 2))
+        self.assertEqual(self.peticio("GET", f"/notes-miniatures/{nota['miniatura']}")[0], 200)
+        self.assertEqual(self.peticio("POST", "/api/notes", {"accio": "afegeix", "text": "x", "versio": "no-hi-es.mp4",
+                                                             "t": 1}, self.bones())[0], 400)
+        self.peticio("POST", "/api/notes", {"accio": "afegeix", "text": "editant", "paraula": 1}, self.bones())
+        dades = json.loads(self.peticio("POST", "/api/notes", {"accio": "envia", "versio": "prova_esborrany_1.mp4"},
+                                        self.bones())[1])
+        self.assertEqual([n["estat"] for n in dades["notes"]], ["enviada", "esborrany"])
+        novetats = json.loads(self.peticio("GET", "/api/novetats")[1])
+        self.assertEqual(novetats["darrer_export"], "prova_esborrany_1.mp4")
+        # Mentre s'exporta (encara sense talls), la versió nova no compta (Codex).
+        (exports / "prova_esborrany_2.mp4").write_bytes(b"a mitges")
+        self.assertEqual(json.loads(self.peticio("GET", "/api/novetats")[1])["darrer_export"], "prova_esborrany_1.mp4")
+
+    def test_una_nota_de_revisa_al_comencament_d_un_tall_i_al_final(self):
+        # Codex: al començament d'un tros (amb marge), la paraula d'abans pot ser una de les tretes; i al final de tot,
+        # el reproductor pot dir el segon exacte que dura la versió.
+        exports = self.carpeta / "exports"
+        exports.mkdir()
+        (exports / "v_esborrany_1.mp4").write_bytes(b"video")
+        (exports / "v_esborrany_1.talls.json").write_text("[[0.97, 3.0]]", encoding="utf-8")
+        afegeix = lambda t: self.peticio("POST", "/api/notes", {"accio": "afegeix", "text": "x", "versio": "v_esborrany_1.mp4",
+                                                                "t": t}, self.bones())
+        estat, cos = afegeix(0)
+        nota = json.loads(cos)["notes"][-1]
+        self.assertEqual((estat, nota["paraula"], nota["inici"]), (200, 2, 0.97))  # «és», no «Això» (treta)
+        self.assertEqual(afegeix(2.03)[0], 200)
+        self.assertEqual(afegeix(2.5)[0], 400)
+
     def test_les_imatges_dels_grafics(self):
         from motor import grafics
         p = Projecte(self.carpeta)

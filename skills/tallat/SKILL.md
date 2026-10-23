@@ -291,6 +291,13 @@ A sota del vídeo, la persona et deixa notes («aquí, un rètol que digui…»,
 - Després, **torna a esperar-les** (`--espera`, en segon pla, un altre cop). Si l'espera s'acaba sense notes, torna-la a llançar mentre la pàgina estigui oberta i la persona no t'hagi dit que ha acabat.
 - Si la persona et diu **«mira les meves notes»** (la pàgina li ho proposa quan tu no hi ets connectat), executa `tallat.py notes --projecte X --espera --minuts 0.1`: agafa de seguida les que ja ha enviat. Sense `--espera`, `tallat.py notes --projecte X` les llista totes amb el seu estat.
 
+### Revisa (les revisions finals)
+
+A dalt de la pàgina, **Edita · Revisa**. A Revisa, la persona mira un esborrany exportat (una **versió**) gran, com el veurà la gent, i hi deixa notes; cada nota guarda el segon d'aquella versió i una miniatura del fotograma. Les notes et diuen de quina versió són i on és la miniatura: **mira-la** (és el que veia) abans de fer el canvi. La paraula i el segon de la gravació ja surten dels talls d'aquella versió, encara que després s'hagi editat.
+
+- Quan acabes **totes** les notes d'una versió, **fes-ne una de nova**: `tallat.py exporta --projecte X --qualitat esborrany`. La pàgina l'ensenya sola com a «Versió N+1», sense notes: la persona revisa la nova, i les de l'anterior es queden a la seva versió. Digues-li al xat, en una línia, que ja la té.
+- Si la persona encara no té cap esborrany, Revisa li ofereix fer-ne un.
+
 ## Revisar l'esborrany
 
 - La persona mira l'esborrany (o el muntatge En directe) i et diu què vol canviar: al xat, amb el segon que veu sota el vídeo («al segon 12, el b-roll és massa llarg»), o amb una nota a la pàgina (vegeu «Notes de la pàgina»).

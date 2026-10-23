@@ -168,6 +168,12 @@ async function miraNovetats() {
     const n = await (await fetch("/api/novetats")).json();
     if (n.clau_projecte !== P.clau_projecte || esperada !== cua || pendent) return;
     if (n.versio_notes !== versioNotes) respostaNotes(await api("/api/notes"));
+    if (n.darrer_export !== darrerExport) {
+      darrerExport = n.darrer_export;
+      const f = await api("/api/feina");
+      pintaVersions(f.exports);
+      actualitzaVersions(f.exports);
+    }
     else if (n.connectat !== claudeConnectat) { claudeConnectat = n.connectat; pintaNotes(); }
     if (versioEstil == null) versioEstil = n.estil;
     if (n.estil !== versioEstil) {
@@ -707,7 +713,7 @@ function instalaText() {
     if (e.target.closest(".p")) e.preventDefault();
   });
   document.addEventListener("keydown", (e) => {
-    if (!seleccioFeta || e.target.matches("input, textarea, select")) return;
+    if (!seleccioFeta || revisant || e.target.matches("input, textarea, select")) return;
     if (["#full-final", "#full-marca", "#guia"].some((s) => !$(s).hidden)) return;  // hi ha una finestra a sobre
     if (e.key === "Escape") { deixaSeleccio(); return; }
     if (esDestaca(e)) { e.preventDefault(); commutaDestacades(seleccioFeta); return; }
@@ -2706,6 +2712,8 @@ function seguimentFeina(feina) {
   const ocupat = feina?.estat === "treballant";
   $("#final").disabled = ocupat;
   caixa.hidden = !ocupat;
+  $("#revisa-feina").hidden = !ocupat;
+  for (const b of [$("#nova-versio"), $("#primera-versio")]) b.disabled = ocupat;
   if (ocupat) {
     const nom = feina.qualitat === "esborrany" ? "Construint l'esborrany"
       : feina.qualitat === "editors" ? "Exportant els trossos" : `Exportant en ${QUALITATS[feina.qualitat]}`;
@@ -2719,6 +2727,8 @@ function seguimentFeina(feina) {
       $("#feina-text").textContent = `${nom}… ${feina.progres} %`;
       $("#feina-progres").style.width = `${feina.progres}%`;
     }
+    $("#revisa-feina-text").textContent = $("#feina-text").textContent;
+    $("#revisa-feina-progres").style.width = $("#feina-progres").style.width;
     if (!consulta) consulta = setInterval(consultaFeina, 700);
   } else if (consulta) {
     clearInterval(consulta);
@@ -2740,8 +2750,12 @@ async function consultaFeina() {
         mostraFet(feina, "Projecte per a altres editors a punt (hi ha un LLEGEIX-ME amb els passos)");
         mostraAlFinder(feina);
       } else if (feina.qualitat === "esborrany") {
-        avis(`L'esborrany és a punt${feina.copia ? " (també a la teva carpeta)" : ""}. Mira'l i digues a Claude què vols canviar (amb el segon, que veus sota el vídeo).`, 6000);
-        carregaVersio(feina.fitxer);
+        darrerExport = r.exports[0]?.nom ?? darrerExport;
+        actualitzaVersions(r.exports);
+        if (!revisant) {
+          avis(`L'esborrany és a punt${feina.copia ? " (també a la teva carpeta)" : ""}. Mira'l i digues a Claude què vols canviar (amb el segon, que veus sota el vídeo).`, 6000);
+          carregaVersio(feina.fitxer);
+        }
       } else {
         mostraFet(feina, `Vídeo en ${QUALITATS[feina.qualitat]} a punt`);
       }
@@ -3735,6 +3749,8 @@ const PASSES_GUIA = [
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
   ["#notes", "Per demanar-li coses a Claude: atura el vídeo on vulguis, escriu una nota (o prem N) i, quan acabis, " +
     "toca Envia a Claude. Claude les fa i et respon a sota de cada una."],
+  [".estacions", "Quan el tinguis gairebé a punt, ves a Revisa: hi mires l'esborrany sencer i hi deixes notes. " +
+    "Claude les fa i en treu una versió nova, i així fins que t'agradi."],
   [".com-es-veu", "Aquí tries com es veu: l'estil, els subtítols, el títol, els gràfics, el b-roll i el so."],
   ['[data-seccio="ritme"]', "I aquí, el ritme: com de curts vols els silencis entre frases."],
   ["#final", "Quan estigui a punt, toca Exporta: un esborrany per mirar-lo, el vídeo final o per a un altre editor."],
@@ -4235,7 +4251,9 @@ const esborranysResposta = new Map(); // el que s'escriu a cada resposta: no es 
 const ESTATS_NOTA = { esborrany: "Per enviar", enviada: "Enviada", treballant: "Claude hi treballa…", feta: "Feta",
   pregunta: "Et pregunta" };
 
-const notesVisibles = () => notesTotes.filter((n) => n.projecte === projecteNotes);
+// Les del que s'edita (el vídeo sencer o un reel). Les d'editar no són de cap versió; les de Revisa, sí.
+const notesDelProjecte = () => notesTotes.filter((n) => n.projecte === projecteNotes);
+const notesVisibles = () => notesDelProjecte().filter((n) => !n.versio);
 
 // El segon del vídeo editat on cau un segon de la gravació (si aquell tros s'ha tret, on comença el següent).
 function muntatgeDe(t) {
@@ -4258,6 +4276,7 @@ function respostaNotes(r) {
   notesCarregades = true;
   carregaVistes();
   pintaNotes();
+  pintaRevisa();
 }
 
 // El primer cop en aquest navegador, el que ja hi ha es dona per vist (si no, tot sortiria com a nou).
@@ -4279,7 +4298,7 @@ function marcaVista(n) {
 
 // Quan Claude acaba una nota o pregunta alguna cosa, un avís curt (la nota es veu a la llista).
 function avisaRespostes(abans) {
-  const ara = notesVisibles().filter((n) => ["enviada", "treballant"].includes(abans.get(n.id)));
+  const ara = notesDelProjecte().filter((n) => ["enviada", "treballant"].includes(abans.get(n.id)));
   const fetes = ara.filter((n) => n.estat === "feta").length;
   const pregunta = ara.find((n) => n.estat === "pregunta");
   if (pregunta) avis(`Claude et pregunta una cosa a la nota ${pregunta.id}.`, 5000);
@@ -4288,7 +4307,7 @@ function avisaRespostes(abans) {
 
 function etiquetaEstat(n) {
   if (n.estat === "pregunta" && n.al_xat) return "Respon-li al xat";
-  if (n.estat === "enviada" && notesVisibles().some((m) => m.estat === "treballant")) return "A la cua";
+  if (n.estat === "enviada" && notesDelProjecte().some((m) => m.estat === "treballant")) return "A la cua";
   if (n.estat === "enviada" && !claudeConnectat) return "S'espera Claude";
   return ESTATS_NOTA[n.estat] || n.estat;
 }
@@ -4572,15 +4591,17 @@ async function enviaNotes() {
 // Si Claude hi és connectat (espera les notes), si hi treballa o si no hi és. Sense notes i sense Claude, no
 // cal dir res. Si s'han enviat notes i Claude no hi és (ni hi treballa), què li has de dir al xat.
 function pintaConnexio() {
-  const visibles = notesVisibles();
-  const treballa = visibles.some((n) => n.estat === "treballant");
-  const espera = !treballa && visibles.some((n) => n.estat === "enviada");
-  const el = $("#connexio");
-  el.hidden = !claudeConnectat && !visibles.length;
-  el.classList.toggle("connectat", claudeConnectat);
-  el.classList.toggle("treballa", !claudeConnectat && treballa);
-  $("#text-connexio").textContent = claudeConnectat ? "Connectat amb Claude" : treballa ? "Claude hi treballa" : "No connectat";
-  $("#avis-connexio").hidden = claudeConnectat || !espera;
+  const totes = notesDelProjecte();
+  const treballa = totes.some((n) => n.estat === "treballant");
+  const espera = !treballa && totes.some((n) => n.estat === "enviada");
+  for (const el of $$("[data-connexio]")) {  // sota el vídeo, i a Revisa
+    el.hidden = !claudeConnectat && !totes.length;
+    el.classList.toggle("connectat", claudeConnectat);
+    el.classList.toggle("treballa", !claudeConnectat && treballa);
+    el.querySelector(".text-connexio").textContent = claudeConnectat ? "Connectat amb Claude"
+      : treballa ? "Claude hi treballa" : "No connectat";
+  }
+  for (const el of $$("[data-avis-connexio]")) el.hidden = claudeConnectat || !espera;
 }
 
 function pintaMarquesNotes() {
@@ -4690,13 +4711,379 @@ function instalaNotes() {
     else { if (sona()) atura(); momentNota = { tot: true }; pintaMomentNota(); }
     camp.focus();
   });
-  $("#copia-frase").addEventListener("click", async () => {
+  for (const b of $$("[data-copia-frase]")) b.addEventListener("click", async () => {
     const frase = $("#frase-connexio").textContent;
     try {
       await navigator.clipboard.writeText(frase);
       avis("Copiat. Enganxa-ho al xat de Claude.");
     } catch { avis(`Escriu-li al xat: «${frase}»`, 5000); }
   });
+}
+
+// --- Revisa ----------------------------------------------------------------------------------
+// L'estació de les revisions finals: l'esborrany exportat (una versió) gran, com el veurà la gent, i a la dreta les
+// notes d'aquella versió, cada una amb la miniatura del seu moment. Claude les fa i en treu una versió nova: les
+// notes de cada versió no es barregen amb les de la següent. Les notes són les mateixes que les d'editar
+// (notes.json), però porten `versio` i `t_versio` (el segon d'aquell vídeo).
+
+let revisant = false;
+let versionsRevisa = [];   // els esborranys, del més antic al més nou: [{nom, n, data}]
+let versioRevisa = null;   // el nom del que es mira
+let darrerExport = null;
+let momentRevisa = null;   // on va la nota que s'escriu: {versio, t} (el vídeo s'hi atura)
+const esborranysRevisa = new Map();  // la nota a mig escriure de cada versió, si se'n canvia: {text, moment}
+let versioNovaEsperant = false;      // n'ha arribat una de nova mentre s'escrivia: s'hi va en acabar
+let temporitzadorVistesRevisa = null;
+const FOTOGRAMA = 1 / 30;
+const vRevisa = () => $("#video-revisa");
+const fmtDecima = (t) => {
+  t = Math.max(0, t || 0);
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return `${m}:${s < 10 ? "0" : ""}${s.toFixed(1).replace(".", ",")}`;
+};
+
+function canviaEstacio(nom) {
+  revisant = nom === "revisa";
+  document.body.classList.toggle("revisant", revisant);
+  $("#revisa").hidden = !revisant;
+  for (const b of $$(".estacions button")) b.setAttribute("aria-checked", String(b.dataset.estacio === nom));
+  if (revisant) { atura(); pintaRevisa(); requestAnimationFrame(ajustaBarraRevisa); }
+  else vRevisa().pause();
+  (revisant ? $('#revisa .estacions [data-estacio="revisa"]') : $('.eines .estacions [data-estacio="edita"]'))
+    ?.focus({ preventScroll: true, focusVisible: false });
+}
+
+// Els esborranys d'aquest projecte són les versions. Si n'arriba un de nou, és el que es mira.
+function actualitzaVersions(exports) {
+  const abans = versionsRevisa.length;
+  // Només les acabades: mentre s'exporta, el fitxer encara no és sencer (Codex).
+  versionsRevisa = exports.filter((x) => x.qualitat === "esborrany" && x.complet !== false).reverse()
+    .map((x, i) => ({ ...x, n: i + 1 }));
+  const nou = versionsRevisa.length > abans && abans > 0;
+  const escrivint = !!$("#text-nota-revisa").value.trim();
+  if (!versionsRevisa.some((v) => v.nom === versioRevisa)) triaVersio(versionsRevisa.at(-1)?.nom ?? null);
+  else if (nou && escrivint) {
+    versioNovaEsperant = true;  // no es canvia sota la nota que s'escriu (Codex): s'hi va en desar-la
+    if (revisant) avis(`Ja tens la versió ${versionsRevisa.length}: la veuràs quan desis aquesta nota.`, 5000);
+  } else if (nou) {
+    triaVersio(versionsRevisa.at(-1).nom);
+    if (revisant) avis(`Ja tens la versió ${versionsRevisa.length}. Mira-la i deixa-hi notes.`, 5000);
+  }
+  pintaRevisa();
+}
+
+// Canviar de versió: la nota que s'estigués escrivint es queda amb la seva versió (i hi torna quan s'hi torna).
+function triaVersio(nom) {
+  if (nom === versioRevisa) return;
+  const camp = $("#text-nota-revisa");
+  if (versioRevisa && camp.value.trim()) esborranysRevisa.set(versioRevisa, { text: camp.value, moment: momentRevisa });
+  versioRevisa = nom;
+  const desat = esborranysRevisa.get(nom);
+  esborranysRevisa.delete(nom);
+  camp.value = desat?.text || "";
+  ajustaAlcada(camp);
+  momentRevisa = desat?.moment || null;
+  if (momentRevisa) {
+    const v = vRevisa();
+    v.addEventListener("loadedmetadata", () => { v.currentTime = momentRevisa?.t ?? 0; }, { once: true });
+  }
+}
+
+function pintaRevisa() {
+  if (!revisant) return;
+  const hiHa = versionsRevisa.length > 0;
+  $("#revisa-buit").hidden = hiHa;
+  $("#revisa-cos").hidden = !hiHa;
+  $("#nova-versio").hidden = !hiHa;
+  const pills = $("#versions-revisa");
+  pills.textContent = "";
+  for (const v of versionsRevisa) {
+    const b = document.createElement("button");
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(v.nom === versioRevisa));
+    b.textContent = `Versió ${v.n}`;
+    b.title = v.data;
+    b.addEventListener("click", () => { triaVersio(v.nom); pintaRevisa(); });
+    pills.append(b);
+  }
+  if (!hiHa) return;
+  const v = vRevisa();
+  const src = `/exports/${encodeURIComponent(versioRevisa)}`;
+  if (v.getAttribute("src") !== src) { v.setAttribute("src", src); pintaTempsRevisa(); }
+  pintaNotesRevisa();
+}
+
+const notesDeRevisa = () => notesDelProjecte().filter((n) => n.versio === versioRevisa)
+  .sort((a, b) => (a.t_versio ?? 0) - (b.t_versio ?? 0) || a.id - b.id);
+
+function pintaNotesRevisa() {
+  const llista = $("#llista-revisa");
+  const actiu = document.activeElement;
+  const focus = actiu?.closest?.("#llista-revisa") ? actiu.dataset.focus : null;
+  const notes = notesDeRevisa();
+  llista.textContent = "";
+  for (const n of notes) llista.append(targetaRevisa(n));
+  if (focus) llista.querySelector(`[data-focus="${focus}"]`)?.focus({ preventScroll: true });
+  $("#buit-notes-revisa").hidden = notes.length > 0;
+  const perEnviar = notes.filter((n) => n.estat === "esborrany").length;
+  const pendents = notes.filter((n) => !["feta", "esborrany"].includes(n.estat)).length;
+  $("#compte-notes-revisa").textContent = notes.length
+    ? [`${notes.length}`, perEnviar && `${perEnviar} per enviar`, pendents && `${pendents} a Claude`].filter(Boolean).join(" · ") : "";
+  const noves = notes.filter(esNova);
+  $("#noves-notes-revisa").textContent = noves.length ? `· ${noves.length === 1 ? "1 nova" : `${noves.length} noves`}` : "";
+  // Les targetes es veuen senceres: si la pàgina es veu, la resposta ja s'ha vist. El punt es queda un moment
+  // (perquè es vegi quina és la nova) i després marxa.
+  clearTimeout(temporitzadorVistesRevisa);
+  if (noves.length && !document.hidden) {
+    temporitzadorVistesRevisa = setTimeout(() => {
+      if (!revisant || document.hidden) return;
+      noves.forEach(marcaVista);
+      pintaNotesRevisa();
+    }, 2500);
+  }
+  const envia = $("#envia-revisa");
+  envia.hidden = !perEnviar;
+  envia.textContent = `Envia a Claude (${perEnviar})`;
+  pintaConnexio();
+  const marques = $("#marques-revisa");
+  marques.textContent = "";
+  const d = vRevisa().duration;
+  for (const n of notes) {
+    if (!(d > 0)) break;
+    const b = document.createElement("button");
+    b.className = `marca-nota estat-${n.estat}`;
+    b.textContent = n.id;
+    b.style.left = `${limita((n.t_versio ?? 0) / d, 0, 1) * 100}%`;
+    b.title = n.fil[0]?.text || "";
+    b.setAttribute("aria-label", `Nota ${n.id}, al ${fmtDecima(n.t_versio)}`);
+    b.addEventListener("click", () => vesANotaRevisa(n));
+    marques.append(b);
+  }
+}
+
+function targetaRevisa(n) {
+  const el = document.createElement("div");
+  el.className = `targeta-nota estat-${n.estat}`;
+  el.dataset.id = n.id;
+  const mini = document.createElement("button");
+  mini.className = "mini-nota";
+  mini.dataset.focus = `mini-${n.id}`;
+  mini.setAttribute("aria-label", `Ves al ${fmtDecima(n.t_versio)}`);
+  if (n.miniatura) {
+    const img = document.createElement("img");
+    img.src = `/notes-miniatures/${encodeURIComponent(n.miniatura)}`;
+    img.alt = "";
+    mini.append(img);
+  }
+  mini.addEventListener("click", () => vesANotaRevisa(n));
+  const cos = document.createElement("div");
+  cos.className = "cos-targeta";
+  const meta = document.createElement("div");
+  meta.className = "meta-targeta";
+  const num = document.createElement("span");
+  num.className = "num-nota";
+  num.textContent = n.id;
+  const temps = document.createElement("button");
+  temps.className = "temps-revisa";
+  temps.dataset.focus = `temps-${n.id}`;
+  temps.textContent = fmtDecima(n.t_versio);
+  temps.title = "Ves a aquest moment";
+  temps.addEventListener("click", () => vesANotaRevisa(n));
+  const xip = document.createElement("span");
+  xip.className = "xip-nota";
+  xip.textContent = etiquetaEstat(n);
+  meta.append(num, temps, xip);
+  if (esNova(n)) {
+    const punt = document.createElement("span");
+    punt.className = "punt-nou";
+    punt.setAttribute("aria-label", "resposta nova");
+    meta.append(punt);
+  }
+  cos.append(meta);
+  for (const m of n.fil) {
+    const p = document.createElement("p");
+    if (m.de === "claude") {
+      p.className = "nota-claude";
+      const qui = document.createElement("b");
+      qui.textContent = "Claude";
+      p.append(qui, document.createTextNode(m.text));
+    } else {
+      p.className = "nota-text";
+      p.textContent = m.text;
+    }
+    cos.append(p);
+  }
+  if (n.estat === "pregunta" && n.al_xat) {
+    const p = document.createElement("p");
+    p.className = "nota-al-xat";
+    p.textContent = "Aquesta pregunta respon-la al xat de Claude, no aquí: és un permís (per exemple, baixar un fitxer d'internet).";
+    cos.append(p);
+  } else if (n.estat === "pregunta" || (n.estat === "feta" && respostesObertes.has(n.id))) {
+    cos.append(formResposta(n, esborranysResposta.get(n.id) || ""));
+  }
+  const peu = document.createElement("div");
+  peu.className = "nota-peu";
+  const enllac = (text, fn) => {
+    const b = document.createElement("button");
+    b.className = "enllac";
+    b.dataset.focus = `${text}-${n.id}`;
+    b.textContent = text;
+    b.addEventListener("click", fn);
+    peu.append(b);
+  };
+  if (n.estat === "esborrany") enllac("Treu", () => treuNota(n.id));
+  if (n.estat === "feta" && !respostesObertes.has(n.id)) enllac("Respon", () => {
+    respostesObertes.add(n.id);
+    pintaNotesRevisa();
+    $(`#llista-revisa .respon-nota textarea[data-id="${n.id}"]`)?.focus();
+  });
+  if (peu.children.length) cos.append(peu);
+  el.append(mini, cos);
+  return el;
+}
+
+function vesANotaRevisa(n) {
+  const v = vRevisa();
+  v.pause();
+  v.currentTime = n.t_versio ?? 0;
+  const el = $(`#llista-revisa [data-id="${n.id}"]`);
+  if (!el) return;
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  el.classList.remove("llum");
+  void el.offsetWidth;
+  el.classList.add("llum");
+}
+
+function pintaTempsRevisa() {
+  const v = vRevisa();
+  const t = v.currentTime || 0, d = v.duration || 0;
+  $("#tc-revisa").textContent = fmtDecima(t);
+  $("#durada-revisa").textContent = fmt(d);
+  const f = d ? limita(t / d, 0, 1) : 0;
+  $("#ple-revisa").style.width = `${f * 100}%`;
+  $("#capcal-revisa").style.left = `${f * 100}%`;
+  $("#rv-play").classList.toggle("sona", !v.paused);
+  $("#rv-play").setAttribute("aria-label", v.paused ? "Reprodueix" : "Atura");
+  $("#temps-nota-revisa").textContent = fmtDecima(momentRevisa ? momentRevisa.t : t);
+}
+
+// La barra i els números, de l'amplada del vídeo que es veu (canvia amb la finestra).
+function ajustaBarraRevisa() {
+  const ample = vRevisa().getBoundingClientRect().width;
+  if (ample > 0) $("#revisa-barra").style.maxWidth = `${Math.max(280, ample)}px`;
+}
+
+// La miniatura del fotograma que es veu (petita: només ha de recordar de quin moment parla la nota).
+function miniaturaRevisa() {
+  const v = vRevisa();
+  try {
+    const alt = 240, ample = Math.round(alt * ((v.videoWidth / v.videoHeight) || 9 / 16));
+    const c = document.createElement("canvas");
+    c.width = ample;
+    c.height = alt;
+    c.getContext("2d").drawImage(v, 0, 0, ample, alt);
+    return c.toDataURL("image/jpeg", 0.72);
+  } catch { return null; }
+}
+
+async function desaNotaRevisa() {
+  const camp = $("#text-nota-revisa");
+  const text = camp.value.trim();
+  if (!text || camp.readOnly || !versioRevisa) return;
+  const v = vRevisa();
+  v.pause();
+  const { versio, t } = momentRevisa?.versio === versioRevisa ? momentRevisa : { versio: versioRevisa, t: v.currentTime || 0 };
+  camp.readOnly = true;
+  try {
+    // La miniatura ha de ser del moment de la nota: si el vídeo s'ha mogut, s'hi torna i s'espera que hi sigui (Codex).
+    if (Math.abs(v.currentTime - t) > 0.04) {
+      await new Promise((fet) => {
+        v.addEventListener("seeked", fet, { once: true });
+        setTimeout(fet, 1500);
+        v.currentTime = t;
+      });
+    }
+    respostaNotes(await api("/api/notes", { accio: "afegeix", text, versio, t, miniatura: miniaturaRevisa() }));
+  } catch (e) {
+    avis(e.message, 5000);
+    return;
+  } finally {
+    camp.readOnly = false;
+  }
+  camp.value = "";
+  ajustaAlcada(camp);
+  momentRevisa = null;
+  pintaTempsRevisa();
+  camp.blur();
+  if (versioNovaEsperant) {
+    versioNovaEsperant = false;
+    triaVersio(versionsRevisa.at(-1)?.nom ?? versioRevisa);
+    pintaRevisa();
+    avis(`Nota desada. Ara mires la versió ${versionsRevisa.length}, la nova.`, 4500);
+  } else avis("Nota desada. Quan acabis de mirar la versió, toca «Envia a Claude».", 4000);
+}
+
+async function enviaRevisa() {
+  try { respostaNotes(await api("/api/notes", { accio: "envia", versio: versioRevisa })); } catch (e) { avis(e.message, 5000); return; }
+  avis(claudeConnectat ? "Enviades a Claude. Quan les acabi, en farà una versió nova."
+    : "Enviades. Ara escriu-li al xat: «mira les meves notes».", 5000);
+}
+
+function teclaRevisa(e) {
+  const v = vRevisa();
+  if (e.metaKey || e.ctrlKey || e.altKey || !versioRevisa) return;
+  if (e.key === " " && e.target.closest?.("button") && e.target.matches(":focus-visible")) return;
+  if (e.key === " ") { e.preventDefault(); v.paused ? v.play().catch(() => {}) : v.pause(); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 1); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); v.currentTime = Math.min(v.duration || 0, v.currentTime + 1); }
+  else if (e.key === ",") { e.preventDefault(); v.pause(); v.currentTime = Math.max(0, v.currentTime - FOTOGRAMA); }
+  else if (e.key === ".") { e.preventDefault(); v.pause(); v.currentTime = Math.min(v.duration || 0, v.currentTime + FOTOGRAMA); }
+  else if (e.code === "KeyN" && !e.shiftKey) { e.preventDefault(); $("#text-nota-revisa").focus(); }
+}
+
+function instalaRevisa() {
+  for (const b of $$(".estacions button")) b.addEventListener("click", () => canviaEstacio(b.dataset.estacio));
+  const v = vRevisa();
+  for (const nom of ["timeupdate", "seeked", "loadedmetadata", "play", "pause"]) v.addEventListener(nom, pintaTempsRevisa);
+  v.addEventListener("loadedmetadata", () => { pintaNotesRevisa(); ajustaBarraRevisa(); });  // els números necessiten la durada
+  const bucle = () => { if (!v.paused) { pintaTempsRevisa(); requestAnimationFrame(bucle); } };
+  v.addEventListener("play", () => requestAnimationFrame(bucle));
+  const commuta = () => { v.paused ? v.play().catch(() => {}) : v.pause(); };
+  v.addEventListener("click", commuta);
+  $("#rv-play").addEventListener("click", commuta);
+  addEventListener("resize", () => { if (revisant) ajustaBarraRevisa(); });
+  const linia = $("#linia-revisa");
+  let arrossega = false;
+  const posa = (e) => {
+    const r = linia.getBoundingClientRect();
+    if (v.duration) v.currentTime = limita((e.clientX - r.left) / r.width, 0, 1) * v.duration;
+  };
+  linia.addEventListener("pointerdown", (e) => { linia.setPointerCapture(e.pointerId); arrossega = true; v.pause(); posa(e); });
+  linia.addEventListener("pointermove", (e) => { if (arrossega) posa(e); });
+  linia.addEventListener("pointerup", () => { arrossega = false; });
+  const salta = (dt, atura_ = false) => () => {
+    if (atura_) v.pause();
+    v.currentTime = limita(v.currentTime + dt, 0, v.duration || 0);
+  };
+  $("#rv-enrere").addEventListener("click", salta(-1));
+  $("#rv-endavant").addEventListener("click", salta(1));
+  $("#rv-fotograma-enrere").addEventListener("click", salta(-FOTOGRAMA, true));
+  $("#rv-fotograma-endavant").addEventListener("click", salta(FOTOGRAMA, true));
+  const camp = $("#text-nota-revisa");
+  camp.addEventListener("focus", () => {
+    v.pause();
+    if (!momentRevisa) momentRevisa = { versio: versioRevisa, t: v.currentTime || 0 };
+    pintaTempsRevisa();
+  });
+  camp.addEventListener("blur", () => { if (!camp.value.trim()) { momentRevisa = null; pintaTempsRevisa(); } });
+  camp.addEventListener("input", () => ajustaAlcada(camp));
+  camp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); desaNotaRevisa(); }
+    else if (e.key === "Escape") { e.stopPropagation(); camp.blur(); }
+  });
+  $("#nova-nota-revisa").addEventListener("submit", (e) => { e.preventDefault(); desaNotaRevisa(); });
+  $("#envia-revisa").addEventListener("click", enviaRevisa);
+  for (const b of [$("#nova-versio"), $("#primera-versio")]) b.addEventListener("click", () => comencaRender("esborrany"));
 }
 
 // --- Avisos -----------------------------------------------------------------------------------
@@ -4755,6 +5142,7 @@ function instalaControls() {
   instalaMarca();
   instalaColumna();
   instalaNotes();
+  instalaRevisa();
   setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
@@ -4797,6 +5185,7 @@ function instalaControls() {
 
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea, select")) return;
+    if (revisant) { teclaRevisa(e); return; }
     if (capaTriada && e.key === "Escape") { deixaCapa(); return; }
     if (!$("#full-final").hidden) { if (e.key === "Escape") tancaFinal(); return; }
     if (e.key === "Escape" && tornaEnrere()) return;
@@ -4880,6 +5269,8 @@ async function inicia() {
   pintaReels();
   try { biblioteca = await api("/api/biblioteca"); } catch { biblioteca = { broll: [], sticker: [] }; }
   pintaInstruccions();
+  darrerExport = P.exports?.[0]?.nom ?? null;
+  actualitzaVersions(P.exports || []);
   carregaNotes();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;

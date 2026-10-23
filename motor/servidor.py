@@ -1,6 +1,9 @@
 """Servidor local de la pàgina de revisió. Només escolta a 127.0.0.1: res no surt de l'ordinador."""
 from __future__ import annotations
 
+import base64
+import binascii
+import bisect
 import hashlib
 import hmac
 import json
@@ -215,6 +218,50 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         return {"arrel": arrel.nom, "reel_actual": actual, "errors_reels": errors,
                 "reels": [dict(r, durada=muntatge.durada_estimada(arrel, r)) for r in reels]}
 
+    def darrer_export(p: Projecte) -> str | None:
+        """El vídeo exportat més nou: si en surt un de nou (Claude n'ha fet un des del xat), la pàgina ho sap."""
+        return next((x["nom"] for x in p.exports() if x["complet"]), None)
+
+    def moment_de_versio(p: Projecte, versio: str, t) -> tuple[str, float, int, float]:
+        """La versió (el nom d'un esborrany d'aquest projecte), el seu segon, la paraula que s'hi sentia i el segon
+        exacte de la gravació (amb els talls d'aquella versió)."""
+        fitxer = p.carpeta / EXPORTS / Path(versio).name
+        talls = fitxer.with_suffix(".talls.json")
+        if fitxer.suffix != ".mp4" or not fitxer.exists() or not talls.exists():
+            raise ValueError("No trobo aquesta versió.")
+        trams = [tuple(x) for x in json.loads(talls.read_text(encoding="utf-8"))]
+        total = sum(b - a for a, b in trams)
+        t_versio = max(0.0, float(t))
+        if t_versio > total + 0.25:
+            raise ValueError("Aquest moment no és a la versió.")
+        # Al final de tot, el reproductor pot dir un pèl més del que dura: és l'últim fotograma (Codex).
+        original = p.al_original(min(t_versio, max(0.0, total - 0.001)), trams)
+        if original is None:
+            raise ValueError("Aquest moment no és a la versió.")
+        paraules = p.dades["paraules"]
+        i = max(0, bisect.bisect_right([w["inici"] for w in paraules], original) - 1)
+        # Al començament d'un tros, la paraula d'abans pot ser una de les tretes: llavors, la primera del tros (Codex).
+        tram = next(((a, b) for a, b in trams if a - 0.001 <= original < b), None)
+        if tram and paraules[i]["final"] < tram[0] and i + 1 < len(paraules) and paraules[i + 1]["inici"] < tram[1]:
+            i += 1
+        return fitxer.name, round(min(t_versio, total), 2), i, round(original, 3)
+
+    def desa_miniatura(carpeta: Path, dades) -> str | None:
+        """La miniatura que envia la pàgina (una imatge JPEG petita, en base64) → notes-miniatures/xxx.jpg."""
+        if not isinstance(dades, str) or not dades.startswith("data:image/jpeg;base64,"):
+            return None
+        try:
+            imatge = base64.b64decode(dades.split(",", 1)[1], validate=True)
+        except (ValueError, binascii.Error):
+            return None
+        if not imatge.startswith(b"\xff\xd8") or len(imatge) > 600_000:
+            return None
+        desti = Path(carpeta) / notes.MINIATURES
+        desti.mkdir(exist_ok=True)
+        nom = f"{uuid.uuid4().hex[:12]}.jpg"
+        (desti / nom).write_bytes(imatge)
+        return nom
+
     def info_notes() -> dict:
         """Les notes per a Claude (de la gravació sencera i dels seus reels: la pàgina ensenya les del que
         s'edita, `projecte`) i si Claude les espera ara."""
@@ -426,6 +473,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                                    "sticker": [p.name for p in stickers.biblioteca()]})
             if ruta.startswith("/exports/"):
                 return self._segur(projecte.carpeta / EXPORTS, ruta[len("/exports/"):])
+            if ruta.startswith("/notes-miniatures/"):  # els fotogrames de les notes de Revisa
+                return self._segur(obert["arrel"].carpeta / notes.MINIATURES, ruta[len("/notes-miniatures/"):])
             if ruta == "/api/projecte":
                 with bloqueig:
                     projecte.al_dia()
@@ -449,7 +498,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     info = info_notes()
                     return self._json({"clau_projecte": clau_de(projecte), "revisio": projecte.estat.get("revisio", 0),
                                        "estil": versio_estil(projecte), "versio_notes": info["versio_notes"],
-                                       "connectat": info["connectat"]})
+                                       "connectat": info["connectat"], "darrer_export": darrer_export(projecte)})
             if ruta == "/api/notes":
                 return self._json(info_notes())
             if ruta == "/api/instantania":
@@ -483,25 +532,33 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 if accio == "afegeix":
                     # La nota va a una paraula (la que sonava en aquell moment) o a tot el vídeo. Perquè Claude
                     # l'entengui sense obrir res, s'hi desa el segon de la gravació i el que es diu al voltant.
+                    # A Revisa, la nota és d'una versió (un esborrany exportat) i d'un segon d'aquell vídeo: la
+                    # paraula es troba amb els talls d'aquella versió, i es desa la miniatura del fotograma.
                     paraula, inici, cita = cos.get("paraula"), None, None
+                    versio, t_versio, miniatura = cos.get("versio"), None, None
+                    if versio:
+                        versio, t_versio, paraula, original = moment_de_versio(p, str(versio), cos.get("t"))
+                        miniatura = desa_miniatura(arrel.carpeta, cos.get("miniatura"))
                     if paraula is not None:
                         paraula = int(paraula)
                         paraules = p.dades["paraules"]
                         if not 0 <= paraula < len(paraules):
                             raise ValueError("Aquesta paraula no hi és.")
-                        inici = round(float(paraules[paraula]["inici"]), 3)
+                        # A Revisa, el segon exacte del moment (no el de l'inici de la paraula).
+                        inici = original if versio else round(float(paraules[paraula]["inici"]), 3)
                         cita = " ".join(w["text"].strip() for w in paraules[max(0, paraula - 3):paraula + 4])
                     reel = None
                     if p is not arrel:
                         reel = next((r["titol"] for r in info_reels()["reels"] if r["id"] == p.carpeta.name), p.carpeta.name)
                     notes.afegeix(arrel.carpeta, str(cos.get("text", "")), paraula=paraula, inici=inici,
-                                  cita=cita, projecte=str(p.carpeta), reel=reel)
+                                  cita=cita, projecte=str(p.carpeta), reel=reel,
+                                  versio=versio, t_versio=t_versio, miniatura=miniatura)
                 elif accio == "esborra":
                     notes.esborra(arrel.carpeta, int(cos.get("id")))
                 elif accio == "respon":
                     notes.respon_persona(arrel.carpeta, int(cos.get("id")), str(cos.get("text", "")))
-                elif accio == "envia":
-                    notes.envia(arrel.carpeta, projecte=str(p.carpeta))
+                elif accio == "envia":  # les de la versió que es revisa, o (sense) les que s'han fet editant
+                    notes.envia(arrel.carpeta, projecte=str(p.carpeta), versio=cos.get("versio") or None)
                 else:
                     return self._json({"error": "No sé què vols fer amb les notes."}, HTTPStatus.BAD_REQUEST)
             except (KeyError, ValueError, TypeError) as e:

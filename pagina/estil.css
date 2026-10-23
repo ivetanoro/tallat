@@ -819,12 +819,12 @@ body.reproduint .play .si-play { display: block; }
   font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .temps-nota.tot { background: var(--omplir); color: var(--text-2); }
-#text-nota {
+#text-nota, #text-nota-revisa {
   flex: 1; min-width: 0; height: 24px; max-height: 96px; padding: 3px 2px; border: 0; background: none; resize: none;
   font: inherit; font-size: var(--t-ui); line-height: 18px; color: var(--text); outline: none;
   -webkit-user-select: text; user-select: text;
 }
-#text-nota::placeholder { color: var(--text-3); }
+#text-nota::placeholder, #text-nota-revisa::placeholder { color: var(--text-3); }
 .llista-notes { margin: 0 calc(-1 * var(--e1)); padding: 0 var(--e1); min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .noves-notes { color: var(--accent); font-weight: 600; }
 .grup-notes {
@@ -903,6 +903,70 @@ body.reproduint .play .si-play { display: block; }
 .boto.suau { background: var(--accent-suau); color: var(--accent); font-weight: 600; }
 .boto.suau:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .boto.ample { flex: none; width: 100%; height: 32px; }
+/* --- Revisa: l'esborrany gran a l'esquerra, les notes de la versió a la dreta ------------------------------- */
+body.revisant { grid-template-columns: minmax(0, 1fr); }
+body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revisant .divisor { display: none !important; }
+.revisa { grid-column: 1 / -1; height: 100vh; min-height: 0; display: flex; flex-direction: column; background: var(--fons); }
+.revisa-cap {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e3);
+  padding: var(--e3) var(--e6); border-bottom: 1px solid var(--linia);
+}
+.versions-revisa { display: flex; flex-wrap: wrap; gap: 6px; }
+.versions-revisa button {
+  height: 28px; padding: 0 var(--e3); border: 0; border-radius: 14px; background: var(--omplir); color: var(--text-2);
+  font: inherit; font-size: var(--t-petit); font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+.versions-revisa button:hover:not([aria-checked="true"]) { color: var(--text); background: var(--omplir-fort); }
+.versions-revisa button[aria-checked="true"] { background: var(--text); color: var(--fons); }
+.revisa-buit { margin: auto; max-width: 440px; padding: var(--e6); text-align: center; }
+.revisa-buit h2 { margin: 0 0 var(--e2); font-size: var(--t-titol); }
+.revisa-buit p { margin: 0 0 var(--e5); color: var(--text-2); font-size: var(--t-cos); line-height: 1.5; }
+.revisa-cos { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
+.revisa-monitor { min-height: 0; display: flex; flex-direction: column; align-items: center; gap: var(--e3); padding: var(--e5) var(--e6) var(--e6); }
+.revisa-pantalla { position: relative; flex: 1; min-height: 0; width: 100%; container-type: size; display: grid; place-items: center; }
+#video-revisa {
+  width: min(100cqw, calc(100cqh * 9 / 16)); height: auto; aspect-ratio: 9 / 16;
+  border-radius: var(--radi-gran); background: #000; box-shadow: var(--ombra);
+}
+/* La barra fa l'amplada del vídeo (es posa des de la pàgina): els números hi cauen al seu moment. */
+.revisa-barra { flex: none; width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 2px; }
+#video-revisa { cursor: pointer; }
+.revisa-controls { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--e3); margin-top: var(--e1); }
+#durada-revisa { text-align: right; }
+#rv-play .si-play { display: none; }
+#rv-play.sona .si-pausa { display: none; }
+#rv-play.sona .si-play { display: block; }
+.tc-revisa { font-size: var(--t-cos); font-weight: 600; font-variant-numeric: tabular-nums; }
+.nota-revisa { width: 100%; max-width: 560px; }
+.revisa-notes {
+  min-height: 0; display: flex; flex-direction: column; gap: var(--e2);
+  padding: var(--e5) var(--e5) var(--e6); border-left: 1px solid var(--linia); background: var(--barra);
+}
+.llista-revisa { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--e2); margin: 0 calc(-1 * var(--e1)); padding: 2px var(--e1); }
+.buit-revisa { margin: var(--e2) 0 0; }
+.targeta-nota {
+  flex: none; display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: var(--e3); padding: var(--e2);
+  border-radius: var(--radi); background: var(--superficie); box-shadow: 0 0 0 0.5px var(--linia), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.targeta-nota.estat-pregunta { box-shadow: inset 3px 0 0 var(--auto), 0 0 0 0.5px var(--linia), 0 1px 3px rgba(0, 0, 0, 0.06); }
+.targeta-nota.estat-feta .cos-targeta > :not(.nota-peu):not(.respon-nota) { opacity: 0.75; }
+.targeta-nota.llum { animation: llum-nota 1.2s var(--molla); }
+.mini-nota { width: 54px; aspect-ratio: 9 / 16; padding: 0; border: 0; border-radius: 6px; overflow: hidden; background: #000; cursor: pointer; }
+.mini-nota img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.cos-targeta { min-width: 0; }
+.meta-targeta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.temps-revisa {
+  padding: 2px 7px; border: 0; border-radius: 6px; background: var(--accent-suau); color: var(--accent);
+  font: inherit; font-size: var(--t-peu); font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.meta-targeta .punt-nou { margin-left: auto; }
+@media (max-width: 900px) {
+  .revisa { height: auto; min-height: 100vh; }
+  .revisa-cos { grid-template-columns: 1fr; }
+  .revisa-pantalla { height: 70vh; flex: none; }
+  .revisa-notes { border-left: 0; border-top: 1px solid var(--linia); }
+}
+
 /* Els números de les notes, sobre la línia de temps: la punta de la bombolla assenyala el moment. */
 .marques-notes { position: relative; width: 100%; height: 16px; margin-bottom: calc(-1 * var(--e2)); }
 .marca-nota { position: absolute; top: 0; cursor: pointer; transition: transform 120ms var(--molla); }

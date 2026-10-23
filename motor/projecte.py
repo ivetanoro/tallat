@@ -563,8 +563,10 @@ class Projecte:
         llista = []
         for f in sorted(carpeta.glob("*.mp4"), key=lambda f: f.stat().st_mtime, reverse=True):
             qualitat = next((q for q in ("esborrany", "1080", "4k") if f"_{q}_" in f.name), "")
+            # Els talls es desen quan el vídeo ja està fet: sense, encara s'està exportant (Revisa no l'ensenya).
             llista.append({"nom": f.name, "qualitat": qualitat, "mida_mb": round(f.stat().st_size / 1e6, 1),
-                           "data": time.strftime("%d/%m %H:%M", time.localtime(f.stat().st_mtime))})
+                           "data": time.strftime("%d/%m %H:%M", time.localtime(f.stat().st_mtime)),
+                           "complet": f.with_suffix(".talls.json").exists()})
         return llista
 
     def previa(self, trams, nom: str = "previa") -> Path:

@@ -8,6 +8,8 @@ que s'allibera sol si el procés s'acaba (revisió de Codex: esborrar bloquejos 
 
 Cada nota és una conversa: {id, estat, projecte, reel, paraula, inici, cita, fil: [{de: "persona" | "claude",
 text, quan}]}. `projecte` és la carpeta que s'editava (la gravació o un reel; `reel`, el títol del reel).
+Les de l'estació Revisa diuen també de quina versió són (`versio`: el nom de l'esborrany exportat), el segon
+d'aquella versió (`t_versio`) i la miniatura del fotograma (`miniatura`, a la carpeta MINIATURES).
 `paraula` i `inici` diuen on va (la paraula marcada i el segon de la gravació), o None si és per a tot el vídeo;
 `cita` és el que es diu en aquell moment, perquè Claude ho entengui sense obrir res.
 Estats: «esborrany» (a la pàgina, encara no enviada), «enviada» (Claude encara no l'ha agafada), «treballant»
@@ -32,6 +34,8 @@ else:
     import fcntl
 
 FITXER = "notes.json"
+MINIATURES = "notes-miniatures"
+TOTES = object()    # a `envia`: les notes de qualsevol versió (i les que no en són de cap)
 CONNEXIO = "connexio.json"
 VIU = 15            # segons: si Claude no ha dit res en aquest temps, ja no hi és connectat
 ESPERA_BLOQUEIG = 20  # segons: més, i és que alguna cosa ha anat malament
@@ -134,13 +138,16 @@ def _missatge(de: str, text: str) -> dict:
 
 
 def afegeix(carpeta: Path, text: str, paraula: int | None = None, inici: float | None = None,
-            cita: str | None = None, projecte: str | None = None, reel: str | None = None) -> dict:
+            cita: str | None = None, projecte: str | None = None, reel: str | None = None,
+            versio: str | None = None, t_versio: float | None = None, miniatura: str | None = None) -> dict:
     """Una nota nova, encara per enviar."""
     def fes(notes):
         nota = {"id": max((n["id"] for n in notes), default=0) + 1, "estat": "esborrany",
                 "projecte": projecte, "reel": reel,
                 "paraula": paraula, "inici": inici, "cita": (cita or "").strip()[:200] or None,
                 "fil": [_missatge("persona", text)]}
+        if versio:
+            nota.update(versio=versio, t_versio=t_versio, miniatura=miniatura)
         notes.append(nota)
         return nota
     return _canvia(carpeta, fes)
@@ -169,13 +176,14 @@ def respon_persona(carpeta: Path, id_: int, text: str) -> dict:
     return _canvia(carpeta, fes)
 
 
-def envia(carpeta: Path, projecte: str | None = None) -> int:
+def envia(carpeta: Path, projecte: str | None = None, versio=TOTES) -> int:
     """Les notes per enviar (totes, o només les d'un projecte: el que es veu a la pàgina), cap a Claude.
-    Torna quantes."""
+    Amb `versio`, només les d'aquella versió (None: les que s'han fet editant, sense versió). Torna quantes."""
     def fes(notes):
         n = 0
         for nota in notes:
-            if nota["estat"] == "esborrany" and (projecte is None or nota.get("projecte") == projecte):
+            if (nota["estat"] == "esborrany" and (projecte is None or nota.get("projecte") == projecte)
+                    and (versio is TOTES or nota.get("versio") == versio)):
                 nota.update(estat="enviada", enviada_quan=time.time())
                 n += 1
         return n
@@ -293,9 +301,10 @@ def id_per_respondre(nota: dict) -> str:
     return f"{nota['id']}.{nota['cops']}" if nota.get("cops") else str(nota["id"])
 
 
-def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None) -> str:
+def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None, carpeta: Path | None = None) -> str:
     """Una nota explicada perquè Claude la pugui fer: on va, què hi diu la persona i què s'han dit abans.
-    `al_video` és el segon del vídeo editat (el que la persona veu sota el vídeo), si se sap."""
+    `al_video` és el segon del vídeo editat (el que la persona veu sota el vídeo), si se sap. Si la nota és d'una
+    versió (Revisa), es diu quina i on és la miniatura (`carpeta`: la de la gravació), perquè Claude la pugui mirar."""
     on = f"per a tot el reel «{nota['reel']}»" if nota.get("reel") else "per a tot el vídeo"
     if nota.get("inici") is not None:
         gravacio = durada_mmss(nota["inici"])
@@ -307,11 +316,15 @@ def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None) ->
             on += f" (paraula {nota['paraula']})"
         if nota.get("reel"):
             on += f", al reel «{nota['reel']}»"
+    if nota.get("versio"):
+        on += f"; feta mirant l'esborrany {nota['versio']}, al {durada_mmss(nota.get('t_versio') or 0)} d'aquell vídeo"
     linies = [f"Nota {nota['id']} ({on}):"]
     for m in nota["fil"]:
         linies.append(f"  {'Tu' if m['de'] == 'claude' else 'La persona'}: {m['text']}")
     if nota.get("reagafada"):
         linies.append("  (Ja te l'havia donat i no l'has resposta: mira si ja l'havies feta abans de tornar-la a fer.)")
+    if nota.get("miniatura") and carpeta is not None:
+        linies.append(f"  El fotograma que mirava: {Path(carpeta) / MINIATURES / nota['miniatura']}")
     if nota["estat"] == "treballant":
         linies.append(f"  Per respondre-la: --respon {id_per_respondre(nota)}")
     if nota.get("projecte"):

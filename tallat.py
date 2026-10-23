@@ -668,7 +668,7 @@ def ordre_notes(args) -> None:
             return
         print("Ha arribat 1 nota:\n" if len(preses) == 1 else f"Han arribat {len(preses)} notes:\n")
         for nota in preses:
-            print(notes.text_per_a_claude(nota, _mmss, _al_video(nota)) + "\n")
+            print(notes.text_per_a_claude(nota, _mmss, _al_video(nota), carpeta) + "\n")
         print("Fes-les i respon cada una amb el número que diu «Per respondre-la» (la persona veu la resposta a la pàgina):")
         print(f'  tallat.py notes --projecte "{carpeta}" --respon NÚMERO "Fet: …"   (si no ho tens clar, afegeix --pregunta)')
         print("Després, torna a esperar-les amb --espera.")
@@ -679,7 +679,7 @@ def ordre_notes(args) -> None:
         return
     noms = {"esborrany": "per enviar", "enviada": "enviada", "treballant": "agafada", "feta": "feta", "pregunta": "pregunta"}
     for nota in totes:
-        print(f"[{noms.get(nota['estat'], nota['estat'])}] {notes.text_per_a_claude(nota, _mmss, _al_video(nota))}")
+        print(f"[{noms.get(nota['estat'], nota['estat'])}] {notes.text_per_a_claude(nota, _mmss, _al_video(nota), carpeta)}")
 
 
 def ordre_destaca(args) -> None:
