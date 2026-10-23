@@ -75,6 +75,33 @@ class TestServidor(unittest.TestCase):
         return {"X-Tallat-Token": self.token, "X-Tallat-Projecte": self.clau,
                 "Content-Type": "application/json", "Origin": f"http://127.0.0.1:{self.port}", **mes}
 
+    def test_les_notes_per_a_claude(self):
+        from motor import notes
+        estat, cos = self.peticio("POST", "/api/notes", {"accio": "afegeix", "text": "aquí, més gran", "paraula": 1},
+                                  self.bones())
+        self.assertEqual(estat, 200)
+        dades = json.loads(cos)
+        self.assertEqual([(n["id"], n["estat"], n["paraula"]) for n in dades["notes"]], [(1, "esborrany", 1)])
+        nota = dades["notes"][0]  # el segon i el que es diu al voltant els posa el servidor, de la transcripció
+        self.assertIsInstance(nota["inici"], float)
+        self.assertTrue(nota["cita"])
+        self.assertEqual(Path(dades["projecte"]).resolve(), self.carpeta.resolve())
+        self.assertFalse(dades["connectat"])
+        self.assertEqual(self.peticio("POST", "/api/notes", {"accio": "afegeix", "text": "x", "paraula": 99},
+                                      self.bones())[0], 400)
+        self.assertEqual(self.peticio("POST", "/api/notes", {"accio": "envia"},
+                                      self.bones(**{"X-Tallat-Projecte": "un-altre"}))[0], 409)
+        self.assertEqual(self.peticio("POST", "/api/notes", {"accio": "envia"}, self.bones())[0], 200)
+        # Claude l'espera i la respon: la pàgina ho veu a les novetats i a /api/notes.
+        notes.marca_connexio(self.carpeta)
+        novetats = json.loads(self.peticio("GET", "/api/novetats")[1])
+        self.assertTrue(novetats["connectat"])
+        self.assertEqual(Path(notes.pren(self.carpeta)[0]["projecte"]).resolve(), self.carpeta.resolve())
+        notes.respon(self.carpeta, 1, "Fet.")
+        dades = json.loads(self.peticio("GET", "/api/notes")[1])
+        self.assertEqual(dades["notes"][0]["estat"], "feta")
+        self.assertGreater(dades["versio_notes"], novetats["versio_notes"])
+
     def test_les_imatges_dels_grafics(self):
         from motor import grafics
         p = Projecte(self.carpeta)
@@ -192,9 +219,10 @@ class TestServidor(unittest.TestCase):
         estat, cos = self.peticio("POST", "/api/kit/nou", {"nom": "x"}, self.bones(**{"X-Tallat-Projecte": "un-altre"}))
         self.assertEqual((estat, json.loads(cos)["error"]), (409, "projecte-canviat"))
 
-    def test_ja_no_hi_ha_notes_ni_regles_a_la_pagina(self):
-        # Es van treure per simplificar: les notes i les regles del gust es diuen a Claude, al xat.
-        for ruta in ("/api/notes", "/api/gust", "/api/gust/treu"):
+    def test_ja_no_hi_ha_regles_a_la_pagina(self):
+        # Es van treure per simplificar: les regles del gust es diuen a Claude, al xat. (Les notes hi han
+        # tornat d'una altra manera: Claude les espera i hi respon; vegeu test_les_notes_per_a_claude.)
+        for ruta in ("/api/gust", "/api/gust/treu"):
             self.assertEqual(self.peticio("POST", ruta, {}, self.bones())[0], 404)
         dades = json.loads(self.peticio("GET", "/api/projecte")[1])
         self.assertNotIn("notes", dades)

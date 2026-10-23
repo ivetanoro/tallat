@@ -37,6 +37,8 @@
   --tret: #86868b;
   --auto: #c93400;
   --auto-suau: rgba(255, 149, 0, 0.14);
+  --verd: #248a3d;
+  --verd-suau: rgba(52, 199, 89, 0.16);
   --proposta: #a05a00;
   --proposta-ratlla: #ffcc00;
   --proposta-suau: rgba(255, 204, 0, 0.22);
@@ -72,6 +74,8 @@
     --tret: #8e8e93;
     --auto: #ff9f0a;
     --auto-suau: rgba(255, 159, 10, 0.16);
+    --verd: #30d158;
+    --verd-suau: rgba(48, 209, 88, 0.18);
     --proposta: #ffd60a;
     --proposta-ratlla: #ffd60a;
     --proposta-suau: rgba(255, 214, 10, 0.18);
@@ -787,6 +791,85 @@ body.reproduint .gran-play { opacity: 0; transform: scale(0.85); pointer-events:
 .play .si-play { stroke-width: 2.6; display: none; }
 body.reproduint .play .si-pausa { display: none; }
 body.reproduint .play .si-play { display: block; }
+
+/* Notes per a Claude, sota el vídeo. El número i el color de cada nota són els mateixos a la llista i a la
+   línia de temps: gris per enviar, blau a Claude, verd feta, taronja quan Claude et pregunta alguna cosa. */
+.notes {
+  width: 100%; flex: 0 1 auto; min-height: 0; max-height: 40%;
+  display: flex; flex-direction: column; gap: var(--e2);
+  padding-top: var(--e3); border-top: 1px solid var(--linia);
+}
+.cap-notes { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e2); }
+.cap-notes h2 { margin: 0; font-size: var(--t-petit); font-weight: 600; color: var(--text-2); }
+.connexio { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-peu); color: var(--text-2); white-space: nowrap; }
+.punt-connexio { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); transition: background-color 200ms; }
+.connexio.connectat .punt-connexio { background: var(--verd); }
+.connexio.treballa .punt-connexio { background: var(--accent); }
+.avis-connexio { padding: var(--e2) var(--e3); border-radius: var(--radi); background: var(--proposta-suau); font-size: var(--t-petit); line-height: 1.45; }
+.avis-connexio p { margin: 0 0 var(--e2); }
+.avis-connexio q { font-weight: 600; }
+.nova-nota {
+  flex: none; display: flex; align-items: flex-start; gap: var(--e2); padding: 5px 6px;
+  border-radius: var(--radi); background: var(--superficie); box-shadow: inset 0 0 0 1px var(--linia);
+}
+.nova-nota:focus-within { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--focus); }
+.temps-nota {
+  flex: none; height: 22px; margin-top: 1px; padding: 0 6px; border: 0; border-radius: 5px;
+  background: var(--accent-suau); color: var(--accent); font-size: var(--t-peu); font-weight: 600;
+  font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.temps-nota.tot { background: var(--omplir); color: var(--text-2); }
+#text-nota {
+  flex: 1; min-width: 0; height: 24px; max-height: 96px; padding: 3px 2px; border: 0; background: none; resize: none;
+  font: inherit; font-size: var(--t-ui); line-height: 18px; color: var(--text); outline: none;
+  -webkit-user-select: text; user-select: text;
+}
+#text-nota::placeholder { color: var(--text-3); }
+.llista-notes { list-style: none; margin: 0; padding: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--e1); }
+.nota { flex: none; padding: var(--e2); border-radius: var(--radi); background: var(--superficie); box-shadow: 0 0 0 0.5px var(--linia); }
+.nota.llum { animation: llum-nota 1.2s var(--molla); }
+@keyframes llum-nota { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0.5px var(--linia); } }
+.nota-cap { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-peu); color: var(--text-2); }
+.num-nota, .marca-nota {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; height: 16px; min-width: 16px; padding: 0 4px;
+  border: 0; border-radius: 8px 8px 8px 2px; background: var(--text-3); color: #fff; font-size: 10px; font-weight: 700; line-height: 1;
+}
+.estat-enviada .num-nota, .estat-treballant .num-nota, .marca-nota.estat-enviada, .marca-nota.estat-treballant { background: var(--accent); }
+.estat-feta .num-nota, .marca-nota.estat-feta { background: var(--verd); }
+.estat-pregunta .num-nota, .marca-nota.estat-pregunta { background: var(--auto); }
+.nota-temps {
+  flex: none; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600;
+  font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.nota-temps:hover { text-decoration: underline; }
+.nota-cita { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nota-text, .nota-claude { margin: var(--e1) 0 0; font-size: var(--t-ui); white-space: pre-wrap; overflow-wrap: anywhere; -webkit-user-select: text; user-select: text; }
+.nota-claude { margin-left: 2px; padding-left: var(--e2); border-left: 2px solid var(--linia); }
+.nota-claude b { display: block; font-size: var(--t-peu); font-weight: 600; color: var(--text-2); }
+.nota-peu { display: flex; align-items: center; gap: var(--e2); margin-top: 6px; }
+.nota-peu .enllac { margin: 0; font-size: var(--t-peu); }
+.xip-nota {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 10px;
+  background: var(--omplir); font-size: 11px; font-weight: 600; color: var(--text-2);
+}
+.estat-enviada .xip-nota, .estat-treballant .xip-nota { background: var(--accent-suau); color: var(--accent); }
+.estat-feta .xip-nota { background: var(--verd-suau); color: var(--verd); }
+.estat-pregunta .xip-nota { background: var(--auto-suau); color: var(--auto); }
+.respon-nota { display: flex; align-items: flex-end; gap: 6px; margin-top: var(--e2); }
+.respon-nota textarea {
+  flex: 1; min-width: 0; height: 28px; max-height: 90px; padding: 4px 8px; border: 0; border-radius: var(--radi-petit);
+  background: var(--fons); box-shadow: inset 0 0 0 1px var(--linia); resize: none;
+  font: inherit; font-size: var(--t-ui); line-height: 18px; color: var(--text); -webkit-user-select: text; user-select: text;
+}
+.respon-nota textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--focus); }
+.boto.petit { height: 28px; padding: 0 var(--e3); font-size: var(--t-petit); }
+.boto.suau { background: var(--accent-suau); color: var(--accent); font-weight: 600; }
+.boto.suau:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.boto.ample { flex: none; width: 100%; height: 32px; }
+/* Els números de les notes, sobre la línia de temps: la punta de la bombolla assenyala el moment. */
+.marques-notes { position: relative; width: 100%; height: 16px; margin-bottom: calc(-1 * var(--e2)); }
+.marca-nota { position: absolute; top: 0; cursor: pointer; transition: transform 120ms var(--molla); }
+.marca-nota:hover { transform: scale(1.15); transform-origin: bottom left; }
 
 
 /* --- Full modal i avisos ------------------------------------------------------ */

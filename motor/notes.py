@@ -1,0 +1,300 @@
+"""Les notes per a Claude: el que la persona demana des de la pàgina, i el que Claude hi respon.
+
+Es desen a notes.json, a la carpeta de la gravació sencera (també les dels seus reels: així Claude les espera
+totes d'un sol lloc): {"versio": n, "notes": [...]}. Hi escriuen dos processos
+(el servidor de la pàgina i `tallat.py notes`, que fa servir Claude), i per això tot es llegeix i s'escriu
+amb el fitxer bloquejat: el bloqueig del sistema (flock al Mac, msvcrt a Windows) sobre notes.json.bloqueig,
+que s'allibera sol si el procés s'acaba (revisió de Codex: esborrar bloquejos «vells» deixava entrar dos processos).
+
+Cada nota és una conversa: {id, estat, projecte, reel, paraula, inici, cita, fil: [{de: "persona" | "claude",
+text, quan}]}. `projecte` és la carpeta que s'editava (la gravació o un reel; `reel`, el títol del reel).
+`paraula` i `inici` diuen on va (la paraula marcada i el segon de la gravació), o None si és per a tot el vídeo;
+`cita` és el que es diu en aquell moment, perquè Claude ho entengui sense obrir res.
+Estats: «esborrany» (a la pàgina, encara no enviada), «enviada» (Claude encara no l'ha agafada), «treballant»
+(Claude l'ha agafada), «feta» (Claude hi ha respost) i «pregunta» (Claude pregunta alguna cosa: la resposta de
+la persona hi torna a anar de seguida). En agafar-la, s'hi apunta quan (`agafada`), quants cops (`cops`) i quants
+missatges ha vist Claude (`vistos`): si la persona n'hi afegeix mentre Claude hi treballa, la resposta de Claude
+no la tanca, i li torna a arribar.
+
+Quan Claude espera notes, ho diu a connexio.json cada pocs segons: així la pàgina pot dir «Connectat amb Claude».
+"""
+from __future__ import annotations
+
+import json
+import os
+import time
+from contextlib import contextmanager
+from pathlib import Path
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
+
+FITXER = "notes.json"
+CONNEXIO = "connexio.json"
+VIU = 15            # segons: si Claude no ha dit res en aquest temps, ja no hi és connectat
+ESPERA_BLOQUEIG = 20  # segons: més, i és que alguna cosa ha anat malament
+REAGAFA = 20 * 60   # segons: una nota agafada fa més temps i sense resposta es torna a donar (Claude es va aturar)
+ESTATS = ("esborrany", "enviada", "treballant", "feta", "pregunta")
+
+
+def _intenta_bloquejar(f) -> bool:
+    try:
+        if os.name == "nt":
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _desbloqueja(f) -> None:
+    if os.name == "nt":
+        f.seek(0)
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
+def _bloquejat(carpeta: Path):
+    # El fitxer del bloqueig es queda a la carpeta: el que bloqueja és tenir-lo obert i bloquejat, no que hi sigui.
+    with open(Path(carpeta) / (FITXER + ".bloqueig"), "a+b") as f:
+        t0 = time.time()
+        while not _intenta_bloquejar(f):
+            if time.time() - t0 > ESPERA_BLOQUEIG:
+                raise TimeoutError("Les notes fa massa que estan bloquejades.")
+            time.sleep(0.02)
+        try:
+            yield
+        finally:
+            _desbloqueja(f)
+
+
+def _llegeix(carpeta: Path) -> dict:
+    try:
+        dades = json.loads((Path(carpeta) / FITXER).read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return {"versio": 0, "notes": []}
+    return {"versio": int(dades.get("versio", 0)), "notes": list(dades.get("notes", []))}
+
+
+def _substitueix(tmp: Path, path: Path) -> None:
+    """os.replace, però a Windows pot fallar un moment si un altre procés (o l'antivirus) té el fitxer obert:
+    s'hi torna uns quants cops abans de rendir-se."""
+    for intent in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if intent == 19:
+                raise
+            time.sleep(0.05)
+
+
+def _escriu(carpeta: Path, dades: dict) -> None:
+    path = Path(carpeta) / FITXER
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(dades, ensure_ascii=False, indent=1), encoding="utf-8")
+    _substitueix(tmp, path)
+
+
+def llegeix(carpeta: Path) -> dict:
+    """{"versio": n, "notes": [...]}: la versió puja a cada canvi (la pàgina sap quan les ha de tornar a pintar)."""
+    with _bloquejat(carpeta):
+        return _llegeix(carpeta)
+
+
+def _canvia(carpeta: Path, fn):
+    """Aplica fn(notes) amb el fitxer bloquejat i desa; torna el que torni fn."""
+    with _bloquejat(carpeta):
+        dades = _llegeix(carpeta)
+        resultat = fn(dades["notes"])
+        dades["versio"] += 1
+        _escriu(carpeta, dades)
+        return resultat
+
+
+def _troba(notes: list[dict], id_: int) -> dict:
+    for n in notes:
+        if n["id"] == id_:
+            return n
+    raise KeyError(f"No hi ha cap nota {id_}.")
+
+
+def _missatge(de: str, text: str) -> dict:
+    text = str(text).strip()
+    if not text:
+        raise ValueError("La nota és buida.")
+    return {"de": de, "text": text[:4000], "quan": round(time.time())}
+
+
+def afegeix(carpeta: Path, text: str, paraula: int | None = None, inici: float | None = None,
+            cita: str | None = None, projecte: str | None = None, reel: str | None = None) -> dict:
+    """Una nota nova, encara per enviar."""
+    def fes(notes):
+        nota = {"id": max((n["id"] for n in notes), default=0) + 1, "estat": "esborrany",
+                "projecte": projecte, "reel": reel,
+                "paraula": paraula, "inici": inici, "cita": (cita or "").strip()[:200] or None,
+                "fil": [_missatge("persona", text)]}
+        notes.append(nota)
+        return nota
+    return _canvia(carpeta, fes)
+
+
+def esborra(carpeta: Path, id_: int) -> None:
+    """Treu una nota que encara no s'ha enviat (les altres ja les ha vist Claude)."""
+    def fes(notes):
+        nota = _troba(notes, id_)
+        if nota["estat"] != "esborrany":
+            raise ValueError("Aquesta nota ja és a Claude.")
+        notes.remove(nota)
+    _canvia(carpeta, fes)
+
+
+def respon_persona(carpeta: Path, id_: int, text: str) -> dict:
+    """La persona contesta la pregunta de Claude (o hi afegeix alguna cosa a una nota ja feta): torna a Claude
+    de seguida, sense haver de prémer «Envia». Si encara no l'havia enviada, s'afegeix a la nota i prou; si Claude
+    hi treballa, li arribarà quan respongui (vegeu `respon`)."""
+    def fes(notes):
+        nota = _troba(notes, id_)
+        nota["fil"].append(_missatge("persona", text))
+        if nota["estat"] in ("feta", "pregunta"):
+            nota["estat"] = "enviada"
+        return nota
+    return _canvia(carpeta, fes)
+
+
+def envia(carpeta: Path, projecte: str | None = None) -> int:
+    """Les notes per enviar (totes, o només les d'un projecte: el que es veu a la pàgina), cap a Claude.
+    Torna quantes."""
+    def fes(notes):
+        n = 0
+        for nota in notes:
+            if nota["estat"] == "esborrany" and (projecte is None or nota.get("projecte") == projecte):
+                nota["estat"] = "enviada"
+                n += 1
+        return n
+    return _canvia(carpeta, fes)
+
+
+def _per_agafar(nota: dict, ara: float) -> bool:
+    """Les enviades, i les agafades fa estona que no s'han respost (Claude es va aturar a mitges). Les que s'acaben
+    d'agafar no: si hi ha dues esperes alhora, o Claude torna a esperar abans d'acabar, no les rep dos cops."""
+    if nota["estat"] == "enviada":
+        return True
+    return nota["estat"] == "treballant" and ara - nota.get("agafada", 0) > REAGAFA
+
+
+def pren(carpeta: Path) -> list[dict]:
+    """Claude agafa les notes que li toquen (passen a «treballant»). Torna còpies."""
+    ara = time.time()
+
+    def fes(notes):
+        preses = []
+        for nota in notes:
+            if _per_agafar(nota, ara):
+                nota.update(estat="treballant", agafada=ara, cops=nota.get("cops", 0) + 1, vistos=len(nota["fil"]))
+                preses.append(nota)
+        return [json.loads(json.dumps(n)) for n in preses]
+    with _bloquejat(carpeta):  # si no n'hi ha cap, no cal reescriure el fitxer
+        if not any(_per_agafar(n, ara) for n in _llegeix(carpeta)["notes"]):
+            return []
+    return _canvia(carpeta, fes)
+
+
+def respon(carpeta: Path, id_: int, text: str, pregunta: bool = False, cop: int | None = None) -> dict:
+    """La resposta de Claude a una nota: «feta» o, si pregunta alguna cosa, «pregunta». Però si mentrestant la
+    persona hi ha escrit alguna cosa que Claude no ha vist, la nota li torna a arribar (amb tota la conversa).
+    `cop` diu de quina vegada que se li va donar és la resposta: si és d'una d'abans (la nota s'ha tornat a donar,
+    potser a un altre Claude), la resposta es desa però no la tanca (revisió de Codex)."""
+    def fes(notes):
+        nota = _troba(notes, id_)
+        vella = cop is not None and cop != nota.get("cops", 0)
+        vistos = nota.get("vistos", len(nota["fil"]))
+        noves = any(m["de"] == "persona" for m in nota["fil"][vistos:])
+        nota["fil"].append(_missatge("claude", text))
+        if not vella:
+            nota["estat"] = "enviada" if noves else "pregunta" if pregunta else "feta"
+        return nota
+    return _canvia(carpeta, fes)
+
+
+def marca_connexio(carpeta: Path) -> None:
+    """Claude espera notes: ho diu a la pàgina (cal repetir-ho cada pocs segons). Cada procés amb el seu fitxer
+    temporal: si hi ha dues esperes alhora, no es trepitgen (revisió de Codex)."""
+    path = Path(carpeta) / CONNEXIO
+    tmp = path.with_name(f"{CONNEXIO}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps({"vist": time.time(), "pid": os.getpid()}), encoding="utf-8")
+    try:
+        _substitueix(tmp, path)
+    except PermissionError:
+        tmp.unlink(missing_ok=True)  # la pàgina ho llegia just ara: ja es dirà d'aquí a un segon
+
+
+def deixa_connexio(carpeta: Path) -> None:
+    """Treu el senyal, si és d'aquest procés (si n'hi ha una altra espera, que continuï dient-ho)."""
+    path = Path(carpeta) / CONNEXIO
+    try:
+        if json.loads(path.read_text(encoding="utf-8")).get("pid") == os.getpid():
+            path.unlink()
+    except (OSError, ValueError):
+        pass
+
+
+def connectat(carpeta: Path) -> bool:
+    """Si Claude espera notes ara mateix."""
+    try:
+        vist = float(json.loads((Path(carpeta) / CONNEXIO).read_text(encoding="utf-8")).get("vist", 0))
+    except (FileNotFoundError, ValueError, OSError):
+        return False
+    return time.time() - vist < VIU
+
+
+def espera(carpeta: Path, segons: float, cada: float = 1.0, avis=None) -> list[dict]:
+    """Espera fins que hi hagi notes enviades (i les agafa) o fins que passin `segons`; mentrestant, la pàgina
+    sap que Claude hi és connectat. Torna les notes agafades (pot ser una llista buida)."""
+    fi = time.time() + segons
+    try:
+        while True:
+            marca_connexio(carpeta)
+            preses = pren(carpeta)
+            if preses or time.time() >= fi:
+                return preses
+            time.sleep(min(cada, max(0.0, fi - time.time())))
+    finally:
+        deixa_connexio(carpeta)
+
+
+def id_per_respondre(nota: dict) -> str:
+    """El que Claude escriu a `--respon`: el número de la nota i de quina vegada se li ha donat («3.2»)."""
+    return f"{nota['id']}.{nota['cops']}" if nota.get("cops") else str(nota["id"])
+
+
+def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None) -> str:
+    """Una nota explicada perquè Claude la pugui fer: on va, què hi diu la persona i què s'han dit abans.
+    `al_video` és el segon del vídeo editat (el que la persona veu sota el vídeo), si se sap."""
+    on = f"per a tot el reel «{nota['reel']}»" if nota.get("reel") else "per a tot el vídeo"
+    if nota.get("inici") is not None:
+        gravacio = durada_mmss(nota["inici"])
+        on = (f"al {durada_mmss(al_video)} del vídeo, el {gravacio} de la gravació" if al_video is not None
+              else f"al {gravacio} de la gravació, un tros que ara no surt al vídeo")
+        if nota.get("cita"):
+            on += f", a «{nota['cita']}»"
+        if nota.get("paraula") is not None:
+            on += f" (paraula {nota['paraula']})"
+        if nota.get("reel"):
+            on += f", al reel «{nota['reel']}»"
+    linies = [f"Nota {nota['id']} ({on}):"]
+    for m in nota["fil"]:
+        linies.append(f"  {'Tu' if m['de'] == 'claude' else 'La persona'}: {m['text']}")
+    if nota.get("cops", 0) > 1 and nota["fil"][-1]["de"] == "persona":
+        linies.append("  (Ja te l'havia donat i no l'has resposta: mira si ja l'havies feta abans de tornar-la a fer.)")
+    if nota["estat"] == "treballant":
+        linies.append(f"  Per respondre-la: --respon {id_per_respondre(nota)}")
+    if nota.get("projecte"):
+        linies.append(f"  (es fa a --projecte \"{nota['projecte']}\")")
+    return "\n".join(linies)

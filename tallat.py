@@ -23,6 +23,8 @@
   python tallat.py grafics canvia PLA.json --projecte CARPETA   (només els gràfics del fitxer: les notes ateses)
   python tallat.py grafics fotogrames --projecte CARPETA        (el fotograma de cada gràfic, per triar-ne el lloc)
   python tallat.py grafics captura URL [--grafic g3] --projecte CARPETA  (la captura d'una web, per al gràfic «web»)
+  python tallat.py notes --projecte CARPETA [--espera [--minuts 9]]      (les notes de la pàgina per a l'assistent)
+  python tallat.py notes --projecte CARPETA --respon NÚMERO "TEXT" [--pregunta]
 
 La carpeta del projecte ha de ser fora del repositori (els vídeos i el que dius no es publiquen).
 """
@@ -40,7 +42,7 @@ import time
 import webbrowser
 from pathlib import Path
 
-from motor import comprova, edicio, editors, entorn, exporta, grafics, gust, instruccions, marca, muntatge, transcripcio
+from motor import comprova, edicio, editors, entorn, exporta, grafics, gust, instruccions, marca, muntatge, notes, transcripcio
 from motor.projecte import EXPORTS, ORIGINAL, PROXY, TRANSCRIPCIO, Projecte, arrel_de, minuts
 
 
@@ -626,6 +628,60 @@ def ordre_marca(args) -> None:
             print(f"  {etiqueta}: {', '.join(valor) if isinstance(valor, list) else 'sí' if valor is True else valor}")
 
 
+def _mmss(t: float) -> str:
+    return f"{int(t // 60)}:{int(t % 60):02d}"
+
+
+def _al_video(nota: dict) -> float | None:
+    """El segon del vídeo editat on cau la nota (el que la persona veia sota el vídeo), amb els talls d'ara."""
+    if nota.get("inici") is None or not nota.get("projecte"):
+        return None
+    try:
+        projecte = Projecte(Path(nota["projecte"]))
+        return projecte.al_muntatge(nota["inici"], projecte.trams())
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def ordre_notes(args) -> None:
+    """Les notes que la persona deixa a la pàgina per a l'assistent (es desen a la gravació sencera, també les
+    dels reels). Sense opcions, les ensenya; amb --espera, espera les que envii i les agafa; amb --respon, hi respon."""
+    carpeta = arrel_de(Path(args.projecte).expanduser().resolve())
+    if not (carpeta / TRANSCRIPCIO).exists():
+        sys.exit(f"No trobo el projecte: {carpeta}")
+    if args.respon:
+        id_, text = args.respon
+        try:  # «3» o «3.2» (la nota 3, la segona vegada que se t'ha donat: la que diu --espera)
+            num, _, cop = id_.partition(".")
+            notes.respon(carpeta, int(num), text, pregunta=args.pregunta, cop=int(cop) if cop else None)
+        except (KeyError, ValueError) as e:
+            sys.exit(str(e).strip("'\""))
+        print(f"Resposta desada a la nota {num}: la persona la veu a la pàgina.")
+        return
+    if args.espera:
+        segons = max(1.0, args.minuts * 60)
+        print(f"Espero les notes de la pàgina (com a molt {minuts(segons)}). Mentrestant, la pàgina diu «Connectat amb Claude».",
+              flush=True)
+        preses = notes.espera(carpeta, segons)
+        if not preses:
+            print("Encara no ha arribat cap nota. Torna a esperar-les quan vulguis.")
+            return
+        print("Ha arribat 1 nota:\n" if len(preses) == 1 else f"Han arribat {len(preses)} notes:\n")
+        for nota in preses:
+            print(notes.text_per_a_claude(nota, _mmss, _al_video(nota)) + "\n")
+        print("Fes-les i respon cada una amb el número que diu «Per respondre-la» (la persona veu la resposta a la pàgina):")
+        print(f'  tallat.py notes --projecte "{carpeta}" --respon NÚMERO "Fet: …"   (si no ho tens clar, afegeix --pregunta)')
+        print("Després, torna a esperar-les amb --espera.")
+        return
+    totes = notes.llegeix(carpeta)["notes"]
+    if not totes:
+        print("Encara no hi ha cap nota.")
+        return
+    noms = {"esborrany": "per enviar", "enviada": "enviada", "treballant": "agafada", "feta": "feta", "pregunta": "pregunta"}
+    for nota in totes:
+        print(f"[{noms.get(nota['estat'], nota['estat'])}] {notes.text_per_a_claude(nota, _mmss, _al_video(nota))}")
+
+
 def ordre_destaca(args) -> None:
     projecte = _carrega(args)
     destacades = projecte.estat.setdefault("destacades", {})
@@ -649,7 +705,7 @@ def ordre_destaca(args) -> None:
               + ", ".join(f"{i} {'sí' if v else 'no'}" for i, v in triades))
     if not projecte.estil_subtitols().get("clau_grans"):
         print("Avís: el kit d'aquest vídeo no fa més grans les paraules destacades. "
-              "S'activa a la pàgina: Subtítols → Estil → Paraules destacades.")
+              "S'activa a la pàgina: Com es veu → Subtítols → Més opcions → Paraules destacades.")
 
 
 PESOS = {"thin": "100", "extralight": "200", "light": "300", "regular": "400", "book": "400", "normal": "400",
@@ -888,6 +944,14 @@ def main() -> None:
     de.add_argument("--no", type=int, nargs="+", metavar="ID", help="Paraules que no han de sortir destacades")
     de.add_argument("--automatic", action="store_true", help="Oblida les triades a mà: les tria totes tallat")
     de.set_defaults(func=ordre_destaca)
+
+    no = sub.add_parser("notes", help="Les notes que la persona deixa a la pàgina per a l'assistent")
+    no.add_argument("--projecte", required=True)
+    no.add_argument("--espera", action="store_true", help="Espera les notes que envii la persona (i les agafa)")
+    no.add_argument("--minuts", type=float, default=9, help="Amb --espera: com a molt quant temps (per defecte, 9)")
+    no.add_argument("--respon", nargs=2, metavar=("NÚMERO", "TEXT"), help="Respon una nota (el número que diu --espera, p. ex. 3.1)")
+    no.add_argument("--pregunta", action="store_true", help="Amb --respon: és una pregunta, que la persona ha de contestar")
+    no.set_defaults(func=ordre_notes)
 
     args = p.parse_args()
     args.func(args)

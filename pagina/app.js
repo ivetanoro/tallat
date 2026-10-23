@@ -167,6 +167,8 @@ async function miraNovetats() {
   try {
     const n = await (await fetch("/api/novetats")).json();
     if (n.clau_projecte !== P.clau_projecte || esperada !== cua || pendent) return;
+    if (n.versio_notes !== versioNotes) respostaNotes(await api("/api/notes"));
+    else if (n.connectat !== claudeConnectat) { claudeConnectat = n.connectat; pintaNotes(); }
     if (versioEstil == null) versioEstil = n.estil;
     if (n.estil !== versioEstil) {
       respostaEstil(await api("/api/marca/info"));
@@ -261,6 +263,7 @@ function aplicaTrams(r) {
     programaPrevia(duradaFinal > 300 ? 4000 : 900);
   }
   if (vista === "directe") { pintaMarques(trams, acum, duradaFinal); recolloca(); }
+  if (notesCarregades) pintaNotes();
 }
 
 // --- Transcripció ---------------------------------------------------------------------
@@ -2507,23 +2510,32 @@ function comprovaTall() {
   }
 }
 
+// El segon de la gravació que es veu ara (al muntatge o a l'esborrany).
+function tempsOriginalAra() {
+  if (vista === "directe") return continu() || escoltant ? originalDe(tempsMuntatge()) : tempsVideo();
+  if (!esborrany?.trams) return null;
+  const m = vE.currentTime;
+  let k = 0;
+  while (k + 1 < esborrany.trams.length && esborrany.acum[k + 1] <= m) k++;
+  return esborrany.trams[k] ? esborrany.trams[k][0] + (m - esborrany.acum[k]) : null;
+}
+
+// L'última paraula que comença abans del segon t de la gravació (-1 si encara no n'ha començat cap).
+function paraulaAbans(t) {
+  let lo = 0, hi = P.paraules.length - 1;
+  while (lo <= hi) {
+    const mig = (lo + hi) >> 1;
+    if (P.paraules[mig].inici <= t) lo = mig + 1; else hi = mig - 1;
+  }
+  return hi;
+}
+
 let paraulaMarcada = null;
 function paraulaActual() {
-  let t;
-  if (vista === "directe") t = continu() || escoltant ? originalDe(tempsMuntatge()) : tempsVideo();
-  else if (esborrany?.trams) {
-    const m = vE.currentTime;
-    let k = 0;
-    while (k + 1 < esborrany.trams.length && esborrany.acum[k + 1] <= m) k++;
-    t = esborrany.trams[k] ? esborrany.trams[k][0] + (m - esborrany.acum[k]) : null;
-  }
+  const t = tempsOriginalAra();
   let id = null;
   if (t != null) {
-    let lo = 0, hi = P.paraules.length - 1;
-    while (lo <= hi) {
-      const mig = (lo + hi) >> 1;
-      if (P.paraules[mig].inici <= t) lo = mig + 1; else hi = mig - 1;
-    }
+    const hi = paraulaAbans(t);
     if (hi >= 0 && t <= P.paraules[hi].final + 0.15) id = hi;
   }
   if (id === paraulaMarcada) return;
@@ -2546,6 +2558,7 @@ function pintaTemps() {
   $("#capcal").style.left = `${f * 100}%`;
   $("#temps-actual").textContent = fmt(m);
   $("#temps-total").textContent = fmt(d);
+  if (!momentNota) $("#temps-nota").textContent = fmt(m);
 }
 
 function pintaMarques(llista, inicis, total) {
@@ -2638,6 +2651,7 @@ function canviaVista(nova) {
   $("#escolta").hidden = !directe;
   if (directe) { pintaMarques(trams, acum, duradaFinal); passaAMuntatge(); }
   else if (esborrany) pintaMarques(esborrany.trams || [], esborrany.acum || [], esborrany.durada);
+  pintaMarquesNotes();
   pintaTemps();
 }
 
@@ -3718,6 +3732,8 @@ const PASSES_GUIA = [
   ["#escolta", "Quan treus una paraula, sonen uns segons al voltant del tall perquè sentis com queda, i s'atura. " +
     "Si no ho vols, apaga això."],
   [".pantalla", "Toca els subtítols, el títol o un gràfic al vídeo per canviar-los. Arrossega'ls per moure'ls."],
+  ["#notes", "Per demanar-li coses a Claude: atura el vídeo on vulguis, escriu una nota (o prem N) i, quan acabis, " +
+    "toca Envia a Claude. Claude les fa i et respon a sota de cada una."],
   [".com-es-veu", "Aquí tries com es veu: l'estil, els subtítols, el títol, els gràfics, el b-roll i el so."],
   ['[data-seccio="ritme"]', "I aquí, el ritme: com de curts vols els silencis entre frases."],
   ["#final", "Quan estigui a punt, toca Exporta: un esborrany per mirar-lo, el vídeo final o per a un altre editor."],
@@ -4196,6 +4212,335 @@ async function decideixInstruccio(ins, nou) {
   }
 }
 
+// --- Notes per a Claude -----------------------------------------------------------------------
+// La persona atura el vídeo on vol, escriu què vol que faci Claude (o una nota per a tot el vídeo) i,
+// quan acaba, les envia. Claude les espera des del xat (`tallat.py notes --espera`), les fa i hi respon:
+// aquí es veu la resposta a sota de cada nota. Es desen a notes.json, a la gravació sencera; la pàgina
+// ensenya les del que s'edita (el vídeo sencer o un reel). Cada nota va a la paraula que sonava.
+
+let notesTotes = [];
+let projecteNotes = null;      // la carpeta del que s'edita: se'n veuen les notes
+let versioNotes = null;
+let notesCarregades = false;
+let claudeConnectat = false;   // Claude espera les notes ara mateix
+let momentNota = null;         // on va la nota que s'escriu: {paraula, m} o {tot: true}; null: on és el vídeo
+const respostesObertes = new Set();  // notes fetes on s'ha tocat «Respon»
+const ESTATS_NOTA = { esborrany: "Per enviar", enviada: "Enviada", treballant: "Claude hi treballa…", feta: "Feta",
+  pregunta: "Et pregunta" };
+
+const notesVisibles = () => notesTotes.filter((n) => n.projecte === projecteNotes);
+
+// El segon del vídeo editat on cau un segon de la gravació (si aquell tros s'ha tret, on comença el següent).
+function muntatgeDe(t) {
+  const k = indexTram(t);
+  if (k >= trams.length) return duradaFinal;
+  return acum[k] + limita(t - trams[k][0], 0, trams[k][1] - trams[k][0]);
+}
+
+async function carregaNotes() {
+  try { respostaNotes(await api("/api/notes")); } catch { /* sense notes: la secció queda buida */ }
+}
+
+function respostaNotes(r) {
+  const abans = new Map(notesTotes.map((n) => [n.id, n.estat]));
+  notesTotes = r.notes || [];
+  projecteNotes = r.projecte ?? projecteNotes;
+  versioNotes = r.versio_notes;
+  if ("connectat" in r) claudeConnectat = r.connectat;
+  if (notesCarregades) avisaRespostes(abans);
+  notesCarregades = true;
+  pintaNotes();
+}
+
+// Quan Claude acaba una nota o pregunta alguna cosa, un avís curt (la nota es veu a la llista).
+function avisaRespostes(abans) {
+  const ara = notesVisibles().filter((n) => ["enviada", "treballant"].includes(abans.get(n.id)));
+  const fetes = ara.filter((n) => n.estat === "feta").length;
+  const pregunta = ara.find((n) => n.estat === "pregunta");
+  if (pregunta) avis(`Claude et pregunta una cosa a la nota ${pregunta.id}.`, 5000);
+  else if (fetes) avis(fetes === 1 ? "Claude ha fet una nota." : `Claude ha fet ${fetes} notes.`, 4000);
+}
+
+function etiquetaEstat(n) {
+  if (n.estat === "enviada" && !claudeConnectat) return "S'espera Claude";
+  return ESTATS_NOTA[n.estat] || n.estat;
+}
+
+// Les notes sense moment (per a tot el vídeo), primer; les altres, per l'ordre del vídeo.
+function ordreNotes(a, b) {
+  if ((a.inici == null) !== (b.inici == null)) return a.inici == null ? -1 : 1;
+  return a.inici == null ? a.id - b.id : muntatgeDe(a.inici) - muntatgeDe(b.inici) || a.id - b.id;
+}
+
+function pintaNotes() {
+  const visibles = notesVisibles().sort(ordreNotes);
+  const llista = $("#llista-notes");
+  // El que s'està escrivint en una resposta no es perd quan arriben novetats.
+  const escrits = new Map($$(".respon-nota textarea").map((t) => [t.dataset.id, t.value]));
+  const ambFocus = document.activeElement?.closest?.(".respon-nota")?.querySelector("textarea")?.dataset.id;
+  llista.textContent = "";
+  for (const n of visibles) llista.append(elementNota(n, escrits.get(String(n.id)) || ""));
+  if (ambFocus) {
+    const t = llista.querySelector(`.respon-nota textarea[data-id="${ambFocus}"]`);
+    if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+  }
+  $("#compte-notes").textContent = visibles.length ? String(visibles.length) : "";
+  const perEnviar = visibles.filter((n) => n.estat === "esborrany").length;
+  const envia = $("#envia-notes");
+  envia.hidden = !perEnviar;
+  envia.textContent = `Envia a Claude (${perEnviar})`;
+  pintaConnexio();
+  pintaMarquesNotes();
+}
+
+function elementNota(n, escrit) {
+  const li = document.createElement("li");
+  li.className = `nota estat-${n.estat}`;
+  li.dataset.id = n.id;
+  const cap = document.createElement("div");
+  cap.className = "nota-cap";
+  const num = document.createElement("span");
+  num.className = "num-nota";
+  num.textContent = n.id;
+  cap.append(num);
+  if (n.inici != null) {
+    const temps = document.createElement("button");
+    temps.className = "nota-temps";
+    temps.textContent = fmt(muntatgeDe(n.inici));
+    temps.title = "Ves a aquest moment del vídeo";
+    temps.addEventListener("click", () => vesANota(n));
+    cap.append(temps);
+  }
+  const cita = document.createElement("span");
+  cita.className = "nota-cita";
+  cita.textContent = n.inici != null && n.cita ? `«${n.cita}»` : "Per a tot el vídeo";
+  cap.append(cita);
+  li.append(cap);
+  for (const m of n.fil) {
+    const p = document.createElement("p");
+    if (m.de === "claude") {
+      p.className = "nota-claude";
+      const qui = document.createElement("b");
+      qui.textContent = "Claude";
+      p.append(qui, document.createTextNode(m.text));
+    } else {
+      p.className = "nota-text";
+      p.textContent = m.text;
+    }
+    li.append(p);
+  }
+  if (n.estat === "pregunta" || (n.estat === "feta" && respostesObertes.has(n.id))) li.append(formResposta(n, escrit));
+  const peu = document.createElement("div");
+  peu.className = "nota-peu";
+  const xip = document.createElement("span");
+  xip.className = "xip-nota";
+  xip.textContent = etiquetaEstat(n);
+  peu.append(xip);
+  const enllac = (text, fn) => {
+    const b = document.createElement("button");
+    b.className = "enllac";
+    b.textContent = text;
+    b.addEventListener("click", fn);
+    peu.append(b);
+  };
+  if (n.estat === "esborrany") enllac("Treu", () => treuNota(n.id));
+  if (n.estat === "feta" && !respostesObertes.has(n.id)) {
+    enllac("Respon", () => {
+      respostesObertes.add(n.id);
+      pintaNotes();
+      $(`.respon-nota textarea[data-id="${n.id}"]`)?.focus();
+    });
+  }
+  li.append(peu);
+  return li;
+}
+
+function formResposta(n, escrit) {
+  const form = document.createElement("form");
+  form.className = "respon-nota";
+  const camp = document.createElement("textarea");
+  Object.assign(camp, { rows: 1, maxLength: 4000, value: escrit,
+    placeholder: n.estat === "pregunta" ? "Respon…" : "Què vols que hi canviï?" });
+  camp.dataset.id = n.id;
+  camp.setAttribute("aria-label", `Resposta a la nota ${n.id}`);
+  const b = document.createElement("button");
+  b.type = "submit";
+  b.className = "boto petit";
+  b.textContent = "Envia";
+  form.append(camp, b);
+  form.addEventListener("submit", (e) => { e.preventDefault(); respon(n.id, camp); });
+  camp.addEventListener("input", () => ajustaAlcada(camp));
+  camp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); respon(n.id, camp); }
+    else if (e.key === "Escape") { e.stopPropagation(); camp.blur(); }
+  });
+  queueMicrotask(() => ajustaAlcada(camp));
+  return form;
+}
+
+// Un camp de text que creix amb el que s'hi escriu (fins al màxim que diu l'estil).
+function ajustaAlcada(camp) {
+  camp.style.height = "auto";
+  camp.style.height = `${camp.scrollHeight}px`;
+}
+
+// El text es queda al camp fins que el servidor l'ha desat: si falla, no es perd (encara que la llista s'hagi
+// tornat a pintar mentrestant: el que hi ha escrit es conserva, vegeu pintaNotes). Revisió de Codex.
+const enviantResposta = new Set();
+async function respon(id, camp) {
+  const text = camp.value.trim();
+  if (!text || enviantResposta.has(id)) return;
+  enviantResposta.add(id);
+  try {
+    respostaNotes(await api("/api/notes", { accio: "respon", id, text }));
+  } catch (e) {
+    avis(e.message, 5000);
+    return;
+  } finally {
+    enviantResposta.delete(id);
+  }
+  if (respostesObertes.delete(id)) pintaNotes();
+  avis(claudeConnectat ? "Resposta enviada a Claude." : "Resposta desada: Claude la veurà quan miri les notes.");
+}
+
+async function treuNota(id) {
+  try { respostaNotes(await api("/api/notes", { accio: "esborra", id })); } catch (e) { avis(e.message, 5000); }
+}
+
+async function enviaNotes() {
+  try { respostaNotes(await api("/api/notes", { accio: "envia" })); } catch (e) { avis(e.message, 5000); return; }
+  avis(claudeConnectat ? "Enviades a Claude." : "Enviades. Ara escriu-li al xat: «mira les meves notes».", 5000);
+}
+
+// Si Claude hi és connectat (espera les notes), si hi treballa o si no hi és. Sense notes i sense Claude, no
+// cal dir res. Si s'han enviat notes i Claude no hi és, què li has de dir al xat.
+function pintaConnexio() {
+  const visibles = notesVisibles();
+  const treballa = visibles.some((n) => n.estat === "treballant");
+  const espera = visibles.some((n) => n.estat === "enviada");
+  const el = $("#connexio");
+  el.hidden = !claudeConnectat && !visibles.length;
+  el.classList.toggle("connectat", claudeConnectat);
+  el.classList.toggle("treballa", !claudeConnectat && treballa);
+  $("#text-connexio").textContent = claudeConnectat ? "Connectat amb Claude" : treballa ? "Claude hi treballa" : "No connectat";
+  $("#avis-connexio").hidden = claudeConnectat || !espera;
+}
+
+function pintaMarquesNotes() {
+  const cont = $("#marques-notes");
+  cont.textContent = "";
+  const d = durada();
+  const amb = vista === "directe" && d ? notesVisibles().filter((n) => n.inici != null) : [];
+  cont.hidden = !amb.length;
+  for (const n of amb) {
+    const m = muntatgeDe(n.inici);
+    const b = document.createElement("button");
+    b.className = `marca-nota estat-${n.estat}`;
+    b.textContent = n.id;
+    b.style.left = `${limita(m / d, 0, 1) * 100}%`;
+    b.title = n.fil[0]?.text || "";
+    b.setAttribute("aria-label", `Nota ${n.id}, al ${fmt(m)}`);
+    b.addEventListener("click", () => vesANota(n));
+    cont.append(b);
+  }
+}
+
+function vesANota(n) {
+  if (n.inici != null) {
+    if (vista !== "directe") canviaVista("directe");
+    vesAOriginal(n.inici);
+  }
+  const li = $(`#llista-notes [data-id="${n.id}"]`);
+  if (!li) return;
+  li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  li.classList.remove("llum");
+  void li.offsetWidth;  // perquè l'animació torni a començar
+  li.classList.add("llum");
+}
+
+// En començar a escriure, la nota es queda al moment on era el vídeo (i el vídeo s'atura). Sempre on és el
+// vídeo, no a la paraula marcada: una paraula marcada fa estona deixava la nota lluny d'on es mirava (Codex).
+function fixaMomentNota() {
+  if (momentNota) return;
+  if (sona()) atura();
+  const t = tempsOriginalAra();
+  const paraula = t == null || !P.paraules.length ? null : Math.max(0, paraulaAbans(t));
+  momentNota = paraula == null ? { tot: true } : { paraula, m: muntatgeDe(P.paraules[paraula].inici) };
+  pintaMomentNota();
+}
+
+function pintaMomentNota() {
+  const b = $("#temps-nota");
+  const tot = !!momentNota?.tot;
+  b.classList.toggle("tot", tot);
+  b.textContent = tot ? "Tot el vídeo" : fmt(momentNota ? momentNota.m : tempsMuntatge());
+  b.title = tot ? "Toca-ho per fer-la en aquest moment del vídeo" : "Toca-ho per fer una nota per a tot el vídeo";
+  $("#text-nota").setAttribute("aria-label", tot ? "Nota per a Claude per a tot el vídeo"
+    : `Nota per a Claude al ${b.textContent} del vídeo`);
+}
+
+function obreNota() {
+  if (document.body.classList.contains("sense-reproductor")) mostraColumna("reproductor", true);
+  $("#text-nota").focus();
+}
+
+async function desaNota() {
+  const camp = $("#text-nota");
+  const text = camp.value.trim();
+  if (!text || camp.readOnly) return;  // mentre es desa, un altre ↩ no en fa una de repetida (Codex)
+  fixaMomentNota();
+  const paraula = momentNota.tot ? null : momentNota.paraula;
+  camp.readOnly = true;
+  try {
+    respostaNotes(await api("/api/notes", { accio: "afegeix", text, paraula }));
+  } catch (e) {
+    avis(e.message, 5000);
+    return;
+  } finally {
+    camp.readOnly = false;
+  }
+  camp.value = "";
+  ajustaAlcada(camp);
+  momentNota = null;
+  pintaMomentNota();
+  camp.blur();
+  if (!llegeix("tallat.nota-desada", false)) {
+    desa("tallat.nota-desada", true);
+    avis("Nota desada. Quan acabis, toca «Envia a Claude».", 5000);
+  } else avis("Nota desada.");
+}
+
+function instalaNotes() {
+  const camp = $("#text-nota");
+  camp.addEventListener("focus", fixaMomentNota);
+  camp.addEventListener("input", () => ajustaAlcada(camp));
+  camp.addEventListener("blur", () => {
+    if (camp.value.trim()) return;  // el que s'ha començat a escriure es queda al seu moment
+    momentNota = null;
+    pintaMomentNota();
+  });
+  camp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); desaNota(); }
+    else if (e.key === "Escape") { e.stopPropagation(); camp.blur(); }
+  });
+  $("#nova-nota").addEventListener("submit", (e) => { e.preventDefault(); desaNota(); });
+  const moment = $("#temps-nota");
+  moment.addEventListener("pointerdown", (e) => e.preventDefault());  // que no es perdi el focus del text
+  moment.addEventListener("click", () => {
+    if (momentNota?.tot) { momentNota = null; fixaMomentNota(); }
+    else { if (sona()) atura(); momentNota = { tot: true }; pintaMomentNota(); }
+    camp.focus();
+  });
+  $("#envia-notes").addEventListener("click", enviaNotes);
+  $("#copia-frase").addEventListener("click", async () => {
+    const frase = $("#frase-connexio").textContent;
+    try {
+      await navigator.clipboard.writeText(frase);
+      avis("Copiat. Enganxa-ho al xat de Claude.");
+    } catch { avis(`Escriu-li al xat: «${frase}»`, 5000); }
+  });
+}
+
 // --- Avisos -----------------------------------------------------------------------------------
 
 let temporitzadorAvis = null;
@@ -4251,6 +4596,7 @@ function instalaControls() {
   instalaSo();
   instalaMarca();
   instalaColumna();
+  instalaNotes();
   setInterval(miraNovetats, 3000);
   const subtitolsBoto = $("#subtitols");
   subtitolsBoto.addEventListener("click", () => {
@@ -4314,6 +4660,7 @@ function instalaControls() {
     else if (e.key === "ArrowLeft") { e.preventDefault(); vesA(tempsMuntatge() - 5); }
     else if (e.key === "ArrowRight") { e.preventDefault(); vesA(tempsMuntatge() + 5); }
     else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? refes() : desfes(); }
+    else if (e.code === "KeyN" && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) { e.preventDefault(); obreNota(); }
   });
 }
 
@@ -4375,6 +4722,7 @@ async function inicia() {
   pintaReels();
   try { biblioteca = await api("/api/biblioteca"); } catch { biblioteca = { broll: [], sticker: [] }; }
   pintaInstruccions();
+  carregaNotes();
   if (P.feina?.estat === "treballant") seguimentFeina(P.feina);
   consultaFeina.darrer = P.feina?.fitxer;
   // El primer cop (i un cop més si la pàgina ha canviat: abans s'hi desava «true»), la visita guiada.

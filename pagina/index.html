@@ -680,6 +680,7 @@
         <svg viewBox="0 0 40 40"><path d="M15 11.5v17l13-8.5z"/></svg>
       </button>
     </div>
+    <div class="marques-notes" id="marques-notes" aria-label="Notes per a Claude al vídeo" hidden></div>
     <div class="linia-temps" id="linia-temps" role="slider" aria-label="Posició" tabindex="0">
       <div class="trossos" id="marques"></div>
       <div class="ple" id="ple"></div>
@@ -704,6 +705,25 @@
     <button class="interruptor" id="escolta" role="switch" aria-checked="true" title="En treure o recuperar paraules, escolta uns segons al voltant del tall">
       <span class="pista" aria-hidden="true"><span class="bola"></span></span>Escolta cada tall
     </button>
+
+    <!-- Notes per a Claude: van al moment on és el vídeo (o a tot el vídeo). Claude les fa i hi respon. -->
+    <section class="notes" id="notes" aria-labelledby="titol-notes">
+      <div class="cap-notes">
+        <h2 id="titol-notes">Notes per a Claude <span class="compte" id="compte-notes"></span></h2>
+        <span class="connexio" id="connexio"><span class="punt-connexio" aria-hidden="true"></span><span id="text-connexio">No connectat</span></span>
+      </div>
+      <div class="avis-connexio" id="avis-connexio" hidden>
+        <p>Claude encara no ha rebut les teves notes. Escriu-li al xat: <q id="frase-connexio">mira les meves notes</q></p>
+        <button class="boto petit" id="copia-frase">Copia-ho</button>
+      </div>
+      <form class="nova-nota" id="nova-nota">
+        <button type="button" class="temps-nota" id="temps-nota" title="Toca-ho per fer una nota per a tot el vídeo">0:00</button>
+        <textarea id="text-nota" rows="1" maxlength="4000" placeholder="Escriu una nota…"
+                  aria-label="Nota per a Claude en aquest moment del vídeo"></textarea>
+      </form>
+      <ol class="llista-notes" id="llista-notes"></ol>
+      <button class="boto suau ample" id="envia-notes" hidden>Envia a Claude</button>
+    </section>
   </section>
 
   <div class="divisor" id="divisor-barra" role="separator" aria-orientation="vertical" tabindex="0"

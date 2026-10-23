@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
-from motor import broll, edicio, editors, entorn, exporta, grafics, marca, muntatge, so, stickers, targetes
+from motor import broll, edicio, editors, entorn, exporta, grafics, marca, muntatge, notes, so, stickers, targetes
 from motor.projecte import EXPORTS, PREVIES, PROXY, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
@@ -32,7 +32,7 @@ RUTES_DEL_PROJECTE = {"/api/estat", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
-                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/escolta"}
+                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/escolta", "/api/notes"}
 mimetypes.add_type("audio/mp4", ".m4a")  # Python diu «audio/mp4a-latm», que els navegadors no reprodueixen
 mimetypes.add_type("audio/wav", ".wav")
 RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge"}  # el cos és el fitxer mateix
@@ -214,6 +214,14 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             actual = obert["p"].carpeta.name
         return {"arrel": arrel.nom, "reel_actual": actual, "errors_reels": errors,
                 "reels": [dict(r, durada=muntatge.durada_estimada(arrel, r)) for r in reels]}
+
+    def info_notes() -> dict:
+        """Les notes per a Claude (de la gravació sencera i dels seus reels: la pàgina ensenya les del que
+        s'edita, `projecte`) i si Claude les espera ara."""
+        carpeta = obert["arrel"].carpeta
+        dades = notes.llegeix(carpeta)
+        return {"notes": dades["notes"], "versio_notes": dades["versio"], "connectat": notes.connectat(carpeta),
+                "projecte": str(obert["p"].carpeta)}
 
     def instantania() -> dict:
         projecte = obert["p"]
@@ -438,8 +446,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             if ruta == "/api/novetats":  # la pàgina hi pregunta sovint: hi ha canvis fets des del xat?
                 with bloqueig:
                     projecte.al_dia()
+                    info = info_notes()
                     return self._json({"clau_projecte": clau_de(projecte), "revisio": projecte.estat.get("revisio", 0),
-                                       "estil": versio_estil(projecte)})
+                                       "estil": versio_estil(projecte), "versio_notes": info["versio_notes"],
+                                       "connectat": info["connectat"]})
+            if ruta == "/api/notes":
+                return self._json(info_notes())
             if ruta == "/api/instantania":
                 with bloqueig:
                     projecte.al_dia()
@@ -462,6 +474,41 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 self.wfile.write(cos)
                 return
             self.send_error(HTTPStatus.NOT_FOUND)
+
+        def _notes(self, cos):
+            """Afegir una nota (a una paraula o a tot el vídeo), treure-la, contestar Claude o enviar-les."""
+            arrel, p = obert["arrel"], obert["p"]
+            accio = cos.get("accio")
+            try:
+                if accio == "afegeix":
+                    # La nota va a una paraula (la que sonava en aquell moment) o a tot el vídeo. Perquè Claude
+                    # l'entengui sense obrir res, s'hi desa el segon de la gravació i el que es diu al voltant.
+                    paraula, inici, cita = cos.get("paraula"), None, None
+                    if paraula is not None:
+                        paraula = int(paraula)
+                        paraules = p.dades["paraules"]
+                        if not 0 <= paraula < len(paraules):
+                            raise ValueError("Aquesta paraula no hi és.")
+                        inici = round(float(paraules[paraula]["inici"]), 3)
+                        cita = " ".join(w["text"].strip() for w in paraules[max(0, paraula - 3):paraula + 4])
+                    reel = None
+                    if p is not arrel:
+                        reel = next((r["titol"] for r in info_reels()["reels"] if r["id"] == p.carpeta.name), p.carpeta.name)
+                    notes.afegeix(arrel.carpeta, str(cos.get("text", "")), paraula=paraula, inici=inici,
+                                  cita=cita, projecte=str(p.carpeta), reel=reel)
+                elif accio == "esborra":
+                    notes.esborra(arrel.carpeta, int(cos.get("id")))
+                elif accio == "respon":
+                    notes.respon_persona(arrel.carpeta, int(cos.get("id")), str(cos.get("text", "")))
+                elif accio == "envia":
+                    notes.envia(arrel.carpeta, projecte=str(p.carpeta))
+                else:
+                    return self._json({"error": "No sé què vols fer amb les notes."}, HTTPStatus.BAD_REQUEST)
+            except (KeyError, ValueError, TypeError) as e:
+                return self._json({"error": str(e).strip("'\"")}, HTTPStatus.BAD_REQUEST)
+            except TimeoutError as e:
+                return self._json({"error": str(e)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            return self._json(info_notes())
 
         def _carpeta_exports(self, projecte):
             """Tria la carpeta dels vídeos amb el diàleg del Mac, o torna a la del projecte."""
@@ -525,6 +572,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         return self._json({"error": "No trobo aquest reel"}, HTTPStatus.NOT_FOUND)
                     obert["p"] = Projecte(muntatge.crea_reel(arrel, reel))
                     return self._json({"ok": True})
+                if ruta == "/api/notes":  # les notes per a Claude
+                    return self._notes(cos)
                 if ruta == "/api/estat":
                     if cos.get("revisio") != projecte.estat.get("revisio", 0):
                         # Una altra pestanya ha desat abans: no la trepitgem.

@@ -55,6 +55,7 @@ Des de la carpeta de tallat: la que conté `tallat.py`, dues carpetes per sobre 
 .venv/bin/python tallat.py grafics --projecte CARPETA [--json]
 .venv/bin/python tallat.py grafics proposa|canvia PLA.json --projecte CARPETA [--de-nou]
 .venv/bin/python tallat.py grafics fotogrames --projecte CARPETA
+.venv/bin/python tallat.py notes --projecte CARPETA [--espera [--minuts 60] | --respon NÚMERO "TEXT" [--pregunta]]
 ```
 
 La carpeta del projecte ha de ser **fora del repositori** (els vídeos i el que diu la persona no es publiquen mai).
@@ -277,9 +278,19 @@ Si la persona vol retocar el vídeo a Premiere, Final Cut, DaVinci Resolve o Cap
 - Quan acabi, digues-li el nom del fitxer i on és. A la pàgina queda un avís amb **Mostra-la al Finder** (a Windows, **a l'Explorador**).
 - Per a Premiere: després d'importar el `.xml`, cal fer **doble clic a la seqüència** (si s'arrossega a una seqüència nova, el Premiere la converteix en un sol clip).
 
+## Notes de la pàgina
+
+A sota del vídeo, la persona et deixa notes («aquí, un rètol que digui…», «els subtítols, més grans»). Cada una va al moment on era el vídeo (a la paraula que sonava) o a tot el vídeo. Quan acaba de revisar, toca **Envia a Claude**. Mentre tu les esperes, la pàgina diu **«Connectat amb Claude»**.
+
+- **Espera-les sempre que la pàgina estigui oberta.** Just després d'obrir-la amb `revisa`, executa `tallat.py notes --projecte X --espera --minuts 60` **en segon pla** (a Claude Code, amb l'ordre en segon pla: t'avisa quan acaba). A Codex, que no té segon pla, fes-ho en acabar cada resposta, amb `--minuts 9` (el màxim que s'hi pot esperar).
+- Quan l'ordre acaba amb notes, fes-les **a la carpeta que diu cada nota** (la del reel, si és d'un reel). La nota diu el segon del vídeo (el que la persona veu sota el vídeo, el que fa servir `tallat.py moment`), el de la gravació, el número de la paraula i què es diu al voltant.
+- **Respon cada nota** amb una frase curta del que has fet: `tallat.py notes --projecte X --respon NÚMERO "Fet: …"`, amb el número que diu la nota a «Per respondre-la» (p. ex. `3.1`). La persona ho veu a sota de la nota. Si no ho tens clar, o el canvi és gros (esborrar un reel, tornar a tallar molt), no ho facis: pregunta-ho amb `--respon NÚMERO "…?" --pregunta`. La seva resposta et torna a arribar com una nota, amb tota la conversa.
+- Després, **torna a esperar-les** (`--espera`, en segon pla, un altre cop). Si l'espera s'acaba sense notes, torna-la a llançar mentre la pàgina estigui oberta i la persona no t'hagi dit que ha acabat.
+- Si la persona et diu **«mira les meves notes»** (la pàgina li ho proposa quan tu no hi ets connectat), executa `tallat.py notes --projecte X --espera --minuts 0.1`: agafa de seguida les que ja ha enviat. Sense `--espera`, `tallat.py notes --projecte X` les llista totes amb el seu estat.
+
 ## Revisar l'esborrany
 
-- La pàgina no té notes: la persona mira l'esborrany (o el muntatge En directe) i et diu al xat què vol canviar, amb el segon que veu sota el vídeo («al segon 12, el b-roll és massa llarg»).
+- La persona mira l'esborrany (o el muntatge En directe) i et diu què vol canviar: al xat, amb el segon que veu sota el vídeo («al segon 12, el b-roll és massa llarg»), o amb una nota a la pàgina (vegeu «Notes de la pàgina»).
 - Per saber què hi ha en aquell moment, `tallat.py moment SEGONS --projecte X` (amb `--esborrany` si parla de l'esborrany: si ha canviat coses després, els temps no coincideixen amb el muntatge d'ara). Et diu el segon de la gravació, les paraules del voltant amb el seu número (» la que sona, [entre claudàtors] les tretes) i si hi surt el títol, un gràfic del pla, un b-roll o un sticker. Si no està clar de quina vista parla, pregunta-l'hi.
 - Fes el canvi i explica-li què has fet. Si la correcció sembla «per sempre» (el b-roll sempre és massa llarg), segueix el que diu «El teu gust».
 
