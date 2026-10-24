@@ -775,11 +775,6 @@
             <span class="temps" id="durada-revisa">0:00</span>
           </div>
         </div>
-        <form class="nova-nota nota-revisa" id="nova-nota-revisa">
-          <span class="temps-nota" id="temps-nota-revisa">0:00,0</span>
-          <textarea id="text-nota-revisa" rows="1" maxlength="4000" placeholder="Què hi canviaries? (el vídeo s'atura)"
-                    aria-label="Nota per a Claude en aquest moment de la versió"></textarea>
-        </form>
       </div>
       <aside class="revisa-notes" aria-labelledby="titol-notes-revisa">
         <div class="cap-notes">
@@ -790,9 +785,22 @@
           <p>Claude encara no ha rebut les teves notes. Escriu-li al xat: <q>mira les meves notes</q></p>
           <button class="boto petit" data-copia-frase>Copia-ho</button>
         </div>
+        <!-- A dalt de tot i gran: és el que més es fa en aquesta estació. -->
+        <form class="nota-revisa" id="nova-nota-revisa">
+          <div class="cap-nota-revisa">
+            <span class="temps-nota" id="temps-nota-revisa">0:00,0</span>
+            <span class="detall">Nota en aquest moment</span>
+          </div>
+          <textarea id="text-nota-revisa" rows="3" maxlength="4000" placeholder="Què hi canviaries? En escriure, el vídeo s'atura."
+                    aria-label="Nota per a Claude en aquest moment de la versió"></textarea>
+          <div class="peu-nota-revisa">
+            <span class="detall">↩ desa · ⇧↩ línia nova</span>
+            <button class="boto principal petit" type="submit">Afegeix la nota</button>
+          </div>
+        </form>
         <button class="boto suau ample" id="envia-revisa" hidden>Envia a Claude</button>
         <div class="llista-revisa" id="llista-revisa"></div>
-        <p class="detall buit-revisa" id="buit-notes-revisa">Atura el vídeo on vulguis canviar alguna cosa i escriu-ho a sota (o prem N). Cada nota guarda el moment i una miniatura.</p>
+        <p class="detall buit-revisa" id="buit-notes-revisa">Atura el vídeo on vulguis canviar alguna cosa i escriu-ho a la caixa de dalt (o prem N). Cada nota guarda el moment i una miniatura.</p>
       </aside>
     </div>
   </section>

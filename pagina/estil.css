@@ -824,7 +824,7 @@ body.reproduint .play .si-play { display: block; }
   font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .temps-nota.tot { background: var(--omplir); color: var(--text-2); }
-#text-nota, #text-nota-revisa {
+#text-nota {
   flex: 1; min-width: 0; height: 24px; max-height: 96px; padding: 3px 2px; border: 0; background: none; resize: none;
   font: inherit; font-size: var(--t-ui); line-height: 18px; color: var(--text); outline: none;
   -webkit-user-select: text; user-select: text;
@@ -965,7 +965,18 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
 #rv-play.sona .si-pausa { display: none; }
 #rv-play.sona .si-play { display: block; }
 .tc-revisa { font-size: var(--t-cos); font-weight: 600; font-variant-numeric: tabular-nums; }
-.nota-revisa { width: 100%; max-width: 560px; }
+.nota-revisa {
+  flex: none; display: flex; flex-direction: column; gap: var(--e2); padding: var(--e3);
+  border-radius: var(--radi); background: var(--superficie); box-shadow: inset 0 0 0 1px var(--linia);
+}
+.nota-revisa:focus-within { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--focus); }
+.cap-nota-revisa, .peu-nota-revisa { display: flex; align-items: center; gap: var(--e2); }
+.peu-nota-revisa { justify-content: space-between; }
+#text-nota-revisa {
+  width: 100%; min-height: 66px; max-height: 220px; padding: 0; border: 0; background: none; resize: none;
+  font: inherit; font-size: var(--t-cos); line-height: 1.45; color: var(--text); outline: none;
+  -webkit-user-select: text; user-select: text;
+}
 .revisa-notes {
   min-height: 0; display: flex; flex-direction: column; gap: var(--e2);
   padding: var(--e5) var(--e5) var(--e6); border-left: 1px solid var(--linia); background: var(--barra);
