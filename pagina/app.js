@@ -884,6 +884,7 @@ const R = { v: $("#video-a"), proxy: $("#video-a"), muntatge: $("#video-m"), k: 
 const continu = () => R.v === R.muntatge;
 let previaLlesta = null;  // {url, trams (JSON)} quan #video-m ja té el muntatge dels talls d'ara
 let esperaPrevia = null;  // el temporitzador de la petició
+let previaPendent = false;  // s'està fent (o s'ha de demanar) el continu dels talls d'ara
 
 // En quin tros del muntatge cau el temps m (amb uns talls i els seus inicis).
 function trosDe(m, llista = trams, inicis = acum) {
@@ -904,18 +905,19 @@ function mostraVideoActiu() {
 
 // Demana el muntatge continu dels talls d'ara (un moment després de l'últim canvi).
 function programaPrevia(ms = 900) {
+  previaPendent = true;
   clearTimeout(esperaPrevia);
   esperaPrevia = setTimeout(demanaPrevia, ms);
 }
 
 async function demanaPrevia() {
-  if (!trams.length) return;
+  if (!trams.length) { previaPendent = false; return; }
   try {
     await cua;  // primer, que el servidor tingui els canvis
     const r = await api("/api/previa", {});
     if (JSON.stringify(r.trams) !== JSON.stringify(trams)) return;  // ja hi ha hagut un altre canvi
     if (r.estat === "fent") { programaPrevia(800); return; }
-    if (r.estat !== "fet") return;
+    if (r.estat !== "fet") { previaPendent = false; return; }
     const json = JSON.stringify(r.trams);
     if (R.muntatge.dataset.url !== r.url) {
       R.muntatge.dataset.url = r.url;
@@ -927,10 +929,12 @@ async function demanaPrevia() {
     }
     if (JSON.stringify(trams) !== json) return;
     previaLlesta = { url: r.url, trams: json };
+    previaPendent = false;
     intentsSonant = 0;
     registre("previa", { url: r.url });
     if (R.reproduint) passaAMuntatgeSonant(); else passaAMuntatge();
   } catch (e) {
+    previaPendent = false;
     registre("previa-error", { msg: String(e?.message || e) });
   }
 }
@@ -1381,9 +1385,10 @@ function pintaCarrega() {
     carrega.visible = encallat;
     $("#carregant").hidden = !encallat;
   }
-  // Només mentre de debò es prepara: si ja s'ha provat tres cops mentre sonava, es canviarà quan s'aturi.
-  const preparant = vista === "directe" && R.reproduint && !continu() && trams.length > 1
-    && (!previaAPunt() || intentsSonant < 3);
+  // Només mentre de debò es prepara, soni o no (si no s'ha pogut fer, no). Si ja és a punt i s'ha provat
+  // tres cops de canviar-hi mentre sonava, es canviarà quan s'aturi.
+  const preparant = vista === "directe" && !continu() && trams.length > 1
+    && (previaAPunt() ? R.reproduint && intentsSonant < 3 : previaPendent);
   if ($("#preparant").hidden === preparant) $("#preparant").hidden = !preparant;
 }
 
