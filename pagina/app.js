@@ -265,7 +265,7 @@ function aplicaTrams(r) {
     const sonava = vista === "directe" && (R.reproduint || R.espera);
     if (onSom != null) passaAProxy(onSom);
     // En un vídeo llarg, refer el continu costa: s'espera que s'hagi acabat de retallar una estona.
-    programaPrevia(duradaFinal > 300 ? 4000 : 900);
+    programaPrevia(duradaFinal > 300 ? 4000 : 600);
     // Si sonava, s'atura aquí i torna a sonar sol, sense salts, quan el continu dels talls nous és a punt.
     if (sonava && caldraEsperar()) { atura(); esperaContinu(); }
   }
@@ -919,7 +919,7 @@ async function demanaPrevia() {
     await cua;  // primer, que el servidor tingui els canvis
     const r = await api("/api/previa", {});
     if (JSON.stringify(r.trams) !== JSON.stringify(trams)) return;  // ja hi ha hagut un altre canvi
-    if (r.estat === "fent") { programaPrevia(800); return; }
+    if (r.estat === "fent") { programaPrevia(300); return; }  // ara ja va de pressa: es pregunta sovint
     if (r.estat !== "fet") { previaNoArriba(); return; }
     const json = JSON.stringify(r.trams);
     if (R.muntatge.dataset.url !== r.url) {

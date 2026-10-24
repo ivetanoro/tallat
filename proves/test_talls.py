@@ -392,9 +392,12 @@ class TestCodificadorPerSistema(unittest.TestCase):
                                                                     "16M", "-profile:v", "high", "-allow_sw", "1"])
             self.assertEqual(exporta.codec_video("lot", "48M"),
                              ["-c:v", "h264_videotoolbox", "-b:v", "48M", "-profile:v", "high", "-allow_sw", "1"])
-            for us in ("copia", "previa"):
-                self.assertEqual(exporta.codec_video(us, "3M"),
-                                 ["-c:v", "h264_videotoolbox", "-b:v", "3M", "-g", "15", "-allow_sw", "1"])
+            self.assertEqual(exporta.codec_video("copia", "3M"),
+                             ["-c:v", "h264_videotoolbox", "-b:v", "3M", "-g", "15", "-allow_sw", "1"])
+        # Els trossos de la vista prèvia, a tot arreu amb el processador (són curts: engegar la gràfica costa més).
+        for plataforma in ("darwin", "win32"):
+            with mock.patch.object(exporta.sys, "platform", plataforma):
+                self.assertEqual(exporta.codec_video("previa", "3M")[:4], ["-c:v", "libx264", "-preset", "ultrafast"])
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
     def test_a_windows_amb_x264_tambe_a_lots(self):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import collections
+import hashlib
 import json
 import os
 import shutil
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from fractions import Fraction
 from pathlib import Path
 
@@ -142,14 +144,19 @@ def codec_video(us: str, bitrate: str) -> list[str]:
     no n'hi ha i es fa amb el processador (x264), amb un preset més ràpid per al que només es mira a la pàgina.
 
     `us`: «final» (l'export), «lot» (el muntatge a lots, que després es torna a comprimir), «copia» (la còpia
-    lleugera) o «previa» (la vista prèvia contínua). La còpia i la vista prèvia porten un fotograma clau cada
-    mig segon perquè els salts siguin instantanis."""
+    lleugera) o «previa» (els trossos de la vista prèvia contínua). La còpia i la vista prèvia porten un
+    fotograma clau cada mig segon perquè els salts siguin instantanis.
+
+    Els trossos de la vista prèvia, sempre amb el processador i el preset més ràpid: són curts, i engegar la
+    gràfica per a cadascun costa més que fer-los (mesurat en un Mac Intel: 0,5 s per tros, i 1,1 s amb la gràfica)."""
     gop = ["-g", "15"] if us in ("copia", "previa") else []
+    if us == "previa":
+        return ["-c:v", "libx264", "-preset", "ultrafast", "-b:v", bitrate, *gop, "-pix_fmt", "yuv420p"]
     if sys.platform == "darwin":
         # -allow_sw: si la gràfica és ocupada (o no n'hi ha, com en un Mac virtual), amb el processador.
         extra = {"final": ["-maxrate", bitrate, "-profile:v", "high"], "lot": ["-profile:v", "high"]}.get(us, [])
         return ["-c:v", "h264_videotoolbox", "-b:v", bitrate, *extra, *gop, "-allow_sw", "1"]
-    preset = {"final": "medium", "lot": "veryfast", "copia": "veryfast", "previa": "veryfast"}[us]
+    preset = {"final": "medium", "lot": "veryfast", "copia": "veryfast"}[us]
     extra = ["-maxrate", bitrate, "-bufsize", f"{int(bitrate.rstrip('M')) * 2}M", "-profile:v", "high"] \
         if us in ("final", "lot") else []
     return ["-c:v", "libx264", "-preset", preset, "-b:v", bitrate, *extra, *gop, "-pix_fmt", "yuv420p"]
@@ -497,39 +504,108 @@ def _exporta(entrades_base, durada, sortida, qualitat, info, filtre, brolls, pec
     treu_rotacio(sortida)
 
 
-def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path) -> Path:
+# Els trossos de la vista prèvia es guarden: després d'un canvi només es fan els nous (un tall parteix un
+# tros en dos) i la resta s'enganxa tal qual. Si canvia com es fa un tros, cal pujar la versió.
+VERSIO_TROSSOS = 2
+VIDA_TROSSOS = 3600  # segons: els que ja no fa servir el muntatge d'ara es guarden una hora (per desfer)
+
+
+def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, trossos: Path | None = None) -> Path:
     """El muntatge en un sol vídeo continu (de la còpia lleugera, sense subtítols ni res), perquè la pàgina
     el pugui reproduir sense saltar: als salts, el Safari s'encalla uns quants dècims de segon. Els talls
-    i els fosos del so, com a l'export (el temps del muntatge és el mateix)."""
+    i els fosos del so, com a l'export (el temps del muntatge és el mateix).
+
+    Cada tros es fa un cop i es guarda a `trossos` (per defecte, al costat de la sortida): així, després
+    d'un canvi, només es fan els trossos nous, i tot plegat s'encadena sense tornar a comprimir la imatge.
+    El so dels trossos va sense comprimir i es comprimeix un sol cop al final (no hi ha petits salts)."""
     if not trams:
         raise ValueError("No queda cap paraula")
     info = info_video(proxy)
-    codec = codec_video("previa", "3M")
+    trossos = trossos or sortida.parent / "trossos"
+    trossos.mkdir(parents=True, exist_ok=True)
+    estat = proxy.stat()
+    origen = f"{VERSIO_TROSSOS}|{estat.st_size}|{estat.st_mtime_ns}|{info['fps']}|{sys.platform}"
+    noms = [trossos / _nom_tros(origen, tram) for tram in trams]
+    falten, vistos = [], set()
+    for tram, nom in zip(trams, noms):
+        if not nom.exists() and nom not in vistos:
+            vistos.add(nom)
+            falten.append((tram, nom))
+    mida = trossos_per_lot(info)
+    for k in range(0, len(falten), mida):
+        _fes_trossos(proxy, falten[k:k + mida], info)
+    for nom in set(noms):
+        try:
+            os.utime(nom)  # els d'ara, la neteja no se'ls emporta
+        except OSError:
+            pass
     sortida.parent.mkdir(parents=True, exist_ok=True)
     # Un nom propi per a cada feina: dues peticions iguals alhora no s'han de trepitjar el fitxer a mitges.
-    temporal = sortida.with_name(f".{sortida.stem}.{os.getpid()}-{threading.get_ident()}.fent{sortida.suffix}")
+    marca = f"{os.getpid()}-{threading.get_ident()}"
+    temporal = sortida.with_name(f".{sortida.stem}.{marca}.fent{sortida.suffix}")
+    llista = trossos / f".llista-{marca}.txt"
+    llista.write_text("".join(f"file '{n.name}'\n" for n in noms), encoding="utf-8")
+    ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", *_entrada_lots(llista), "-map", "0:v", "-map", "0:a",
+             "-c:v", "copy", "-c:a", "aac", "-aac_coder", "fast", "-b:a", "128k", "-ar", "48000",
+             "-movflags", "+faststart", str(temporal)]
+    try:
+        r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if r.returncode != 0:
+            raise RuntimeError("ffmpeg no ha pogut fer la previsualització:\n" + r.stderr[-1500:])
+        temporal.replace(sortida)
+    finally:
+        temporal.unlink(missing_ok=True)
+        llista.unlink(missing_ok=True)
+    _neteja_trossos(trossos, set(noms))
+    return sortida
+
+
+def _nom_tros(origen: str, tram) -> str:
+    """El nom del fitxer d'un tros: depèn de la còpia lleugera (`origen`) i d'on comencen i acaben la imatge
+    i el so del tros. Amb el mateix tall, el mateix fitxer."""
+    sa, sb = so_del_tram(tram)
+    clau = f"{origen}|{tram[0]:.6f}|{tram[1]:.6f}|{sa:.6f}|{sb:.6f}"
+    return f"tros_{hashlib.sha1(clau.encode()).hexdigest()[:16]}.mov"
+
+
+def _fes_trossos(proxy: Path, feina: list, info: dict) -> None:
+    """Fa uns quants trossos (tram, fitxer) d'una sola passada d'ffmpeg: una entrada i una sortida per tros.
+    Cada sortida s'escriu amb un nom temporal i es canvia al final: mai no queda un tros a mitges."""
+    parts = []
+    for i, (tram, _) in enumerate(feina):
+        parts.append(f"[{i}:v]setpts=PTS-STARTPTS,setsar=1[v{i}];")
+        parts.append(_so_del_tros(i, tram))
+    marca = f"{os.getpid()}-{threading.get_ident()}"
+    sortides = [(nom.with_name(f".{nom.stem}.{marca}.fent.mov"), nom) for _, nom in feina]
+    ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", *_entrades_trams(proxy, [tram for tram, _ in feina], info),
+             "-filter_complex_script", ""]
+    for i, (temporal, _) in enumerate(sortides):
+        ordre += ["-map", f"[v{i}]", "-map", f"[a{i}]", "-r", info["fps"], *codec_video("previa", "3M"),
+                  "-c:a", "pcm_s16le", "-ar", "48000", str(temporal)]
     with tempfile.TemporaryDirectory() as carpeta:
-        if len(trams) > trossos_per_lot(info):  # molts trossos: a lots, i la imatge dels lots es copia tal qual
-            llista = _munta_lots(proxy, trams, info, Path(carpeta), codec)
-            ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", *_entrada_lots(llista),
-                     "-map", "0:v", "-map", "0:a", "-c:v", "copy"]
-        else:
-            parts = _uneix_trossos(trams, None, None)
-            parts.append("[vc]null[v];[ac]anull[a]")
-            filtre = Path(carpeta) / "previa.txt"
-            filtre.write_text("\n".join(parts), encoding="utf-8")
-            ordre = ["ffmpeg", "-y", "-v", "error", "-nostats", *_entrades_trams(proxy, trams, info),
-                     "-filter_complex_script", str(filtre), "-map", "[v]", "-map", "[a]", "-r", info["fps"],
-                     *codec]
-        ordre += ["-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", str(temporal)]
+        filtre = Path(carpeta) / "trossos.txt"
+        filtre.write_text("\n".join(parts).rstrip().rstrip(";"), encoding="utf-8")
+        ordre[ordre.index("-filter_complex_script") + 1] = str(filtre)
         try:
             r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace")
             if r.returncode != 0:
                 raise RuntimeError("ffmpeg no ha pogut fer la previsualització:\n" + r.stderr[-1500:])
-            temporal.replace(sortida)
+            for temporal, nom in sortides:
+                temporal.replace(nom)
         finally:
-            temporal.unlink(missing_ok=True)
-    return sortida
+            for temporal, _ in sortides:
+                temporal.unlink(missing_ok=True)
+
+
+def _neteja_trossos(trossos: Path, en_us: set) -> None:
+    """Esborra els trossos (i les restes de feines a mitges) que fa més de VIDA_TROSSOS que no es fan servir."""
+    limit = time.time() - VIDA_TROSSOS
+    for f in [*trossos.glob("tros_*.mov"), *trossos.glob(".*.fent.mov"), *trossos.glob(".llista-*.txt")]:
+        try:
+            if f not in en_us and f.stat().st_mtime < limit:
+                f.unlink()
+        except OSError:  # a Windows, si algú el té obert: ja s'esborrarà un altre cop
+            pass
 
 
 def fes_proxy(video: Path, sortida: Path, progres=None) -> Path:
