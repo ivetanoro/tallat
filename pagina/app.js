@@ -925,8 +925,11 @@ async function demanaPrevia() {
     if (R.muntatge.dataset.url !== r.url) {
       R.muntatge.dataset.url = r.url;
       R.muntatge.src = r.url;
+      // Només cal saber-ne la durada. La imatge, el Safari no la baixa d'un vídeo que no es veu fins que
+      // s'hi salta o sona (esperant «loadeddata», de vegades passaven més de 20 s): el salt de passaAMuntatge
+      // (o el play) ja la fa baixar.
       await new Promise((resol, falla) => {
-        R.muntatge.addEventListener("loadeddata", resol, { once: true });
+        R.muntatge.addEventListener("loadedmetadata", resol, { once: true });
         R.muntatge.addEventListener("error", falla, { once: true });
       });
     }
@@ -996,7 +999,8 @@ function passaAMuntatge() {
     mostraVideoActiu();
     if (R.espera) { R.espera = false; reprodueix(); }
   };
-  if (Math.abs(R.muntatge.currentTime - m) < 0.02) { fet(); return; }
+  // Si encara no en té la imatge (el Safari), el salt la fa baixar: no es canvia fins que hi és (no es veuria res).
+  if (Math.abs(R.muntatge.currentTime - m) < 0.02 && R.muntatge.readyState >= 2) { fet(); return; }
   R.muntatge.addEventListener("seeked", fet, { once: true });
   R.muntatge.currentTime = m;
 }
@@ -2545,7 +2549,11 @@ function instalaReproductor() {
   }
   R.proxy.addEventListener("error", () => avis("No puc obrir la còpia lleugera del vídeo (proxy.mp4)."));
   // Si el vídeo continu falla, es continua amb la còpia que salta.
-  R.muntatge.addEventListener("error", () => { previaLlesta = null; if (continu()) passaAProxy(originalDe(tempsMuntatge())); });
+  R.muntatge.addEventListener("error", () => {
+    registre("continu-error", { codi: R.muntatge.error?.code, video: ev(R.muntatge) });
+    previaLlesta = null;
+    if (continu()) passaAProxy(originalDe(tempsMuntatge()));
+  });
   // El salt del vídeo continu que esperava que acabés l'anterior (vegeu vesA).
   R.muntatge.addEventListener("seeked", () => {
     if (!continu() || R.salt == null || R.recarrega != null) return;
