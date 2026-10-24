@@ -211,6 +211,65 @@ class TestServidor(unittest.TestCase):
         self.assertIn("previa_1.mp4", noms)
         self.assertEqual(previa.demana(projecte, [])["estat"], "no")
 
+    def test_si_el_continu_falla_es_diu_i_no_es_torna_a_provar_de_seguida(self):
+        # Revisió de Codex: si ffmpeg fallava, cada pregunta tornava a començar la feina i deia «fent», i la
+        # pàgina (que espera el continu per fer sonar el vídeo) esperava per sempre.
+        from motor import exporta
+
+        class Projecte_:
+            def __init__(self, carpeta):
+                self.carpeta = carpeta
+
+            def fitxer(self, nom):
+                return self.carpeta / nom
+
+            def previa(self, trams):
+                return self.carpeta / "previa" / f"previa_{len(trams)}.mp4"
+
+        def acaba(previa):
+            for _ in range(200):
+                if previa.fent is None:
+                    return
+                time.sleep(0.01)
+
+        projecte = Projecte_(self.carpeta)
+        (self.carpeta / "proxy.mp4").write_bytes(b"x")
+        previa = servidor.Previa()
+        intents = []
+
+        def falla(proxy, trams, desti):
+            intents.append(desti)
+            raise RuntimeError("ffmpeg no ha pogut fer la previsualització")
+
+        with mock.patch.object(exporta, "fes_previa", side_effect=falla), mock.patch.object(servidor.traceback, "print_exc"):
+            self.assertEqual(previa.demana(projecte, [(0, 1)])["estat"], "fent")
+            acaba(previa)
+            for _ in range(3):  # ara diu que no s'ha pogut, i no ho torna a provar a cada pregunta
+                r = previa.demana(projecte, [(0, 1)])
+                self.assertEqual(r["estat"], "error")
+                self.assertIn("ffmpeg", r["error"])
+            self.assertEqual(len(intents), 1)
+            # Uns altres talls sí que es proven.
+            self.assertEqual(previa.demana(projecte, [(0, 1)] * 2)["estat"], "fent")
+            acaba(previa)
+            # Passada l'estona, es torna a provar (potser era un moment de disc ple).
+            ara = time.time()
+            with mock.patch.object(servidor.time, "time", return_value=ara + servidor.REPROVA_PREVIA + 1):
+                self.assertEqual(previa.demana(projecte, [(0, 1)])["estat"], "fent")
+            acaba(previa)
+        self.assertEqual(len(intents), 3)
+
+        def fes(proxy, trams, desti):
+            desti.parent.mkdir(exist_ok=True)
+            desti.write_bytes(b"mp4")
+
+        with mock.patch.object(exporta, "fes_previa", side_effect=fes):
+            with mock.patch.object(servidor.time, "time", return_value=time.time() + 2 * servidor.REPROVA_PREVIA):
+                self.assertEqual(previa.demana(projecte, [(0, 1)])["estat"], "fent")
+            acaba(previa)
+            self.assertEqual(previa.demana(projecte, [(0, 1)])["estat"], "fet")
+        self.assertNotIn(projecte.previa([(0, 1)]), previa.fallades)
+
     def test_si_no_es_pot_copiar_a_la_carpeta_l_export_no_falla(self):
         from motor import exporta
         with mock.patch.object(exporta, "copia_a_carpeta", side_effect=PermissionError(13, "Permission denied")):

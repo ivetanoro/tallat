@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import traceback
 import uuid
 from http import HTTPStatus
@@ -102,13 +103,19 @@ class Feina:
             self._actualitza(estat="error", error=str(e))
 
 
+REPROVA_PREVIA = 30  # segons: si fer el continu ha fallat, fins aleshores no es torna a provar (amb els mateixos talls)
+
+
 class Previa:
     """El muntatge en un vídeo continu per a la pàgina (exporta.fes_previa), un alhora i en segon pla.
-    La pàgina el demana després de cada canvi; mentre es fa, reprodueix saltant com sempre."""
+    La pàgina el demana després de cada canvi i, mentrestant, espera per fer sonar el vídeo. Si no es pot fer,
+    diu «error» (i la pàgina fa sonar la còpia que salta): abans es tornava a provar a cada pregunta, sense
+    dir-ho mai, i la pàgina esperava per sempre (revisió de Codex)."""
 
     def __init__(self):
         self.bloqueig = threading.Lock()
         self.fent = None  # el fitxer que s'està fent
+        self.fallades = {}  # fitxer → (quan, error) dels que no s'han pogut fer
 
     def demana(self, projecte: Projecte, trams) -> dict:
         if not trams or not (projecte.fitxer(PROXY)).exists():
@@ -121,6 +128,9 @@ class Previa:
                 pass
             return {"estat": "fet", "url": f"/previa/{desti.name}", "trams": edicio.trams_json(trams)}
         with self.bloqueig:
+            fallada = self.fallades.get(desti)
+            if fallada and time.time() - fallada[0] < REPROVA_PREVIA and self.fent != desti:
+                return {"estat": "error", "error": fallada[1], "trams": edicio.trams_json(trams)}
             if self.fent is None:  # si se'n fa una altra, la pàgina ho tornarà a demanar
                 self.fent = desti
                 threading.Thread(target=self._fes, args=(projecte.fitxer(PROXY), list(trams), desti),
@@ -134,8 +144,12 @@ class Previa:
             # sona a la pàgina sempre n'és una, perquè cada petició la toca (os.utime).
             for vell in sorted(desti.parent.glob("previa_*.mp4"), key=lambda p: p.stat().st_mtime)[:-4]:
                 entorn.esborra_si_pots(vell)
-        except Exception:
+            with self.bloqueig:
+                self.fallades.pop(desti, None)
+        except Exception as e:
             traceback.print_exc()
+            with self.bloqueig:
+                self.fallades[desti] = (time.time(), str(e)[:300])
         finally:
             with self.bloqueig:
                 self.fent = None

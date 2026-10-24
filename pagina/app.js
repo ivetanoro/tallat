@@ -263,6 +263,7 @@ function aplicaTrams(r) {
   if (canviats) {
     previaLlesta = null;
     const sonava = vista === "directe" && (R.reproduint || R.espera);
+    senseEspera = false;  // talls nous: el seu continu sí que s'espera
     if (onSom != null) passaAProxy(onSom);
     // En un vídeo llarg, refer el continu costa: s'espera que s'hagi acabat de retallar una estona.
     programaPrevia(duradaFinal > 300 ? 4000 : 600);
@@ -920,7 +921,11 @@ async function demanaPrevia() {
     const r = await api("/api/previa", {});
     if (JSON.stringify(r.trams) !== JSON.stringify(trams)) return;  // ja hi ha hagut un altre canvi
     if (r.estat === "fent") { programaPrevia(300); return; }  // ara ja va de pressa: es pregunta sovint
-    if (r.estat !== "fet") { previaNoArriba(); return; }
+    if (r.estat !== "fet") {
+      if (r.error) registre("previa-error", { msg: r.error });
+      previaNoArriba();
+      return;
+    }
     const json = JSON.stringify(r.trams);
     if (R.muntatge.dataset.url !== r.url) {
       R.muntatge.dataset.url = r.url;
@@ -936,6 +941,7 @@ async function demanaPrevia() {
     if (JSON.stringify(trams) !== json) return;
     previaLlesta = { url: r.url, trams: json };
     previaPendent = false;
+    senseEspera = false;
     intentsSonant = 0;
     registre("previa", { url: r.url });
     if (R.reproduint) passaAMuntatgeSonant(); else passaAMuntatge();
@@ -947,11 +953,25 @@ async function demanaPrevia() {
 
 // El play espera el continu: si encara es prepara, el vídeo no arrenca amb la còpia que salta. Quan el
 // continu és a punt, s'hi passa amb el vídeo aturat (és quan el canvi va bé al Safari) i comença a sonar sol.
-const caldraEsperar = () => vista === "directe" && trams.length > 1 && !continu() && !previaAPunt() && previaPendent;
+// Com a molt ESPERA_CONTINU: si encara no hi és (un vídeo molt llarg, el Mac molt carregat), sona la còpia que
+// salta i, quan arribi el continu, s'hi passa mentre sona (com abans). No s'ha d'esperar mai per sempre (Codex).
+const ESPERA_CONTINU = 20000;
+let senseEspera = false;  // ja s'ha esperat prou per aquests talls: fins que canviïn o arribi el continu, no s'espera
+const caldraEsperar = () => vista === "directe" && trams.length > 1 && !continu() && !previaAPunt() && previaPendent
+  && !senseEspera;
+let rellotgeEspera = null;
 function esperaContinu() {
   R.espera = true;
   document.body.classList.add("reproduint");  // el botó ja diu pausa: es pot cancel·lar
   registre("espera-continu", { video: ev(R.v) });
+  clearTimeout(rellotgeEspera);
+  rellotgeEspera = setTimeout(() => {
+    if (!R.espera) return;
+    registre("espera-massa", { video: ev(R.v) });
+    senseEspera = true;
+    R.espera = false;
+    reprodueix();
+  }, ESPERA_CONTINU);
 }
 // Si el continu no es pot fer, sona la còpia que salta: millor amb salts que no sonar.
 function previaNoArriba() {
@@ -4970,6 +4990,13 @@ async function desaNotaRevisa() {
     return;
   } finally {
     camp.readOnly = false;
+  }
+  // Mentre es desava s'ha pogut triar una altra versió: el camp ja és el d'aquella (amb la seva nota a mig
+  // escriure), i no s'ha de buidar. La nota desada, que s'havia guardat com a esborrany de la seva versió, fora (Codex).
+  if (versioRevisa !== versio || camp.value.trim() !== text) {
+    if (esborranysRevisa.get(versio)?.text.trim() === text) esborranysRevisa.delete(versio);
+    avis("Nota desada.", 3000);
+    return;
   }
   camp.value = "";
   ajustaAlcada(camp);
