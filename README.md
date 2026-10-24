@@ -1,10 +1,15 @@
-# tallat
-
-**Edites el reel en el que dura un tallat.**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/imatges/capcalera-fosca.jpg">
+  <img src=".github/imatges/capcalera.jpg" alt="tallat. Edites el reel en el que et dura un cafè.">
+</picture>
 
 tallat és un editor de reels en català que funciona dins de [Claude](https://claude.com/download) o de [Codex](https://openai.com/codex) (el de ChatGPT). Et graves parlant a càmera, li dius «edita aquest vídeo» i el retalles com si retallessis un text: les paraules que treus desapareixen del vídeo. Després hi poses subtítols animats, b-roll i stickers, i l'exportes en vertical, a punt per a Instagram, TikTok o YouTube Shorts.
 
 És gratuït, de codi obert i tot passa al teu ordinador.
+
+![La pàgina d'editar de tallat: a l'esquerra el que cal revisar, al mig el text amb paraules ratllades, a la dreta el vídeo amb subtítols.](.github/imatges/1-edita.png)
+
+*Treus paraules com en un document i el vídeo queda tallat. En taronja, el que tallat ha tret sol; en gris, el que has tret tu.*
 
 ## Què fa
 
@@ -20,6 +25,14 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 - **Uns quants estils.** Desa el teu estil (lletra, colors, animacions, durada del b-roll…) amb un nom, fes-ne uns quants per a tipus de vídeo diferents, tria'n un per a cada vídeo i passa'l a qui vulguis en un `.zip`.
 - **Recorda el teu gust.** Si dius a Claude «els subtítols, més grans» o «no em treguis mai els *vale*», et pregunta si és per sempre i ho aplica a tots els vídeos següents. Per veure les teves regles, pregunta-li «quines regles tinc?».
 - **Exporta** un esborrany ràpid, la versió final en 1080 o 4K vertical, o un projecte per acabar-lo a Premiere, Final Cut, DaVinci Resolve o CapCut.
+
+![El panell dels subtítols, amb sis estils, i el vídeo amb l'estil Apilat.](.github/imatges/2-subtitols.png)
+
+*Tries com són els subtítols i els veus de seguida al vídeo.*
+
+![Una nota per a Claude sota el vídeo, i la resposta de Claude: ha posat un zoom.](.github/imatges/3-notes.png)
+
+*Deixes notes per a Claude en un moment del vídeo. Claude les fa i et respon.*
 
 ## Què necessites
 
