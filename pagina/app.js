@@ -262,9 +262,12 @@ function aplicaTrams(r) {
   $("#durada-final").textContent = fmt(duradaFinal);
   if (canviats) {
     previaLlesta = null;
+    const sonava = vista === "directe" && (R.reproduint || R.espera);
     if (onSom != null) passaAProxy(onSom);
     // En un vídeo llarg, refer el continu costa: s'espera que s'hagi acabat de retallar una estona.
     programaPrevia(duradaFinal > 300 ? 4000 : 900);
+    // Si sonava, s'atura aquí i torna a sonar sol, sense salts, quan el continu dels talls nous és a punt.
+    if (sonava && caldraEsperar()) { atura(); esperaContinu(); }
   }
   if (vista === "directe") { pintaMarques(trams, acum, duradaFinal); recolloca(); }
   if (notesCarregades) pintaNotes();
@@ -880,7 +883,7 @@ function actualitzaPropostes() {
 // (#video-m), que sona sense salts: als salts, el Safari s'encalla uns quants dècims de segon.
 // (Vam provar dos vídeos alternats a cada tall, però al Safari el segon deixava de dir per on anava.)
 const R = { v: $("#video-a"), proxy: $("#video-a"), muntatge: $("#video-m"), k: 0, reproduint: false, aturaA: null,
-  vigila: { t: -1, des: 0 }, rescats: null, salt: null, recarrega: null, preparant: null, posat: false };
+  vigila: { t: -1, des: 0 }, rescats: null, salt: null, recarrega: null, preparant: null, posat: false, espera: false };
 const continu = () => R.v === R.muntatge;
 let previaLlesta = null;  // {url, trams (JSON)} quan #video-m ja té el muntatge dels talls d'ara
 let esperaPrevia = null;  // el temporitzador de la petició
@@ -917,7 +920,7 @@ async function demanaPrevia() {
     const r = await api("/api/previa", {});
     if (JSON.stringify(r.trams) !== JSON.stringify(trams)) return;  // ja hi ha hagut un altre canvi
     if (r.estat === "fent") { programaPrevia(800); return; }
-    if (r.estat !== "fet") { previaPendent = false; return; }
+    if (r.estat !== "fet") { previaNoArriba(); return; }
     const json = JSON.stringify(r.trams);
     if (R.muntatge.dataset.url !== r.url) {
       R.muntatge.dataset.url = r.url;
@@ -934,9 +937,23 @@ async function demanaPrevia() {
     registre("previa", { url: r.url });
     if (R.reproduint) passaAMuntatgeSonant(); else passaAMuntatge();
   } catch (e) {
-    previaPendent = false;
+    previaNoArriba();
     registre("previa-error", { msg: String(e?.message || e) });
   }
+}
+
+// El play espera el continu: si encara es prepara, el vídeo no arrenca amb la còpia que salta. Quan el
+// continu és a punt, s'hi passa amb el vídeo aturat (és quan el canvi va bé al Safari) i comença a sonar sol.
+const caldraEsperar = () => vista === "directe" && trams.length > 1 && !continu() && !previaAPunt() && previaPendent;
+function esperaContinu() {
+  R.espera = true;
+  document.body.classList.add("reproduint");  // el botó ja diu pausa: es pot cancel·lar
+  registre("espera-continu", { video: ev(R.v) });
+}
+// Si el continu no es pot fer, sona la còpia que salta: millor amb salts que no sonar.
+function previaNoArriba() {
+  previaPendent = false;
+  if (R.espera) { R.espera = false; reprodueix(); }
 }
 
 const previaAPunt = () => !!previaLlesta && previaLlesta.trams === JSON.stringify(trams);
@@ -977,6 +994,7 @@ function passaAMuntatge() {
     if (Math.abs(tempsMuntatge() - m) > 0.05) { passaAMuntatge(); return; }  // mentrestant s'ha mogut
     activaMuntatge(m);
     mostraVideoActiu();
+    if (R.espera) { R.espera = false; reprodueix(); }
   };
   if (Math.abs(R.muntatge.currentTime - m) < 0.02) { fet(); return; }
   R.muntatge.addEventListener("seeked", fet, { once: true });
@@ -1211,6 +1229,8 @@ function reprodueix() {
   R.proxy.volume = 1;  // si s'havia aturat enmig d'un fos
   if (vista === "esborrany") { vE.play(); return; }
   if (!trams.length) return;
+  if (caldraEsperar()) { esperaContinu(); return; }
+  R.espera = false;
   // El continu és a punt (i no salta encara: un salt a sobre d'un altre l'encallaria): hi passem ja.
   if (!continu() && previaAPunt() && !R.muntatge.seeking) {
     const m = R.posat && tempsMuntatge() < duradaFinal - 0.05 ? tempsMuntatge() : 0;
@@ -1243,6 +1263,7 @@ function reprodueix() {
 
 function atura() {
   intentsSonant = 0;
+  R.espera = false;
   if (R.reproduint) registre("atura", { k: R.k, video: ev(R.v) });
   R.repren = false;
   R.aturaA = null;
@@ -1340,7 +1361,7 @@ function vigila() {
   }
 }
 
-const sona = () => (vista === "esborrany" ? !vE.paused : R.reproduint);
+const sona = () => (vista === "esborrany" ? !vE.paused : R.reproduint || R.espera);  // esperant el continu, també
 
 function reprodueixDes(id) {
   if (vista !== "directe") canviaVista("directe");
@@ -1379,7 +1400,8 @@ function pintaCarrega() {
   const v = vista === "esborrany" ? vE : R.v;
   const ara = performance.now();
   let encallat = false;
-  if (!sona() || v.currentTime !== carrega.t) carrega = { ...carrega, t: v.currentTime, des: ara };
+  const sonaDeDebo = vista === "esborrany" ? !vE.paused : R.reproduint;  // mentre espera el continu, no
+  if (!sonaDeDebo || v.currentTime !== carrega.t) carrega = { ...carrega, t: v.currentTime, des: ara };
   else encallat = ara - carrega.des > 300;
   if (encallat !== carrega.visible) {
     carrega.visible = encallat;
