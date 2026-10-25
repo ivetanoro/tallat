@@ -1,11 +1,14 @@
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -451,6 +454,45 @@ class TestPreviaContinua(unittest.TestCase):
             sortida = exporta.fes_previa(d / "proxy.mp4", trams, d / "previa" / "p.mp4")
             self.assertAlmostEqual(exporta.info_video(sortida)["durada"], 2.3, delta=0.08)
             self.assertFalse(list((d / "previa").glob(".*")))  # cap fitxer a mitges
+
+    def test_despres_d_un_canvi_nomes_es_fan_els_trossos_nous(self):
+        # És el que fa que vagi de pressa: un tall parteix un tros en dos, i la resta ja hi és.
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=4",
+                            "-f", "lavfi", "-i", "sine=d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                            "-shortest", str(d / "proxy.mp4")], check=True)
+            exporta.fes_previa(d / "proxy.mp4", [(0.2, 1.0), (2.0, 3.5)], d / "previa" / "p.mp4")
+            primer = {f.name: f.stat().st_ino for f in (d / "previa" / "trossos").glob("tros_*.mov")}
+            self.assertEqual(len(primer), 2)
+            with mock.patch.object(exporta, "_fes_trossos", wraps=exporta._fes_trossos) as fes:
+                sortida = exporta.fes_previa(d / "proxy.mp4", [(0.2, 1.0), (2.0, 2.6), (2.9, 3.5)],
+                                             d / "previa" / "p.mp4")
+            self.assertEqual([len(c.args[1]) for c in fes.call_args_list], [2])  # només els dos nous
+            despres = {f.name: f.stat().st_ino for f in (d / "previa" / "trossos").glob("tros_*.mov")}
+            self.assertEqual(len(despres), 4)  # el que ja no es fa servir es guarda una estona (per desfer)
+            self.assertEqual(len(set(primer.items()) & set(despres.items())), 2)  # els d'abans, intactes
+            self.assertAlmostEqual(exporta.info_video(sortida)["durada"], 2.0, delta=0.08)
+            # Passada l'estona, el que no es fa servir se'n va; el que es fa servir no, encara que sigui vell.
+            vell = time.time() - exporta.VIDA_TROSSOS - 60
+            for f in (d / "previa" / "trossos").glob("tros_*.mov"):
+                os.utime(f, (vell, vell))
+            exporta.fes_previa(d / "proxy.mp4", [(0.2, 1.0), (2.0, 2.6), (2.9, 3.5)], d / "previa" / "p.mp4")
+            self.assertEqual(len(list((d / "previa" / "trossos").glob("tros_*.mov"))), 3)
+
+    def test_els_trossos_es_fan_a_poques_alhora(self):
+        # Cada tros té el seu compressor: amb 40 de cop, la primera vegada, el Mac anava molt carregat.
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=4",
+                            "-f", "lavfi", "-i", "sine=d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                            "-shortest", str(d / "proxy.mp4")], check=True)
+            trams = [(round(0.1 + i * 0.35, 2), round(0.1 + i * 0.35 + 0.25, 2)) for i in range(10)]
+            with mock.patch.object(exporta, "TROSSOS_PER_PASSADA", 4), \
+                    mock.patch.object(exporta, "_fes_trossos", wraps=exporta._fes_trossos) as fes:
+                exporta.fes_previa(d / "proxy.mp4", trams, d / "previa" / "p.mp4")
+            self.assertEqual([len(c.args[1]) for c in fes.call_args_list], [4, 4, 2])
+            self.assertIn("-threads", exporta.codec_video("previa", "3M"))
 
 
 class TestAlineador(unittest.TestCase):

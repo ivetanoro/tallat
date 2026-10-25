@@ -150,8 +150,8 @@ def codec_video(us: str, bitrate: str) -> list[str]:
     Els trossos de la vista prèvia, sempre amb el processador i el preset més ràpid: són curts, i engegar la
     gràfica per a cadascun costa més que fer-los (mesurat en un Mac Intel: 0,5 s per tros, i 1,1 s amb la gràfica)."""
     gop = ["-g", "15"] if us in ("copia", "previa") else []
-    if us == "previa":
-        return ["-c:v", "libx264", "-preset", "ultrafast", "-b:v", bitrate, *gop, "-pix_fmt", "yuv420p"]
+    if us == "previa":  # 2 fils per tros: es fan TROSSOS_PER_PASSADA alhora (vegeu fes_previa)
+        return ["-c:v", "libx264", "-preset", "ultrafast", "-threads", "2", "-b:v", bitrate, *gop, "-pix_fmt", "yuv420p"]
     if sys.platform == "darwin":
         # -allow_sw: si la gràfica és ocupada (o no n'hi ha, com en un Mac virtual), amb el processador.
         extra = {"final": ["-maxrate", bitrate, "-profile:v", "high"], "lot": ["-profile:v", "high"]}.get(us, [])
@@ -508,6 +508,10 @@ def _exporta(entrades_base, durada, sortida, qualitat, info, filtre, brolls, pec
 # tros en dos) i la resta s'enganxa tal qual. Si canvia com es fa un tros, cal pujar la versió.
 VERSIO_TROSSOS = 2
 VIDA_TROSSOS = 3600  # segons: els que ja no fa servir el muntatge d'ara es guarden una hora (per desfer)
+# Quants trossos fa cada ffmpeg. Cada tros té el seu compressor: amb 40 de cop (la primera vegada que s'obre
+# una gravació llarga), més de 3,5 GB de memòria i 1.500 fils. Amb 8, i 2 fils cadascun, uns 350 MB i
+# més de pressa (mesurat en un Mac Intel de 16 fils, 68 trossos: 8,3 s → 5,5 s).
+TROSSOS_PER_PASSADA = 8
 
 
 def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, trossos: Path | None = None) -> Path:
@@ -531,7 +535,7 @@ def fes_previa(proxy: Path, trams: list[tuple[float, float]], sortida: Path, tro
         if not nom.exists() and nom not in vistos:
             vistos.add(nom)
             falten.append((tram, nom))
-    mida = trossos_per_lot(info)
+    mida = min(TROSSOS_PER_PASSADA, trossos_per_lot(info))
     for k in range(0, len(falten), mida):
         _fes_trossos(proxy, falten[k:k + mida], info)
     for nom in set(noms):

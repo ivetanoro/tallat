@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import binascii
 import bisect
+import errno
 import hashlib
 import hmac
 import json
@@ -141,8 +142,10 @@ class Previa:
         try:
             exporta.fes_previa(proxy, trams, desti)
             # Se'n guarden les quatre que s'han fet servir darrerament (desfer i refer hi tornen); la que
-            # sona a la pàgina sempre n'és una, perquè cada petició la toca (os.utime).
-            for vell in sorted(desti.parent.glob("previa_*.mp4"), key=lambda p: p.stat().st_mtime)[:-4]:
+            # sona a la pàgina sempre n'és una, perquè cada petició la toca (os.utime). Els vídeos curts de
+            # l'antic «Escolta cada tall» (fins a la 0.7) ja no els fa servir res.
+            vells = sorted(desti.parent.glob("previa_*.mp4"), key=lambda p: p.stat().st_mtime)[:-4]
+            for vell in [*vells, *desti.parent.glob("escolta_*.mp4")]:
                 entorn.esborra_si_pots(vell)
             with self.bloqueig:
                 self.fallades.pop(desti, None)
@@ -234,9 +237,13 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         if not imatge.startswith(b"\xff\xd8") or len(imatge) > 600_000:
             return None
         desti = Path(carpeta) / notes.MINIATURES
-        desti.mkdir(exist_ok=True)
         nom = f"{uuid.uuid4().hex[:12]}.jpg"
-        (desti / nom).write_bytes(imatge)
+        try:
+            desti.mkdir(exist_ok=True)
+            (desti / nom).write_bytes(imatge)
+        except OSError:  # sense miniatura, la nota es desa igualment
+            notes.esborra_miniatura(carpeta, nom)
+            return None
         return nom
 
     def info_notes() -> dict:
@@ -527,9 +534,13 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     reel = None
                     if p is not arrel:
                         reel = next((r["titol"] for r in info_reels()["reels"] if r["id"] == p.carpeta.name), p.carpeta.name)
-                    notes.afegeix(arrel.carpeta, str(cos.get("text", "")), paraula=paraula, inici=inici,
-                                  cita=cita, projecte=str(p.carpeta), reel=reel,
-                                  versio=versio, t_versio=t_versio, miniatura=miniatura)
+                    try:
+                        notes.afegeix(arrel.carpeta, str(cos.get("text", "")), paraula=paraula, inici=inici,
+                                      cita=cita, projecte=str(p.carpeta), reel=reel,
+                                      versio=versio, t_versio=t_versio, miniatura=miniatura)
+                    except Exception:  # la nota no s'ha desat: la seva miniatura no la farà servir ningú
+                        notes.esborra_miniatura(arrel.carpeta, miniatura)
+                        raise
                 elif accio == "esborra":
                     notes.esborra(arrel.carpeta, int(cos.get("id")))
                 elif accio == "respon":
@@ -542,6 +553,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._json({"error": str(e).strip("'\"")}, HTTPStatus.BAD_REQUEST)
             except TimeoutError as e:
                 return self._json({"error": str(e)}, HTTPStatus.SERVICE_UNAVAILABLE)
+            except OSError as e:  # el disc ple, la carpeta sense permís…: abans, la pàgina només deia «Load failed»
+                motiu = {errno.ENOSPC: " (el disc és ple)", errno.EACCES: " (no hi ha permís per escriure-hi)",
+                         errno.EPERM: " (no hi ha permís per escriure-hi)",
+                         errno.EROFS: " (el disc és només de lectura)"}.get(e.errno, "")
+                return self._json({"error": f"No he pogut desar la nota a la carpeta del projecte{motiu}."},
+                                  HTTPStatus.INTERNAL_SERVER_ERROR)
             return self._json(info_notes())
 
         def _carpeta_exports(self, projecte):

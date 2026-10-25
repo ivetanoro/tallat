@@ -130,6 +130,23 @@ class TestServidor(unittest.TestCase):
         (exports / "prova_esborrany_2.mp4").write_bytes(b"a mitges")
         self.assertEqual(json.loads(self.peticio("GET", "/api/novetats")[1])["darrer_export"], "prova_esborrany_1.mp4")
 
+    def test_si_no_es_pot_desar_una_nota_la_pagina_ho_diu(self):
+        # El disc ple o la carpeta sense permís: abans la connexió es tallava i la pàgina deia «Load failed».
+        import base64
+        from motor import notes
+        exports = self.carpeta / "exports"
+        exports.mkdir()
+        (exports / "prova_esborrany_1.mp4").write_bytes(b"video")
+        (exports / "prova_esborrany_1.talls.json").write_text("[[0.5, 3.0]]", encoding="utf-8")
+        jpeg = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff una foto").decode()
+        with mock.patch.object(notes, "_escriu", side_effect=OSError(28, "No space left on device")):
+            estat, cos = self.peticio("POST", "/api/notes", {"accio": "afegeix", "text": "aquí", "versio":
+                                                             "prova_esborrany_1.mp4", "t": 0.6, "miniatura": jpeg},
+                                      self.bones())
+        self.assertEqual(estat, 500)
+        self.assertEqual(json.loads(cos)["error"], "No he pogut desar la nota a la carpeta del projecte (el disc és ple).")
+        self.assertEqual(list((self.carpeta / notes.MINIATURES).iterdir()), [])  # la miniatura no es queda sola
+
     def test_una_nota_de_revisa_al_comencament_d_un_tall_i_al_final(self):
         # Codex: al començament d'un tros (amb marge), la paraula d'abans pot ser una de les tretes; i al final de tot,
         # el reproductor pot dir el segon exacte que dura la versió.
@@ -209,6 +226,15 @@ class TestServidor(unittest.TestCase):
         noms = sorted(p.name for p in (self.carpeta / "previa").glob("previa_*.mp4"))
         self.assertEqual(len(noms), 4)
         self.assertIn("previa_1.mp4", noms)
+        # Els vídeos curts de l'antic «Escolta cada tall» se'n van amb la neteja.
+        (self.carpeta / "previa" / "escolta_abc.mp4").write_bytes(b"mp4")
+        with mock.patch.object(exporta, "fes_previa", side_effect=fes):
+            previa.demana(projecte, [(0, 1)] * 9)
+            for _ in range(100):
+                if previa.fent is None:
+                    break
+                time.sleep(0.01)
+        self.assertFalse((self.carpeta / "previa" / "escolta_abc.mp4").exists())
         self.assertEqual(previa.demana(projecte, [])["estat"], "no")
 
     def test_si_el_continu_falla_es_diu_i_no_es_torna_a_provar_de_seguida(self):

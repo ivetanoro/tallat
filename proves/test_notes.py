@@ -120,6 +120,33 @@ class TestNotes(unittest.TestCase):
             notes.afegeix(self.carpeta, "   ")
         self.assertEqual([n["id"] for n in notes.llegeix(self.carpeta)["notes"]], [2])
 
+    def test_un_numero_no_es_torna_a_fer_servir(self):
+        # Si es treu l'última nota, la següent no es queda el seu número: la pàgina recorda coses de cada nota pel
+        # número (la resposta a mig escriure, quina està desplegada…) i se les trobaria en una altra.
+        notes.afegeix(self.carpeta, "una")
+        notes.afegeix(self.carpeta, "dues")
+        notes.esborra(self.carpeta, 2)
+        self.assertEqual(notes.afegeix(self.carpeta, "tres")["id"], 3)
+        notes.esborra(self.carpeta, 3)
+        notes.esborra(self.carpeta, 1)
+        self.assertEqual(notes.afegeix(self.carpeta, "quatre")["id"], 4)
+        # Un notes.json d'abans (sense «darrera») continua igual.
+        (self.carpeta / notes.FITXER).write_text(json.dumps({"versio": 3, "notes": [{**notes.llegeix(self.carpeta)[
+            "notes"][0], "id": 7}]}), encoding="utf-8")
+        self.assertEqual(notes.afegeix(self.carpeta, "cinc")["id"], 8)
+
+    def test_la_miniatura_se_n_va_amb_la_nota(self):
+        carpeta = self.carpeta / notes.MINIATURES
+        carpeta.mkdir()
+        (carpeta / "abc.jpg").write_bytes(b"foto")
+        (self.carpeta / "altre.jpg").write_bytes(b"no s'ha de tocar")
+        notes.afegeix(self.carpeta, "aquí", versio="v.mp4", t_versio=1.0, miniatura="abc.jpg")
+        notes.afegeix(self.carpeta, "allà", versio="v.mp4", t_versio=2.0, miniatura="../altre.jpg")
+        notes.esborra(self.carpeta, 1)
+        notes.esborra(self.carpeta, 2)
+        self.assertFalse((carpeta / "abc.jpg").exists())
+        self.assertTrue((self.carpeta / "altre.jpg").exists())  # només noms de dins de la carpeta de les miniatures
+
     def test_envia_nomes_les_del_reel_que_es_veu(self):
         notes.afegeix(self.carpeta, "del vídeo sencer", projecte="/a")
         notes.afegeix(self.carpeta, "del reel", projecte="/a/reels/r1")

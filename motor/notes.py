@@ -1,7 +1,9 @@
 """Les notes per a Claude: el que la persona demana des de la pàgina, i el que Claude hi respon.
 
 Es desen a notes.json, a la carpeta de la gravació sencera (també les dels seus reels: així Claude les espera
-totes d'un sol lloc): {"versio": n, "notes": [...]}. Hi escriuen dos processos
+totes d'un sol lloc): {"versio": n, "darrera": id, "notes": [...]}. `darrera` és el número més alt que s'ha donat
+mai: si s'esborra l'última nota, la següent no torna a tenir el seu número (la pàgina recorda coses de cada nota
+pel número, com la resposta a mig escriure). Hi escriuen dos processos
 (el servidor de la pàgina i `tallat.py notes`, que fa servir Claude), i per això tot es llegeix i s'escriu
 amb el fitxer bloquejat: el bloqueig del sistema (flock al Mac, msvcrt a Windows) sobre notes.json.bloqueig,
 que s'allibera sol si el procés s'acaba (revisió de Codex: esborrar bloquejos «vells» deixava entrar dos processos).
@@ -83,8 +85,10 @@ def _llegeix(carpeta: Path) -> dict:
     try:
         dades = json.loads((Path(carpeta) / FITXER).read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
-        return {"versio": 0, "notes": []}
-    return {"versio": int(dades.get("versio", 0)), "notes": list(dades.get("notes", []))}
+        return {"versio": 0, "darrera": 0, "notes": []}
+    llista = list(dades.get("notes", []))
+    darrera = max([int(dades.get("darrera", 0)), *(n["id"] for n in llista)])
+    return {"versio": int(dades.get("versio", 0)), "darrera": darrera, "notes": llista}
 
 
 def _substitueix(tmp: Path, path: Path) -> None:
@@ -113,12 +117,14 @@ def llegeix(carpeta: Path) -> dict:
         return _llegeix(carpeta)
 
 
-def _canvia(carpeta: Path, fn):
-    """Aplica fn(notes) amb el fitxer bloquejat i desa; torna el que torni fn."""
+def _canvia(carpeta: Path, fn, tot: bool = False):
+    """Aplica fn(notes) amb el fitxer bloquejat i desa; torna el que torni fn. Amb `tot`, fn(dades): també hi
+    veu la darrera."""
     with _bloquejat(carpeta):
         dades = _llegeix(carpeta)
-        resultat = fn(dades["notes"])
+        resultat = fn(dades if tot else dades["notes"])
         dades["versio"] += 1
+        dades["darrera"] = max([dades["darrera"], *(n["id"] for n in dades["notes"])])
         _escriu(carpeta, dades)
         return resultat
 
@@ -141,26 +147,37 @@ def afegeix(carpeta: Path, text: str, paraula: int | None = None, inici: float |
             cita: str | None = None, projecte: str | None = None, reel: str | None = None,
             versio: str | None = None, t_versio: float | None = None, miniatura: str | None = None) -> dict:
     """Una nota nova, encara per enviar."""
-    def fes(notes):
-        nota = {"id": max((n["id"] for n in notes), default=0) + 1, "estat": "esborrany",
+    def fes(dades):
+        nota = {"id": dades["darrera"] + 1, "estat": "esborrany",
                 "projecte": projecte, "reel": reel,
                 "paraula": paraula, "inici": inici, "cita": (cita or "").strip()[:200] or None,
                 "fil": [_missatge("persona", text)]}
         if versio:
             nota.update(versio=versio, t_versio=t_versio, miniatura=miniatura)
-        notes.append(nota)
+        dades["notes"].append(nota)
         return nota
-    return _canvia(carpeta, fes)
+    return _canvia(carpeta, fes, tot=True)
 
 
 def esborra(carpeta: Path, id_: int) -> None:
-    """Treu una nota que encara no s'ha enviat (les altres ja les ha vist Claude)."""
+    """Treu una nota que encara no s'ha enviat (les altres ja les ha vist Claude), amb la seva miniatura."""
     def fes(notes):
         nota = _troba(notes, id_)
         if nota["estat"] != "esborrany":
             raise ValueError("Aquesta nota ja és a Claude.")
         notes.remove(nota)
-    _canvia(carpeta, fes)
+        return nota.get("miniatura")
+    esborra_miniatura(carpeta, _canvia(carpeta, fes))
+
+
+def esborra_miniatura(carpeta: Path, nom: str | None) -> None:
+    """Esborra una miniatura de la carpeta MINIATURES (només un nom de fitxer d'allà dins, mai un altre camí)."""
+    if not nom or Path(nom).name != nom or nom.startswith("."):
+        return
+    try:
+        (Path(carpeta) / MINIATURES / nom).unlink(missing_ok=True)
+    except OSError:  # a Windows, si el navegador la té oberta: es queda, i prou
+        pass
 
 
 def respon_persona(carpeta: Path, id_: int, text: str) -> dict:
