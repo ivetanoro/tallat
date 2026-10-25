@@ -3432,14 +3432,15 @@ function paraulaPerAfegir() {
   return null;
 }
 
-// El que es diu a partir d'una paraula (fins al final de la frase): el text de partida dels gràfics nous.
+// El que es diu a partir d'una paraula (fins al final de la frase, o abans, en una coma o uns dos punts si ja n'hi ha
+// prou): el text de partida dels gràfics nous. Que no quedi tallat a mitges («poca llet i»).
 function textDes(id, max) {
   const paraules = [];
   for (let k = id; k < P.paraules.length && paraules.length < max; k++) {
     if (esFora(k)) continue;
     const text = String(estat.correccions?.[k] ?? P.paraules[k].text).trim();
     paraules.push(text);
-    if (/[.?!…]["'»”]*$/.test(text)) break;
+    if (/[.?!…]["'»”]*$/.test(text) || (paraules.length >= 3 && /[,:;]$/.test(text))) break;
   }
   return paraules.join(" ").replace(/^[«"“¿¡]+/, "").replace(/[.,;:!?…«»"“”]+$/, "");
 }

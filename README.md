@@ -7,7 +7,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 
 És gratuït, de codi obert i tot passa al teu ordinador.
 
-![La pàgina d'editar de tallat: a l'esquerra el que cal revisar, al mig el text amb paraules ratllades, a la dreta el vídeo amb subtítols.](.github/imatges/1-edita.png)
+![La pàgina de tallat, a Edita: a l'esquerra el que cal revisar i el ritme, al mig el text amb paraules ratllades, a la dreta el vídeo amb subtítols i les notes per a Claude.](.github/imatges/1-edita.png)
 
 *Treus paraules com en un document i el vídeo queda tallat. En taronja, el que tallat ha tret sol; en gris, el que has tret tu.*
 
@@ -21,14 +21,15 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 - **B-roll i stickers.** Fitxers teus, o generats amb la intel·ligència artificial d'imatge o vídeo que tinguis connectada a Claude. El b-roll pot tapar tota la pantalla o sortir en una targeta arrodonida, en una finestra petita, com una foto, amb la pantalla partida o en tres targetes seguides.
 - **Canvies l'ordre** dels paràgrafs arrossegant-los.
 - **Títol del ganxo.** Un text dissenyat per als primers segons («#3 canvis / **ser creadora** / nivell fàcil»), que pots escriure tu o et proposa Claude, amb el seu estil: en esglaó, com un rètol, a màquina d'escriure amb el fons enfosquit…
-- **El teu estil.** Tries els teus colors i lletres a la pàgina, en 4 passos (o, si vols, Claude te'ls pregunta al xat, a partir d'un reel que t'hauria agradat fer), i els subtítols, el títol, els gràfics i el b-roll els fan servir sols. Després els pots retocar quan vulguis.
+- **Vesteix el vídeo tocant-lo.** Tria un estil per a tot el vídeo d'un sol toc (subtítols, títol, gràfics i b-roll: Net, Revista, Pop, Suau, Impacte o Apilat) i afegeix-hi peces: atura el vídeo on vulguis i toca un gràfic, un b-roll, un zoom o un so. Cada vídeo té el seu estil, i **⌘Z** ho desfà tot.
+- **Els teus colors i lletres.** Els tries a la pàgina en 2 passos (o, si vols, Claude te'ls pregunta al xat, a partir d'un reel que t'hauria agradat fer), i els subtítols, el títol, els gràfics i el b-roll els fan servir sols.
 - **Uns quants estils.** Desa el teu estil (lletra, colors, animacions, durada del b-roll…) amb un nom, fes-ne uns quants per a tipus de vídeo diferents, tria'n un per a cada vídeo i passa'l a qui vulguis en un `.zip`.
 - **Recorda el teu gust.** Si dius a Claude «els subtítols, més grans» o «no em treguis mai els *vale*», et pregunta si és per sempre i ho aplica a tots els vídeos següents. Per veure les teves regles, pregunta-li «quines regles tinc?».
 - **Exporta** un esborrany ràpid, la versió final en 1080 o 4K vertical, o un projecte per acabar-lo a Premiere, Final Cut, DaVinci Resolve o CapCut.
 
-![El panell dels subtítols, amb sis estils, i el vídeo amb l'estil Apilat.](.github/imatges/2-subtitols.png)
+![Vesteix: a l'esquerra la galeria de peces, al mig el vídeo amb una frase clau, a la dreta la frase per retocar-la.](.github/imatges/2-vesteix.png)
 
-*Tries com són els subtítols i els veus de seguida al vídeo.*
+*A Vesteix, toques una peça i s'afegeix on és el vídeo. A la dreta la retoques.*
 
 ![Una nota per a Claude sota el vídeo, i la resposta de Claude: ha posat un zoom.](.github/imatges/3-notes.png)
 
