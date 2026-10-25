@@ -1179,7 +1179,7 @@ body.vestint .reproductor { grid-column: 2; border-left: 0; padding-left: var(--
 .dreta-cap { flex: none; display: flex; align-items: center; gap: var(--e2); padding: var(--e3) var(--e4); }
 .dreta-cap .espai { flex: 1; }
 .dreta-cap .feina .barra-progres { width: 56px; }
-.pestanyes-dreta { flex: none; width: auto; margin: 0 var(--e5) var(--e2); }
+.segmentat.pestanyes-dreta { flex: none; width: auto; margin: 0 var(--e5) var(--e2); }  /* sense el 100 % d'«ample»: amb els marges, sortia */
 .pestanyes-dreta button { position: relative; }
 .pestanyes-dreta .compte { margin-left: 2px; }
 .pestanyes-dreta .punt-nou { position: absolute; top: 5px; right: 8px; }
@@ -1194,10 +1194,15 @@ body.vestint .vesteix-dreta .notes {
 .vesteix-dreta .nova-nota { padding: var(--e2) var(--e3); }
 .vesteix-dreta .nova-nota .peu-nota { display: flex; }
 .vesteix-dreta #text-nota { min-height: 62px; max-height: 200px; line-height: 1.45; }
-.vesteix-dreta .llista-notes { flex: 1 1 auto; gap: var(--e1); }
+/* El Safari no encongeix un botó més que el seu text (un enllaç llarg l'eixamplava i la nota sortia de la pàgina):
+   cap fill no pot ser més ample que la columna, i les paraules llargues es parteixen. */
+.vesteix-dreta, .vesteix-dreta .notes { min-width: 0; overflow-x: hidden; }
+.vesteix-dreta .llista-notes { flex: 1 1 auto; gap: var(--e1); overflow-x: hidden; }
+.vesteix-dreta .llista-notes > * { min-width: 0; max-width: 100%; }
 .vesteix-dreta .linia-nota { align-items: flex-start; gap: var(--e2); min-height: 44px; padding: var(--e2); font-size: var(--t-cos); line-height: 1.35; }
 .vesteix-dreta .linia-nota .linia-text {
-  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  white-space: normal; overflow-wrap: anywhere; word-break: break-word;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
 .vesteix-dreta .linia-temps-nota { font-size: var(--t-petit); line-height: 20px; }
 .vesteix-dreta .num-nota { height: 20px; min-width: 20px; margin-top: 1px; font-size: 12px; border-radius: 10px 10px 10px 3px; }
