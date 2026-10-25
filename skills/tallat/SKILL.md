@@ -66,7 +66,7 @@ La marca diu com són els vídeos de la persona: els seus colors i lletres (cada
 
 **Primer, a la pàgina.** Els colors i les lletres es fan a la pàgina de revisió, en 2 passos visuals (a **Vesteix**, la fila **Colors i lletres**; també s'ofereix sol al panell Subtítols). **No la posis abans del primer vídeo:** que la persona comenci a editar de seguida. Quan arribi als subtítols o als gràfics, o si diu «vull els meus colors», digues-li que toqui **Colors i lletres** a la pàgina (a **Vesteix**).
 
-**A la pàgina ja no hi ha** la crida a l'acció, l'estil dels gràfics (cadascú el tria a cada gràfic, a Vesteix), la lletra de mà ni els colors o estils que no vol mai (l'Ivet, 2026-10-25: sobraven). No els preguntis. Si la persona te'n parla ella (una crida que fa servir sempre, la seva lletra de mà feta font), desa-ho al xat (`crida=…`, `lletra_ma=…`, `energia=…`): es fa servir igual.
+**A la pàgina ja no hi ha** la crida a l'acció, l'estil dels gràfics (cadascú el tria a cada gràfic, a Vesteix), la lletra de mà ni els colors o estils que no vol mai (sobraven). No els preguntis. Si la persona te'n parla ella (una crida que fa servir sempre, la seva lletra de mà feta font), desa-ho al xat (`crida=…`, `lletra_ma=…`, `energia=…`): es fa servir igual.
 
 **L'entrevista al xat és opcional.** Fes-la si la persona la demana («fem el meu estil», «vull els meus colors») o si vol que l'ajudis a decidir. Si ja té els colors i les lletres de la pàgina, salta aquestes preguntes. **No li preguntis de què va el seu compte ni qui el mira:** pot semblar que t'hi fiques, i el tema ja el saps pel que diu als vídeos. Si te'n parla ella, apunta-ho (`compte`, `public`) i fes-ho servir per als títols i els gràfics.
 

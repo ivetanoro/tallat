@@ -37,8 +37,12 @@ MAX_SONS = 200  # els que es posen a mà (estat["sons"])
 def neteja_sons(llista, paraules: int | None = None) -> list[dict]:
     """Els sons posats a mà a la pàgina (Vesteix), comprovats: [{id, so, paraula}]. Cada un sona quan
     es diu la seva paraula (o la primera que es queda després). El que no s'entén, fora."""
+    llista = llista if isinstance(llista, list) else []
+    # Un id nou (si en falta o es repeteix) no ha de ser el d'un altre que ve més avall a la llista.
+    tots = [s.get("id") for s in llista if isinstance(s, dict) and isinstance(s.get("id"), str)]
+    seguent = max([int(i[1:]) for i in tots if i[1:].isdigit()] + [0]) + 1
     sortida, ids = [], set()
-    for s in llista if isinstance(llista, list) else []:
+    for s in llista:
         if not isinstance(s, dict) or s.get("so") not in NOMS:
             continue
         p = s.get("paraula")
@@ -46,8 +50,7 @@ def neteja_sons(llista, paraules: int | None = None) -> list[dict]:
             continue
         sid = s.get("id")
         if not isinstance(sid, str) or not sid or len(sid) > 20 or sid in ids:
-            n = max([int(i[1:]) for i in ids if i[1:].isdigit()] + [len(ids)])
-            sid = f"s{n + 1}"
+            sid, seguent = f"s{seguent}", seguent + 1
         ids.add(sid)
         sortida.append({"id": sid, "so": s["so"], "paraula": p})
     return sortida[:MAX_SONS]

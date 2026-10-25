@@ -1196,8 +1196,8 @@ body.vestint .vesteix-dreta .notes {
 .vesteix-dreta #text-nota { min-height: 62px; max-height: 200px; line-height: 1.45; }
 /* El Safari no encongeix un botó més que el seu text (un enllaç llarg l'eixamplava i la nota sortia de la pàgina):
    cap fill no pot ser més ample que la columna, i les paraules llargues es parteixen. */
-.vesteix-dreta, .vesteix-dreta .notes { min-width: 0; overflow-x: hidden; }
-.vesteix-dreta .llista-notes { flex: 1 1 auto; gap: var(--e1); overflow-x: hidden; }
+.vesteix-dreta, .vesteix-dreta .notes { min-width: 0; overflow-x: clip; }  /* clip: sense fer-ne una altra barra de baixar */
+.vesteix-dreta .llista-notes { flex: 1 1 auto; gap: var(--e1); overflow-x: clip; }
 .vesteix-dreta .llista-notes > * { min-width: 0; max-width: 100%; }
 .vesteix-dreta .linia-nota { align-items: flex-start; gap: var(--e2); min-height: 44px; padding: var(--e2); font-size: var(--t-cos); line-height: 1.35; }
 .vesteix-dreta .linia-nota .linia-text {

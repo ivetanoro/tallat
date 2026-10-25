@@ -91,6 +91,18 @@ ENLLACOS_MARCA = {
 NOM_DE_FONT = re.compile(r"^[\w][\w .-]{0,60}$")
 
 
+_neutre: dict = {}
+
+
+def _estil_neutre() -> dict:
+    """L'estil neutre sense notes (una còpia: qui el fa servir el pot canviar). Es llegeix un sol cop mentre el
+    fitxer no canvia: valida i carrega el demanen a cada opció i a cada petició."""
+    marca_temps = PER_DEFECTE.stat().st_mtime_ns
+    if _neutre.get("temps") != marca_temps:
+        _neutre.update(temps=marca_temps, dades=_sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8"))))
+    return json.loads(json.dumps(_neutre["dades"]))
+
+
 def _sense_notes(d: dict) -> dict:
     """Treu les claus que comencen per «_» (són explicacions per a les persones)."""
     return {k: (_sense_notes(v) if isinstance(v, dict) else v) for k, v in d.items() if not k.startswith("_")}
@@ -304,7 +316,7 @@ def ruta(kit: str | None = None) -> Path:
 def carrega(path: Path | None = None, kit: str | None = None) -> dict:
     """L'estil sencer d'un kit (o d'un fitxer), amb els valors que hi falten presos de l'estil neutre."""
     path = path or ruta(kit)
-    base = _sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8")))
+    base = _estil_neutre()
     for seccio, valors in _sense_notes(_llegeix_json(path)).items():
         if seccio == "nom":  # el nom del kit no és part de l'estil
             continue
@@ -422,20 +434,47 @@ def amb_estil_video(base: dict, estil: dict | None) -> dict:
     return base
 
 
-def passa_al_kit(estil: dict, kit: str | None = None, path: Path | None = None) -> None:
-    """«Fes-lo servir en tots els vídeos»: el que un vídeo ha canviat, al seu kit."""
+def claus_de_la_marca(m: dict) -> dict:
+    """{seccio: claus} que hi posa la marca `m` (les que té): a sobre d'aquestes, el kit no hi mana (amb_la_marca)."""
+    claus: dict = {}
+    for clau, destins in ENLLACOS_MARCA.items():
+        valor = m.get(clau) if not (clau == "color_destacat" and m.get(clau) is None) else m.get("color_text")
+        if valor is None:
+            continue
+        for seccio, desti in destins:
+            claus.setdefault(seccio, set()).add(desti)
+            if (seccio, desti) == ("subtitols", "font"):
+                claus[seccio].add("font_fitxer")
+        if clau == "lletra_accent":
+            for seccio in ("subtitols", "titol"):
+                claus.setdefault(seccio, set()).add("clau_cursiva")
+    return claus
+
+
+def passa_al_kit(estil: dict, kit: str | None = None, path: Path | None = None) -> dict:
+    """«Fes-lo servir en tots els vídeos»: el que un vídeo ha canviat, al seu kit. Els colors i les lletres que hi posa
+    la marca no hi van (al kit, la marca hi passaria al damunt i es perdrien): torna el que s'ha de quedar al vídeo."""
+    marca_ = carrega(path, kit).get("marca") or {}
+    de_la_marca = claus_de_la_marca(marca_)
+    queda: dict = {}
     for seccio in SECCIONS_VIDEO:
-        if estil.get(seccio):
-            desa(seccio, estil[seccio], path, kit)
+        valors = estil.get(seccio) or {}
+        propis = {k: v for k, v in valors.items() if k in de_la_marca.get(seccio, set())}
+        resta = {k: v for k, v in valors.items() if k not in propis}
+        if resta:
+            desa(seccio, resta, path, kit)
+        if propis:
+            queda[seccio] = propis
     if estil.get("grafics"):
         desa("marca", {"energia": [estil["grafics"]]}, path, kit)
+    return queda
 
 
 def valida(seccio: str, canvis: dict) -> dict:
     """Comprova els canvis que arriben de la pàgina; llança ValueError amb un missatge clar si n'hi ha cap de dolent."""
     if seccio not in EDITABLES:
         raise ValueError(f"No es pot canviar la secció «{seccio}»")
-    base = _sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8")))[seccio]
+    base = _estil_neutre()[seccio]
     net = {}
     for clau, valor in canvis.items():
         if clau not in base:

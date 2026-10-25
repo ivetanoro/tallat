@@ -225,7 +225,7 @@ class TestEstilDelVideo(AmbKits):
                 marca.valida(seccio, e[seccio])
 
     def test_un_video_canvia_el_seu_estil_i_els_altres_no(self):
-        marca.desa("marca", {"color_text": "#FBF6D1"})
+        marca.desa("marca", {"color_text": "#DDEEFF"})
         a, b = self.projecte("a"), self.projecte("b")
         revista = next(e for e in marca.estils_video() if e["id"] == "revista")
         a.estat["estil"] = marca.neteja_estil_video({"subtitols": {**revista["subtitols"], "mida": 0.09, "inventat": 1},
@@ -233,7 +233,7 @@ class TestEstilDelVideo(AmbKits):
         a.desa()
         a = Projecte(a.carpeta)
         self.assertEqual(a.estil()["subtitols"]["mida"], 0.09)
-        self.assertEqual(a.estil()["subtitols"]["color"], "#FBF6D1")  # els colors de la marca, sempre
+        self.assertEqual(a.estil()["subtitols"]["color"], "#DDEEFF")  # els colors de la marca, sempre
         self.assertEqual(a.estil()["marca"]["energia"], ["editorial"])
         self.assertNotIn("inventat", a.estat["estil"]["subtitols"])
         self.assertNotEqual(b.estil()["subtitols"]["mida"], 0.09)  # l'altre vídeo, com el kit
@@ -244,12 +244,22 @@ class TestEstilDelVideo(AmbKits):
 
     def test_els_colors_i_les_lletres_de_la_marca_manen(self):
         # Un estil de títol triat abans hi havia deixat els seus colors: la marca hi passa al damunt.
-        marca.desa("marca", {"color_text": "#FBF6D1", "color_fosc": "#2F1B11"})
+        marca.desa("marca", {"color_text": "#DDEEFF", "color_fosc": "#223344"})
         marca.desa("titol", {"color": "#FFFFFF", "clau_color": "#FF5A36", "contorn": "#000000", "majuscules": True})
         a = self.projecte("a")
         titol = a.estil()["titol"]
-        self.assertEqual((titol["color"], titol["clau_color"], titol["contorn"]), ("#FBF6D1", "#FBF6D1", "#2F1B11"))
+        self.assertEqual((titol["color"], titol["clau_color"], titol["contorn"]), ("#DDEEFF", "#DDEEFF", "#223344"))
         self.assertTrue(titol["majuscules"])  # la resta, com al kit
         # Un vídeo encara ho pot canviar per a ell sol.
-        a.estat["estil"] = {"titol": {"clau_color": "#ACCAE6"}}
-        self.assertEqual(a.estil()["titol"]["clau_color"], "#ACCAE6")
+        a.estat["estil"] = {"titol": {"clau_color": "#55AA77"}}
+        self.assertEqual(a.estil()["titol"]["clau_color"], "#55AA77")
+
+    def test_fes_lo_servir_en_tots_no_perd_els_colors_canviats_en_un_video(self):
+        # Al kit, la marca hi passa al damunt: el color canviat en aquest vídeo s'hi ha de quedar (al vídeo).
+        marca.desa("marca", {"color_text": "#DDEEFF"})
+        a = self.projecte("a")
+        queda = marca.passa_al_kit({"subtitols": {"color": "#55AA77", "mida": 0.09}}, kit=a.kit())
+        self.assertEqual(queda, {"subtitols": {"color": "#55AA77"}})
+        self.assertEqual(marca.carrega(kit=a.kit())["subtitols"]["mida"], 0.09)
+        a.estat["estil"] = queda
+        self.assertEqual((a.estil()["subtitols"]["color"], a.estil()["subtitols"]["mida"]), ("#55AA77", 0.09))

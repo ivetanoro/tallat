@@ -724,10 +724,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                                        "sons": sons})
                 if ruta == "/api/estil/a-tots":  # «Fes-lo servir en tots els vídeos»: l'estil d'aquest vídeo, al kit
                     try:
-                        marca.passa_al_kit(projecte.estat.get("estil") or {}, kit=projecte.kit())
+                        queda = marca.passa_al_kit(projecte.estat.get("estil") or {}, kit=projecte.kit())
                     except ValueError as e:
                         return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
-                    projecte.estat["estil"] = {}
+                    projecte.estat["estil"] = queda  # els colors i les lletres canviats només aquí, aquí es queden
                     projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
                     projecte.desa()
                     return self._json({**info_marca(), **instantania()})

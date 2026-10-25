@@ -119,7 +119,19 @@ let darrerDesplacamentManual = 0;
 let cua = Promise.resolve();
 let pendent = false;
 let errorDesant = null;  // si l'últim desament ha fallat (fins que un altre surti bé)
+let temporitzadorSincro = null;  // un desament que espera una mica (els lliscadors d'estil: no cada pas)
+function sincronitzaAviat(ms = 300) {
+  clearTimeout(temporitzadorSincro);
+  temporitzadorSincro = setTimeout(() => { temporitzadorSincro = null; sincronitza(); }, ms);
+}
+// Abans de fer res que depengui del que hi ha desat, el que esperava una mica s'envia ara. Torna la cua.
+function esperaDesats() {
+  if (temporitzadorSincro) sincronitza();
+  return cua;
+}
 function sincronitza() {
+  clearTimeout(temporitzadorSincro);  // aquesta petició ja ho porta tot
+  temporitzadorSincro = null;
   if (pendent) return;     // diversos canvis seguits viatgen en una sola petició
   pendent = true;
   cua = cua.then(async () => {
@@ -147,6 +159,7 @@ function sincronitza() {
 // Abans d'exportar, s'han d'haver desat tots els canvis, i bé: si no, el vídeo sortiria sense els
 // últims talls. Si mentre s'espera n'arriba un altre, també s'espera.
 async function canvisDesats() {
+  if (temporitzadorSincro) sincronitza();
   let esperada;
   do {
     esperada = cua;
@@ -159,7 +172,7 @@ async function canvisDesats() {
 // sovint i, si n'hi ha i aquí no hi ha res a mig desar, els carrega.
 let versioEstil = null;
 async function miraNovetats() {
-  if (document.hidden || !estat) return;
+  if (document.hidden || !estat || temporitzadorSincro) return;  // amb canvis per enviar, primer s'envien
   const esperada = cua;
   await esperada;
   if (esperada !== cua || pendent) return;
@@ -242,7 +255,7 @@ function aplicaTrams(r) {
   }
   if (r.zooms) zoomsTram = r.zooms;
   if (r.mostra_broll) mostraBroll = r.mostra_broll;  // la miniatura de com surt el b-roll (l'estil d'aquest vídeo)
-  if (r.mostres_grafics) { mostresGrafics = r.mostres_grafics; signaturaGaleria = ""; }
+  if (r.mostres_grafics) mostresGrafics = r.mostres_grafics;
   if (r.brolls) { brollsMuntatge = r.brolls; pintaResumBroll(); if (mostraBrollDespres) setTimeout(mostraBrollViu, 0); }
   if (r.grafics_dibuix) dibuixosGrafics = r.grafics_dibuix;
   if (r.grafics) { graficsMuntatge = r.grafics; previaBruta = true; }
@@ -923,7 +936,7 @@ function programaPrevia(ms = 900) {
 async function demanaPrevia() {
   if (!trams.length) { previaPendent = false; return; }
   try {
-    await cua;  // primer, que el servidor tingui els canvis
+    await esperaDesats();  // primer, que el servidor tingui els canvis
     const r = await api("/api/previa", {});
     if (JSON.stringify(r.trams) !== JSON.stringify(trams)) return;  // ja hi ha hagut un altre canvi
     if (r.estat === "fent") { programaPrevia(300); return; }  // ara ja va de pressa: es pregunta sovint
@@ -1796,7 +1809,7 @@ function canviaEstilVideo(seccio, canvis) {
   for (const b of $$("#desfes, [data-desfes]")) b.disabled = !desfer.length;
   for (const b of $$("#refes, [data-refes]")) b.disabled = !refer.length;
   pintaVesteix();
-  sincronitza();
+  sincronitzaAviat();  // un lliscador envia molts canvis seguits: s'envia l'últim
 }
 
 function apunta(seccio, canvis) {
@@ -2337,7 +2350,7 @@ function instalaKits() {
   });
 }
 
-// Ensenya el canvi sense fer sonar res (l'Ivet no vol que el vídeo arrenqui sol, com l'antic «Escolta cada tall»): si
+// Ensenya el canvi sense fer sonar res (el vídeo no arrenca sol, com tampoc ho fa l'antic «Escolta cada tall»): si
 // ara no es veu cap línia de subtítols, el vídeo va (aturat) a la següent, ja entrada.
 function mostraAnimacio() {
   if (vista !== "directe" || sona() || !liniesSub.length) return;
@@ -3015,7 +3028,7 @@ async function obre(reel) {
   if ((reel || null) === (P.reel_actual || null)) return;
   atura();
   try {
-    await cua;  // que no quedi cap canvi per desar
+    await esperaDesats();  // que no quedi cap canvi per desar
     await api("/api/obre", { reel });
     location.reload();
   } catch (e) { avis(e.message); }
@@ -3449,7 +3462,14 @@ function graficNou(tipus, paraula) {
   return g;
 }
 
-const idNou = (llista, lletra) => `${lletra}${Math.max(0, ...llista.map((x) => Number(String(x.id).slice(1)) || 0)) + 1}`;
+// L'id d'una peça nova: el número més alt + 1, comptant-hi els de les que ja no hi són però en queda el so apagat
+// (sons_apagats va per id: si es tornés a fer servir, la peça nova sortiria muda).
+function idNou(llista, lletra) {
+  const prefix = lletra === "g" ? "grafic:" : "so:";
+  const apagats = (estat?.sons_apagats || []).filter((c) => c.startsWith(prefix + lletra)).map((c) => c.slice(prefix.length));
+  const numeros = [...llista.map((x) => String(x.id)), ...apagats].map((id) => Number(id.slice(1)) || 0);
+  return `${lletra}${Math.max(0, ...numeros) + 1}`;
+}
 
 function afegeixPeca(fes) {
   const paraula = paraulaPerAfegir();
@@ -3470,13 +3490,18 @@ function afegeixGrafic(tipus) {
   });
 }
 
+// Un zoom és el d'un tros: es coneix pel segon de la gravació on comença el tros (si els talls canvien, el número del
+// tros canvia, però aquest segon no).
+const idZoom = (k) => (trams[k] ? trams[k][0].toFixed(3) : "");
+const tramDeZoom = (id) => trams.findIndex(([a]) => a.toFixed(3) === String(id));
+
 function afegeixZoom() {
   afegeixPeca((paraula) => {
     const k = indexTram(P.paraules[paraula].inici);
-    if (zoomsTram[k]) { triaPeca("zoom", k); avis("Aquest tros ja té zoom."); return; }
+    if (zoomsTram[k]) { triaPeca("zoom", idZoom(k)); avis("Aquest tros ja té zoom."); return; }
     canvia((e) => { e.zooms = [...new Set([...(e.zooms || []), paraula])].sort((a, b) => a - b); });
-    pecaPerVeure = { tipus: "zoom", id: k };
-    triaPeca("zoom", k);
+    pecaPerVeure = { tipus: "zoom", id: idZoom(k) };
+    triaPeca("zoom", idZoom(k));
   });
 }
 
@@ -3551,7 +3576,7 @@ function pecesDelVideo() {
       detall: ins?.pagina ? `${fmtSegons(b.durada)}` : `«${ins?.text || "b-roll"}»` });
   }
   zoomsTram.forEach((z, k) => {
-    if (z && k < trams.length) peces.push({ tipus: "zoom", id: k, t: acum[k], nom: "Zoom",
+    if (z && k < trams.length) peces.push({ tipus: "zoom", id: idZoom(k), t: acum[k], nom: "Zoom",
       detall: `Fins al tall (${fmtSegons(trams[k][1] - trams[k][0])})` });
   });
   for (const s of estat?.sons || []) {
@@ -3735,7 +3760,7 @@ function editorSig() {
   if (tipus === "titol") return [estilTitol, estat.titol, estat.estil?.titol];
   if (tipus === "grafic") return [graficDe(id), dibuixosGrafics[id], graficsMuntatge.find((x) => x.id === id)?.inici];
   if (tipus === "broll") return [brollsMuntatge.find((b) => b.id === id), instruccions.find((i) => i.id === id)];
-  if (tipus === "zoom") return [zoomsTram[id], trams[id], acum[id]];
+  if (tipus === "zoom") { const k = tramDeZoom(id); return [zoomsTram[k], trams[k], acum[k]]; }
   return [(estat.sons || []).find((s) => s.id === id), efectesMuntatge.find((x) => x.clau === `so:${id}`)?.t];
 }
 
@@ -3916,8 +3941,9 @@ function pintaEditor(cont, enfoca) {
     posa();
     const t = document.createElement("p");
     t.className = "detall";
-    t.textContent = trams[id] ? `El vídeo s'apropa en tot aquest tros, d'un tall al següent: de ${fmt(acum[id])} a `
-      + `${fmt(acum[id] + trams[id][1] - trams[id][0])}.` : "";
+    const k = tramDeZoom(id);
+    t.textContent = k >= 0 ? `El vídeo s'apropa en tot aquest tros, d'un tall al següent: de ${fmt(acum[k])} a `
+      + `${fmt(acum[k] + trams[k][1] - trams[k][0])}.` : "";
     cos.append(t);
     accionsPeca(cos, "Treu el zoom", () => treuZoom(id));
   } else {
@@ -4090,8 +4116,8 @@ function treuBroll(id) {
   else if (ins) decideixInstruccio(ins, "descartada").then((ok) => ok && avis("B-roll tret (la instrucció de veu queda descartada)."));
 }
 
-function treuZoom(k) {
-  const [a, b] = trams[k] || [];
+function treuZoom(id) {
+  const [a, b] = trams[tramDeZoom(id)] || [];
   deixaPeca();
   if (a == null) return;
   const dins = (id) => id >= 0 && id < P.paraules.length && P.paraules[id].inici >= a - 0.05 && P.paraules[id].inici < b;
@@ -4137,6 +4163,7 @@ function treuSo(id) {
 
 function treuPecaTriada() {
   const { tipus, id } = pecaTriada;
+  if (tipus === "subtitols" || tipus === "titol") return;  // no són peces: es treuen des del seu editor
   if (tipus === "grafic") {
     treuGrafic(id);
     deixaPeca();
@@ -4189,8 +4216,10 @@ function pintaResumEstilVideo() {
 
 function triaEstilVideo(e) {
   canvia((est) => {
+    const on = est.estil?.subtitols?.posicio_y;  // on els has posat en aquest vídeo, s'hi queden
     est.estil = { ...(est.estil?.so ? { so: est.estil.so } : {}),
-      subtitols: { ...e.subtitols }, titol: { ...e.titol }, broll: { ...e.broll }, grafics: e.grafics };
+      subtitols: { ...e.subtitols, ...(on != null ? { posicio_y: on } : {}) }, titol: { ...e.titol }, broll: { ...e.broll },
+      grafics: e.grafics };
     // Els gràfics també: els que tenien un estil triat, el de l'estil nou (⌘Z ho desfà tot).
     for (const g of est.grafics || []) g.estil = null;
   });
@@ -4204,9 +4233,10 @@ async function estilATots() {
     const r = await api("/api/estil/a-tots", {});
     estat = r.estat;
     respostaEstil(r);
-    aplicaTrams(r);
     refresca(true);
-    avis("Fet: tots els vídeos amb aquest estil el fan servir.", 4000);
+    avis(Object.keys(estat.estil || {}).length
+      ? "Fet. Els colors i les lletres que has canviat només aquí es queden només en aquest vídeo: els de tots són a «Colors i lletres»."
+      : "Fet: tots els vídeos amb aquest estil el fan servir.", 6000);
   } catch (e) { avis(e.message, 6000); }
 }
 
@@ -4339,6 +4369,17 @@ function editorSubtitols(cos) {
     (v) => canviaEstil({ paraules_per_linia: AGRUPACIONS[v][0], lletres_per_linia: AGRUPACIONS[v][1] }, true));
   segmentatPeca(cos, "La paraula que dius", [["cap", "Igual"], ["color", "Color"], ["caixa", "Caixa"], ["gran", "Més gran"]],
     destacatDe(e), (v) => canviaEstil(v === "cap" ? { destaca: false } : { destaca: true, destacat: v }, true));
+  if (destacatDe(e) === "color" && (e.color_actiu || "").toUpperCase() === (e.color || "").toUpperCase()) {
+    const pista = document.createElement("p");
+    pista.className = "detall";
+    pista.innerHTML = 'Ara és del mateix color que la resta. Tria un color <b>Destacat</b> a «Colors i lletres» perquè es vegi. ';
+    const b = document.createElement("button");
+    b.className = "enllac";
+    b.textContent = "Obre «Colors i lletres»";
+    b.addEventListener("click", obreMarca);
+    pista.append(b);
+    cos.append(pista);
+  }
   segmentatPeca(cos, "Mida", MIDES_SUB.map(([v, t]) => [v, t]), mesProper(MIDES_SUB, e.mida, 0.007),
     (v) => canviaEstil({ mida: MIDES_SUB.find((x) => x[0] === v)[2] }));
   segmentatPeca(cos, "On surten", LLOCS_SUB.map(([v, t]) => [v, t]), mesProper(LLOCS_SUB, e.posicio_y, 0.08),
@@ -4921,7 +4962,7 @@ let instruccioPerPujar = null;
 async function pujaFitxers(fitxers, url) {
   let json = null;
   try {
-    await cua;
+    await esperaDesats();
     for (const fitxer of fitxers) {
       json = await resposta(await fetch(url(fitxer), { method: "POST", headers: capcaleres(), body: fitxer }));
     }
@@ -4942,7 +4983,7 @@ async function pujaBroll(iid, fitxer) {
 
 async function accioBroll(ruta, dades, missatge) {
   try {
-    await cua;
+    await esperaDesats();
     const r = await api(ruta, dades);
     estat = r.estat;
     aplicaTrams(r);
@@ -5078,7 +5119,7 @@ function pintaInstruccions() {
 // Torna true si el servidor l'ha desada (si no, ja ho ha dit l'avís).
 async function decideixInstruccio(ins, nou) {
   try {
-    await cua;  // primer, que es desin els canvis pendents
+    await esperaDesats();  // primer, que es desin els canvis pendents
     const r = await api("/api/instruccio", { id: ins.id, estat: nou });
     estat = r.estat;
     aplicaTrams(r);
@@ -6220,7 +6261,7 @@ function carregaMostresSo() {
   $("#s-preparant").hidden = false;
   mostresEnCurs = (async () => {
     try {
-      await cua;
+      await esperaDesats();
       const r = await api("/api/so/mostres", {});
       mostresSo = r;
       mostraNivell = nivell;
@@ -6338,8 +6379,8 @@ let editantMarca = false;
 const COLORS_MARCA = [["m-color-text", "color_text"], ["m-color-principal", "color_principal"],
   ["m-color-destacat", "color_destacat"], ["m-color-secundari", "color_secundari"], ["m-color-clar", "color_clar"],
   ["m-color-fosc", "color_fosc"]];
-// La crida, l'estil dels gràfics, la lletra de mà i els colors prohibits no són a la pàgina (l'Ivet, 2026-10-25: cadascú
-// tria l'estil de cada gràfic, i la resta són casos concrets): si un kit els té, es fan servir igual; es posen al xat.
+// La crida, l'estil dels gràfics, la lletra de mà i els colors prohibits no són a la pàgina (cadascú tria l'estil de cada
+// gràfic, i la resta són casos concrets): si un kit els té, es fan servir igual; es posen al xat.
 const LLETRES_MARCA = [["m-lletra-titols", "lletra_titols"], ["m-lletra-text", "lletra_text"],
   ["m-lletra-accent", "lletra_accent"]];
 

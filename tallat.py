@@ -631,8 +631,11 @@ def ordre_estil(args) -> None:
     if canviat:
         projecte.estat["estil"] = marca.neteja_estil_video(propi)
     if args.a_tots:
-        marca.passa_al_kit(projecte.estat.get("estil") or {}, kit=projecte.kit())
-        projecte.estat["estil"] = {}
+        queda = marca.passa_al_kit(projecte.estat.get("estil") or {}, kit=projecte.kit())
+        projecte.estat["estil"] = queda  # els colors i les lletres que la marca ja posa no poden ser de tots
+        if queda:
+            print("Els colors i les lletres que aquest vídeo canvia es queden només en aquest vídeo (els de tots els vídeos "
+                  "són a la marca: tallat.py marca).")
         canviat = True
     if canviat:
         projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1  # la pàgina oberta s'hi posa al dia
