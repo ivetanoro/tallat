@@ -1551,15 +1551,23 @@ async function carregaFontsKit(fonts) {
   }
 }
 
-// Els valors d'un estil fet amb els colors de la marca, si n'hi ha: la marca mana.
+// Què posa cada color i cada lletra de la marca (motor/marca.py, ENLLACOS_MARCA).
+const DE_LA_MARCA = {
+  subtitols: { color: "color_text", contorn: "color_fosc", color_actiu: "color_destacat", clau_color: "color_destacat",
+    font: "lletra_text", clau_font: "lletra_accent" },
+  titol: { color: "color_text", contorn: "color_fosc", clau_color: "color_destacat", font: "lletra_titols", clau_font: "lletra_accent" },
+  broll: { vora_color: "color_principal" },
+};
+
+// Els valors d'un estil fet sense el que hi posa la marca: la marca mana (el servidor l'hi posa al damunt, i triar un
+// estil fet no ha de deixar els seus colors en aquest vídeo). Sense color destacat, mana el del text.
 function ambMarca(seccio, valors) {
   const m = estilMarca || {};
   const v = { ...valors };
-  if (m.color_destacat) {
-    if (seccio === "subtitols") for (const k of ["color_actiu", "clau_color"]) if (k in v) v[k] = m.color_destacat;
-    if (seccio === "titol" && "clau_color" in v) v.clau_color = m.color_destacat;
+  for (const [k, rol] of Object.entries(DE_LA_MARCA[seccio] || {})) {
+    const deLaMarca = rol === "color_destacat" ? m.color_destacat || m.color_text : m[rol];
+    if (deLaMarca) delete v[k];
   }
-  if (m.color_principal && seccio === "broll" && "vora_color" in v && v.vora_color == null) v.vora_color = m.color_principal;
   return v;
 }
 

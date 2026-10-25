@@ -201,8 +201,9 @@ class Projecte:
         return marca.amb_estil_video(self.estil_kit(), self.estat.get("estil"))
 
     def estil_kit(self) -> dict:
-        """L'estil del kit, sense els canvis d'aquest vídeo (el de tots els vídeos d'aquell estil)."""
-        return marca.carrega(kit=self.kit())
+        """L'estil del kit, sense els canvis d'aquest vídeo (el de tots els vídeos d'aquell estil), amb els colors i les
+        lletres de la marca al damunt."""
+        return marca.amb_la_marca(marca.carrega(kit=self.kit()))
 
     def estil_subtitols(self) -> dict:
         return self.estil()["subtitols"]

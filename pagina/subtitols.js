@@ -123,6 +123,23 @@
     return llum > 160 ? "#000000" : "#FFFFFF";
   }
 
+  // La lletra damunt d'una caixa de color s'ha de llegir: si el color del text i el de la caixa s'assemblen massa
+  // (els colors de la marca damunt d'un estil fet amb una caixa clara, per exemple), el de `alternativa` (el contorn,
+  // que la marca posa fosc) o, si tampoc, blanc o negre.
+  function llumRelativa(hex) {
+    const n = parseInt(String(hex || "#000000").slice(1), 16) || 0;
+    const c = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * c((n >> 16) & 255) + 0.7152 * c((n >> 8) & 255) + 0.0722 * c(n & 255);
+  }
+  function relacio(a, b) {
+    const [x, y] = [llumRelativa(a), llumRelativa(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  }
+  function llegible(color, fons, alternativa) {
+    if (!color || !fons || relacio(color, fons) >= 3) return color;
+    return alternativa && relacio(alternativa, fons) >= 3 ? alternativa : contrast(fons);
+  }
+
   // La família d'una lletra per al CSS: «system-ui» tal qual, «Fraunces» entre cometes (com fa el Python).
   const GENERIQUES = new Set(["system-ui", "serif", "sans-serif", "monospace", "cursive", "fantasy"]);
   function familiaDe(nom) {
@@ -245,8 +262,9 @@
       "--ts-font": op.familia || "system-ui, sans-serif",
       "--ts-pes": pes,
       "--ts-mida": `${(op.mida ?? estil.mida) * AMPLADA}px`,
-      "--ts-color": estil.color,
-      "--ts-actiu": estil.color_actiu,
+      // Amb píndola, damunt d'una caixa de color: que es llegeixi (llegible).
+      "--ts-color": estil.fons === "pindola" ? llegible(estil.color, estil.fons_color, estil.contorn) : estil.color,
+      "--ts-actiu": estil.fons === "pindola" ? llegible(estil.color_actiu, estil.fons_color, estil.contorn) : estil.color_actiu,
       "--ts-contorn": estil.contorn,
       "--ts-gruix": `${(estil.gruix_contorn || 0) * 2}em`,
       "--ts-majuscules": estil.majuscules ? "uppercase" : "none",
@@ -361,7 +379,8 @@
       b.seq.forEach((x, j) => {
         const ara = x.w.inici;
         const fi = j + 1 < b.seq.length ? b.seq[j + 1].w.inici : x.fila.linia.final;
-        const colorDeSempre = x.p.classList.contains("ts-clau") ? colorClau : estil.color;
+        const colorDeSempre = x.p.classList.contains("ts-clau") ? colorClau
+          : estil.fons === "pindola" ? llegible(estil.color, estil.fons_color, estil.contorn) : estil.color;
         if (destacat === "color") {
           tl.set(x.t, { color: estil.color_actiu }, ara);
           tl.set(x.t, { color: colorDeSempre }, fi);
@@ -505,13 +524,15 @@
     const maquina = animacio === "maquina";
     const y = estil.posicio_y ?? 0.25;
     arrel.style.height = `${op.alcada || 1920}px`;
+    const caixa = estil.fons === "pindola" ? estil.fons_color || "#000000" : null;  // el text va damunt d'aquest color
     const v = {
       "--tt-y": `${y * 100}%`, "--tt-ancora": `${-y * 100}%`,
       "--tt-amplada": `${(estil.amplada_maxima ?? 0.86) * 100}%`,
       "--tt-font": op.familia || "system-ui, sans-serif",
       "--tt-pes": Number(estil.pes) || 800,
       "--tt-mida": `${(estil.mida ?? 0.07) * AMPLADA}px`,
-      "--tt-color": estil.color, "--tt-clau-color": estil.clau_color || estil.color,
+      "--tt-color": caixa ? llegible(estil.color, caixa, estil.contorn) : estil.color,
+      "--tt-clau-color": caixa ? llegible(estil.clau_color || estil.color, caixa, estil.contorn) : estil.clau_color || estil.color,
       "--tt-clau-mida": Number(estil.clau_mida) || 1,
       "--tt-contorn": estil.contorn, "--tt-gruix": `${(estil.gruix_contorn || 0) * 2}em`,
       "--tt-majuscules": estil.majuscules ? "uppercase" : "none",

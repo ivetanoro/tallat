@@ -391,6 +391,27 @@ def neteja_estil_video(estil) -> dict:
     return net
 
 
+def amb_la_marca(estil: dict) -> dict:
+    """Els colors i les lletres de la marca, a sobre de les seccions del kit: manen sempre (un estil fet que s'hi
+    hagués triat abans no els trepitja). Els que la marca no té, es queden com són. Sense color destacat, les
+    destacades van del color del text (com _escampa_marca). Després, un vídeo encara els pot canviar (amb_estil_video)."""
+    m = estil.get("marca") or {}
+    for clau, destins in ENLLACOS_MARCA.items():
+        valor = m.get(clau)
+        if clau == "color_destacat" and valor is None:
+            valor = m.get("color_text")
+        if valor is None:
+            continue
+        for seccio, desti in destins:
+            estil.setdefault(seccio, {})[desti] = valor
+            if (seccio, desti) == ("subtitols", "font"):
+                estil["subtitols"]["font_fitxer"] = None
+        if clau == "lletra_accent":  # la paraula emotiva, en cursiva
+            for seccio in ("subtitols", "titol"):
+                estil.setdefault(seccio, {})["clau_cursiva"] = True
+    return estil
+
+
 def amb_estil_video(base: dict, estil: dict | None) -> dict:
     """L'estil d'un kit (carrega) amb el que el vídeo hi ha canviat al damunt."""
     for seccio, valors in (estil or {}).items():
