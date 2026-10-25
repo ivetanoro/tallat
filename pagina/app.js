@@ -562,6 +562,7 @@ function pintaBarreta() {
 }
 
 // A sobre de la primera paraula marcada (o a sota, si a dalt no hi cap); s'amaga si queda fora de la vista.
+// «A dalt» acaba on acaba la barra d'eines (Desfés, Exporta…): a la primera línia, la tapava.
 function colocaBarreta() {
   const b = $("#barreta");
   if (b.hidden) return;
@@ -571,9 +572,10 @@ function colocaBarreta() {
   if (!r || !r.height || r.bottom < text.top || r.top > text.bottom) { b.style.visibility = "hidden"; return; }
   b.style.visibility = "";
   const x = Math.min(Math.max(r.left + r.width / 2 - b.offsetWidth / 2, text.left + 8), text.right - b.offsetWidth - 8);
+  const sostre = Math.max(text.top, $(".eines").getBoundingClientRect().bottom - 8);
   const dalt = r.top - b.offsetHeight - 8;
   b.style.left = `${x}px`;
-  b.style.top = `${dalt < text.top + 4 ? r.bottom + 8 : dalt}px`;
+  b.style.top = `${dalt < sostre ? r.bottom + 8 : dalt}px`;
 }
 
 // Les paraules es queden marcades: un altre ⌫ (o «Recupera», a la barreta) les torna a posar.
@@ -1901,7 +1903,6 @@ function pintaResumTitol() {
   if (!estilTitol) return;
   const primera = (estat?.titol?.text || "").split("\n")[0].replaceAll("*", "").trim();
   $("#nom-estil-titol").textContent = primera ? `«${primera}» · ${predefinitTitol()?.nom ?? "Personalitzat"}` : "Sense títol";
-  pintaMostraTitol($("#mostra-titol"), { ...estilTitol, mida: 0.3, clau_mida: 1 }, "Aa", 1080);
 }
 
 function pintaPanellTitol() {
@@ -2147,7 +2148,9 @@ function pintaKits() {
     detall.textContent = [actual && "En aquest vídeo", k.per_defecte && "Per defecte"].filter(Boolean).join(" · ");
     text.append(nom, detall);
     b.append(mostra, text);
+    if (actual) b.insertAdjacentHTML("beforeend", '<svg class="marca-actual" viewBox="0 0 20 20" aria-hidden="true"><path d="m4.5 10.5 3.5 3.5 7.5-8"/></svg>');
     b.insertAdjacentHTML("beforeend", '<svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>');
+    b.classList.toggle("actual", actual);
     b.setAttribute("aria-label", `${k.nom}${actual ? ", el d'aquest vídeo" : ""}`);
     b.addEventListener("click", () => obreKit(k));
     llista.append(b);
@@ -3746,9 +3749,11 @@ function esVeu(el) {
   const r = el.getBoundingClientRect();
   return r.width > 0 && r.height > 0 && !el.closest("[hidden]");
 }
+// El primer que es veu (les estacions, per exemple, hi són a la columna de l'esquerra i a la barra del text).
+const visible = (sel) => $$(sel).find(esVeu);
 
 function obreGuia() {
-  passesVisibles = PASSES_GUIA.filter(([sel]) => esVeu($(sel)));
+  passesVisibles = PASSES_GUIA.filter(([sel]) => visible(sel));
   if (!passesVisibles.length) return;
   passaGuia = 0;
   $("#guia").hidden = false;
@@ -3765,7 +3770,7 @@ function tancaGuia() {
 function pintaGuia() {
   if (passaGuia < 0) return;
   const [sel, text] = passesVisibles[passaGuia];
-  const el = $(sel);
+  const el = visible(sel);
   let r = el.getBoundingClientRect();
   if (r.top < 0 || r.bottom > innerHeight) {  // més avall de la columna («Com es veu», «Ritme»): s'hi baixa
     el.scrollIntoView({ block: "nearest" });
@@ -4730,8 +4735,7 @@ function canviaEstacio(nom) {
   for (const b of $$(".estacions button")) b.setAttribute("aria-checked", String(b.dataset.estacio === nom));
   if (revisant) { atura(); pintaRevisa(); requestAnimationFrame(ajustaBarraRevisa); }
   else vRevisa().pause();
-  (revisant ? $('#revisa .estacions [data-estacio="revisa"]') : $('.eines .estacions [data-estacio="edita"]'))
-    ?.focus({ preventScroll: true, focusVisible: false });
+  visible(`.estacions [data-estacio="${revisant ? "revisa" : "edita"}"]`)?.focus({ preventScroll: true, focusVisible: false });
 }
 
 // Els esborranys d'aquest projecte són les versions. Si n'arriba un de nou, és el que es mira.

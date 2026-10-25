@@ -8,6 +8,13 @@
 </head>
 <body>
   <aside class="barra" aria-label="Projecte">
+    <!-- Edita · Revisa, sempre a dalt a l'esquerra (a Revisa també). Si s'amaga la columna, va a la barra del text. -->
+    <div class="cap-estacions">
+      <div class="segmentat petit estacions" role="radiogroup" aria-label="Què fas">
+        <button role="radio" data-estacio="edita" aria-checked="true">Edita</button>
+        <button role="radio" data-estacio="revisa" aria-checked="false" title="Mira l'esborrany sencer i deixa-hi notes per a Claude">Revisa</button>
+      </div>
+    </div>
     <header class="barra-cap">
       <p class="marca" id="marca" hidden></p>
       <div class="fila-nom">
@@ -51,7 +58,7 @@
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
       <button class="fila-estil" id="obre-estil-titol" aria-label="Títol del ganxo: escriu-lo i canvia'n l'estil">
-        <span class="mostra-estil" id="mostra-titol" aria-hidden="true">Aa</span>
+        <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 6.5V5h12v1.5M12 5v14M9.5 19h5"/></svg></span>
         <span class="fila-estil-text"><strong>Títol del ganxo</strong><span id="nom-estil-titol"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
@@ -620,6 +627,10 @@
 
   <main class="text" aria-label="Transcripció">
     <div class="eines">
+      <div class="segmentat petit estacions sense-columna" role="radiogroup" aria-label="Què fas">
+        <button role="radio" data-estacio="edita" aria-checked="true">Edita</button>
+        <button role="radio" data-estacio="revisa" aria-checked="false" title="Mira l'esborrany sencer i deixa-hi notes per a Claude">Revisa</button>
+      </div>
       <button class="icona" id="commuta-barra" title="Amaga la columna de l'esquerra (⌃⌘S)" aria-label="Columna de l'esquerra" aria-pressed="true">
         <svg viewBox="0 0 20 20"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M7.5 4v12"/></svg>
       </button>
@@ -630,10 +641,6 @@
         <button class="icona" id="refes" title="Refés (⇧⌘Z)" aria-label="Refés" disabled>
           <svg viewBox="0 0 20 20"><path d="m12.5 5 4 4-4 4M16 9H8.5a4.5 4.5 0 0 0 0 9H11"/></svg>
         </button>
-      </div>
-      <div class="segmentat petit estacions" role="radiogroup" aria-label="Què fas">
-        <button role="radio" data-estacio="edita" aria-checked="true">Edita</button>
-        <button role="radio" data-estacio="revisa" aria-checked="false" title="Mira l'esborrany sencer i deixa-hi notes per a Claude">Revisa</button>
       </div>
       <div class="espai"></div>
       <div class="feina" id="feina" hidden>
@@ -721,9 +728,15 @@
         <button class="boto petit" id="copia-frase" data-copia-frase>Copia-ho</button>
       </div>
       <form class="nova-nota" id="nova-nota">
-        <button type="button" class="temps-nota" id="temps-nota" title="Toca-ho per fer una nota per a tot el vídeo">0:00</button>
-        <textarea id="text-nota" rows="1" maxlength="4000" placeholder="Escriu una nota…"
-                  aria-label="Nota per a Claude en aquest moment del vídeo"></textarea>
+        <div class="fila-nova-nota">
+          <button type="button" class="temps-nota" id="temps-nota" title="Toca-ho per fer una nota per a tot el vídeo">0:00</button>
+          <textarea id="text-nota" rows="2" maxlength="4000" placeholder="Què hi canviaries? En escriure, el vídeo s'atura."
+                    aria-label="Nota per a Claude en aquest moment del vídeo"></textarea>
+        </div>
+        <div class="peu-nota">
+          <span class="detall">↩ desa · ⇧↩ línia nova</span>
+          <button class="boto principal petit" type="submit">Afegeix la nota</button>
+        </div>
       </form>
       <div class="llista-notes" id="llista-notes"></div>
     </section>
@@ -793,7 +806,7 @@
           </div>
           <textarea id="text-nota-revisa" rows="3" maxlength="4000" placeholder="Què hi canviaries? En escriure, el vídeo s'atura."
                     aria-label="Nota per a Claude en aquest moment de la versió"></textarea>
-          <div class="peu-nota-revisa">
+          <div class="peu-nota">
             <span class="detall">↩ desa · ⇧↩ línia nova</span>
             <button class="boto principal petit" type="submit">Afegeix la nota</button>
           </div>

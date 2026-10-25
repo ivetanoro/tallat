@@ -27,22 +27,28 @@
   --barra: rgba(236, 236, 240, 0.78);
   --vidre: rgba(255, 255, 255, 0.72);
   --text: #1d1d1f;
-  --text-2: #6e6e73;
-  --text-3: #86868b;
+  /* Els grisos i el blau del text, prou foscos per llegir-se en lletra petita (4,5 a 1 sobre el fons de la columna) */
+  --text-2: #5f5f64;
+  --text-3: #737378;
   --linia: rgba(0, 0, 0, 0.1);
   --omplir: rgba(120, 120, 128, 0.12);
   --omplir-fort: rgba(120, 120, 128, 0.2);
-  --accent: #007aff;
-  --accent-suau: rgba(0, 122, 255, 0.12);
+  --accent: #0071e3;
+  --accent-suau: rgba(0, 113, 227, 0.12);
+  --accent-text: #0059b3;  /* el blau de les lletres (enllaços, temps): el de fons és massa clar en lletra petita */
   --tret: #86868b;
   --auto: #c93400;
   --auto-suau: rgba(255, 149, 0, 0.14);
-  --verd: #248a3d;
+  --verd: #1f7a35;
   --verd-suau: rgba(52, 199, 89, 0.16);
+  /* El fons dels números de les notes (la lletra és blanca): prou foscos també en mode fosc */
+  --num-gris: var(--text-3);
+  --num-verd: var(--verd);
+  --num-taronja: var(--auto);
   --proposta: #a05a00;
   --proposta-ratlla: #ffcc00;
   --proposta-suau: rgba(255, 204, 0, 0.22);
-  --focus: rgba(0, 122, 255, 0.45);
+  --focus: rgba(0, 113, 227, 0.45);
   --ombra: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.08);
   --ombra-gran: 0 2px 6px rgba(0, 0, 0, 0.08), 0 24px 64px rgba(0, 0, 0, 0.18);
 
@@ -64,13 +70,17 @@
     --barra: rgba(44, 44, 46, 0.78);
     --vidre: rgba(28, 28, 30, 0.72);
     --text: #f5f5f7;
-    --text-2: #a1a1a6;
+    --text-2: #aeaeb2;
     --text-3: #8e8e93;
     --linia: rgba(255, 255, 255, 0.12);
     --omplir: rgba(120, 120, 128, 0.24);
     --omplir-fort: rgba(120, 120, 128, 0.36);
-    --accent: #0a84ff;
+    --accent: #0071e3;  /* la lletra blanca dels botons, també en fosc (amb el #0a84ff, 3,7 a 1) */
     --accent-suau: rgba(10, 132, 255, 0.22);
+    --accent-text: #66b2ff;
+    --num-gris: #737378;
+    --num-verd: #1f7a35;
+    --num-taronja: #c93400;
     --tret: #8e8e93;
     --auto: #ff9f0a;
     --auto-suau: rgba(255, 159, 10, 0.16);
@@ -129,6 +139,18 @@ kbd {
   border-right: 1px solid var(--linia);
 }
 .marca { margin: 0 0 var(--e1); font-size: var(--t-petit); font-weight: 600; color: var(--text-2); }
+/* Edita · Revisa, sempre a dalt a l'esquerra. A Edita, a dalt de la columna, i no se'n va en baixar-la. */
+.cap-estacions {
+  position: sticky; top: calc(-1 * var(--e6)); z-index: 3;  /* el navegador l'enganxa a dins del farciment de la columna */
+  margin: calc(-1 * var(--e6)) calc(-1 * var(--e5)) var(--e2); padding: var(--e3) var(--e5) var(--e4);
+  background: var(--barra);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--e3)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--e3)), transparent);
+}
+.eines .estacions.sense-columna { display: none; }
+body.sense-barra .eines .estacions.sense-columna { display: inline-flex; }
 .barra h1 { margin: 0; font-size: var(--t-titol); line-height: 1.2; font-weight: 700; overflow-wrap: anywhere; }
 .durades {
   display: flex; align-items: baseline; gap: var(--e2);
@@ -147,7 +169,7 @@ kbd {
 .buit { margin: 0; font-size: var(--t-ui); color: var(--text-2); }
 .enllac {
   margin-top: var(--e2); padding: 0; border: 0; background: none;
-  color: var(--accent); font-size: var(--t-ui); cursor: pointer;
+  color: var(--accent-text); font-size: var(--t-ui); cursor: pointer;
 }
 .enllac:hover { text-decoration: underline; }
 .enllac:active { opacity: 0.6; }
@@ -179,7 +201,7 @@ kbd {
 .mini:hover { color: var(--text); }
 .mini:active { transform: scale(0.88); }
 .mini.treu:hover { background: var(--auto-suau); color: var(--auto); }
-.mini.deixa:hover { background: var(--accent-suau); color: var(--accent); }
+.mini.deixa:hover { background: var(--accent-suau); color: var(--accent-text); }
 
 
 .nova-regla { margin-top: var(--e2); }
@@ -214,13 +236,16 @@ kbd {
 
 /* L'inici: el que queda al vídeo i «Com es veu», una fila per panell amb el que hi ha triat. */
 .inici > .seccio:first-child { margin-top: var(--e5); }
-.mostra-estil.icona-fila { display: flex; align-items: center; justify-content: center; background: var(--accent-suau); color: var(--accent); }
+.mostra-estil.icona-fila { display: flex; align-items: center; justify-content: center; background: var(--accent-suau); color: var(--accent-text); }
 .icona-fila svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .fila-estil .punt { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--auto); }
 
 /* Els estils (kits): la llista, i les accions al peu de la llista i del panell de cada estil. */
 .llista-kits { display: flex; flex-direction: column; }
 .llista-kits .fila-estil { margin-top: 0; }
+/* L'estil que fa servir el vídeo: una ✓ blava i el nom en blau (com a les llistes dels Ajustos del Mac). */
+.marca-actual { flex: none; width: 18px; height: 18px; color: var(--accent-text); stroke-width: 2.2; }
+.fila-estil.actual .fila-estil-text strong { color: var(--accent-text); font-weight: 600; }
 .accions-kit { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e2); }
 .accions-kit .perill { color: var(--auto); }
 .accions-kit .perill.confirma { font-weight: 600; }
@@ -246,13 +271,13 @@ kbd {
 .item.instruccio .ins-text { color: var(--text-2); font-size: var(--t-petit); display: -webkit-box;
   -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .item.instruccio .ins-estat { font-size: var(--t-peu); color: var(--text-2); }
-.item.instruccio.acceptada .ins-tipus { color: var(--accent); }
+.item.instruccio.acceptada .ins-tipus { color: var(--accent-text); }
 .item.instruccio.descartada { opacity: 0.55; }
 .item.instruccio .mini.actiu { background: var(--accent); color: #fff; box-shadow: none; }
 /* Les que afegeix Claude ja són al vídeo: una etiqueta en lloc del botó d'acceptar. */
 .item.instruccio .al-video {
   flex: none; align-self: center; padding: 2px var(--e2); border-radius: 999px; font-size: var(--t-peu); font-weight: 500;
-  color: var(--accent); background: var(--accent-suau); white-space: nowrap;
+  color: var(--accent-text); background: var(--accent-suau); white-space: nowrap;
 }
 .item.instruccio .torna-ins { flex: none; align-self: center; margin: 0; font-size: var(--t-peu); }
 /* Les instruccions, d'una línia: el detall i les accions secundàries surten en passar-hi el ratolí. */
@@ -263,7 +288,7 @@ kbd {
 .item.instruccio:not(:hover):not(:focus-within) .discret { display: none; }
 .ins-accions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e1); font-size: var(--t-petit); }
 .ins-accions .enllac { margin: 0; font-size: var(--t-petit); }
-.ins-accions .fet { color: var(--accent); font-weight: 500; }
+.ins-accions .fet { color: var(--accent-text); font-weight: 500; }
 .ins-accions select {
   max-width: 100%; height: 24px; border: 0; border-radius: var(--radi-petit); padding: 0 var(--e2);
   font: inherit; font-size: var(--t-petit); color: var(--text); background: var(--omplir);
@@ -275,7 +300,7 @@ kbd {
 .item.reel .reel-detall { color: var(--text-2); font-size: var(--t-petit); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item.reel .reel-durada { flex: none; color: var(--text-2); font-size: var(--t-petit); font-variant-numeric: tabular-nums; padding-top: 1px; }
 .item.reel.obert { background: var(--accent-suau); }
-.item.reel.obert .reel-titol { color: var(--accent); }
+.item.reel.obert .reel-titol { color: var(--accent-text); }
 
 /* --- Text ------------------------------------------------------------------- */
 
@@ -335,7 +360,7 @@ kbd {
   transition: opacity 150ms ease-out, color 120ms;
 }
 .paragraf:hover .marca-temps, .marca-temps:focus-visible { opacity: 1; }
-.marca-temps:hover { color: var(--accent); }
+.marca-temps:hover { color: var(--accent-text); }
 
 /* Moure paràgrafs: una nansa al marge esquerre */
 .transcripcio { position: relative; }
@@ -385,11 +410,13 @@ body.movent, body.movent * { cursor: grabbing !important; }
   font-variant-numeric: tabular-nums;
   transition: background-color 120ms, color 120ms;
 }
+.pausa { position: relative; }
+.pausa::before { content: ""; position: absolute; inset: -4px -2px; }  /* més fàcil de tocar: 26 px d'alt */
 .pausa:hover { color: var(--text); background: var(--omplir-fort); }
 /* Escurçat (el que passa sol), el silenci surt fluix, només amb la vora: no és res que s'hagi de fer.
    Sencer (s'hi ha clicat), en blau. */
 .pausa:not(.sencera) { background: transparent; box-shadow: inset 0 0 0 1px var(--linia); }
-.pausa.sencera { background: var(--accent-suau); color: var(--accent); }
+.pausa.sencera { background: var(--accent-suau); color: var(--accent-text); }
 
 .editor {
   font: inherit; color: inherit;
@@ -522,7 +549,7 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
 .fila-estil-text strong { font-size: var(--t-ui); font-weight: 500; color: var(--text); }
 .xebro { flex: none; width: 14px; height: 14px; color: var(--text-3); }
 
-.barra.editant-estil > :not(.panell-estil) { display: none; }
+.barra.editant-estil > :not(.panell-estil):not(.cap-estacions) { display: none; }
 .panell-estil { display: flex; flex-direction: column; gap: var(--e5); }
 .panell-estil .tornar { margin: 0; align-self: flex-start; }
 .titol-panell { margin: 0; font-size: var(--t-titol); line-height: 1.2; font-weight: 700; }
@@ -542,7 +569,7 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
 .estil:hover .estil-mostra { box-shadow: 0 0 0 1px var(--linia), 0 4px 12px rgba(0, 0, 0, 0.15); }
 .estil:active .estil-mostra { transform: scale(0.97); }
 .estil[aria-checked="true"] .estil-mostra { box-shadow: 0 0 0 2px var(--fons), 0 0 0 4px var(--accent); }
-.estil[aria-checked="true"] .estil-nom { color: var(--accent); }
+.estil[aria-checked="true"] .estil-nom { color: var(--accent-text); }
 
 .camp { display: flex; flex-direction: column; gap: var(--e2); }
 .etiqueta { font-size: var(--t-petit); font-weight: 600; color: var(--text-2); }
@@ -573,7 +600,7 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
 .sub-camps { display: flex; flex-direction: column; gap: var(--e2); padding-left: var(--e3); border-left: 2px solid var(--omplir); }
 .sub-camps[hidden] { display: none; }
 .sub-camps .detall { margin: 0; }
-.extrems { display: flex; justify-content: space-between; margin-top: calc(-1 * var(--e1)); font-size: var(--t-peu); color: var(--text-3); }
+.extrems { display: flex; justify-content: space-between; margin-top: calc(-1 * var(--e1)); font-size: var(--t-peu); color: var(--text-2); }
 .colors { display: flex; gap: var(--e4); }
 .color { display: flex; flex-direction: column; align-items: center; gap: var(--e1); font-size: var(--t-petit); color: var(--text-2); cursor: pointer; }
 .color input {
@@ -800,7 +827,7 @@ body.reproduint .play .si-play { display: block; }
 /* Notes per a Claude, sota el vídeo. El número i el color de cada nota són els mateixos a la llista i a la
    línia de temps: gris per enviar, blau a Claude, verd feta, taronja quan Claude et pregunta alguna cosa. */
 .notes {
-  width: 100%; flex: 0 1 auto; min-height: 0; max-height: 48%;
+  width: 100%; flex: 0 1 auto; min-height: 0; max-height: 52%;
   display: flex; flex-direction: column; gap: var(--e2);
   padding-top: var(--e3); border-top: 1px solid var(--linia);
 }
@@ -814,24 +841,28 @@ body.reproduint .play .si-play { display: block; }
 .avis-connexio p { margin: 0 0 var(--e2); }
 .avis-connexio q { font-weight: 600; }
 .nova-nota {
-  flex: none; display: flex; align-items: flex-start; gap: var(--e2); padding: 5px 6px;
+  flex: none; display: flex; flex-direction: column; gap: 6px; padding: 6px var(--e2);
   border-radius: var(--radi); background: var(--superficie); box-shadow: inset 0 0 0 1px var(--linia);
 }
+.fila-nova-nota { display: flex; align-items: flex-start; gap: var(--e2); }
+/* El peu (↩ desa i el botó), només mentre s'hi escriu: quan no, la llista de sota té més lloc. */
+.nova-nota .peu-nota { display: none; }
+.nova-nota:focus-within .peu-nota, .nova-nota:has(#text-nota:not(:placeholder-shown)) .peu-nota { display: flex; }
 .nova-nota:focus-within { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--focus); }
 .temps-nota {
   flex: none; height: 22px; margin-top: 1px; padding: 0 6px; border: 0; border-radius: 5px;
-  background: var(--accent-suau); color: var(--accent); font-size: var(--t-peu); font-weight: 600;
+  background: var(--accent-suau); color: var(--accent-text); font-size: var(--t-peu); font-weight: 600;
   font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .temps-nota.tot { background: var(--omplir); color: var(--text-2); }
 #text-nota {
-  flex: 1; min-width: 0; height: 24px; max-height: 96px; padding: 3px 2px; border: 0; background: none; resize: none;
-  font: inherit; font-size: var(--t-ui); line-height: 18px; color: var(--text); outline: none;
+  flex: 1; min-width: 0; min-height: 42px; max-height: 128px; padding: 1px 2px; border: 0; background: none; resize: none;
+  font: inherit; font-size: var(--t-cos); line-height: 20px; color: var(--text); outline: none;
   -webkit-user-select: text; user-select: text;
 }
 #text-nota::placeholder, #text-nota-revisa::placeholder { color: var(--text-3); }
 .llista-notes { margin: 0 calc(-1 * var(--e1)); padding: 0 var(--e1); min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.noves-notes { color: var(--accent); font-weight: 600; }
+.noves-notes { color: var(--accent-text); font-weight: 600; }
 .grup-notes {
   display: flex; align-items: center; justify-content: space-between; gap: var(--e2); flex: none;
   margin: 6px 0 0; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2);
@@ -848,7 +879,7 @@ body.reproduint .play .si-play { display: block; }
 }
 .linia-nota:hover { background: var(--omplir); }
 .linia-nota:active { background: var(--omplir-fort); }
-.linia-temps-nota { flex: none; color: var(--accent); font-size: var(--t-peu); font-weight: 600; font-variant-numeric: tabular-nums; }
+.linia-temps-nota { flex: none; color: var(--accent-text); font-size: var(--t-peu); font-weight: 600; font-variant-numeric: tabular-nums; }
 .linia-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .estat-enviada.linia-nota .linia-text, .estat-treballant.linia-nota .linia-text { color: var(--text-2); }
 .punt-nou { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
@@ -874,13 +905,13 @@ body.reproduint .play .si-play { display: block; }
 .nota-cap { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--t-peu); color: var(--text-2); cursor: pointer; }
 .num-nota, .marca-nota {
   flex: none; display: inline-flex; align-items: center; justify-content: center; height: 16px; min-width: 16px; padding: 0 4px;
-  border: 0; border-radius: 8px 8px 8px 2px; background: var(--text-3); color: #fff; font-size: 10px; font-weight: 700; line-height: 1;
+  border: 0; border-radius: 8px 8px 8px 2px; background: var(--num-gris); color: #fff; font-size: 10px; font-weight: 700; line-height: 1;
 }
 .estat-enviada .num-nota, .estat-treballant .num-nota, .marca-nota.estat-enviada, .marca-nota.estat-treballant { background: var(--accent); }
-.estat-feta .num-nota, .marca-nota.estat-feta { background: var(--verd); }
-.estat-pregunta .num-nota, .marca-nota.estat-pregunta { background: var(--auto); }
+.estat-feta .num-nota, .marca-nota.estat-feta { background: var(--num-verd); }
+.estat-pregunta .num-nota, .marca-nota.estat-pregunta { background: var(--num-taronja); }
 .nota-temps {
-  flex: none; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600;
+  flex: none; padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-weight: 600;
   font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .nota-temps:hover { text-decoration: underline; }
@@ -894,7 +925,7 @@ body.reproduint .play .si-play { display: block; }
   display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 10px;
   background: var(--omplir); font-size: 11px; font-weight: 600; color: var(--text-2);
 }
-.estat-enviada .xip-nota, .estat-treballant .xip-nota { background: var(--accent-suau); color: var(--accent); }
+.estat-enviada .xip-nota, .estat-treballant .xip-nota { background: var(--accent-suau); color: var(--accent-text); }
 .estat-feta .xip-nota { background: var(--verd-suau); color: var(--verd); }
 .estat-pregunta .xip-nota { background: var(--auto-suau); color: var(--auto); }
 .respon-nota { display: flex; align-items: flex-end; gap: 6px; margin-top: var(--e2); }
@@ -905,7 +936,7 @@ body.reproduint .play .si-play { display: block; }
 }
 .respon-nota textarea:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--focus); }
 .boto.petit { height: 28px; padding: 0 var(--e3); font-size: var(--t-petit); }
-.boto.suau { background: var(--accent-suau); color: var(--accent); font-weight: 600; }
+.boto.suau { background: var(--accent-suau); color: var(--accent-text); font-weight: 600; }
 .boto.suau:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .boto.ample { flex: none; width: 100%; height: 32px; }
 /* Carregant: una rodeta damunt del vídeo quan s'encalla (com als reproductors de sempre), i un rètol quan sona la
@@ -937,7 +968,7 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
 .revisa { grid-column: 1 / -1; height: 100vh; min-height: 0; display: flex; flex-direction: column; background: var(--fons); }
 .revisa-cap {
   flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e3);
-  padding: var(--e3) var(--e6); border-bottom: 1px solid var(--linia);
+  padding: var(--e3) var(--e6) var(--e3) var(--e5); border-bottom: 1px solid var(--linia);
 }
 .versions-revisa { display: flex; flex-wrap: wrap; gap: 6px; }
 .versions-revisa button {
@@ -970,8 +1001,9 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
   border-radius: var(--radi); background: var(--superficie); box-shadow: inset 0 0 0 1px var(--linia);
 }
 .nota-revisa:focus-within { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--focus); }
-.cap-nota-revisa, .peu-nota-revisa { display: flex; align-items: center; gap: var(--e2); }
-.peu-nota-revisa { justify-content: space-between; }
+.cap-nota-revisa, .peu-nota { display: flex; align-items: center; gap: var(--e2); }
+.peu-nota { justify-content: space-between; }
+.peu-nota .detall { margin: 0; }
 #text-nota-revisa {
   width: 100%; min-height: 66px; max-height: 220px; padding: 0; border: 0; background: none; resize: none;
   font: inherit; font-size: var(--t-cos); line-height: 1.45; color: var(--text); outline: none;
@@ -995,7 +1027,7 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
 .cos-targeta { min-width: 0; }
 .meta-targeta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .temps-revisa {
-  padding: 2px 7px; border: 0; border-radius: 6px; background: var(--accent-suau); color: var(--accent);
+  padding: 2px 7px; border: 0; border-radius: 6px; background: var(--accent-suau); color: var(--accent-text);
   font: inherit; font-size: var(--t-peu); font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer;
 }
 .meta-targeta .punt-nou { margin-left: auto; }
@@ -1009,6 +1041,8 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
 /* Els números de les notes, sobre la línia de temps: la punta de la bombolla assenyala el moment. */
 .marques-notes { position: relative; width: 100%; height: 16px; margin-bottom: calc(-1 * var(--e2)); }
 .marca-nota { position: absolute; top: 0; cursor: pointer; transition: transform 120ms var(--molla); }
+/* El dibuix és petit, però la zona que es pot tocar fa uns 26 px (cap avall poc: a sota hi ha la línia de temps). */
+.marca-nota::before { content: ""; position: absolute; inset: -8px -5px -2px; }
 .marca-nota:hover { transform: scale(1.15); transform-origin: bottom left; }
 
 
@@ -1067,6 +1101,8 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
   body { grid-template-columns: 1fr; overflow: auto; }
   .barra, .text, .reproductor { grid-column: auto; }
   .divisor, #commuta-barra, #commuta-reproductor { display: none; }
+  .cap-estacions { display: none; }  /* la columna de l'esquerra va sota el vídeo: les estacions, a la barra del text */
+  .eines .estacions.sense-columna { display: inline-flex; }
   .barra, .text, .reproductor { height: auto; }
   .reproductor { order: -1; height: 70vh; border-left: 0; }
   .transcripcio { padding-bottom: var(--e8); }
@@ -1075,7 +1111,7 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .barra, .eines { background: var(--fons); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .barra, .eines, .cap-estacions { background: var(--fons); backdrop-filter: none; -webkit-backdrop-filter: none; }
   .gran-play, .avis-flotant { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 @media (prefers-contrast: more) and (prefers-color-scheme: light) {
@@ -1085,7 +1121,7 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
   :root { --linia: rgba(255, 255, 255, 0.4); --text-2: #d1d1d6; --omplir: rgba(120, 120, 128, 0.4); }
 }
 @media (prefers-contrast: more) {
-  .barra, .eines { background: var(--fons); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .barra, .eines, .cap-estacions { background: var(--fons); backdrop-filter: none; -webkit-backdrop-filter: none; }
   .p.fora { opacity: 1; }
 }
 
@@ -1107,7 +1143,7 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
 .efecte:first-child { border-top: 0; }
 .efecte .nom-efecte { flex: 1; min-width: 0; font-size: var(--t-petit); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .efecte.apagat .nom-efecte { color: var(--text-3); text-decoration: line-through; }
-.efecte .moment { font-size: var(--t-petit); color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer;
+.efecte .moment { font-size: var(--t-petit); color: var(--accent-text); background: none; border: 0; padding: 0; cursor: pointer;
   font-variant-numeric: tabular-nums; }
 .efecte .icona { width: 26px; height: 26px; }
 
@@ -1173,7 +1209,7 @@ input.camp-text { min-height: 0; }
 .grafic-cap strong { font-weight: 600; }
 .grafic-cap .temps-petit { color: var(--text-2); font-size: var(--t-petit); font-variant-numeric: tabular-nums; }
 .grafic-estat { margin-left: auto; font-size: var(--t-peu); font-weight: 600; }
-.grafic.mantingut .grafic-estat { color: var(--accent); }
+.grafic.mantingut .grafic-estat { color: var(--accent-text); }
 .grafic.canvia .grafic-estat { color: var(--proposta); }
 .grafic-text {
   margin: 0; font-size: var(--t-petit); color: var(--text); cursor: pointer;
@@ -1210,7 +1246,7 @@ input.camp-text { min-height: 0; }
 }
 .fet-export[hidden] { display: none; }
 .fet-export #fet-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fet-export .fet-marca { color: var(--accent); font-weight: 700; }
+.fet-export .fet-marca { color: var(--accent-text); font-weight: 700; }
 .fet-export .enllac { margin: 0; font-size: var(--t-petit); white-space: nowrap; }
 .fet-export .icona { width: 22px; height: 22px; }
 
@@ -1277,8 +1313,9 @@ input.camp-text { min-height: 0; }
 .guia-accions { display: flex; align-items: center; gap: var(--e3); }
 .guia-pas { flex: 1; font-size: var(--t-petit); color: var(--text-2); }
 .guia-accions .enllac { margin: 0; }
+.ajuda-guia::before { content: ""; position: absolute; inset: -3px; }  /* es toca en 28 px */
 .ajuda-guia {
-  flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  position: relative; flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
   background: var(--omplir); color: var(--text-2); font-size: 12px; font-weight: 600;
 }
 .fila-nom { display: flex; align-items: flex-start; gap: var(--e2); }
