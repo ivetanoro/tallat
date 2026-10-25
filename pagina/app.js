@@ -2157,7 +2157,7 @@ function pintaKits() {
 
 // Tocar un estil: el fa servir aquest vídeo (si no el feia servir ja) i l'obre. Només es pot canviar
 // l'estil del vídeo; per tornar al d'abans, es toca aquell. Si encara no té colors, el panell ofereix
-// l'assistent dels 4 passos, però s'obre igualment (revisió de Codex: si no, no es podia gestionar).
+// l'assistent dels 2 passos, però s'obre igualment (revisió de Codex: si no, no es podia gestionar).
 async function obreKit(k) {
   if (k.id !== kitActual) {
     await accioKit("/api/kit/tria", { kit: k.id }, `Aquest vídeo ara fa servir l'estil «${k.nom}».`);
@@ -3282,6 +3282,7 @@ function treuGrafic(id, treure = true) {
 
 let vestint = false;
 let pestanyaPeces = llegeix("tallat.pestanya-peces", "grafics");
+let pestanyaDreta = "peces";  // a la dreta de Vesteix: «peces» (la triada o totes) o «notes» (les notes per a Claude)
 let pecaTriada = null;      // {tipus: "grafic" | "broll" | "zoom" | "so", id}
 let pecaPerVeure = null;    // la que s'acaba d'afegir: quan el servidor en sap el moment, el vídeo hi va
 let tretsOberts = false;
@@ -3354,6 +3355,7 @@ function graficNou(tipus, paraula) {
     g.xifra = xifra ? xifra[0] : "3";
   }
   if (tipus === "anotacio") g.forma = "fletxa";
+  if (tipus === "crida") g.text = retalla(estilMarca?.crida || "Segueix-me per a més", 90);
   return g;
 }
 
@@ -3472,8 +3474,30 @@ function pecesDelVideo() {
 
 const pecaDe = (tipus, id) => pecesDelVideo().find((p) => p.tipus === tipus && String(p.id) === String(id));
 
+// A la dreta de Vesteix, una pestanya o l'altra: cadascuna amb tota l'alçada (un sol lloc per baixar).
+function mostraDreta(quina) {
+  pestanyaDreta = quina;
+  $("#vesteix-dreta").dataset.pestanya = quina;
+  pintaPestanyesDreta();
+  if (quina === "notes" && notesCarregades) pintaNotes();  // ara es veuen: les respostes noves ja compten com a vistes
+}
+
+function pintaPestanyesDreta() {
+  for (const b of $$("#pestanyes-dreta button")) {
+    b.setAttribute("aria-selected", String(b.dataset.dreta === pestanyaDreta));
+    b.tabIndex = b.dataset.dreta === pestanyaDreta ? 0 : -1;
+  }
+  if (!estat) return;
+  const peces = pecesDelVideo().length;
+  $("#compte-peces").textContent = peces ? String(peces) : "";
+  const notes = notesCarregades ? notesVisibles() : [];
+  $("#compte-notes-dreta").textContent = notes.length ? String(notes.length) : "";
+  $("#punt-notes-dreta").hidden = pestanyaDreta === "notes" || !notes.some((n) => esNova(n) || n.estat === "pregunta");
+}
+
 function triaPeca(tipus, id, { enfoca = false, ves = false } = {}) {
   pecaTriada = { tipus, id };
+  if (pestanyaDreta !== "peces") mostraDreta("peces");
   const p = pecaDe(tipus, id);
   if (ves && p?.t != null) vesA(p.t + (tipus === "grafic" ? 0.6 : 0.1));
   pintaDreta({ refes: true, enfoca });
@@ -3584,6 +3608,7 @@ function pintaGaleria() {
 
 function pintaDreta({ refes = false, enfoca = false } = {}) {
   if (!vestint || !estat) return;
+  pintaPestanyesDreta();
   for (const b of $$("[data-desfes]")) b.disabled = !desfer.length;
   for (const b of $$("[data-refes]")) b.disabled = !refer.length;
   const cont = $("#peca");
@@ -3841,7 +3866,8 @@ function editorGrafic(cos, g) {
   }
   if (g.tipus === "frase") ambText("El text", "El que posis *entre asteriscs* surt destacat.", { linies: 2 });
   else if (g.tipus === "etiqueta" || g.tipus === "anotacio") ambText("El text");
-  else if (g.tipus === "crida") ambText("El text", "", { placeholder: estilMarca?.crida || "Segueix-me per a més", valid: () => true });
+  else if (g.tipus === "crida") ambText("El text", "", { placeholder: estilMarca?.crida || "Segueix-me per a més",
+    valid: (v) => v.trim() || estilMarca?.crida });
   else if (g.tipus === "notificacio") {
     camp(cos, "Qui l'envia", campText(g.de || "", { mida: 30, clau: "de", valid: () => true, desa: (v) => canviaGrafic(id, { de: textPla(v) }) }));
     ambText("El missatge", "", { linies: 2 });
@@ -3920,6 +3946,7 @@ function editorGrafic(cos, g) {
 
 // Una nota per a Claude sobre una peça: va al moment de la peça i ja diu de quina parla.
 function notaSobre(g) {
+  mostraDreta("notes");
   const s = graficsMuntatge.find((x) => x.id === g.id);
   if (s) vesA(s.inici + 0.6);
   const camp = $("#text-nota");
@@ -4020,6 +4047,7 @@ function treuPecaTriada() {
 
 // «Demana-li gràfics a Claude»: una nota per a tot el vídeo (Claude la fa amb el pla de gràfics).
 function demanaGrafics() {
+  mostraDreta("notes");
   const camp = $("#text-nota");
   momentNota = { tot: true };
   pintaMomentNota();
@@ -4050,6 +4078,14 @@ function instalaVesteix() {
     e.preventDefault();
   });
   $("#demana-grafics").addEventListener("click", demanaGrafics);
+  for (const b of $$("#pestanyes-dreta button")) b.addEventListener("click", () => mostraDreta(b.dataset.dreta));
+  $("#pestanyes-dreta").addEventListener("keydown", (e) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+    e.preventDefault();
+    mostraDreta(pestanyaDreta === "peces" ? "notes" : "peces");
+    $(`#pestanyes-dreta [data-dreta="${pestanyaDreta}"]`).focus();
+  });
+  mostraDreta("peces");
   for (const b of $$("[data-desfes]")) b.addEventListener("click", desfes);
   for (const b of $$("[data-refes]")) b.addEventListener("click", refes);
   $("#vesteix-exporta").addEventListener("click", obreFinal);
@@ -4401,7 +4437,7 @@ function instalaGuia() {
 }
 
 // --- La teva marca, pas a pas -------------------------------------------------------------------
-// Quatre passos visuals dins la pàgina: els colors, les lletres, l'estil dels gràfics i la crida.
+// Dos passos visuals dins la pàgina: els colors i les lletres.
 // No va al principi: s'ofereix quan arribes als subtítols o als gràfics (o des d'«El teu estil»).
 
 const PALETES = [
@@ -4420,8 +4456,8 @@ const PARELLES = [
   { nom: "Amable", lletra_titols: "fredoka", lletra_text: "poppins", lletra_accent: "caveat" },
   { nom: "Neta", lletra_titols: "inter-tight", lletra_text: "inter", lletra_accent: "fraunces" },
 ];
-const TITOLS_ASSISTENT = ["Els teus colors", "Les teves lletres", "Com són els teus gràfics", "La teva crida"];
-let assistent = null;  // {pas, colors, parella, energia, grafics, crida}
+const TITOLS_ASSISTENT = ["Els teus colors", "Les teves lletres"];
+let assistent = null;  // {pas, colors, parella}
 
 const marcaFeta = (m = estilMarca) => !!m && COLORS_MARCA.some(([, k]) => m[k]);
 
@@ -4450,9 +4486,6 @@ function obreAssistent() {
     pas: 0,
     colors: marcaFeta(m) ? Object.fromEntries(COLORS_MARCA.map(([, k]) => [k, m[k] || null])) : { ...PALETES[0] },
     parella: null,
-    energia: energies(m),
-    grafics: m.grafics || "normal",
-    crida: m.crida || "",
   };
   delete assistent.colors.nom;
   $("#velo").hidden = false;
@@ -4481,7 +4514,7 @@ function pintaAssistent() {
   $("#titol-assistent").textContent = TITOLS_ASSISTENT[a.pas];
   $$("#passes-assistent i").forEach((el, k) => el.classList.toggle("fet", k <= a.pas));
   $("#assistent-enrere").textContent = a.pas ? "Enrere" : "Ara no";
-  $("#assistent-seguent").textContent = a.pas === 3 ? "Fet" : "Següent";
+  $("#assistent-seguent").textContent = a.pas === TITOLS_ASSISTENT.length - 1 ? "Fet" : "Següent";
   const cos = $("#cos-assistent");
   cos.textContent = "";
   const graella = document.createElement("div");
@@ -4538,70 +4571,13 @@ function pintaAssistent() {
       b.classList.add("lletres-opcio");
       b.innerHTML = "<strong>Les meves</strong><span>Les lletres que ja tens al teu estil</span>";
     }
-  } else if (a.pas === 2) {
-    const paleta = { ...(paletaGrafics || {}), text: a.colors.color_text, principal: a.colors.color_principal,
-      destacat: a.colors.color_destacat || a.colors.color_text, secundari: a.colors.color_secundari || a.colors.color_principal,
-      clar: a.colors.color_clar || "#FFFFFF", fosc: a.colors.color_fosc || "#111111" };
-    if (a.parella && a.parella !== "kit") {
-      Object.assign(paleta, { lletra_titols: nomLletra(a.parella.lletra_titols), lletra_text: nomLletra(a.parella.lletra_text),
-        lletra_accent: nomLletra(a.parella.lletra_accent) });
-    }
-    for (const [estil, nom] of [["net", "Net"], ["mac", "Mac"], ["scrapbook", "Scrapbook"], ["editorial", "Editorial"]]) {
-      const triat = a.energia.includes(estil);
-      const b = opcioAssistent(graella, triat, () => {
-        const nou = new Set(a.energia);
-        if (nou.has(estil) && nou.size > 1) nou.delete(estil); else nou.add(estil);
-        a.energia = [...nou];
-        pintaAssistent();
-      });
-      b.classList.add("grafic-opcio");
-      b.innerHTML = '<span class="mostra-grafic"><span></span></span><span class="nom-opcio"></span>';
-      b.lastChild.textContent = nom;
-      if (window.TallatGrafics) {
-        const host = b.querySelector(".mostra-grafic > span");
-        const mostra = { id: estil, tipus: estil === "editorial" ? "frase" : "llista", estil, posicio: "mig", limits: [0, 1920],
-          inici: 0, final: 1e5, text: estil === "editorial" ? "una *idea* clara" : "3 coses",
-          punts: estil === "editorial" ? [] : [{ text: "una", t: 0 }, { text: "dues", t: 0 }] };
-        requestAnimationFrame(() => {
-          TallatGrafics.construeix(host, [mostra], paleta, OP_GRAFICS).seek(50, false);
-          const caixa = b.querySelector(".mostra-grafic");
-          host.style.transform = `scale(${caixa.clientWidth / 1080})`;
-          host.style.marginTop = `${(caixa.clientHeight - caixa.clientWidth * 1920 / 1080) / 2}px`;
-        });
-      }
-    }
-    const quants = document.createElement("div");
-    quants.className = "segmentat ample";
-    quants.setAttribute("role", "radiogroup");
-    quants.setAttribute("aria-label", "Quants gràfics");
-    for (const [v, t] of [["pocs", "Pocs"], ["normal", "Normal"], ["molts", "Molts"]]) {
-      const b = document.createElement("button");
-      b.setAttribute("role", "radio");
-      b.setAttribute("aria-checked", String(a.grafics === v));
-      b.textContent = t;
-      b.addEventListener("click", () => { a.grafics = v; pintaAssistent(); });
-      quants.append(b);
-    }
-    cos.append(quants);
-  } else {
-    graella.remove();
-    const camp = document.createElement("input");
-    camp.type = "text";
-    camp.className = "camp-text";
-    camp.maxLength = 600;
-    camp.placeholder = "Per exemple: desa't aquest vídeo per quan el necessitis";
-    camp.value = a.crida;
-    camp.setAttribute("aria-label", "La teva crida a l'acció");
-    camp.addEventListener("input", () => { a.crida = camp.value; });
-    cos.append(camp);
-    setTimeout(() => camp.focus(), 50);
   }
 }
 
 async function acabaAssistent() {
   const a = assistent;
   tancaAssistent();
-  canviaMarca({ ...a.colors, energia: a.energia, grafics: a.grafics, crida: a.crida.trim() });
+  canviaMarca({ ...a.colors });
   pintaPanellMarca();
   if (a.parella && a.parella !== "kit") {
     for (const clau of ["lletra_titols", "lletra_text", "lletra_accent"]) await baixaLletra(a.parella[clau], "marca", clau);
@@ -4619,7 +4595,7 @@ function instalaAssistent() {
   });
   $("#assistent-seguent").addEventListener("click", () => {
     if (!assistent) return;
-    if (assistent.pas === 3) acabaAssistent();
+    if (assistent.pas === TITOLS_ASSISTENT.length - 1) acabaAssistent();
     else { assistent.pas++; pintaAssistent(); }
   });
   document.addEventListener("keydown", (e) => {
@@ -4961,6 +4937,7 @@ function pintaNotes() {
   $("#noves-notes").textContent = noves ? `· ${noves === 1 ? "1 nova" : `${noves} noves`}` : "";
   pintaConnexio();
   pintaMarquesNotes();
+  if (vestint) pintaPestanyesDreta();
 }
 
 function capGrup(clau, titol, quantes) {
@@ -5242,6 +5219,7 @@ function pintaMomentNota() {
 }
 
 function obreNota() {
+  if (vestint) mostraDreta("notes");
   if (document.body.classList.contains("sense-reproductor")) mostraColumna("reproductor", true);
   $("#text-nota").focus();
 }
@@ -5791,7 +5769,7 @@ function instalaControls() {
     if (e.target.matches?.("input, textarea, select")) return;
     if (revisant) { teclaRevisa(e); return; }
     // A Vesteix, la peça triada es treu amb ⌫ (com a Keynote) i es deixa amb Esc.
-    if (vestint && pecaTriada && !e.metaKey && !e.ctrlKey && (e.key === "Backspace" || e.key === "Delete")
+    if (vestint && pecaTriada && pestanyaDreta === "peces" && !e.metaKey && !e.ctrlKey && (e.key === "Backspace" || e.key === "Delete")
         && $("#full-final").hidden && !$(".barra").classList.contains("editant-estil")) {
       e.preventDefault();
       treuPecaTriada();
@@ -6046,10 +6024,10 @@ let editantMarca = false;
 const COLORS_MARCA = [["m-color-text", "color_text"], ["m-color-principal", "color_principal"],
   ["m-color-destacat", "color_destacat"], ["m-color-secundari", "color_secundari"], ["m-color-clar", "color_clar"],
   ["m-color-fosc", "color_fosc"]];
-const energies = (m) => [].concat(m?.energia || "net");  // un o uns quants estils de gràfics
+// La crida, l'estil dels gràfics, la lletra de mà i els colors prohibits no són a la pàgina (l'Ivet, 2026-10-25: cadascú
+// tria l'estil de cada gràfic, i la resta són casos concrets): si un kit els té, es fan servir igual; es posen al xat.
 const LLETRES_MARCA = [["m-lletra-titols", "lletra_titols"], ["m-lletra-text", "lletra_text"],
-  ["m-lletra-accent", "lletra_accent"], ["m-lletra-ma", "lletra_ma"]];
-const TEXTOS_MARCA = [["m-prohibits", "colors_prohibits"], ["m-crida", "crida"]];
+  ["m-lletra-accent", "lletra_accent"]];
 
 function aplicaMarca(r) {
   if (r.paleta_grafics) { paletaGrafics = r.paleta_grafics; previaBruta = true; }
@@ -6081,12 +6059,6 @@ function pintaPanellMarca() {
   for (const [id, clau] of LLETRES_MARCA) {
     if (document.activeElement !== $(`#${id}`)) ompleLletres($(`#${id}`), m[clau], { buit: "Sense triar" });
   }
-  for (const [id, clau] of TEXTOS_MARCA) if (document.activeElement !== $(`#${id}`)) $(`#${id}`).value = m[clau] || "";
-  const triats = energies(m);
-  for (const b of $$("#m-energia button")) b.setAttribute("aria-pressed", String(triats.includes(b.dataset.valor)));
-  $("#m-majuscules-ma").setAttribute("aria-checked", String(!!m.majuscules_ma));
-  $("#m-majuscules-ma").disabled = !m.lletra_ma;  // sense lletra de mà, no hi ha res per posar en majúscules
-  $("#m-majuscules-ma").title = m.lletra_ma ? "" : "Tria primer una lletra de mà";
   marcaSegmentat("m-grafics", m.grafics || "normal");
 }
 
@@ -6124,18 +6096,7 @@ function instalaMarca() {
       else { canviaMarca({ [clau]: v || null }); pintaPanellMarca(); }
     });
   }
-  for (const [id, clau] of TEXTOS_MARCA) $(`#${id}`).addEventListener("input", (e) => canviaMarca({ [clau]: e.target.value }));
-  $("#m-majuscules-ma").addEventListener("click", () => { canviaMarca({ majuscules_ma: !estilMarca?.majuscules_ma }); pintaPanellMarca(); });
   for (const b of $$("#m-grafics button")) b.addEventListener("click", () => { canviaMarca({ grafics: b.dataset.valor }); pintaPanellMarca(); });
-  for (const b of $$("#m-energia button")) {
-    b.addEventListener("click", () => {
-      const triats = new Set(energies(estilMarca));
-      if (triats.has(b.dataset.valor)) triats.delete(b.dataset.valor); else triats.add(b.dataset.valor);
-      if (!triats.size) return;  // almenys un
-      canviaMarca({ energia: [...triats] });
-      pintaPanellMarca();
-    });
-  }
 }
 
 inicia();

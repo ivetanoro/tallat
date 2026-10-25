@@ -1179,9 +1179,33 @@ body.vestint .reproductor { grid-column: 2; border-left: 0; padding-left: var(--
 .dreta-cap { flex: none; display: flex; align-items: center; gap: var(--e2); padding: var(--e3) var(--e4); }
 .dreta-cap .espai { flex: 1; }
 .dreta-cap .feina .barra-progres { width: 56px; }
-.peca { flex: 1 1 auto; min-height: 160px; overflow-y: auto; padding: var(--e2) var(--e5) var(--e5); }
-/* Les notes per a Claude, a sota (les porta aquí la pàgina): com a molt, la meitat de la columna. */
-body.vestint .vesteix-dreta .notes { flex: 0 1 auto; max-height: 50%; padding: var(--e3) var(--e5) var(--e4); }
+.pestanyes-dreta { flex: none; width: auto; margin: 0 var(--e5) var(--e2); }
+.pestanyes-dreta button { position: relative; }
+.pestanyes-dreta .compte { margin-left: 2px; }
+.pestanyes-dreta .punt-nou { position: absolute; top: 5px; right: 8px; }
+.peca { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--e2) var(--e5) var(--e5); }
+/* Les notes per a Claude (les porta aquí la pàgina) tenen la seva pestanya, amb tota l'alçada: a dalt la caixa,
+   a sota la llista, que és l'única que baixa. Més grans que sota el vídeo d'Edita, on hi ha poc lloc. */
+.vesteix-dreta[data-pestanya="notes"] .peca, .vesteix-dreta[data-pestanya="peces"] .notes { display: none; }
+body.vestint .vesteix-dreta .notes {
+  flex: 1 1 auto; max-height: none; min-height: 0; padding: var(--e2) var(--e5) var(--e5); border-top: 0; gap: var(--e3);
+}
+.vesteix-dreta .notes .cap-notes h2 { font-size: var(--t-ui); }
+.vesteix-dreta .nova-nota { padding: var(--e2) var(--e3); }
+.vesteix-dreta .nova-nota .peu-nota { display: flex; }
+.vesteix-dreta #text-nota { min-height: 62px; max-height: 200px; line-height: 1.45; }
+.vesteix-dreta .llista-notes { flex: 1 1 auto; gap: var(--e1); }
+.vesteix-dreta .linia-nota { align-items: flex-start; gap: var(--e2); min-height: 44px; padding: var(--e2); font-size: var(--t-cos); line-height: 1.35; }
+.vesteix-dreta .linia-nota .linia-text {
+  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.vesteix-dreta .linia-temps-nota { font-size: var(--t-petit); line-height: 20px; }
+.vesteix-dreta .num-nota { height: 20px; min-width: 20px; margin-top: 1px; font-size: 12px; border-radius: 10px 10px 10px 3px; }
+.vesteix-dreta .linia-nota .punt-nou, .vesteix-dreta .linia-nota .roda-nota { margin-top: 6px; }
+.vesteix-dreta .nota { padding: var(--e3); }
+.vesteix-dreta .nota-text, .vesteix-dreta .nota-claude, .vesteix-dreta .respon-nota textarea { font-size: var(--t-cos); line-height: 1.45; }
+.vesteix-dreta .nota-cap { font-size: var(--t-petit); }
+.vesteix-dreta .grup-notes { font-size: var(--t-peu); margin-top: var(--e3); }
 
 .pestanyes-peces { margin-bottom: var(--e2); }
 .segmentat button[aria-selected="true"] {
@@ -1439,6 +1463,7 @@ body.vestint .vesteix-dreta .notes { flex: 0 1 auto; max-height: 50%; padding: v
   }
   body.vestint .peca { flex: none; overflow: visible; }
   body.vestint .vesteix-dreta .notes { max-height: none; }
+  body.vestint .vesteix-dreta .llista-notes { overflow: visible; }
 }
 @media (max-width: 700px) {
   /* Tot en una columna que baixa sencera (la pàgina fa de barra de desplaçament, no cada columna). */

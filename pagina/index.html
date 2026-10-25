@@ -129,7 +129,7 @@
       <h2 class="titol-panell">Subtítols</h2>
       <button class="oferta-marca" data-obre-assistent hidden>
         <span class="mostra-estil mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes el teu estil: 4 passos</span></span>
+        <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes el teu estil: 2 passos</span></span>
       </button>
       <p class="pista-video">Toca els subtítols al vídeo per canviar-los.</p>
       <button class="interruptor" id="subtitols" role="switch" aria-checked="true">
@@ -356,7 +356,7 @@
       <p class="detall">El que canviïs aquí es fa servir en tots els vídeos que tinguin aquest estil.</p>
       <button class="oferta-marca" data-obre-assistent hidden>
         <span class="mostra-estil mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes el teu estil: 4 passos</span></span>
+        <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes el teu estil: 2 passos</span></span>
       </button>
       <div class="camp">
         <span class="etiqueta">Colors</span>
@@ -368,10 +368,6 @@
           <label class="color" title="Fons i targetes"><input type="color" id="m-color-clar"><span>Clar</span></label>
           <label class="color" title="En lloc del negre: contorns i ombres"><input type="color" id="m-color-fosc"><span>Fosc</span></label>
         </div>
-      </div>
-      <div class="camp">
-        <label class="etiqueta" for="m-prohibits">Colors o estils que no vols mai</label>
-        <input type="text" class="camp-text" id="m-prohibits" maxlength="600" placeholder="Per exemple: negre, neó">
       </div>
       <div class="camp">
         <label class="etiqueta" for="m-lletra-titols">Lletra dels títols</label>
@@ -386,32 +382,12 @@
         <select id="m-lletra-accent"></select>
       </div>
       <div class="camp">
-        <label class="etiqueta" for="m-lletra-ma">Lletra de mà (notes i anotacions)</label>
-        <select id="m-lletra-ma"></select>
-        <button class="interruptor" id="m-majuscules-ma" role="switch" aria-checked="false">
-          <span class="pista" aria-hidden="true"><span class="bola"></span></span>Sempre en majúscules
-        </button>
-      </div>
-      <div class="camp">
-        <span class="etiqueta" id="et-m-energia">Estil dels gràfics (un o uns quants)</span>
-        <div class="segmentat ample" role="group" aria-labelledby="et-m-energia" id="m-energia">
-          <button aria-pressed="false" data-valor="net" title="Net i minimalista">Net</button>
-          <button aria-pressed="false" data-valor="mac" title="Finestres, menús, carpetes: com l'ordinador">Mac</button>
-          <button aria-pressed="false" data-valor="scrapbook" title="Juganer, amb stickers, retalls i notes">Scrapbook</button>
-          <button aria-pressed="false" data-valor="editorial" title="Titulars grans, com una revista">Editorial</button>
-        </div>
-      </div>
-      <div class="camp">
-        <span class="etiqueta" id="et-m-grafics">Quants gràfics</span>
+        <span class="etiqueta" id="et-m-grafics">Quants gràfics et proposa Claude</span>
         <div class="segmentat ample" role="radiogroup" aria-labelledby="et-m-grafics" id="m-grafics">
           <button role="radio" data-valor="pocs" title="Un cada 8-12 segons">Pocs</button>
           <button role="radio" data-valor="normal" title="Un cada 4-6 segons">Normal</button>
           <button role="radio" data-valor="molts" title="Un cada 2-4 segons">Molts</button>
         </div>
-      </div>
-      <div class="camp">
-        <label class="etiqueta" for="m-crida">La teva crida a l'acció</label>
-        <input type="text" class="camp-text" id="m-crida" maxlength="600" placeholder="Per exemple: comenta GUIA i te l'envio">
       </div>
       <div class="accions-kit">
         <button class="enllac" id="kit-duplica">Duplica…</button>
@@ -762,7 +738,12 @@
       </div>
       <button class="boto principal" id="vesteix-exporta">Exporta</button>
     </header>
-    <section class="peca" id="peca"></section>
+    <!-- Dues pestanyes, perquè cadascuna tingui tota l'alçada: la peça (o totes) i les notes per a Claude. -->
+    <div class="segmentat ample pestanyes-dreta" role="tablist" aria-label="Què veus a la dreta" id="pestanyes-dreta">
+      <button role="tab" data-dreta="peces" aria-selected="true" aria-controls="peca">Peces <span class="compte" id="compte-peces"></span></button>
+      <button role="tab" data-dreta="notes" aria-selected="false" aria-controls="notes">Notes <span class="compte" id="compte-notes-dreta"></span><span class="punt-nou" id="punt-notes-dreta" aria-label="respostes noves" hidden></span></button>
+    </div>
+    <section class="peca" id="peca" role="tabpanel"></section>
   </aside>
 
   <!-- Revisa: l'esborrany exportat (una versió) gran, i les notes d'aquella versió a la dreta, amb la miniatura
@@ -848,7 +829,7 @@
        aria-label="Amplada de la columna del vídeo" title="Arrossega per canviar l'amplada. Doble clic: mida normal."></div>
   <div class="velo" id="velo" hidden></div>
   <div class="full assistent" id="full-marca" role="dialog" aria-modal="true" aria-labelledby="titol-assistent" hidden>
-    <div class="passes-assistent" id="passes-assistent" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="passes-assistent" id="passes-assistent" aria-hidden="true"><i></i><i></i></div>
     <h2 id="titol-assistent"></h2>
     <div id="cos-assistent"></div>
     <div class="botons">
