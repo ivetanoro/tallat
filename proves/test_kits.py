@@ -201,3 +201,43 @@ class TestMoment(TestKitDelProjecte):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEstilDelVideo(AmbKits):
+    """Cada vídeo pot canviar l'estil del seu kit sense tocar els altres (l'estat, «estil»)."""
+
+    def projecte(self, nom: str) -> Projecte:
+        carpeta = self.casa / nom
+        carpeta.mkdir()
+        (carpeta / "transcripcio.json").write_text(json.dumps(
+            {"video": "no-hi-es.mov", "fps": "30", "durada": 2.0,
+             "paraules": [{"id": 0, "text": "Hola.", "inici": 0.1, "final": 0.5, "frase": 0}]}), encoding="utf-8")
+        return Projecte(carpeta)
+
+    def test_els_estils_de_tot_el_video_no_porten_els_colors_ni_les_lletres(self):
+        estils = marca.estils_video()
+        self.assertGreaterEqual(len(estils), 4)
+        for e in estils:
+            self.assertIn(e["grafics"], marca.ESTILS_GRAFICS)
+            for seccio, treure in marca.DE_LA_MARCA.items():
+                self.assertFalse(treure & set(e[seccio]), (e["id"], seccio))
+            for seccio in ("subtitols", "titol", "broll"):  # tot el que hi ha es pot desar
+                marca.valida(seccio, e[seccio])
+
+    def test_un_video_canvia_el_seu_estil_i_els_altres_no(self):
+        marca.desa("marca", {"color_text": "#FBF6D1"})
+        a, b = self.projecte("a"), self.projecte("b")
+        revista = next(e for e in marca.estils_video() if e["id"] == "revista")
+        a.estat["estil"] = marca.neteja_estil_video({"subtitols": {**revista["subtitols"], "mida": 0.09, "inventat": 1},
+                                                     "titol": revista["titol"], "grafics": "editorial"})
+        a.desa()
+        a = Projecte(a.carpeta)
+        self.assertEqual(a.estil()["subtitols"]["mida"], 0.09)
+        self.assertEqual(a.estil()["subtitols"]["color"], "#FBF6D1")  # els colors de la marca, sempre
+        self.assertEqual(a.estil()["marca"]["energia"], ["editorial"])
+        self.assertNotIn("inventat", a.estat["estil"]["subtitols"])
+        self.assertNotEqual(b.estil()["subtitols"]["mida"], 0.09)  # l'altre vídeo, com el kit
+        # «Fes-lo servir en tots els vídeos»: al kit, i l'altre vídeo també el té.
+        marca.passa_al_kit(a.estat["estil"], kit=a.kit())
+        self.assertEqual(Projecte(b.carpeta).estil()["subtitols"]["mida"], 0.09)
+        self.assertEqual(Projecte(b.carpeta).estil()["marca"]["energia"], ["editorial"])

@@ -30,6 +30,7 @@ PER_DEFECTE = CONFIG / "brand.example.json"
 ESTILS = CONFIG / "estils_subtitols.json"
 ESTILS_TITOL = CONFIG / "estils_titol.json"
 ESTILS_BROLL = CONFIG / "estils_broll.json"
+ESTILS_VIDEO = CONFIG / "estils_video.json"
 LLETRES = CONFIG / "lletres.json"
 USUARI = Path.home() / ".tallat" / "brand.json"  # l'estil d'abans dels kits: amb ell es fa el primer kit
 KITS = Path.home() / ".tallat" / "kits"
@@ -345,6 +346,70 @@ def estils_broll() -> list[dict]:
     return _estils(ESTILS_BROLL)
 
 
+# --- L'estil de cada vídeo ----------------------------------------------------------------------
+# El kit diu com són tots els vídeos d'aquell estil; cada vídeo en pot canviar el que vulgui sense tocar els altres
+# (l'estat de l'edició, «estil»: es desfà com la resta). «Fes-lo servir en tots els vídeos» ho passa al kit.
+# Els colors i les lletres (la secció «marca») són sempre del kit: valen per a tots els vídeos.
+
+SECCIONS_VIDEO = ("subtitols", "titol", "broll", "so")
+ESTILS_GRAFICS = ("net", "mac", "scrapbook", "editorial")
+# El que posen els colors i les lletres de la persona (ENLLACOS_MARCA): un estil del vídeo no ho porta, i així
+# sempre surt amb els seus colors i lletres (i, si els canvia, tots els vídeos ho veuen).
+DE_LA_MARCA = {"subtitols": {"color", "contorn", "color_actiu", "clau_color", "font", "clau_font", "clau_cursiva",
+                             "font_fitxer", "posicio_y"},
+               "titol": {"color", "contorn", "clau_color", "font", "clau_font", "clau_cursiva"},
+               "broll": {"vora_color"}}
+
+
+def estils_video() -> list[dict]:
+    """Els estils de tot el vídeo: [{id, nom, descripcio, subtitols, titol, broll (els valors), grafics}]. Dels
+    subtítols, tampoc no hi va la posició (on els tens, s'hi queden)."""
+    parts = {"subtitols": {e["id"]: e for e in estils()}, "titol": {e["id"]: e for e in estils_titol()},
+             "broll": {e["id"]: e for e in estils_broll()}}
+    sortida = []
+    for e in json.loads(ESTILS_VIDEO.read_text(encoding="utf-8"))["estils"]:
+        estil = {"id": e["id"], "nom": e["nom"], "descripcio": e.get("descripcio", ""), "grafics": e["grafics"]}
+        for seccio, fets in parts.items():
+            estil[seccio] = {k: v for k, v in fets[e[seccio]]["valors"].items() if k not in DE_LA_MARCA[seccio]}
+        sortida.append(estil)
+    return sortida
+
+
+def neteja_estil_video(estil) -> dict:
+    """L'estil propi d'un vídeo, comprovat opció a opció (el que no s'entén, fora: la resta es queda)."""
+    if not isinstance(estil, dict):
+        return {}
+    net: dict = {}
+    for seccio in SECCIONS_VIDEO:
+        for clau, valor in (estil.get(seccio) or {}).items() if isinstance(estil.get(seccio), dict) else ():
+            try:
+                net.setdefault(seccio, {}).update(valida(seccio, {clau: valor}))
+            except ValueError:
+                continue
+    if estil.get("grafics") in ESTILS_GRAFICS:
+        net["grafics"] = estil["grafics"]
+    return net
+
+
+def amb_estil_video(base: dict, estil: dict | None) -> dict:
+    """L'estil d'un kit (carrega) amb el que el vídeo hi ha canviat al damunt."""
+    for seccio, valors in (estil or {}).items():
+        if seccio == "grafics":
+            base.setdefault("marca", {})["energia"] = [valors]
+        elif isinstance(valors, dict):
+            base.setdefault(seccio, {}).update(valors)
+    return base
+
+
+def passa_al_kit(estil: dict, kit: str | None = None, path: Path | None = None) -> None:
+    """«Fes-lo servir en tots els vídeos»: el que un vídeo ha canviat, al seu kit."""
+    for seccio in SECCIONS_VIDEO:
+        if estil.get(seccio):
+            desa(seccio, estil[seccio], path, kit)
+    if estil.get("grafics"):
+        desa("marca", {"energia": [estil["grafics"]]}, path, kit)
+
+
 def valida(seccio: str, canvis: dict) -> dict:
     """Comprova els canvis que arriben de la pàgina; llança ValueError amb un missatge clar si n'hi ha cap de dolent."""
     if seccio not in EDITABLES:
@@ -502,7 +567,7 @@ LLOCS_LLETRA = {("subtitols", "font"), ("titol", "font"), ("subtitols", "clau_fo
 
 
 def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = None, seccio: str = "subtitols",
-                 clau: str = "font") -> dict:
+                 clau: str = "font", nomes_baixa: bool = False) -> dict | str:
     """Posa una lletra de la biblioteca al kit (la baixa el primer cop, amb la cursiva si en té) i la fa
     servir on diu `seccio` i `clau`: els subtítols, el títol, les paraules destacades o la marca (que
     l'escampa on toca). Torna l'estil d'aquella secció."""
@@ -537,6 +602,8 @@ def baixa_lletra(id_lletra: str, kit: str | None = None, path: Path | None = Non
         temporal = desti.with_name(f".{desti.name}.baixant")
         temporal.write_bytes(contingut)
         temporal.replace(desti)
+    if nomes_baixa:  # a les lletres del kit, i prou: torna el nom (un vídeo la posa al seu estil)
+        return nom
     if seccio == "marca":
         return desa("marca", {clau: nom}, path)
     dades = _llegeix_json(path)

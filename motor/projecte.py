@@ -85,6 +85,7 @@ class Projecte:
             # El pla de gràfics també el pot escriure algú a mà: el que no s'entén no ha de trencar res.
             estat["grafics"] = grafics.neteja_llista(estat.get("grafics"))
             estat["sons"] = so.neteja_sons(estat.get("sons"), len(self.dades["paraules"]))
+            estat["estil"] = marca.neteja_estil_video(estat.get("estil"))
             return estat
         if (self.carpeta / EDICIO_TEXT).exists():
             text = (self.carpeta / EDICIO_TEXT).read_text(encoding="utf-8")
@@ -195,7 +196,12 @@ class Projecte:
         (self.carpeta / KIT_TRIAT).write_text(json.dumps({"kit": kit}) + "\n", encoding="utf-8")
 
     def estil(self) -> dict:
-        """L'estil sencer del kit d'aquest vídeo (subtítols, b-roll, stickers i talls)."""
+        """L'estil d'aquest vídeo: el del seu kit (subtítols, títol, b-roll, so, marca…) amb el que el vídeo hi ha
+        canviat al damunt (l'estat, «estil»)."""
+        return marca.amb_estil_video(self.estil_kit(), self.estat.get("estil"))
+
+    def estil_kit(self) -> dict:
+        """L'estil del kit, sense els canvis d'aquest vídeo (el de tots els vídeos d'aquell estil)."""
         return marca.carrega(kit=self.kit())
 
     def estil_subtitols(self) -> dict:

@@ -14,6 +14,7 @@ L'estat de l'edició es desa a `edicio.json`:
   zooms        [id]          paraules on comença un zoom (instruccions de veu acceptades)
   grafics      [{…}]         el pla de gràfics (motor/grafics.py)
   sons         [{id, so, paraula}]  efectes de so posats a mà a la pàgina (motor/so.py)
+  estil        {seccio: {…}}  el que aquest vídeo canvia de l'estil del seu kit (motor/marca.py, amb_estil_video)
 """
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ def estat_buit(pausa_maxima: float | None = PAUSA_MAXIMA) -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": pausa_maxima, "pauses_mantingudes": [],
             "subtitols": True, "ordre": None, "zooms": [], "destacades": {}, "titol": None,
-            "sons_apagats": [], "grafics": [], "sons": []}
+            "sons_apagats": [], "grafics": [], "sons": [], "estil": {}}
 
 
 def titol_net(titol) -> dict | None:

@@ -63,19 +63,24 @@
     <div class="vesteix-barra" id="vesteix-barra">
     <section class="seccio tot-el-video" aria-labelledby="titol-tot-video">
       <h2 id="titol-tot-video">Tot el vídeo</h2>
-      <button class="fila-estil" id="obre-estils" aria-label="Estil: colors, lletres i com són els teus vídeos">
-        <span class="mostra-estil mostra-marca" id="mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span class="fila-estil-text"><strong>Estil</strong><span id="nom-marca"></span></span>
+      <button class="fila-estil" id="obre-estil-video" aria-label="Estil: com es veu tot el vídeo (subtítols, títol, gràfics i b-roll)">
+        <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M9 6.5h6M8.5 15.5h7M10 18h4"/><path d="M8.5 10.5h3"/></svg></span>
+        <span class="fila-estil-text"><strong>Estil</strong><span id="nom-estil-video"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
-      <button class="fila-estil" id="obre-subtitols" aria-label="Subtítols: l'estil, la lletra, els colors i les paraules destacades">
+      <button class="fila-estil" id="obre-subtitols" aria-label="Subtítols: retoca'ls (a la dreta)">
         <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 11.5h4M14 11.5h3M7 15h10"/></svg></span>
         <span class="fila-estil-text"><strong>Subtítols</strong><span id="nom-estil-sub"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
-      <button class="fila-estil" id="obre-estil-titol" aria-label="Títol del ganxo: escriu-lo i canvia'n l'estil">
+      <button class="fila-estil" id="obre-estil-titol" aria-label="Títol del ganxo: escriu-lo i retoca'l (a la dreta)">
         <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 6.5V5h12v1.5M12 5v14M9.5 19h5"/></svg></span>
         <span class="fila-estil-text"><strong>Títol del ganxo</strong><span id="nom-estil-titol"></span></span>
+        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+      </button>
+      <button class="fila-estil" id="obre-estils" aria-label="Colors i lletres: els teus, per a tots els vídeos">
+        <span class="mostra-estil mostra-marca" id="mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="fila-estil-text"><strong>Colors i lletres</strong><span id="nom-marca"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
     </section>
@@ -111,8 +116,8 @@
 
     <div class="panell-estil" id="panell-estils" hidden>
       <button class="enllac tornar" id="tanca-estils">‹ Enrere</button>
-      <h2 class="titol-panell">Estil</h2>
-      <p class="detall">Un estil són els colors, les lletres i com són els gràfics. Toca'n un per fer-lo servir en aquest vídeo i canviar-lo.</p>
+      <h2 class="titol-panell">Estils guardats</h2>
+      <p class="detall">Cada un té els seus colors i lletres i com són els teus vídeos. La majoria de gent en té un. Toca'n un per fer-lo servir en aquest vídeo.</p>
       <div class="llista-kits" id="llista-kits"></div>
       <div class="accions-kit">
         <button class="enllac" id="kit-nou">Estil nou (el de tallat)…</button>
@@ -305,7 +310,7 @@
             </div>
           </details>
 
-          <button class="enllac" id="restableix-estil">Torna a l'estil de tallat</button>
+          <button class="enllac" id="restableix-estil" hidden>Torna a l'estil dels altres vídeos</button>
         </div>
       </details>
     </div>
@@ -352,8 +357,8 @@
 
     <div class="panell-estil" id="panell-marca" hidden>
       <button class="enllac tornar" id="tanca-marca">‹ Enrere</button>
-      <h2 class="titol-panell" id="titol-marca">El teu estil</h2>
-      <p class="detall">El que canviïs aquí es fa servir en tots els vídeos que tinguin aquest estil.</p>
+      <h2 class="titol-panell" id="titol-marca">Colors i lletres</h2>
+      <p class="detall">Els teus colors i les teves lletres. Valen per a tots els vídeos.</p>
       <button class="oferta-marca" data-obre-assistent hidden>
         <span class="mostra-estil mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes el teu estil: 2 passos</span></span>
@@ -389,6 +394,10 @@
           <button role="radio" data-valor="molts" title="Un cada 2-4 segons">Molts</button>
         </div>
       </div>
+      <button class="fila-estil" id="obre-guardats">
+        <span class="fila-estil-text"><strong>Estils guardats</strong><span id="nom-kit-guardat"></span></span>
+        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+      </button>
       <div class="accions-kit">
         <button class="enllac" id="kit-duplica">Duplica…</button>
         <button class="enllac" id="kit-nom">Canvia el nom…</button>
@@ -526,7 +535,7 @@
           </button>
         </div>
       </details>
-      <button class="enllac" id="restableix-titol">Torna a l'estil de tallat</button>
+      <button class="enllac" id="restableix-titol" hidden>Torna a l'estil dels altres vídeos</button>
     </div>
 
     <div class="panell-estil" id="panell-broll" hidden>
@@ -596,7 +605,7 @@
           </button>
         </div>
       </details>
-      <button class="enllac" id="restableix-broll">Torna a l'estil de tallat</button>
+      <button class="enllac" id="restableix-broll" hidden>Torna a l'estil dels altres vídeos</button>
     </div>
 
   </aside>
@@ -835,6 +844,26 @@
     <div class="botons">
       <button class="enllac" id="assistent-enrere">Enrere</button>
       <button class="boto principal" id="assistent-seguent">Següent</button>
+    </div>
+  </div>
+
+  <!-- L'estil del vídeo: gran, al damunt (com triar un tema), perquè es vegi bé la diferència entre un i l'altre. -->
+  <div class="full estils-full" id="full-estil" role="dialog" aria-modal="true" aria-labelledby="titol-estil-video" hidden>
+    <div class="cap-full">
+      <h2 id="titol-estil-video">Estil del vídeo</h2>
+      <span class="detall">Un toc canvia els subtítols, el títol, els gràfics i el b-roll, amb els teus colors i lletres.</span>
+      <button class="icona" id="tanca-estil-video" title="Tanca" aria-label="Tanca">
+        <svg viewBox="0 0 20 20"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg>
+      </button>
+    </div>
+    <div class="estils-video" id="estils-video" role="radiogroup" aria-label="Estil del vídeo"></div>
+    <div class="peu-estils">
+      <p class="detall amb-marca">Amb els teus colors i lletres. <button class="enllac" id="a-colors">Canvia'ls</button></p>
+      <div class="caixa-a-tots" id="caixa-a-tots" hidden>
+        <p>Aquest vídeo té un estil diferent dels altres.</p>
+        <button class="enllac" id="estil-com-tots">Torna al dels altres</button>
+        <button class="boto principal" id="estil-a-tots">Fes-lo servir en tots els vídeos</button>
+      </div>
     </div>
   </div>
 

@@ -37,7 +37,7 @@ RUTES_DEL_PROJECTE = {"/api/estat", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
-                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/notes"}
+                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/notes", "/api/estil/a-tots"}
 mimetypes.add_type("audio/mp4", ".m4a")  # Python diu «audio/mp4a-latm», que els navegadors no reprodueixen
 mimetypes.add_type("audio/wav", ".wav")
 RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge"}  # el cos és el fitxer mateix
@@ -274,7 +274,16 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "titol": titol, "grafics": situats, "grafics_dibuix": projecte.dibuixos_grafics(linies),
                 "blocs": projecte.blocs(trams, situats),
                 **info_efectes(projecte, trams, brolls, enganxines, titol, linies, situats),
+                **mostres_del_video(projecte),
                 "paragrafs": projecte.paragrafs()}
+
+    def mostres_del_video(projecte) -> dict:
+        """Les miniatures que depenen de l'estil d'aquest vídeo (el b-roll i les mostres dels gràfics)."""
+        estil = projecte.estil()
+        sub, marca_ = estil.get("subtitols", {}), estil.get("marca", {})
+        accent = sub.get("clau_color") or sub.get("color_actiu") or "#FFFFFF"
+        return {"mostra_broll": targetes.mostra(estil.get("broll", {}), accent),
+                "mostres_grafics": grafics.mostres(marca_.get("energia"), marca_.get("crida") or "")}
 
     def info_efectes(projecte, trams, brolls, enganxines, titol, linies, situats) -> dict:
         """Els efectes de so (per a la llista de la pestanya So) i la pista que sona a la vista prèvia."""
@@ -302,16 +311,19 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         return f"{kit}:" + ":".join(str(f.stat().st_mtime_ns) if f.exists() else "-" for f in fitxers)
 
     def info_marca() -> dict:
+        # Les seccions, tal com són al kit (el de tots els vídeos): la pàgina hi posa al damunt el que aquest vídeo
+        # hi ha canviat (l'estat, «estil»), que es desfà com la resta.
         kit = obert["p"].kit()
-        estil = obert["p"].estil_subtitols()
-        broll_estil = obert["p"].estil().get("broll", {})
+        del_kit = obert["p"].estil_kit()
+        estil = del_kit["subtitols"]
+        broll_estil = del_kit.get("broll", {})
         accent = estil.get("clau_color") or estil.get("color_actiu") or "#FFFFFF"
         fonts = [{"familia": f["familia"], "pes": f["pes"], "estil": f.get("estil", "normal"),
                   "url": f"/marca/fonts/{quote(f['fitxer'].name)}?v={int(f['fitxer'].stat().st_mtime)}"}
                  for f in marca.fonts_del_kit(kit) if f["fitxer"].parent == marca.ruta(kit).parent / "fonts"]
-        return {"estil_subtitols": estil, "estil_titol": obert["p"].estil().get("titol", {}),
-                "estil_so": obert["p"].estil_so(), "sons_propis": str(so.SONS_PROPIS),
-                "estil_marca": obert["p"].estil().get("marca", {}),
+        return {"estil_subtitols": estil, "estil_titol": del_kit.get("titol", {}),
+                "estil_so": del_kit.get("so", {}), "sons_propis": str(so.SONS_PROPIS),
+                "estil_marca": del_kit.get("marca", {}), "estils_video": marca.estils_video(),
                 "paleta_grafics": grafics.paleta(obert["p"].estil()),
                 "mostres_grafics": grafics.mostres(obert["p"].estil().get("marca", {}).get("energia"),
                                                    obert["p"].estil().get("marca", {}).get("crida") or ""),
@@ -710,7 +722,24 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         return self._json({"error": f"No he pogut preparar les mostres: {e}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
                     return self._json({"abans": f"/so/{veu['abans'].name}", "despres": f"/so/{veu['despres'].name}",
                                        "sons": sons})
+                if ruta == "/api/estil/a-tots":  # «Fes-lo servir en tots els vídeos»: l'estil d'aquest vídeo, al kit
+                    try:
+                        marca.passa_al_kit(projecte.estat.get("estil") or {}, kit=projecte.kit())
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+                    projecte.estat["estil"] = {}
+                    projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
+                    projecte.desa()
+                    return self._json({**info_marca(), **instantania()})
                 if ruta == "/api/marca/lletra":  # una lletra de la biblioteca (es baixa al kit el primer cop)
+                    if cos.get("nomes_baixa"):  # la fa servir un sol vídeo: la pàgina la posa al seu estil
+                        try:
+                            nom = marca.baixa_lletra(str(cos.get("id", "")), kit=projecte.kit(), nomes_baixa=True)
+                        except KeyError:
+                            return self._json({"error": "No conec aquesta lletra"}, HTTPStatus.NOT_FOUND)
+                        except ConnectionError as e:
+                            return self._json({"error": str(e)}, HTTPStatus.BAD_GATEWAY)
+                        return self._json({"familia": nom, **info_marca()})
                     try:
                         marca.baixa_lletra(str(cos.get("id", "")), kit=projecte.kit(),
                                            seccio=str(cos.get("seccio") or "subtitols"), clau=str(cos.get("clau") or "font"))
@@ -927,6 +956,7 @@ def _estat_de_json(cos: dict) -> dict:
     estat["titol"] = edicio.titol_net(estat.get("titol"))
     estat["grafics"] = grafics.neteja_llista(estat.get("grafics"))
     estat["sons"] = so.neteja_sons(estat.get("sons"))
+    estat["estil"] = marca.neteja_estil_video(estat.get("estil"))
     apagats = estat.get("sons_apagats") if isinstance(estat.get("sons_apagats"), list) else []
     estat["sons_apagats"] = sorted({c for c in apagats if isinstance(c, str) and 0 < len(c) <= 60})[:500]
     for clau in ("mantingudes", "pauses_mantingudes"):

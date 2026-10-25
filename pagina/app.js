@@ -202,6 +202,7 @@ function canvia(fn, { repinta = false } = {}) {
 }
 
 function refresca(repinta) {
+  recalculaEstils();
   if (repinta) pintaText(); else actualitzaParaules();
   pintaTitol();
   pintaVesteix();
@@ -240,7 +241,9 @@ function aplicaTrams(r) {
     pintaText();
   }
   if (r.zooms) zoomsTram = r.zooms;
-  if (r.brolls) { brollsMuntatge = r.brolls; pintaResumBroll(); }
+  if (r.mostra_broll) mostraBroll = r.mostra_broll;  // la miniatura de com surt el b-roll (l'estil d'aquest vídeo)
+  if (r.mostres_grafics) { mostresGrafics = r.mostres_grafics; signaturaGaleria = ""; }
+  if (r.brolls) { brollsMuntatge = r.brolls; pintaResumBroll(); if (mostraBrollDespres) setTimeout(mostraBrollViu, 0); }
   if (r.grafics_dibuix) dibuixosGrafics = r.grafics_dibuix;
   if (r.grafics) { graficsMuntatge = r.grafics; previaBruta = true; }
   if (r.efectes) { efectesMuntatge = r.efectes; pintaSo(); }
@@ -1740,7 +1743,56 @@ function pintaPanellEstil() {
 const pendents = { subtitols: {}, titol: {}, broll: {}, so: {}, marca: {} };
 let temporitzadorDesa = null;
 
+// --- L'estil de cada vídeo ---
+// Els subtítols, el títol, el b-roll i el so: el kit diu com són a tots els vídeos d'aquell estil, i cada vídeo hi
+// canvia el que vulgui (l'estat, «estil»: es desfà amb ⌘Z i no toca els altres vídeos). «Fes-lo servir en tots els
+// vídeos» ho passa al kit. Els colors i les lletres (la marca) són sempre del kit (motor/marca.py, amb_estil_video).
+const SECCIONS_VIDEO = ["subtitols", "titol", "broll", "so"];
+const kitEstil = { subtitols: null, titol: null, broll: null, so: null };  // com són al kit (el de tots els vídeos)
+const propiDe = (seccio) => estat?.estil?.[seccio] || {};
+const ambVideo = (seccio) => kitEstil[seccio] && { ...kitEstil[seccio], ...propiDe(seccio) };
+let signaturaEstils = "";
+
+// Torna a calcular l'estil de cada secció (el del kit amb el del vídeo) si ha canviat: desfer, Claude, un altre kit…
+function recalculaEstils() {
+  if (!kitEstil.subtitols || !estat) return;  // encara no ha arribat l'estil
+  const sig = JSON.stringify([kitEstil, estat?.estil]);
+  if (sig === signaturaEstils) return;
+  signaturaEstils = sig;
+  if (kitEstil.subtitols) aplicaEstilSubtitols(ambVideo("subtitols"));
+  if (kitEstil.titol) aplicaEstilTitol(ambVideo("titol"));
+  if (kitEstil.broll) { estilBroll = ambVideo("broll"); pintaResumBroll(); pintaPanellBroll(); }
+  if (kitEstil.so) { estilSo = ambVideo("so"); pintaSo(); }
+  for (const [id, seccio] of [["#restableix-estil", "subtitols"], ["#restableix-titol", "titol"], ["#restableix-broll", "broll"]]) {
+    $(id).hidden = !Object.keys(propiDe(seccio)).length;
+  }
+  pintaPanellEstil();
+  pintaPanellTitol();
+  pintaResumEstilVideo();
+  if (!$("#full-estil").hidden) pintaEstilsVideo();
+}
+
+// Un canvi d'estil d'aquest vídeo. Els canvis seguits de la mateixa opció (un lliscador) són un sol pas per desfer.
+let darrerCanviEstil = { clau: "", t: 0 };
+function canviaEstilVideo(seccio, canvis) {
+  const clau = `${seccio}:${Object.keys(canvis).sort().join(",")}`;
+  const ara = performance.now();
+  if (clau !== darrerCanviEstil.clau || ara - darrerCanviEstil.t > 900) {
+    desfer.push(copia(estat));
+    if (desfer.length > 300) desfer.shift();
+    refer.length = 0;
+  }
+  darrerCanviEstil = { clau, t: ara };
+  estat.estil = { ...(estat.estil || {}), [seccio]: { ...propiDe(seccio), ...canvis } };
+  recalculaEstils();
+  for (const b of $$("#desfes, [data-desfes]")) b.disabled = !desfer.length;
+  for (const b of $$("#refes, [data-refes]")) b.disabled = !refer.length;
+  pintaVesteix();
+  sincronitza();
+}
+
 function apunta(seccio, canvis) {
+  if (SECCIONS_VIDEO.includes(seccio)) { canviaEstilVideo(seccio, canvis); return; }
   Object.assign(pendents[seccio], canvis);
   clearTimeout(temporitzadorDesa);
   temporitzadorDesa = setTimeout(desaEstils, 300);
@@ -1766,8 +1818,14 @@ function desaEstils() {
   return cua;
 }
 
-// Torna una secció a l'estil de tallat (el que hi hagués pendent d'aquella secció, fora).
+// Torna una secció a l'estil de tallat (el que hi hagués pendent d'aquella secció, fora). Les d'un vídeo, a l'estil
+// del kit (el dels altres vídeos): se'n treu el que aquest vídeo hi havia canviat.
 async function restableix(seccio, missatge) {
+  if (SECCIONS_VIDEO.includes(seccio)) {
+    canvia((e) => { const x = { ...(e.estil || {}) }; delete x[seccio]; e.estil = x; });
+    avis("Ha tornat a l'estil dels altres vídeos.");
+    return;
+  }
   pendents[seccio] = {};
   await desaEstils();
   try {
@@ -1792,27 +1850,28 @@ function respostaEstil(r) {
   if (r.fonts_kit) carregaFontsKit(r.fonts_kit);
   if (r.estils_titol) estilsTitol = r.estils_titol;
   if (r.trams) aplicaTrams(r);
-  // Si mentrestant hi ha hagut més canvis, que no es perdin a la vista.
-  aplicaEstilSubtitols({ ...r.estil_subtitols, ...pendents.subtitols });
-  if (r.estil_titol) aplicaEstilTitol({ ...r.estil_titol, ...pendents.titol });
+  if (r.estils_video) estilsVideo = r.estils_video;
   aplicaMarca(r);
   aplicaBroll(r);
   aplicaSo(r);
+  if (r.estil_subtitols) kitEstil.subtitols = r.estil_subtitols;
+  if (r.estil_titol) kitEstil.titol = r.estil_titol;
+  recalculaEstils();
   pintaPanellEstil();
   pintaPanellTitol();
 }
 
 function aplicaSo(r) {
-  if (r.estil_so) { estilSo = { ...r.estil_so, ...pendents.so }; pintaSo(); }
+  if (r.estil_so) { kitEstil.so = r.estil_so; signaturaEstils = ""; recalculaEstils(); }
 }
 
 function aplicaBroll(r) {
-  if (r.estil_broll) estilBroll = { ...r.estil_broll, ...pendents.broll };
+  if (r.estil_broll) { kitEstil.broll = r.estil_broll; signaturaEstils = ""; recalculaEstils(); }
   if (r.estils_broll) estilsBroll = r.estils_broll;
   if (r.mostra_broll) mostraBroll = r.mostra_broll;
   pintaResumBroll();
   pintaPanellBroll();
-  if (mostraBrollDespres && !Object.keys(pendents.broll).length) mostraBrollViu();
+
 }
 
 // --- El títol del ganxo -------------------------------------------------------------------------
@@ -1903,7 +1962,7 @@ function pintaMostraTitol(caixa, e, text, alcada) {
 function pintaResumTitol() {
   if (!estilTitol) return;
   const primera = (estat?.titol?.text || "").split("\n")[0].replaceAll("*", "").trim();
-  $("#nom-estil-titol").textContent = primera ? `«${primera}» · ${predefinitTitol()?.nom ?? "Personalitzat"}` : "Sense títol";
+  $("#nom-estil-titol").textContent = primera ? `«${primera}»` : "Sense títol";
 }
 
 function pintaPanellTitol() {
@@ -1972,7 +2031,7 @@ function tancaTitol() {
 function instalaTitol() {
   $("#text-titol").addEventListener("input", canviaTextTitol);
   $("#durada-titol").addEventListener("input", (e) => canviaDuradaTitol(+e.target.value));
-  $("#obre-estil-titol").addEventListener("click", obreTitol);
+  $("#obre-estil-titol").addEventListener("click", () => obreALaDreta("titol"));
   $("#tanca-titol").addEventListener("click", tancaTitol);
   $("#t-animacio").addEventListener("change", (e) => canviaTitol({ animacio: e.target.value }, true));
   for (const [id, clau] of [["t-fons", "fons"], ["t-alineacio", "alineacio"], ["t-corba-linies", "corba_linies"]]) {
@@ -2068,24 +2127,32 @@ function tancaSubtitols() {
 
 // Del panell d'un estil, a la llista d'estils; de la resta, a l'inici. False si no n'hi havia cap d'obert.
 function tornaEnrere() {
-  if (editantMarca) { tancaMarca(); obreEstils(); return true; }
+  if (editantMarca) { tancaMarca(); return true; }
+  if (!$("#panell-estils").hidden) { tancaPanell("estils"); obreMarca(); return true; }
   if (editantTitol) { tancaTitol(); return true; }
   if (editantBroll) { tancaBroll(); return true; }
   if (editantEstil) { tancaSubtitols(); return true; }
-  const obert = ["estils", "so"].find((id) => !$(`#panell-${id}`).hidden);
+  const obert = ["so"].find((id) => !$(`#panell-${id}`).hidden);
   if (obert) tancaPanell(obert);
   return !!obert;
 }
 
 function pintaResumSub() {
   if (!estat) return;
-  $("#nom-estil-sub").textContent = estat.subtitols === false ? "Sense subtítols" : (predefinitActual()?.nom ?? "Personalitzat");
+  // Com són, en paraules (l'estil de tot el vídeo ja es diu a la fila «Estil»).
+  const e = estilSub || {};
+  const quantes = { una: "D'una en una", poques: "Dues o tres", frase: "La frase" }[agrupacioDe(e)];
+  const on = { dalt: "a dalt", mig: "al mig", baix: "a baix" }[mesProper(LLOCS_SUB, e.posicio_y, 0.12)] || "";
+  $("#nom-estil-sub").textContent = estat.subtitols === false ? "Sense subtítols" : [quantes, on].filter(Boolean).join(", ");
 }
 
 function instalaColumna() {
-  $("#obre-estils").addEventListener("click", obreEstils);
-  $("#tanca-estils").addEventListener("click", () => tancaPanell("estils"));
-  $("#obre-subtitols").addEventListener("click", obreSubtitols);
+  $("#obre-estils").addEventListener("click", obreMarca);  // «Colors i lletres»: els del kit d'aquest vídeo
+  $("#obre-guardats").addEventListener("click", () => { tancaMarca(); obreEstils(); });
+  $("#tanca-estils").addEventListener("click", () => { tancaPanell("estils"); obreMarca(); });
+  $("#obre-subtitols").addEventListener("click", () => obreALaDreta("subtitols"));
+  $("#obre-estil-video").addEventListener("click", obreEstilVideo);
+  $("#tanca-estil-video").addEventListener("click", tancaEstilVideo);
   $("#tanca-subtitols").addEventListener("click", tancaSubtitols);
   $("#obre-so").addEventListener("click", obreSo);
   $("#tanca-so").addEventListener("click", () => tancaPanell("so"));
@@ -2276,6 +2343,19 @@ function mostraAnimacio() {
 async function baixaLletra(id, seccio = "subtitols", clau = "font") {
   const nom = bibliotecaLletres.lletres.find((l) => l.id === id)?.nom || id;
   avis(`Baixant la lletra «${nom}»…`, 20000);
+  if (SECCIONS_VIDEO.includes(seccio)) {  // es baixa a les lletres del kit, i la fa servir aquest vídeo
+    try {
+      const r = await api("/api/marca/lletra", { id, nomes_baixa: true, kit: kitActual });
+      respostaEstil(r);
+      apunta(seccio, { [clau]: r.familia, ...(seccio === "subtitols" && clau === "font" ? { font_fitxer: null } : {}) });
+      avis(`Lletra «${nom}» posada.`);
+    } catch (e) {
+      avis(e.message, 6000);
+    }
+    pintaPanellEstil();
+    pintaPanellTitol();
+    return;
+  }
   try {
     await desaEstils();
     respostaEstil(await api("/api/marca/lletra", { id, seccio, clau, kit: kitActual }));
@@ -3305,6 +3385,8 @@ const ICONES_PECA = {
   broll: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m3.5 15 4.5-4 4 3.5 3-2.5 5.5 4.5"/><circle cx="15.5" cy="9" r="1.5"/></svg>',
   zoom: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8.5" y="8.5" width="7" height="7" rx="1.5"/></svg>',
   so: '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+  subtitols: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 11.5h4M14 11.5h3M7 15h10"/></svg>',
+  titol: '<svg viewBox="0 0 24 24"><path d="M6 6.5V5h12v1.5M12 5v14M9.5 19h5"/></svg>',
 };
 const ICONES_GALERIA = {
   web: '<svg viewBox="0 0 48 36"><rect x="3" y="3" width="42" height="30" rx="4"/><path d="M3 10h42"/><circle cx="8.5" cy="6.5" r="1"/><circle cx="12.5" cy="6.5" r="1"/><path d="M10 17h28M10 22h20M10 27h24"/></svg>',
@@ -3505,7 +3587,7 @@ function triaPeca(tipus, id, { enfoca = false, ves = false } = {}) {
 
 function deixaPeca() {
   pecaTriada = null;
-  if (capaTriada?.startsWith("grafic:")) deixaCapa();
+  if (capaTriada) deixaCapa();
   pintaDreta({ refes: true });
 }
 
@@ -3613,7 +3695,8 @@ function pintaDreta({ refes = false, enfoca = false } = {}) {
   for (const b of $$("[data-refes]")) b.disabled = !refer.length;
   const cont = $("#peca");
   const perVenir = pecaPerVeure && pecaPerVeure.tipus === pecaTriada?.tipus && pecaPerVeure.id === pecaTriada?.id;
-  if (pecaTriada && !perVenir && !pecaDe(pecaTriada.tipus, pecaTriada.id) && !(pecaTriada.tipus === "grafic" && graficDe(pecaTriada.id))) {
+  const deTotElVideo = ["subtitols", "titol"].includes(pecaTriada?.tipus);
+  if (pecaTriada && !perVenir && !deTotElVideo && !pecaDe(pecaTriada.tipus, pecaTriada.id) && !(pecaTriada.tipus === "grafic" && graficDe(pecaTriada.id))) {
     pecaTriada = null;
     refes = true;
   }
@@ -3640,6 +3723,8 @@ function pintaDreta({ refes = false, enfoca = false } = {}) {
 
 function editorSig() {
   const { tipus, id } = pecaTriada;
+  if (tipus === "subtitols") return [estilSub, estat.subtitols, estat.estil?.subtitols];
+  if (tipus === "titol") return [estilTitol, estat.titol, estat.estil?.titol];
   if (tipus === "grafic") return [graficDe(id), dibuixosGrafics[id], graficsMuntatge.find((x) => x.id === id)?.inici];
   if (tipus === "broll") return [brollsMuntatge.find((b) => b.id === id), instruccions.find((i) => i.id === id)];
   if (tipus === "zoom") return [zoomsTram[id], trams[id], acum[id]];
@@ -3810,6 +3895,14 @@ function pintaEditor(cont, enfoca) {
     capEditor(cont, p, "B-roll");
     posa();
     editorBroll(cos, id);
+  } else if (tipus === "subtitols") {
+    capEditor(cont, null, "Subtítols");
+    posa();
+    editorSubtitols(cos);
+  } else if (tipus === "titol") {
+    capEditor(cont, null, "Títol del ganxo");
+    posa();
+    editorTitol(cos);
   } else if (tipus === "zoom") {
     capEditor(cont, p, "Zoom");
     posa();
@@ -4059,6 +4152,269 @@ function demanaGrafics() {
   avis("Si et va bé així, prem ↩ i després «Envia a Claude».", 5000);
 }
 
+// --- L'estil del vídeo: tot el vídeo d'un sol toc ---------------------------------------------------
+// Cada estil (config/estils_video.json) porta els subtítols, el títol, els gràfics i el b-roll, sense colors ni
+// lletres: són sempre els de la persona. Les cartes es dibuixen damunt d'un fotograma del vídeo, amb el mateix codi
+// que el vídeo, i amb el que diu de debò: el que veus és el que surt.
+
+let estilsVideo = [];      // [{id, nom, descripcio, subtitols, titol, broll, grafics}]
+let liniesEstilsVideo = [];
+
+const iguals = (a, b) => (typeof b === "number" ? Math.abs((a ?? NaN) - b) < 1e-6 : String(a) === String(b));
+
+// El que fa servir el vídeo (si en té tots els valors), o null: retocat, o el del kit sense cap estil d'aquests.
+function estilVideoActual() {
+  const g = estat?.estil?.grafics || [].concat(estilMarca?.energia || "net")[0];
+  return estilsVideo.find((e) => e.grafics === g && ["subtitols", "titol", "broll"].every((s) => {
+    const ara = ambVideo(s) || {};
+    return Object.entries(e[s]).every(([k, v]) => iguals(ara[k], v));
+  })) || null;
+}
+
+function pintaResumEstilVideo() {
+  if (!estat) return;
+  const actual = estilVideoActual();
+  const propi = Object.keys(estat.estil || {}).length > 0;
+  $("#nom-estil-video").textContent = actual ? actual.nom : propi ? "Retocat" : "El dels altres vídeos";
+  $("#caixa-a-tots").hidden = !propi;
+}
+
+function triaEstilVideo(e) {
+  canvia((est) => {
+    est.estil = { ...(est.estil?.so ? { so: est.estil.so } : {}),
+      subtitols: { ...e.subtitols }, titol: { ...e.titol }, broll: { ...e.broll }, grafics: e.grafics };
+    // Els gràfics també: els que tenien un estil triat, el de l'estil nou (⌘Z ho desfà tot).
+    for (const g of est.grafics || []) g.estil = null;
+  });
+  previaBruta = true;
+  avis(`Estil «${e.nom}». Mira com queda al vídeo.`);
+}
+
+async function estilATots() {
+  try {
+    await canvisDesats();
+    const r = await api("/api/estil/a-tots", {});
+    estat = r.estat;
+    respostaEstil(r);
+    aplicaTrams(r);
+    refresca(true);
+    avis("Fet: tots els vídeos amb aquest estil el fan servir.", 4000);
+  } catch (e) { avis(e.message, 6000); }
+}
+
+// Un fotograma del vídeo d'ara (el que es veu), per al fons de les cartes. Null si encara no n'hi ha.
+function fotogramaDelVideo() {
+  const v = R.v;
+  if (!v || v.readyState < 2 || !v.videoWidth) return null;
+  try {
+    const c = document.createElement("canvas");
+    [c.width, c.height] = [270, 480];
+    const r = Math.max(c.width / v.videoWidth, c.height / v.videoHeight);
+    const [w, h] = [v.videoWidth * r, v.videoHeight * r];
+    c.getContext("2d").drawImage(v, (c.width - w) / 2, (c.height - h) / 2, w, h);
+    return c.toDataURL("image/jpeg", 0.8);
+  } catch { return null; }
+}
+
+// Les paraules de mostra: les del principi del vídeo (les que es queden), com les diu.
+function paraulesDeMostra() {
+  const k = P?.paraules.findIndex((_, i) => !esFora(i)) ?? -1;
+  const text = k >= 0 ? textDes(k, 7) : "";
+  const paraules = text.split(/\s+/).filter(Boolean);
+  return paraules.length >= 3 ? paraules : ["tinc", "una", "idea", "genial"];
+}
+
+// Una mostra dels subtítols d'un estil: les paraules en línies com les faria (una, poques o la frase), totes ja dites.
+function liniesDeMostra(e) {
+  const paraules = paraulesDeMostra();
+  const n = Math.max(1, Math.min(paraules.length, e.paraules_per_linia || 3));
+  const apilat = ["apilat", "escampat"].includes(e.disposicio);
+  const grups = apilat ? [paraules.slice(0, n), paraules.slice(n, 2 * n)].filter((g) => g.length) : [paraules.slice(0, n)];
+  let t = 0;
+  return grups.map((g) => {
+    const inici = t;
+    const ws = g.map((text) => { const w = { text: text.replace(/[.,;:!?…«»"]+$/g, ""), inici: t, final: t + 0.28, clau: false }; t += 0.3; return w; });
+    return { inici, final: 9, paraules: ws, bloc: 0 };
+  });
+}
+
+function obreEstilVideo() {
+  if (sona()) atura();
+  $("#velo").hidden = false;
+  $("#full-estil").hidden = false;
+  pintaEstilsVideo();
+  ($("#estils-video [aria-checked='true']") || $("#estils-video .carta-estil"))?.focus();
+}
+
+function tancaEstilVideo() {
+  $("#full-estil").hidden = true;
+  if ($("#full-final").hidden && $("#full-marca").hidden) $("#velo").hidden = true;
+  $("#obre-estil-video").focus({ preventScroll: true });
+}
+
+function pintaEstilsVideo() {
+  const cont = $("#estils-video");
+  for (const tl of liniesEstilsVideo) tl?.kill?.();
+  liniesEstilsVideo = [];
+  cont.textContent = "";
+  if (!estilsVideo.length || !kitEstil.subtitols) return;
+  const fons = fotogramaDelVideo();
+  const actual = estilVideoActual();
+  const textTitol = estat?.titol?.text || "El teu\n*títol*";
+  for (const e of estilsVideo) {
+    const b = document.createElement("button");
+    b.className = "carta-estil";
+    b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(actual === e));
+    b.title = e.descripcio;
+    b.innerHTML = '<span class="carta-estil-mostra"><span class="mg-host"></span></span><span class="carta-estil-nom"></span>';
+    b.querySelector(".carta-estil-nom").textContent = e.nom;
+    b.setAttribute("aria-label", `${e.nom}: ${e.descripcio}`);
+    b.addEventListener("click", () => { triaEstilVideo(e); pintaEstilsVideo(); });
+    cont.append(b);
+    const mostra = b.querySelector(".carta-estil-mostra");
+    if (fons) mostra.style.backgroundImage = `url(${fons})`;
+    if (!window.TallatSubtitols || !mostra.clientWidth) continue;
+    const host = mostra.querySelector(".mg-host");
+    host.style.transform = `scale(${mostra.clientWidth / 1080})`;
+    // Com al vídeo: l'estil del kit, amb el de la carta al damunt (on són ara els subtítols, s'hi queden).
+    const sub = { ...kitEstil.subtitols, ...e.subtitols, posicio_y: estilSub?.posicio_y ?? kitEstil.subtitols.posicio_y };
+    const tit = { ...kitEstil.titol, ...e.titol };
+    const capa = () => { const d = document.createElement("div"); d.className = "capa-mostra"; host.append(d); return d; };
+    const linies = liniesDeMostra(sub);
+    liniesEstilsVideo.push(TallatSubtitols.construeix(capa(), linies, sub, { familia: familiaCss(sub) })
+      .seek(linies.at(-1).paraules.at(-1).inici + 0.6, false));
+    liniesEstilsVideo.push(TallatSubtitols.titol(capa(), { text: textTitol, inici: 0, final: 9 }, tit,
+      { familia: familiaCss({ font: tit.font || sub.font }) }).seek(9 - 0.35, false));  // ja escrit (com a la pàgina)
+    if (window.TallatGrafics && paletaGrafics && mostresGrafics.etiqueta) {
+      const d = { ...sencer(mostresGrafics.etiqueta), estil: e.grafics, posicio: 0.44 };
+      liniesEstilsVideo.push(TallatGrafics.construeix(capa(), [d], paletaGrafics, OP_GRAFICS).seek(50, false));
+    }
+  }
+}
+
+// --- Els subtítols i el títol, a la dreta (com les peces) ---
+
+// Les tres coses que es poden canviar de seguida (la resta, a «Més ajustos»): valors i el més proper.
+const MIDES_SUB = [["petita", "Petita", 0.056], ["mitjana", "Mitjana", 0.07], ["gran", "Gran", 0.09]];
+const LLOCS_SUB = [["dalt", "Dalt", 0.18], ["mig", "Mig", 0.5], ["baix", "Baix", 0.74]];
+const MIDES_TITOL = [["petit", "Petit", 0.05], ["mitja", "Mitjà", 0.066], ["gran", "Gran", 0.086]];
+const LLOCS_TITOL = [["dalt", "Dalt", 0.16], ["mig", "Mig", 0.42], ["baix", "Baix", 0.66]];
+const mesProper = (opcions, v, marge) => opcions.find(([, , x]) => Math.abs((v ?? -9) - x) <= marge)?.[0] ?? null;
+
+function obreALaDreta(tipus) {
+  if (!vestint) canviaEstacio("vesteix");
+  tancaElQueHiHagi();
+  if (tipus === "titol" && titolMuntatge && !sona()) vesA(titolMuntatge.inici + Math.min(1, (titolMuntatge.final - titolMuntatge.inici) / 2));
+  if (tipus === "subtitols" && !sona() && liniesSub.length) {
+    const m = tempsMuntatge();
+    if (!liniesSub.some((l) => m >= l.inici && m < l.final)) {
+      const l = liniesSub.find((x) => x.inici >= m) || liniesSub[0];
+      vesA(l.inici + Math.min(0.6, (l.final - l.inici) / 2));
+    }
+  }
+  triaPeca(tipus, tipus, { enfoca: tipus === "titol" && !estat?.titol?.text });
+}
+
+function editorSubtitols(cos) {
+  const e = estilSub || {};
+  const amb = estat.subtitols !== false;
+  const sw = document.createElement("button");
+  sw.className = "interruptor";
+  sw.setAttribute("role", "switch");
+  sw.setAttribute("aria-checked", String(amb));
+  sw.innerHTML = '<span class="pista" aria-hidden="true"><span class="bola"></span></span>Posa subtítols al vídeo';
+  sw.addEventListener("click", () => $("#subtitols").click());
+  cos.append(sw);
+  if (!amb) return;
+  segmentatPeca(cos, "Paraules alhora", [["una", "Una"], ["poques", "Dues o tres"], ["frase", "La frase"]], agrupacioDe(e),
+    (v) => canviaEstil({ paraules_per_linia: AGRUPACIONS[v][0], lletres_per_linia: AGRUPACIONS[v][1] }, true));
+  segmentatPeca(cos, "La paraula que dius", [["cap", "Igual"], ["color", "Color"], ["caixa", "Caixa"], ["gran", "Més gran"]],
+    destacatDe(e), (v) => canviaEstil(v === "cap" ? { destaca: false } : { destaca: true, destacat: v }, true));
+  segmentatPeca(cos, "Mida", MIDES_SUB.map(([v, t]) => [v, t]), mesProper(MIDES_SUB, e.mida, 0.007),
+    (v) => canviaEstil({ mida: MIDES_SUB.find((x) => x[0] === v)[2] }));
+  segmentatPeca(cos, "On surten", LLOCS_SUB.map(([v, t]) => [v, t]), mesProper(LLOCS_SUB, e.posicio_y, 0.08),
+    (v) => canviaEstil({ posicio_y: LLOCS_SUB.find((x) => x[0] === v)[2] }));
+  const pista = document.createElement("p");
+  pista.className = "detall";
+  pista.textContent = "També els pots arrossegar al vídeo, amunt o avall.";
+  cos.append(pista);
+  accionsSeccio(cos, "subtitols", () => { tancaElQueHiHagi(); obreSubtitols(); $("#grup-e-mes").open = true; });
+}
+
+function editorTitol(cos) {
+  const e = estilTitol || {};
+  const text = titolEsborrany?.text ?? estat.titol?.text ?? "";
+  const camp = document.createElement("textarea");
+  Object.assign(camp, { className: "camp-text", rows: 3, value: text, placeholder: "El teu\n*títol*" });
+  camp.dataset.camp = "titol:text";
+  camp.addEventListener("input", () => {
+    canviaTitolDelVideo({ text: camp.value }, 700);
+    // El títol surt al principi: si el vídeo és més endavant, hi va, perquè es vegi el que s'escriu.
+    if (titolMuntatge && !sona() && tempsMuntatge() >= titolMuntatge.final) vesA(Math.min(1, titolMuntatge.final / 2));
+  });
+  camp.addEventListener("blur", () => desaTitolDelVideo());
+  const c = document.createElement("label");
+  c.className = "camp camp-peca";
+  c.innerHTML = '<span class="etiqueta">El text</span>';
+  c.append(camp);
+  const ajuda = document.createElement("span");
+  ajuda.className = "detall ajuda-camp";
+  ajuda.textContent = "Cada línia, una línia del títol. El que posis *entre asteriscs* surt destacat.";
+  c.append(ajuda);
+  cos.append(c);
+  if (!text.trim()) return;
+  const durada = titolEsborrany?.durada ?? estat.titol?.durada ?? e.durada ?? 3;
+  const fila = document.createElement("div");
+  fila.className = "camp camp-peca";
+  fila.innerHTML = '<span class="etiqueta">Quant dura <span class="valor"></span></span>';
+  const valor = fila.querySelector(".valor");
+  valor.textContent = fmtSegons(durada);
+  const rang = document.createElement("input");
+  Object.assign(rang, { type: "range", min: 1, max: 8, step: 0.5, value: durada });
+  rang.setAttribute("aria-label", "Quant dura el títol");
+  rang.addEventListener("input", () => { valor.textContent = fmtSegons(+rang.value); canviaTitolDelVideo({ durada: +rang.value }, 400); });
+  fila.append(rang);
+  cos.append(fila);
+  segmentatPeca(cos, "Mida", MIDES_TITOL.map(([v, t]) => [v, t]), mesProper(MIDES_TITOL, e.mida, 0.007),
+    (v) => canviaTitol({ mida: MIDES_TITOL.find((x) => x[0] === v)[2] }));
+  segmentatPeca(cos, "On surt", LLOCS_TITOL.map(([v, t]) => [v, t]), mesProper(LLOCS_TITOL, e.posicio_y, 0.08),
+    (v) => canviaTitol({ posicio_y: LLOCS_TITOL.find((x) => x[0] === v)[2] }));
+  accionsSeccio(cos, "titol", () => { tancaElQueHiHagi(); obreTitol(); }, () => {
+    canviaTitolDelVideo({ text: "" }, 0);
+    deixaPeca();
+    avis("Títol tret.");
+  });
+}
+
+// El peu dels editors dels subtítols i del títol: «Més ajustos» (el panell sencer, a l'esquerra), tornar a l'estil
+// dels altres vídeos (si aquest l'ha canviat) i, al títol, treure'l.
+function accionsSeccio(cos, seccio, mesAjustos, treu) {
+  const fila = document.createElement("div");
+  fila.className = "accions-peca";
+  const mes = document.createElement("button");
+  mes.className = "boto petit";
+  mes.textContent = "Més ajustos…";
+  mes.addEventListener("click", mesAjustos);
+  fila.append(mes);
+  if (Object.keys(propiDe(seccio)).length) {
+    const torna = document.createElement("button");
+    torna.className = "enllac";
+    torna.textContent = "Com els altres vídeos";
+    torna.title = "Torna a l'estil dels altres vídeos";
+    torna.addEventListener("click", () => restableix(seccio));
+    fila.append(torna);
+  }
+  if (treu) {
+    const b = document.createElement("button");
+    b.className = "enllac perill";
+    b.textContent = "Treu el títol";
+    b.addEventListener("click", treu);
+    fila.append(b);
+  }
+  cos.append(fila);
+}
+
 function instalaVesteix() {
   for (const b of $$("#pestanyes-peces button")) {
     b.addEventListener("click", () => {
@@ -4089,6 +4445,15 @@ function instalaVesteix() {
   for (const b of $$("[data-desfes]")) b.addEventListener("click", desfes);
   for (const b of $$("[data-refes]")) b.addEventListener("click", refes);
   $("#vesteix-exporta").addEventListener("click", obreFinal);
+  $("#estil-a-tots").addEventListener("click", estilATots);
+  $("#estil-com-tots").addEventListener("click", () => {
+    canvia((e) => { e.estil = {}; });
+    avis("Ha tornat a l'estil dels altres vídeos.");
+  });
+  $("#a-colors").addEventListener("click", () => { tancaEstilVideo(); obreMarca(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("#full-estil").hidden) { e.stopPropagation(); tancaEstilVideo(); }
+  }, true);
   new ResizeObserver(() => { if (vestint) { signaturaGaleria = ""; pintaGaleria(); } }).observe($("#galeria-peces"));
 }
 
@@ -4139,7 +4504,8 @@ const canviaCapa = (quin, canvis) => (quin === "titol" ? canviaTitol(canvis) : c
 
 function triaCapa(quin) {
   capaTriada = quin;
-  if (quin.startsWith("grafic:") && !(pecaTriada?.tipus === "grafic" && pecaTriada.id === quin.slice(7))) triaPeca("grafic", quin.slice(7));
+  const [tipus, id] = quin.startsWith("grafic:") ? ["grafic", quin.slice(7)] : [quin, quin];
+  if (!(pecaTriada?.tipus === tipus && pecaTriada.id === id)) triaPeca(tipus, id);
   $(".pantalla").classList.add("editant");  // el botó gran de reproduir no tapa el que s'edita
   pintaBarraCapa();
 }
@@ -4168,71 +4534,9 @@ function pintaMarcCapa() {
   $("#barra-capa").classList.toggle("a-dalt", r.top + r.height / 2 - base.top > base.height / 2);
 }
 
+// Al vídeo, només el marc (i arrossegar amunt i avall): el que s'ha tocat es retoca a la dreta de Vesteix.
 function pintaBarraCapa() {
-  const barra = $("#barra-capa");
-  barra.textContent = "";
-  const quin = capaTriada;
-  // Un gràfic es retoca a la dreta (Vesteix): al vídeo, només el marc (i s'arrossega amunt i avall).
-  if (quin?.startsWith("grafic:")) { barra.hidden = true; pintaMarcCapa(); return; }
-  const e = estilDe(quin);
-  if (!quin || !e) { barra.hidden = true; return; }
-  barra.hidden = false;
-  // Els estils fets, en dibuixos.
-  const estils = document.createElement("div");
-  estils.className = "barra-estils";
-  barra.append(estils);
-  const llista = quin === "titol" ? estilsTitol : estilsPredefinits;
-  const actual = quin === "titol" ? predefinitTitol() : predefinitActual();
-  for (const p of llista.slice(0, 6)) {
-    const valors = ambMarca(quin, p.valors);
-    const mostra = botoEstil(estils, p, p === actual, () => { canviaCapa(quin, valors); pintaBarraCapa(); });
-    if (!window.TallatSubtitols) continue;
-    if (quin === "titol") pintaMostraTitol(mostra, { ...e, ...valors, mida: 0.3, clau_mida: 1, corba: 0 }, "*Aa*", 1080);
-    else pintaMostra(mostra, { ...e, ...valors }, { paraules: [MOSTRA[0], MOSTRA[2]], alcada: 1080, mida: 0.2 });
-  }
-  // Els colors de la marca (i el d'ara), en rodones.
-  const fila = document.createElement("div");
-  fila.className = "barra-fila";
-  barra.append(fila);
-  const m = estilMarca || {};
-  // Sense marca, el blanc de sempre; amb marca, només els seus colors (n'hi ha que no volen mai el blanc pur).
-  const colors = [...new Set([e.color, m.color_text, m.color_destacat, m.color_principal, m.color_secundari, m.color_clar,
-    marcaFeta() ? null : "#FFFFFF"].filter(Boolean).map((c) => c.toUpperCase()))].slice(0, 6);
-  for (const c of colors) {
-    const b = document.createElement("button");
-    b.className = "rodona";
-    b.style.background = c;
-    b.setAttribute("aria-label", `Color ${c}`);
-    b.setAttribute("aria-pressed", String((e.color || "").toUpperCase() === c));
-    b.addEventListener("click", () => { canviaCapa(quin, { color: c }); pintaBarraCapa(); });
-    fila.append(b);
-  }
-  // La mida.
-  const mida = document.createElement("input");
-  Object.assign(mida, { type: "range", min: quin === "titol" ? 0.035 : 0.04, max: quin === "titol" ? 0.14 : 0.12,
-    step: 0.002, value: e.mida ?? 0.075 });
-  mida.setAttribute("aria-label", "Mida");
-  mida.addEventListener("input", () => canviaCapa(quin, { mida: Number(mida.value) }));
-  const icona = document.createElement("span");
-  icona.className = "barra-icona";
-  icona.setAttribute("aria-hidden", "true");
-  icona.textContent = "A";
-  fila.append(icona, mida);
-  // Més opcions (el panell sencer) i tancar.
-  const mes = document.createElement("button");
-  mes.className = "enllac";
-  mes.textContent = quin === "titol" ? "Text i més" : "Més";
-  mes.addEventListener("click", () => {
-    const q = quin;
-    deixaCapa();
-    if (q === "titol") obreTitol(); else { obreSubtitols(); $("#grup-e-mes").open = true; }
-  });
-  const tanca = document.createElement("button");
-  tanca.className = "icona";
-  tanca.setAttribute("aria-label", "Tanca");
-  tanca.innerHTML = '<svg viewBox="0 0 20 20"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg>';
-  tanca.addEventListener("click", deixaCapa);
-  fila.append(mes, tanca);
+  $("#barra-capa").hidden = true;
   pintaMarcCapa();
 }
 
@@ -5749,7 +6053,7 @@ function instalaControls() {
   $("#carpeta-projecte").addEventListener("click", () => triaCarpeta("projecte"));
   $("#fet-mostra").addEventListener("click", () => darrerFet && mostraAlFinder(darrerFet));
   $("#fet-tanca").addEventListener("click", () => { $("#fet-export").hidden = true; });
-  $("#velo").addEventListener("click", tancaFinal);
+  $("#velo").addEventListener("click", () => { tancaFinal(); if (!$("#full-estil").hidden) tancaEstilVideo(); });
   const perAEditors = async (dades) => {
     tancaFinal();
     try {
@@ -5842,7 +6146,8 @@ async function inicia() {
   marcaSubtitols();
   estilsPredefinits = P.estils_subtitols || [];
   estilsTitol = P.estils_titol || [];
-  aplicaEstilTitol(P.estil_titol);
+  estilsVideo = P.estils_video || [];
+  kitEstil.titol = P.estil_titol;
   aplicaMarca(P);
   aplicaBroll(P);
   aplicaSo(P);
@@ -5852,7 +6157,8 @@ async function inicia() {
   bibliotecaLletres = P.biblioteca_lletres || bibliotecaLletres;
   versioEstil = P.versio_estil;
   carregaFontsKit(P.fonts_kit || []);
-  aplicaEstilSubtitols(P.estil_subtitols);
+  kitEstil.subtitols = P.estil_subtitols;
+  recalculaEstils();
   pintaPanellEstil();
   pintaVersions(P.exports || []);
   pintaCarpeta(P);
@@ -5901,7 +6207,7 @@ function sonaEfectes() {
 let mostresEnCurs = null;
 function carregaMostresSo() {
   const nivell = estilSo?.soroll || "suau";
-  if (mostresEnCurs || Object.keys(pendents.so).length) return;
+  if (mostresEnCurs) return;
   if (mostresSo && mostraNivell === nivell) return;
   $("#s-preparant").hidden = false;
   mostresEnCurs = (async () => {
@@ -6048,8 +6354,9 @@ function pintaResumMarca() {
     mostra.querySelectorAll("i").forEach((el, k) => { el.style.background = colors[k] || ""; });
   }
   const nom = kits.find((k) => k.id === kitActual)?.nom || "El teu estil";
-  $("#titol-marca").textContent = nom;
-  $("#nom-marca").textContent = colors.length ? nom : `${nom} · encara sense colors`;
+  const lletres = [...new Set([m.lletra_titols, m.lletra_text].filter(Boolean))].join(" · ");
+  $("#nom-marca").textContent = colors.length ? lletres || "Els teus colors" : "Encara no els has triat";
+  $("#nom-kit-guardat").textContent = kits.length > 1 ? `Ara: ${nom} (en tens ${kits.length})` : nom;
 }
 
 function pintaPanellMarca() {

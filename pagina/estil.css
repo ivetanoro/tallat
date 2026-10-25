@@ -1270,6 +1270,32 @@ body.vestint .vesteix-dreta .notes {
 .fila-tret .fila-peca-text { flex: 1; opacity: 0.7; }
 .fila-tret .enllac { margin: 0; flex: none; }
 
+/* L'estil del vídeo: cartes de tot el vídeo (fotograma, títol, gràfic i subtítols) */
+.full.estils-full { width: min(1180px, calc(100vw - var(--e8))); max-height: calc(100vh - var(--e8)); overflow-y: auto; }
+.estils-full .cap-full { align-items: baseline; flex-wrap: wrap; }
+.estils-full .cap-full .detall { flex: 1 1 260px; font-variant-numeric: normal; }
+.estils-video { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 40vw), 1fr)); gap: var(--e4); margin-top: var(--e5); }
+@media (min-width: 1100px) { .estils-video { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.peu-estils { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--e3); margin-top: var(--e5); }
+.peu-estils .amb-marca { margin: 0; }
+.carta-estil { display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; }
+.carta-estil-mostra {
+  position: relative; display: block; aspect-ratio: 9 / 16; border-radius: var(--radi-mitja); overflow: hidden;
+  background: linear-gradient(165deg, #5a5a5e, #1c1c1e) center / cover no-repeat;
+  box-shadow: 0 0 0 1px var(--linia); transition: box-shadow 150ms ease-out, transform 100ms ease-out;
+}
+.carta-estil:hover .carta-estil-mostra { box-shadow: 0 0 0 1px var(--linia), 0 4px 14px rgba(0, 0, 0, 0.18); }
+.carta-estil:active .carta-estil-mostra { transform: scale(0.97); }
+.carta-estil[aria-checked="true"] .carta-estil-mostra { box-shadow: 0 0 0 2px var(--fons), 0 0 0 4px var(--accent); }
+.carta-estil-nom { font-size: var(--t-ui); font-weight: 600; color: var(--text); }
+.carta-estil[aria-checked="true"] .carta-estil-nom { color: var(--accent-text); }
+.carta-estil[aria-checked="true"] .carta-estil-nom::after { content: " ✓"; }
+.amb-marca .enllac { margin: 0; font-size: var(--t-petit); }
+.caixa-a-tots { display: flex; align-items: center; flex-wrap: wrap; gap: var(--e3); }
+.caixa-a-tots p { margin: 0; font-size: var(--t-petit); color: var(--text-2); }
+.caixa-a-tots .enllac { margin: 0; font-size: var(--t-petit); }
+.peca-subtitols .icona-peca, .peca-titol .icona-peca { background: #636366; }
+
 /* L'editor de la peça triada */
 .cap-editor { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e3); margin-bottom: var(--e4); }
 .cap-editor .tornar { margin: 0; }
@@ -1295,6 +1321,7 @@ body.vestint .vesteix-dreta .notes {
   margin-top: var(--e2); padding-top: var(--e4); border-top: 1px solid var(--linia);
 }
 .accions-peca .enllac { margin: 0; }
+.accions-peca { flex-wrap: wrap; }
 .accions-peca .perill { color: var(--auto); }
 .grafic-imatges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2); }
 .grafic-imatges[hidden] { display: none; }

@@ -370,6 +370,26 @@ class TestServidor(unittest.TestCase):
         self.assertIn("2", desat["esborrades"])
         self.assertNotIn("1", desat["esborrades"])
 
+    def test_l_estil_d_un_video_i_fes_lo_servir_en_tots(self):
+        dades = json.loads(self.peticio("GET", "/api/projecte")[1])
+        self.assertTrue(any(e["id"] == "net" for e in dades["estils_video"]))
+        nou = {**dades["estat"], "estil": {"subtitols": {"mida": 0.11, "pes": "molt"}, "grafics": "mac"}}
+        estat, cos = self.peticio("POST", "/api/estat", nou, self.bones())
+        self.assertEqual(estat, 200)
+        r = json.loads(cos)
+        self.assertEqual(r["estat"]["estil"], {"subtitols": {"mida": 0.11}, "grafics": "mac"})
+        self.assertEqual(Projecte(self.carpeta).estil()["subtitols"]["mida"], 0.11)
+        kit = Projecte(self.carpeta).kit()
+        self.assertNotEqual(marca.carrega(kit=kit)["subtitols"]["mida"], 0.11)  # el kit, encara no
+        # La pàgina rep l'estil del kit (hi posa al damunt el del vídeo).
+        self.assertNotEqual(json.loads(self.peticio("GET", "/api/projecte")[1])["estil_subtitols"]["mida"], 0.11)
+        estat, cos = self.peticio("POST", "/api/estil/a-tots", {}, self.bones())
+        self.assertEqual(estat, 200)
+        r = json.loads(cos)
+        self.assertEqual(r["estat"]["estil"], {})
+        self.assertEqual(r["estil_subtitols"]["mida"], 0.11)
+        self.assertEqual(marca.carrega(kit=kit)["marca"]["energia"], ["mac"])
+
     def test_un_so_posat_a_ma_sona_al_seu_moment(self):
         dades = json.loads(self.peticio("GET", "/api/projecte")[1])
         nou = {**dades["estat"], "sons": [{"id": "s1", "so": "pop", "paraula": 2}, {"so": "rugit", "paraula": 1}]}

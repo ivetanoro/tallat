@@ -584,6 +584,73 @@ NOMS_MARCA = {"compte": "El compte", "public": "Qui el mira", "referencia": "Ree
               "crida": "Crida a l'acció"}
 
 
+def _valor_cli(text: str):
+    """Un valor escrit a l'ordre: número, sí/no, null o text."""
+    t = text.strip()
+    if t.lower() in ("sí", "si", "true"):
+        return True
+    if t.lower() in ("no", "false"):
+        return False
+    if t.lower() in ("null", "cap", ""):
+        return None
+    try:
+        return int(t) if re.fullmatch(r"-?\d+", t) else float(t.replace(",", ".")) if re.fullmatch(r"-?\d+[.,]\d+", t) else t
+    except ValueError:
+        return t
+
+
+def ordre_estil(args) -> None:
+    """L'estil d'aquest vídeo: el del seu kit amb el que aquest vídeo hi ha canviat. Amb --tria, un dels estils de
+    tot el vídeo; amb SECCIO.CLAU=VALOR, una opció només d'aquest vídeo; --a-tots ho passa al kit (tots els vídeos)
+    i --treu torna a l'estil del kit."""
+    projecte = _carrega(args)
+    estils = marca.estils_video()
+    propi = projecte.estat.get("estil") or {}
+    if args.treu:
+        propi = {}
+    if args.tria:
+        e = next((x for x in estils if x["id"] == args.tria), None)
+        if e is None:
+            sys.exit(f"No conec l'estil «{args.tria}». N'hi ha: {', '.join(x['id'] for x in estils)}")
+        propi = {**{k: v for k, v in propi.items() if k == "so"},
+                 "subtitols": dict(e["subtitols"]), "titol": dict(e["titol"]), "broll": dict(e["broll"]), "grafics": e["grafics"]}
+    for parell in args.valors:
+        clau, igual, valor = parell.partition("=")
+        seccio, punt, opcio = clau.partition(".")
+        if seccio == "grafics" and not punt and igual:
+            propi["grafics"] = valor.strip()
+            continue
+        if not igual or not punt or seccio not in marca.SECCIONS_VIDEO:
+            sys.exit(f"No entenc «{parell}». Fes servir SECCIO.CLAU=VALOR, amb una d'aquestes seccions: "
+                     f"{', '.join(marca.SECCIONS_VIDEO)} (o grafics=net|mac|scrapbook|editorial)")
+        try:
+            propi.setdefault(seccio, {}).update(marca.valida(seccio, {opcio: _valor_cli(valor)}))
+        except ValueError as e:
+            sys.exit(str(e))
+    canviat = args.treu or args.tria or args.valors
+    if canviat:
+        projecte.estat["estil"] = marca.neteja_estil_video(propi)
+    if args.a_tots:
+        marca.passa_al_kit(projecte.estat.get("estil") or {}, kit=projecte.kit())
+        projecte.estat["estil"] = {}
+        canviat = True
+    if canviat:
+        projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1  # la pàgina oberta s'hi posa al dia
+        projecte.desa()
+    propi = projecte.estat.get("estil") or {}
+    nom = next((k["nom"] for k in marca.kits() if k["id"] == projecte.kit()), projecte.kit())
+    igual = next((e["id"] for e in estils if all(propi.get(s) == e[s] for s in ("subtitols", "titol", "broll", "grafics"))), None)
+    noms = ", ".join(f"{e['id']} ({e['nom']})" for e in estils)
+    print(f"Estils de tot el vídeo: {noms}")
+    if not propi:
+        print(f"Aquest vídeo fa servir l'estil del kit «{nom}» tal com és (el de tots els vídeos d'aquest kit).")
+        return
+    print(f"Aquest vídeo parteix del kit «{nom}»" + (f" amb l'estil «{igual}»" if igual else "") + ". Hi canvia:")
+    for seccio, valors in propi.items():
+        print(f"  {seccio}: {json.dumps(valors, ensure_ascii=False)}")
+    print("Per passar-ho a tots els vídeos d'aquest kit: --a-tots. Per tornar al del kit: --treu.")
+
+
 def ordre_marca(args) -> None:
     """La marca d'un kit: la mostra i, amb CLAU=VALOR, la desa (i l'escampa pel kit)."""
     kit = Projecte(Path(args.projecte).expanduser().resolve()).kit() if args.projecte else marca.resol(args.kit)
@@ -926,6 +993,13 @@ def main() -> None:
     ti.add_argument("--treu", action="store_true", help="Treu el títol")
     ti.set_defaults(func=ordre_titol)
 
+    es = sub.add_parser("estil", help="L'estil d'aquest vídeo (--tria un estil de tot el vídeo, SECCIO.CLAU=VALOR, --a-tots, --treu)")
+    es.add_argument("--projecte", required=True)
+    es.add_argument("--tria", help="Un dels estils de tot el vídeo (net, revista, pop, suau, impacte, apilat)")
+    es.add_argument("--a-tots", action="store_true", help="Passa l'estil d'aquest vídeo al seu kit (per a tots els vídeos)")
+    es.add_argument("--treu", action="store_true", help="Treu els canvis d'aquest vídeo: torna a l'estil del kit")
+    es.add_argument("valors", nargs="*", metavar="SECCIO.CLAU=VALOR", help="p. ex. subtitols.mida=0.09 titol.posicio_y=0.2 grafics=editorial")
+    es.set_defaults(func=ordre_estil)
     ma = sub.add_parser("marca", help="La marca d'un kit: colors, lletres i com són els teus vídeos (CLAU=VALOR la desa)")
     on = ma.add_mutually_exclusive_group()
     on.add_argument("--projecte", help="El kit d'aquest vídeo")
