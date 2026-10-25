@@ -1945,12 +1945,12 @@ function canviaTitol(canvis, mostra = false) {
   if (mostra) mostraTitol();
 }
 
-// Fa sonar el títol des del principi perquè es vegi com entra.
+// Ensenya el títol sense fer sonar res: si ara no es veu, el vídeo hi va (aturat), amb el títol ja entrat.
 function mostraTitol() {
   if (vista !== "directe" || sona() || !titolMuntatge) return;
-  vesA(titolMuntatge.inici);
-  reprodueix();
-  R.aturaA = Math.min(duradaFinal, titolMuntatge.final + 0.2);
+  const m = tempsMuntatge();
+  if (m >= titolMuntatge.inici && m < titolMuntatge.final) return;
+  vesA(Math.max(titolMuntatge.inici, Math.min(titolMuntatge.final - 0.35, titolMuntatge.inici + 1.2)));
 }
 
 
@@ -2337,14 +2337,14 @@ function instalaKits() {
   });
 }
 
-// Fa sonar una línia de subtítols perquè es vegi com entra.
+// Ensenya el canvi sense fer sonar res (l'Ivet no vol que el vídeo arrenqui sol, com l'antic «Escolta cada tall»): si
+// ara no es veu cap línia de subtítols, el vídeo va (aturat) a la següent, ja entrada.
 function mostraAnimacio() {
   if (vista !== "directe" || sona() || !liniesSub.length) return;
   const m = tempsMuntatge();
+  if (liniesSub.some((l) => m >= l.inici && m < l.final)) return;
   const linia = liniesSub.find((l) => l.final > m + 0.05) || liniesSub[0];
-  vesA(Math.max(0, linia.inici - 0.2));
-  reprodueix();
-  R.aturaA = Math.min(duradaFinal, linia.final + 0.4);
+  vesA(Math.min(linia.final - 0.05, linia.inici + 0.6));
 }
 
 // Una lletra gratuïta de la biblioteca: el servidor la baixa al kit (el primer cop) i la fa servir.
@@ -3165,14 +3165,14 @@ function canviaBroll(canvis, mostra = false) {
   apunta("broll", canvis);
 }
 
-// Fa sonar el primer b-roll del vídeo perquè es vegi com entra.
+// Ensenya el b-roll sense fer sonar res: si ara no se'n veu cap, el vídeo va (aturat) al primer, ja entrat.
 function mostraBrollViu() {
   mostraBrollDespres = false;
+  if (vista !== "directe" || sona() || !brollsMuntatge.length) return;
+  const m = tempsMuntatge();
+  if (brollsMuntatge.some((b) => m >= b.inici && m < (b.fins ?? b.inici + b.durada))) return;
   const b = brollsMuntatge[0];
-  if (vista !== "directe" || sona() || !b) return;
-  vesA(Math.max(0, b.inici - 0.3));
-  reprodueix();
-  R.aturaA = Math.min(duradaFinal, (b.fins ?? b.inici + b.durada) + 0.2);
+  vesA(b.inici + Math.min(0.5, b.durada / 2));
 }
 
 function obreBroll() {
