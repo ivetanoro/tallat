@@ -370,6 +370,48 @@ class TestServidor(unittest.TestCase):
         self.assertIn("2", desat["esborrades"])
         self.assertNotIn("1", desat["esborrades"])
 
+    def test_un_so_posat_a_ma_sona_al_seu_moment(self):
+        dades = json.loads(self.peticio("GET", "/api/projecte")[1])
+        nou = {**dades["estat"], "sons": [{"id": "s1", "so": "pop", "paraula": 2}, {"so": "rugit", "paraula": 1}]}
+        estat, cos = self.peticio("POST", "/api/estat", nou, self.bones())
+        self.assertEqual(estat, 200)
+        r = json.loads(cos)
+        self.assertEqual(r["estat"]["sons"], [{"id": "s1", "so": "pop", "paraula": 2}])
+        efecte = next(e for e in r["efectes"] if e["clau"] == "so:s1")
+        self.assertAlmostEqual(efecte["t"], 1.0, delta=0.1)  # la paraula 2 comença a 1 s
+        self.assertTrue(r["pista_efectes"])
+        # També amb els efectes apagats al kit («cap»): l'has posat tu.
+        marca.desa("so", {"efectes": "cap"}, kit=Projecte(self.carpeta).kit())
+        r = json.loads(self.peticio("GET", "/api/instantania")[1])
+        self.assertEqual([e["clau"] for e in r["efectes"]], ["so:s1"])
+
+    def test_un_b_roll_posat_des_de_la_pagina(self):
+        import shutil
+        import subprocess
+        if not shutil.which("ffmpeg"):
+            self.skipTest("cal ffmpeg")
+        foto = self.carpeta / "foto.png"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64", "-frames:v", "1", str(foto)],
+                       check=True)
+        bones = self.bones(**{"Content-Type": "application/octet-stream"})
+        estat, cos = self.peticio("POST", "/api/broll/puja?paraula=3&nom=foto.png", foto.read_bytes(), bones)
+        self.assertEqual(estat, 200, cos)
+        r = json.loads(cos)
+        nou = next(i for i in r["instruccions"] if i.get("pagina"))
+        self.assertEqual((nou["tipus"], nou["ancora"], nou["estat"]), ("broll", 3, "acceptada"))
+        self.assertTrue((self.carpeta / nou["fitxer"]).exists())
+        self.assertEqual([b["id"] for b in r["brolls"]], [nou["id"]])
+        # Un fitxer que no és un vídeo ni una imatge de debò: no en queda res.
+        estat, _ = self.peticio("POST", "/api/broll/puja?paraula=4&nom=dolenta.png", b"no soc una imatge", bones)
+        self.assertEqual(estat, 400)
+        self.assertEqual(sum(1 for i in Projecte(self.carpeta).instruccions() if i.get("pagina")), 1)
+        # Els de les instruccions de veu no s'esborren; els de la pàgina, sí (amb els seus fitxers).
+        self.assertEqual(self.peticio("POST", "/api/broll/esborra", {"instruccio": "i1"}, self.bones())[0], 400)
+        estat, cos = self.peticio("POST", "/api/broll/esborra", {"instruccio": nou["id"]}, self.bones())
+        self.assertEqual(estat, 200)
+        self.assertFalse(any(i.get("pagina") for i in json.loads(cos)["instruccions"]))
+        self.assertFalse((self.carpeta / nou["fitxer"]).exists())
+
     def test_els_fitxers_servits_no_poden_executar_scripts(self):
         # Segona revisió de Codex: un sticker SVG amb un script, obert directament, podia llegir el codi de la pàgina.
         (self.carpeta / "stickers").mkdir()

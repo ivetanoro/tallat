@@ -83,7 +83,7 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
 ## Com es fa servir
 
 1. Digues a Claude **«edita aquest vídeo»** i arrossega-hi el vídeo (o escriu on és). Claude el transcriu i t'obre la pàgina de revisió al navegador.
-2. Retalla'l a la pàgina:
+2. Retalla'l a la pàgina, a **Edita** (la primera de les tres estacions de dalt a l'esquerra: **Edita · Vesteix · Revisa**):
 
    | Per… | Fes… |
    |---|---|
@@ -97,8 +97,9 @@ Claude baixa i prepara tot el que tallat necessita: ffmpeg (per treballar el ví
    | deixar una nota per a Claude en aquest moment del vídeo | N (o escriu a sota del vídeo) |
    | amagar la columna de l'esquerra o la del vídeo | ⌃⌘S / ⌥⌘V |
 
-3. A **Com es veu**, a la columna de l'esquerra, tria com vols que quedi: l'**Estil** (els teus colors i lletres), els **Subtítols**, el **Títol del ganxo**, els **Gràfics**, el **B-roll** i el **So** (la neteja de la veu i els efectes). Cada fila obre el seu panell, i **‹ Enrere** hi torna. A dalt, a **Per revisar**, hi ha les instruccions de veu i les paraules que tallat et proposa treure; a baix, a **Ritme**, com de curts vols els silencis.
-4. Si vols gràfics, digues a Claude **«proposa'm gràfics»**: et proposa frases clau, etiquetes, llistes, notificacions, xats, números que compten, notes escrites a mà, captures de webs, fotos en ventall i la crida final, frase a frase i amb els colors i les lletres del teu estil. A la pestanya **Gràfics** els veus en miniatura: si en toques un, el pots **Canviar** (i li escrius una nota) o **Treure**. Si no hi toques res, es queda. Després digues a Claude «mira les notes dels gràfics» i els canvia. Si un gràfic té el **bloc de color**, el vídeo es fa petit a baix i el gràfic surt a dalt sobre el teu color: l'actives o el treus tocant el gràfic al vídeo.
+   A la columna de l'esquerra d'**Edita** hi ha **Per revisar** (les instruccions de veu i les paraules que tallat et proposa treure) i el **Ritme** (com de curts vols els silencis).
+3. Ves a **Vesteix** (a dalt a l'esquerra): és on tries com es veu. A **Tot el vídeo**, l'**Estil** (els teus colors i lletres), els **Subtítols** i el **Títol del ganxo**. A **Peces**, els **gràfics**, el **b-roll**, els **zooms** i el **so**: atura el vídeo on vulguis i toca'n una, i s'hi afegeix. A la dreta la retoques (el text, l'estil, on surt…) o la treus (⌫). Si no en toques cap, a la dreta hi ha totes les del vídeo, per ordre.
+4. Si vols que Claude te'n proposi, toca **Demana-li gràfics a Claude** (o digues-li **«proposa'm gràfics»** al xat): et proposa frases clau, etiquetes, llistes, notificacions, xats, números que compten, notes escrites a mà, captures de webs, fotos en ventall i la crida final, amb els colors i les lletres del teu estil. Els seus porten l'etiqueta «Claude». Si un gràfic té el **bloc de color**, el vídeo es fa petit a baix i el gràfic surt a dalt sobre el teu color.
 5. Clica **Exporta** (a dalt) → **Esborrany** i mira'l. El que vulguis canviar, digues-ho a Claude amb el segon, que veus sota el vídeo: «al segon 12, el b-roll és massa llarg». O deixa-li una **nota**: a sota del vídeo, atura'l on vulguis i escriu què vols (o prem **N**). Quan acabis, toca **Envia a Claude**: les fa i et respon a sota de cada nota. Si la pàgina diu «No connectat», escriu-li al xat «mira les meves notes».
 6. Per a les revisions finals, toca **Revisa** (a dalt). Hi veus l'esborrany gran i hi deixes notes, cada una amb la miniatura del seu moment. Envia-les a Claude: les fa i en treu una **versió nova**, que surt sola a Revisa. Així fins que t'agradi.
 7. Quan t'agradi, **Exporta** → **Vídeo final** (1080 o 4K). O, si el vols acabar en un altre editor, **Per acabar-lo en un altre editor**: Premiere, Final Cut o DaVinci, o CapCut o iMovie. Els vídeos que ja has fet també surten a **Exporta**.

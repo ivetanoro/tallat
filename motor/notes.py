@@ -318,10 +318,34 @@ def id_per_respondre(nota: dict) -> str:
     return f"{nota['id']}.{nota['cops']}" if nota.get("cops") else str(nota["id"])
 
 
-def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None, carpeta: Path | None = None) -> str:
+def numeros_pagina(totes: list[dict], al_video) -> dict[int, int]:
+    """El número amb què la pàgina ensenya cada nota ({id: número}): per l'ordre del vídeo (les de tot el vídeo,
+    primer) dins del seu projecte (la gravació o un reel) i, a Revisa, de la seva versió. Com pagina/app.js
+    (numNota). `al_video(nota)`: el segon del vídeo editat on cau (o None)."""
+    grups: dict = {}
+    for n in totes:
+        grups.setdefault((n.get("projecte"), n.get("versio")), []).append(n)
+    numeros = {}
+    for (_, versio), llista in grups.items():
+        if versio:
+            ordre = sorted(llista, key=lambda n: (n.get("t_versio") or 0, n["id"]))
+        else:
+            def clau(n):
+                if n.get("inici") is None:
+                    return (0, 0.0, n["id"])
+                t = al_video(n)
+                return (1, t if t is not None else float("inf"), n["id"])
+            ordre = sorted(llista, key=clau)
+        numeros.update({n["id"]: k for k, n in enumerate(ordre, 1)})
+    return numeros
+
+
+def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None, carpeta: Path | None = None,
+                      numero: int | None = None) -> str:
     """Una nota explicada perquè Claude la pugui fer: on va, què hi diu la persona i què s'han dit abans.
     `al_video` és el segon del vídeo editat (el que la persona veu sota el vídeo), si se sap. Si la nota és d'una
-    versió (Revisa), es diu quina i on és la miniatura (`carpeta`: la de la gravació), perquè Claude la pugui mirar."""
+    versió (Revisa), es diu quina i on és la miniatura (`carpeta`: la de la gravació), perquè Claude la pugui mirar.
+    `numero`: el que la persona veu a la pàgina (per l'ordre del vídeo; numeros_pagina), si no és l'id."""
     on = f"per a tot el reel «{nota['reel']}»" if nota.get("reel") else "per a tot el vídeo"
     if nota.get("inici") is not None:
         gravacio = durada_mmss(nota["inici"])
@@ -335,7 +359,8 @@ def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None, ca
             on += f", al reel «{nota['reel']}»"
     if nota.get("versio"):
         on += f"; feta mirant l'esborrany {nota['versio']}, al {durada_mmss(nota.get('t_versio') or 0)} d'aquell vídeo"
-    linies = [f"Nota {nota['id']} ({on}):"]
+    nom = f"Nota {nota['id']}" if numero in (None, nota["id"]) else f"Nota {nota['id']} (a la pàgina, la {numero})"
+    linies = [f"{nom} ({on}):"]
     for m in nota["fil"]:
         linies.append(f"  {'Tu' if m['de'] == 'claude' else 'La persona'}: {m['text']}")
     if nota.get("reagafada"):

@@ -33,7 +33,7 @@ MIDA_MAXIMA_PUJADA = 2 * 1024 ** 3   # un b-roll o un sticker
 MIDA_MAXIMA_IMATGE = 60 * 1024 ** 2  # una captura o una foto d'un gràfic
 # Les peticions que canvien el projecte obert: han de dir a quin projecte van (dues pestanyes).
 RUTES_DEL_PROJECTE = {"/api/estat", "/api/instruccio", "/api/broll/biblioteca",
-                      "/api/broll/treu", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors",
+                      "/api/broll/treu", "/api/broll/esborra", "/api/broll/puja", "/api/mostra", "/api/exporta", "/api/editors",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
@@ -313,6 +313,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 "estil_so": obert["p"].estil_so(), "sons_propis": str(so.SONS_PROPIS),
                 "estil_marca": obert["p"].estil().get("marca", {}),
                 "paleta_grafics": grafics.paleta(obert["p"].estil()),
+                "mostres_grafics": grafics.mostres(obert["p"].estil().get("marca", {}).get("energia"),
+                                                   obert["p"].estil().get("marca", {}).get("crida") or ""),
                 "estils_titol": marca.estils_titol(), "estil_broll": broll_estil,
                 "mostra_broll": targetes.mostra(broll_estil, accent),
                 "estils_broll": [{**e, "mostra": targetes.mostra({**broll_estil, **e["valors"]}, accent)}
@@ -651,11 +653,19 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
                     projecte.desa()
                     return self._json(instantania())
-                if ruta in ("/api/broll/biblioteca", "/api/broll/treu"):
+                if ruta in ("/api/broll/biblioteca", "/api/broll/treu", "/api/broll/esborra"):
                     iid = str(cos.get("instruccio", ""))
+                    paraula = cos.get("paraula")  # Vesteix: un b-roll nou en aquesta paraula
                     try:
                         if ruta.endswith("treu"):
                             projecte.treu_broll(iid)
+                        elif ruta.endswith("esborra"):
+                            projecte.esborra_broll(iid)
+                        elif isinstance(paraula, int) and not isinstance(paraula, bool) and not iid:
+                            fitxer = next((p for p in broll.biblioteca() if p.name == cos.get("nom", "")), None)
+                            if fitxer is None:
+                                return self._json({"error": "No trobo aquest fitxer a la biblioteca"}, HTTPStatus.NOT_FOUND)
+                            projecte.afegeix_broll(paraula, fitxer)
                         else:
                             nom = cos.get("nom", "")
                             ins = next((i for i in projecte.instruccions() if i["id"] == iid), {})
@@ -666,6 +676,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                             projecte.assigna_recurs(iid, fitxer)
                     except KeyError:
                         return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                     except Exception as e:  # ffmpeg no ha pogut llegir el fitxer
                         return self._json({"error": f"No he pogut preparar el b-roll: {e}"}, HTTPStatus.BAD_REQUEST)
                     return self._json(instantania())
@@ -761,11 +773,17 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             iid = (consulta.get("instruccio") or [""])[0]
             nom = Path((consulta.get("nom") or ["fitxer"])[0]).name
             mida = int(self.headers.get("Content-Length") or 0)
-            if not (broll.es_compatible(Path(nom)) or stickers.es_compatible(Path(nom))):
-                return self._no_permesa(HTTPStatus.BAD_REQUEST, "Aquest tipus de fitxer no serveix")
+            # Vesteix: un b-roll nou, a la paraula on era el vídeo (en lloc d'una instrucció que ja hi era).
+            paraula = (consulta.get("paraula") or [""])[0]
+            paraula = int(paraula) if paraula.isdigit() and not iid else None
+            if not (broll.es_compatible(Path(nom)) or (paraula is None and stickers.es_compatible(Path(nom)))):
+                return self._no_permesa(HTTPStatus.BAD_REQUEST, "Aquest tipus de fitxer no serveix: ha de ser un vídeo o una imatge")
             if not 0 < mida <= MIDA_MAXIMA_PUJADA:
                 return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "El fitxer és buit o massa gran (2 GB com a màxim)")
-            if not any(i["id"] == iid and i.get("tipus") in ("broll", "sticker") for i in projecte.instruccions()):
+            if paraula is not None:
+                if paraula >= len(projecte.dades["paraules"]):
+                    return self._no_permesa(HTTPStatus.BAD_REQUEST, "No trobo aquest moment del vídeo")
+            elif not any(i["id"] == iid and i.get("tipus") in ("broll", "sticker") for i in projecte.instruccions()):
                 return self._no_permesa(HTTPStatus.NOT_FOUND, "No trobo aquesta instrucció")
             carpeta = projecte.carpeta_instruccions() / broll.CARPETA / "pujats"
             carpeta.mkdir(parents=True, exist_ok=True)
@@ -790,7 +808,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     if self.headers.get("X-Tallat-Projecte") != clau_de(obert["p"]):
                         return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
                     try:
-                        obert["p"].assigna_recurs(iid, temporal)  # en fa una còpia al projecte
+                        if paraula is not None:
+                            obert["p"].afegeix_broll(paraula, temporal)
+                        else:
+                            obert["p"].assigna_recurs(iid, temporal)  # en fa una còpia al projecte
                     except KeyError:
                         return self._json({"error": "No trobo aquesta instrucció"}, HTTPStatus.NOT_FOUND)
                     except Exception as e:
@@ -905,6 +926,7 @@ def _estat_de_json(cos: dict) -> dict:
     estat["destacades"] = {k: bool(v) for k, v in estat["destacades"].items()}
     estat["titol"] = edicio.titol_net(estat.get("titol"))
     estat["grafics"] = grafics.neteja_llista(estat.get("grafics"))
+    estat["sons"] = so.neteja_sons(estat.get("sons"))
     apagats = estat.get("sons_apagats") if isinstance(estat.get("sons_apagats"), list) else []
     estat["sons_apagats"] = sorted({c for c in apagats if isinstance(c, str) and 0 < len(c) <= 60})[:500]
     for clau in ("mantingudes", "pauses_mantingudes"):

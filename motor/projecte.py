@@ -84,6 +84,7 @@ class Projecte:
             estat = edicio.llegeix_estat(self.carpeta / EDICIO)
             # El pla de gràfics també el pot escriure algú a mà: el que no s'entén no ha de trencar res.
             estat["grafics"] = grafics.neteja_llista(estat.get("grafics"))
+            estat["sons"] = so.neteja_sons(estat.get("sons"), len(self.dades["paraules"]))
             return estat
         if (self.carpeta / EDICIO_TEXT).exists():
             text = (self.carpeta / EDICIO_TEXT).read_text(encoding="utf-8")
@@ -349,18 +350,22 @@ class Projecte:
         Qui ja té calculats els b-rolls, els stickers, el títol, les línies o els gràfics els pot passar."""
         estil = self.estil()
         quants = estil.get("so", {}).get("efectes", "pocs")
-        if quants == "cap":
-            return []
-        if titol is False:
-            titol = self.titol(trams)
-        if not self.estat.get("subtitols", True) or quants != "molts":
-            linies = []  # les línies només compten per als «molts»
-        elif linies is None:
-            linies = self.linies_subtitols(trams)
-        llista = so.esdeveniments(self.brolls(trams) if brolls is None else brolls,
-                                  self.stickers(trams) if stickers is None else stickers, titol,
-                                  estil.get("titol", {}).get("animacio", "puja"), linies, quants,
-                                  self.grafics(trams) if situats is None else situats)
+        llista = []
+        if quants != "cap":
+            if titol is False:
+                titol = self.titol(trams)
+            if not self.estat.get("subtitols", True) or quants != "molts":
+                linies = []  # les línies només compten per als «molts»
+            elif linies is None:
+                linies = self.linies_subtitols(trams)
+            llista = so.esdeveniments(self.brolls(trams) if brolls is None else brolls,
+                                      self.stickers(trams) if stickers is None else stickers, titol,
+                                      estil.get("titol", {}).get("animacio", "puja"), linies, quants,
+                                      self.grafics(trams) if situats is None else situats)
+        # Els que s'han posat a mà sonen sempre (també amb «cap»: els has posat tu).
+        if self.estat.get("sons"):
+            inicis, _, _ = grafics.temps_paraules(self._blocs(), mapa_muntatge(trams))
+            llista = sorted(llista + so.esdeveniments_propis(self.estat["sons"], inicis), key=lambda e: e["t"])
         apagats = set(self.estat.get("sons_apagats") or [])
         return [dict(x, actiu=x["clau"] not in apagats) for x in llista]
 
@@ -435,6 +440,9 @@ class Projecte:
         llista = self.instruccions()
         p = self.dades["paraules"][paraula]
         n = sum(1 for i in llista if i["id"].startswith("m"))
+        ids = {i["id"] for i in llista}
+        while f"m{paraula}-{n + 1}" in ids:  # si se n'ha esborrat alguna, el compte no basta
+            n += 1
         ins = {"id": f"m{paraula}-{n + 1}", "tipus": tipus, "text": text or tipus, "paraules": list(treu) if treu else None,
                "inici": p["inici"], "final": p["inici"], "ancora": paraula, "estat": "acceptada", "manual": True}
         if treu:
@@ -461,6 +469,36 @@ class Projecte:
                    durada=d, estat="acceptada", tipus="broll")
         self._desa_instruccions(base, llista)
         return ins
+
+    def afegeix_broll(self, paraula: int, origen: Path) -> dict:
+        """Un b-roll posat a la pàgina (Vesteix) en una paraula: una instrucció a mà amb `pagina` i el seu
+        fitxer. Si el fitxer no es pot preparar, no en queda res."""
+        if not 0 <= paraula < len(self.dades["paraules"]):
+            raise ValueError(f"No hi ha cap paraula amb el número {paraula}")
+        ins = self.afegeix_instruccio("broll", paraula, "b-roll")
+        llista = self.instruccions()
+        next(i for i in llista if i["id"] == ins["id"])["pagina"] = True
+        self._desa_instruccions(self.carpeta_instruccions(), llista)
+        try:
+            return self.assigna_broll(ins["id"], origen)
+        except Exception:
+            self.esborra_broll(ins["id"])
+            raise
+
+    def esborra_broll(self, iid: str) -> None:
+        """Treu del tot un b-roll posat a la pàgina (amb els seus fitxers). Els de les instruccions de veu no
+        s'esborren: es descarten (i es poden tornar a posar)."""
+        base = self.carpeta_instruccions()
+        llista = self.instruccions()
+        ins = next((i for i in llista if i["id"] == iid), None)
+        if ins is None:
+            raise KeyError(iid)
+        if not ins.get("pagina"):
+            raise ValueError("Aquest b-roll ve d'una instrucció de veu: descarta-la")
+        for clau in ("fitxer", "original"):
+            if ins.get(clau):
+                entorn.esborra_si_pots(base / ins[clau])
+        self._desa_instruccions(base, [i for i in llista if i["id"] != iid])
 
     def treu_broll(self, iid: str) -> None:
         """Treu el fitxer (b-roll o sticker) assignat a una instrucció."""

@@ -25,6 +25,15 @@ class TestEfectes(unittest.TestCase):
         self.assertEqual(molts[-1]["clau"], "clau:7")
         self.assertEqual(so.esdeveniments(brolls, stickers, titol, "puja", linies, "cap"), [])
 
+    def test_els_sons_posats_a_ma(self):
+        sons = so.neteja_sons([{"id": "s1", "so": "pop", "paraula": 3}, {"id": "s1", "so": "tic", "paraula": 4},
+                               {"so": "rugit", "paraula": 1}, {"so": "pop", "paraula": 99}, {"so": "pop", "paraula": True},
+                               "pop"], paraules=10)
+        self.assertEqual(sons, [{"id": "s1", "so": "pop", "paraula": 3}, {"id": "s2", "so": "tic", "paraula": 4}])
+        efectes = so.esdeveniments_propis(sons + [{"id": "s3", "so": "whoosh", "paraula": 5}], {3: 1.2, 5: 2.0})
+        # El de la paraula 4 no hi és (la paraula no surt al vídeo); el whoosh arriba al màxim a la paraula.
+        self.assertEqual([(e["clau"], e["moments"]) for e in efectes], [("so:s1", [1.2]), ("so:s3", [1.8])])
+
     def test_el_titol_a_maquina_fa_una_tecla_per_lletra(self):
         titol = {"text": "ab\n*cd*", "inici": 0.0, "final": 3.0}
         moments = so.esdeveniments([], [], titol, "maquina", [], "pocs")[0]["moments"]

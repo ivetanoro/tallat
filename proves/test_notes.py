@@ -120,6 +120,18 @@ class TestNotes(unittest.TestCase):
             notes.afegeix(self.carpeta, "   ")
         self.assertEqual([n["id"] for n in notes.llegeix(self.carpeta)["notes"]], [2])
 
+    def test_a_la_pagina_es_numeren_per_l_ordre_del_video(self):
+        totes = [{"id": 1, "projecte": "a", "inici": 9.0}, {"id": 2, "projecte": "a", "inici": 2.0},
+                 {"id": 3, "projecte": "a", "inici": None}, {"id": 4, "projecte": "b", "inici": 5.0},
+                 {"id": 5, "projecte": "a", "versio": "v1", "t_versio": 4.0},
+                 {"id": 6, "projecte": "a", "versio": "v1", "t_versio": 1.0}]
+        numeros = notes.numeros_pagina(totes, lambda n: n["inici"] / 2)
+        # Les de tot el vídeo primer; cada projecte i cada versió compten a part.
+        self.assertEqual(numeros, {3: 1, 2: 2, 1: 3, 4: 1, 6: 1, 5: 2})
+        text = notes.text_per_a_claude({"id": 1, "inici": None, "fil": [{"de": "persona", "text": "hola"}], "estat": "enviada"},
+                                       lambda t: "0:00", numero=3)
+        self.assertTrue(text.startswith("Nota 1 (a la pàgina, la 3) "))
+
     def test_un_numero_no_es_torna_a_fer_servir(self):
         # Si es treu l'última nota, la següent no es queda el seu número: la pàgina recorda coses de cada nota pel
         # número (la resposta a mig escriure, quina està desplegada…) i se les trobaria en una altra.

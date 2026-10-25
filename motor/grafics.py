@@ -384,6 +384,27 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
     return d
 
 
+# Les mostres de la galeria de Vesteix: com queda cada tipus amb l'estil de la persona (sense imatges: la
+# web i les fotos es dibuixen a la pàgina amb una icona).
+MOSTRES = {"frase": {"text": "Menys és *més*"}, "etiqueta": {"text": "Pas 1"},
+           "llista": {"text": "Tres claus", "punts": ["Llum", "So", "Ritme"]},
+           "numero": {"xifra": "73 %", "text": "ho fan així"},
+           "notificacio": {"de": "Missatge", "text": "Ja és aquí!"},
+           "xat": {"punts": ["Ho has vist?", "Sí, és genial"]},
+           "anotacio": {"text": "aquí!", "forma": "fletxa"}, "crida": {"text": ""}}
+
+
+def mostres(estils, crida: str = "") -> dict:
+    """{tipus: dibuix} de cada mostra, al mig de la pantalla i sencera (per a les miniatures)."""
+    sortida = {}
+    for tipus, valors in MOSTRES.items():
+        g = net({"id": f"mostra-{tipus}", "tipus": tipus, "paraula": 0, **valors})
+        d = dibuix(g, estils, crida or "Segueix-me per a més")
+        if d:
+            sortida[tipus] = {**d, "posicio": "mig", "limits": [0, ALCADA]}
+    return sortida
+
+
 def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils: list[str],
           crida: str = "", subtitols: dict | None = None, bloc_de: dict | None = None,
           alcada: float | None = None, imatges=None, sense_bloc: bool = False) -> list[dict]:

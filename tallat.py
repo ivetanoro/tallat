@@ -632,13 +632,19 @@ def _mmss(t: float) -> str:
     return f"{int(t // 60)}:{int(t % 60):02d}"
 
 
+_trams_de: dict = {}  # carpeta → (projecte, trams): un sol cop per projecte encara que hi hagi moltes notes
+
+
 def _al_video(nota: dict) -> float | None:
     """El segon del vídeo editat on cau la nota (el que la persona veia sota el vídeo), amb els talls d'ara."""
     if nota.get("inici") is None or not nota.get("projecte"):
         return None
     try:
-        projecte = Projecte(Path(nota["projecte"]))
-        return projecte.al_muntatge(nota["inici"], projecte.trams())
+        if nota["projecte"] not in _trams_de:
+            projecte = Projecte(Path(nota["projecte"]))
+            _trams_de[nota["projecte"]] = (projecte, projecte.trams())
+        projecte, trams = _trams_de[nota["projecte"]]
+        return projecte.al_muntatge(nota["inici"], trams)
     except (OSError, ValueError, KeyError):
         return None
 
@@ -667,8 +673,9 @@ def ordre_notes(args) -> None:
             print("Encara no ha arribat cap nota. Torna a esperar-les quan vulguis.")
             return
         print("Ha arribat 1 nota:\n" if len(preses) == 1 else f"Han arribat {len(preses)} notes:\n")
+        numeros = notes.numeros_pagina(notes.llegeix(carpeta)["notes"], _al_video)
         for nota in preses:
-            print(notes.text_per_a_claude(nota, _mmss, _al_video(nota), carpeta) + "\n")
+            print(notes.text_per_a_claude(nota, _mmss, _al_video(nota), carpeta, numeros.get(nota["id"])) + "\n")
         print("Fes-les i respon cada una amb el número que diu «Per respondre-la» (la persona veu la resposta a la pàgina):")
         print(f'  tallat.py notes --projecte "{carpeta}" --respon NÚMERO "Fet: …"   (si no ho tens clar, afegeix --pregunta)')
         print("Després, torna a esperar-les amb --espera.")
@@ -678,8 +685,10 @@ def ordre_notes(args) -> None:
         print("Encara no hi ha cap nota.")
         return
     noms = {"esborrany": "per enviar", "enviada": "enviada", "treballant": "agafada", "feta": "feta", "pregunta": "pregunta"}
+    numeros = notes.numeros_pagina(totes, _al_video)
     for nota in totes:
-        print(f"[{noms.get(nota['estat'], nota['estat'])}] {notes.text_per_a_claude(nota, _mmss, _al_video(nota), carpeta)}")
+        print(f"[{noms.get(nota['estat'], nota['estat'])}] "
+              f"{notes.text_per_a_claude(nota, _mmss, _al_video(nota), carpeta, numeros.get(nota['id']))}")
 
 
 def ordre_destaca(args) -> None:
@@ -705,7 +714,7 @@ def ordre_destaca(args) -> None:
               + ", ".join(f"{i} {'sí' if v else 'no'}" for i, v in triades))
     if not projecte.estil_subtitols().get("clau_grans"):
         print("Avís: el kit d'aquest vídeo no fa més grans les paraules destacades. "
-              "S'activa a la pàgina: Com es veu → Subtítols → Més opcions → Paraules destacades.")
+              "S'activa a la pàgina: Vesteix → Subtítols → Més opcions → Paraules destacades.")
 
 
 PESOS = {"thin": "100", "extralight": "200", "light": "300", "regular": "400", "book": "400", "normal": "400",

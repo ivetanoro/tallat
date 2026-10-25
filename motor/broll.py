@@ -70,6 +70,12 @@ def prepara(origen: Path, desti: Path, durada: float = 1.5, lut: str | None = No
     comu = ["-an", "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
             "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(temporal)]
     if origen.suffix.lower() in IMATGES:
+        # Una imatge que no es pot llegir: amb «-loop 1», ffmpeg s'hi quedaria provant-ho per sempre.
+        mida = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                               "stream=width,height", "-of", "csv=p=0", str(origen)],
+                              capture_output=True, text=True, timeout=30).stdout.strip().split(",")
+        if len(mida) < 2 or not all(x.isdigit() and int(x) > 0 for x in mida[:2]):
+            raise ValueError("No puc llegir aquesta imatge: potser està espatllada o no és una imatge de debò")
         fotogrames = max(1, round(durada * FPS))
         # Zoom lent del 100 % al 108 %, centrat: la imatge «respira» en lloc de quedar quieta.
         filtre = (f"{_cobreix()},scale={AMPLADA * 2}:{ALCADA * 2},"
@@ -83,7 +89,7 @@ def prepara(origen: Path, desti: Path, durada: float = 1.5, lut: str | None = No
         inici = 0.3 if info["durada"] > durada + 0.6 else 0.0
         ordre = ["ffmpeg", "-v", "error", "-y", "-ss", f"{inici:.2f}", "-i", str(origen),
                  "-t", f"{durada:.3f}", "-map", "0:v:0", "-vf", _cobreix() + _lut(lut), *comu]
-    subprocess.run(ordre, check=True, capture_output=True)
+    subprocess.run(ordre, check=True, capture_output=True, timeout=600)  # un fitxer estrany no penja el servidor
     treu_rotacio(temporal)  # un clip de l'iPhone: que no surti de costat
     temporal.replace(desti)
     return desti

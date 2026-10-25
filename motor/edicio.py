@@ -13,6 +13,7 @@ L'estat de l'edició es desa a `edicio.json`:
   ordre        [[a, b]]      (reels muntats) trossos d'ids en l'ordre en què han de sonar
   zooms        [id]          paraules on comença un zoom (instruccions de veu acceptades)
   grafics      [{…}]         el pla de gràfics (motor/grafics.py)
+  sons         [{id, so, paraula}]  efectes de so posats a mà a la pàgina (motor/so.py)
 """
 from __future__ import annotations
 
@@ -34,7 +35,7 @@ def estat_buit(pausa_maxima: float | None = PAUSA_MAXIMA) -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": pausa_maxima, "pauses_mantingudes": [],
             "subtitols": True, "ordre": None, "zooms": [], "destacades": {}, "titol": None,
-            "sons_apagats": [], "grafics": []}
+            "sons_apagats": [], "grafics": [], "sons": []}
 
 
 def titol_net(titol) -> dict | None:

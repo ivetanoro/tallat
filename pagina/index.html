@@ -8,10 +8,11 @@
 </head>
 <body>
   <aside class="barra" aria-label="Projecte">
-    <!-- Edita · Revisa, sempre a dalt a l'esquerra (a Revisa també). Si s'amaga la columna, va a la barra del text. -->
+    <!-- Edita · Vesteix · Revisa, sempre a dalt a l'esquerra. Si s'amaga la columna, va a la barra del text. -->
     <div class="cap-estacions">
       <div class="segmentat petit estacions" role="radiogroup" aria-label="Què fas">
-        <button role="radio" data-estacio="edita" aria-checked="true">Edita</button>
+        <button role="radio" data-estacio="edita" aria-checked="true" title="El text: què es queda, què es treu i el ritme">Edita</button>
+        <button role="radio" data-estacio="vesteix" aria-checked="false" title="Com es veu: l'estil, els subtítols, els gràfics, el b-roll, els zooms i el so">Vesteix</button>
         <button role="radio" data-estacio="revisa" aria-checked="false" title="Mira l'esborrany sencer i deixa-hi notes per a Claude">Revisa</button>
       </div>
     </div>
@@ -45,8 +46,23 @@
       </div>
     </section>
 
-    <section class="seccio com-es-veu" aria-labelledby="titol-com-es-veu">
-      <h2 id="titol-com-es-veu">Com es veu</h2>
+    <section class="seccio" data-seccio="ritme">
+      <h2 id="titol-ritme">Ritme</h2>
+      <div class="segmentat ample" role="radiogroup" aria-labelledby="titol-ritme" id="ritme">
+        <button role="radio" data-valor="0">Original</button>
+        <button role="radio" data-valor="1">Pausat</button>
+        <button role="radio" data-valor="2">Normal</button>
+        <button role="radio" data-valor="3">Àgil</button>
+      </div>
+      <p class="detall" id="nota-ritme"></p>
+    </section>
+    </div>
+
+    <!-- Vesteix: com es veu el vídeo. A dalt, el que val per a tot el vídeo; a sota, les peces: en tocar-ne una,
+         s'afegeix al moment on és el vídeo (i a la dreta es retoca). -->
+    <div class="vesteix-barra" id="vesteix-barra">
+    <section class="seccio tot-el-video" aria-labelledby="titol-tot-video">
+      <h2 id="titol-tot-video">Tot el vídeo</h2>
       <button class="fila-estil" id="obre-estils" aria-label="Estil: colors, lletres i com són els teus vídeos">
         <span class="mostra-estil mostra-marca" id="mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span class="fila-estil-text"><strong>Estil</strong><span id="nom-marca"></span></span>
@@ -62,32 +78,34 @@
         <span class="fila-estil-text"><strong>Títol del ganxo</strong><span id="nom-estil-titol"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
-      <button class="fila-estil" id="obre-grafics" aria-label="Gràfics: el pla que proposa Claude">
-        <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M11 3.5l1.9 5.1 5.1 1.9-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/><path d="M18.5 15v5M16 17.5h5"/></svg></span>
-        <span class="fila-estil-text"><strong>Gràfics</strong><span id="nom-grafics"></span></span>
-        <span class="punt" id="punt-grafics" hidden></span>
-        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
-      </button>
-      <button class="fila-estil" id="obre-estil-broll" aria-label="B-roll: tria com surt a la pantalla">
-        <span class="mostra-estil" id="mostra-broll" aria-hidden="true"></span>
-        <span class="fila-estil-text"><strong>B-roll</strong><span id="nom-estil-broll"></span></span>
-        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
-      </button>
-      <button class="fila-estil" id="obre-so" aria-label="So: la neteja de la veu i els efectes">
-        <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></span>
-        <span class="fila-estil-text"><strong>So</strong><span id="nom-so"></span></span>
-        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
-      </button>
     </section>
-    <section class="seccio" data-seccio="ritme">
-      <h2 id="titol-ritme">Ritme</h2>
-      <div class="segmentat ample" role="radiogroup" aria-labelledby="titol-ritme" id="ritme">
-        <button role="radio" data-valor="0">Original</button>
-        <button role="radio" data-valor="1">Pausat</button>
-        <button role="radio" data-valor="2">Normal</button>
-        <button role="radio" data-valor="3">Àgil</button>
+    <section class="seccio peces" aria-labelledby="titol-peces">
+      <h2 id="titol-peces">Peces</h2>
+      <div class="segmentat ample pestanyes-peces" role="tablist" aria-labelledby="titol-peces" id="pestanyes-peces">
+        <button role="tab" data-peces="grafics" aria-selected="true" aria-controls="galeria-peces">Gràfics</button>
+        <button role="tab" data-peces="broll" aria-selected="false" aria-controls="galeria-peces">B-roll</button>
+        <button role="tab" data-peces="zoom" aria-selected="false" aria-controls="galeria-peces">Zooms</button>
+        <button role="tab" data-peces="so" aria-selected="false" aria-controls="galeria-peces">So</button>
       </div>
-      <p class="detall" id="nota-ritme"></p>
+      <p class="detall pista-peces" id="pista-peces">Toca'n una i s'afegeix on és el vídeo.</p>
+      <div class="galeria-peces" id="galeria-peces" role="tabpanel" aria-labelledby="titol-peces"></div>
+      <div class="peu-peces" data-peu="grafics">
+        <button class="boto suau ample" id="demana-grafics">Demana-li gràfics a Claude</button>
+      </div>
+      <div class="peu-peces" data-peu="broll" hidden>
+        <button class="fila-estil" id="obre-estil-broll" aria-label="B-roll: tria com surt a la pantalla">
+          <span class="mostra-estil" id="mostra-broll" aria-hidden="true"></span>
+          <span class="fila-estil-text"><strong>Com surt el b-roll</strong><span id="nom-estil-broll"></span></span>
+          <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+        </button>
+      </div>
+      <div class="peu-peces" data-peu="so" hidden>
+        <button class="fila-estil" id="obre-so" aria-label="So: la neteja de la veu i els efectes">
+          <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></span>
+          <span class="fila-estil-text"><strong>La veu i els efectes</strong><span id="nom-so"></span></span>
+          <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+        </button>
+      </div>
     </section>
     </div>
 
@@ -290,24 +308,6 @@
           <button class="enllac" id="restableix-estil">Torna a l'estil de tallat</button>
         </div>
       </details>
-    </div>
-
-    <div class="panell-estil" id="panell-grafics" hidden>
-      <button class="enllac tornar" id="tanca-grafics">‹ Enrere</button>
-      <h2 class="titol-panell">Gràfics</h2>
-      <button class="oferta-marca" data-obre-assistent hidden>
-        <span class="mostra-estil mostra-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-        <span><strong>Posa-hi els teus colors i lletres</strong><span>Fes el teu estil: 4 passos</span></span>
-      </button>
-      <section class="seccio" data-seccio="pla-grafics">
-        <h2>Pla de gràfics <span class="compte" id="compte-grafics"></span></h2>
-        <p class="detall" id="ajuda-grafics"></p>
-        <div id="pla-grafics"></div>
-        <details class="grup-estil" id="grup-trets" hidden>
-          <summary>Trets <span class="compte" id="compte-trets"></span></summary>
-          <div id="grafics-trets"></div>
-        </details>
-      </section>
     </div>
 
     <div class="panell-estil" id="panell-so" hidden>
@@ -628,7 +628,8 @@
   <main class="text" aria-label="Transcripció">
     <div class="eines">
       <div class="segmentat petit estacions sense-columna" role="radiogroup" aria-label="Què fas">
-        <button role="radio" data-estacio="edita" aria-checked="true">Edita</button>
+        <button role="radio" data-estacio="edita" aria-checked="true" title="El text: què es queda, què es treu i el ritme">Edita</button>
+        <button role="radio" data-estacio="vesteix" aria-checked="false" title="Com es veu: l'estil, els subtítols, els gràfics, el b-roll, els zooms i el so">Vesteix</button>
         <button role="radio" data-estacio="revisa" aria-checked="false" title="Mira l'esborrany sencer i deixa-hi notes per a Claude">Revisa</button>
       </div>
       <button class="icona" id="commuta-barra" title="Amaga la columna de l'esquerra (⌃⌘S)" aria-label="Columna de l'esquerra" aria-pressed="true">
@@ -742,12 +743,35 @@
     </section>
   </section>
 
+  <!-- Vesteix, a la dreta: la peça que has tocat (per retocar-la) o, si no n'has tocat cap, totes les del vídeo. A sota,
+       les notes per a Claude (les mateixes d'Edita: la pàgina les hi porta). -->
+  <aside class="vesteix-dreta" id="vesteix-dreta" aria-label="Les peces del vídeo" hidden>
+    <header class="dreta-cap">
+      <div class="grup">
+        <button class="icona" data-desfes title="Desfés (⌘Z)" aria-label="Desfés" disabled>
+          <svg viewBox="0 0 20 20"><path d="M7.5 5 3.5 9l4 4M4 9h7.5a4.5 4.5 0 0 1 0 9H9"/></svg>
+        </button>
+        <button class="icona" data-refes title="Refés (⇧⌘Z)" aria-label="Refés" disabled>
+          <svg viewBox="0 0 20 20"><path d="m12.5 5 4 4-4 4M16 9H8.5a4.5 4.5 0 0 0 0 9H11"/></svg>
+        </button>
+      </div>
+      <div class="espai"></div>
+      <div class="feina" id="vesteix-feina" hidden>
+        <span id="vesteix-feina-text">Construint…</span>
+        <span class="barra-progres"><span id="vesteix-feina-progres"></span></span>
+      </div>
+      <button class="boto principal" id="vesteix-exporta">Exporta</button>
+    </header>
+    <section class="peca" id="peca"></section>
+  </aside>
+
   <!-- Revisa: l'esborrany exportat (una versió) gran, i les notes d'aquella versió a la dreta, amb la miniatura
        de cada moment. Claude les fa i en treu una versió nova. -->
   <section class="revisa" id="revisa" aria-label="Revisa" hidden>
     <header class="revisa-cap">
       <div class="segmentat petit estacions" role="radiogroup" aria-label="Què fas">
-        <button role="radio" data-estacio="edita" aria-checked="false">Edita</button>
+        <button role="radio" data-estacio="edita" aria-checked="false" title="El text: què es queda, què es treu i el ritme">Edita</button>
+        <button role="radio" data-estacio="vesteix" aria-checked="false" title="Com es veu: l'estil, els subtítols, els gràfics, el b-roll, els zooms i el so">Vesteix</button>
         <button role="radio" data-estacio="revisa" aria-checked="true" title="Mira l'esborrany sencer i deixa-hi notes per a Claude">Revisa</button>
       </div>
       <div class="versions-revisa" id="versions-revisa" role="radiogroup" aria-label="Versió"></div>

@@ -31,6 +31,26 @@ VERSIO_SONS = "1"     # canvia-la si canvia com es fabriquen els sons (la pista 
 
 # Què sona a cada cosa. «pocs»: b-roll, stickers i títol; «molts»: també les paraules destacades.
 NOMS = {"whoosh": "Whoosh", "pop": "Pop", "tecla": "Teclat", "brill": "Brillantor", "tic": "Tic"}
+MAX_SONS = 200  # els que es posen a mà (estat["sons"])
+
+
+def neteja_sons(llista, paraules: int | None = None) -> list[dict]:
+    """Els sons posats a mà a la pàgina (Vesteix), comprovats: [{id, so, paraula}]. Cada un sona quan
+    es diu la seva paraula (o la primera que es queda després). El que no s'entén, fora."""
+    sortida, ids = [], set()
+    for s in llista if isinstance(llista, list) else []:
+        if not isinstance(s, dict) or s.get("so") not in NOMS:
+            continue
+        p = s.get("paraula")
+        if isinstance(p, bool) or not isinstance(p, int) or p < 0 or (paraules is not None and p >= paraules):
+            continue
+        sid = s.get("id")
+        if not isinstance(sid, str) or not sid or len(sid) > 20 or sid in ids:
+            n = max([int(i[1:]) for i in ids if i[1:].isdigit()] + [len(ids)])
+            sid = f"s{n + 1}"
+        ids.add(sid)
+        sortida.append({"id": sid, "so": s["so"], "paraula": p})
+    return sortida[:MAX_SONS]
 
 
 # --- La neteja de la veu -------------------------------------------------------------------------
@@ -268,6 +288,19 @@ def esdeveniments(brolls: list[dict], stickers: list[dict], titol: dict | None, 
                     llista.append({"clau": f"clau:{w['id']}", "nom": f"«{w['text']}»", "so": "tic", "t": w["inici"],
                                    "moments": [w["inici"]]})
     return sorted(llista, key=lambda e: e["t"])
+
+
+def esdeveniments_propis(sons: list[dict], inicis: dict) -> list[dict]:
+    """Els sons posats a mà, al muntatge. `inicis`: on comença al muntatge la primera paraula que es queda a
+    partir de cada una ({id: segons}, grafics.temps_paraules). El whoosh arriba al màxim just a la paraula."""
+    llista = []
+    for s in sons:
+        t = inicis.get(s["paraula"])
+        if t is None:
+            continue
+        llista.append({"clau": f"so:{s['id']}", "nom": NOMS[s["so"]], "so": s["so"], "t": round(t, 3),
+                       "moments": [round(max(0.0, t - 0.2), 3) if s["so"] == "whoosh" else round(t, 3)], "propi": True})
+    return llista
 
 
 def _a_bytes(mostres) -> bytes:
