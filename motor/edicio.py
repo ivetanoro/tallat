@@ -15,6 +15,10 @@ L'estat de l'edició es desa a `edicio.json`:
   grafics      [{…}]         el pla de gràfics (motor/grafics.py)
   sons         [{id, so, paraula}]  efectes de so posats a mà a la pàgina (motor/so.py)
   estil        {seccio: {…}}  el que aquest vídeo canvia de l'estil del seu kit (motor/marca.py, amb_estil_video)
+  ronda        n             quantes rondes de propostes hi ha fet Claude (el tauler de Vesteix; motor/grafics.py)
+  vots         {clau: {vot, nota, nom, paraula}}  el que la persona diu al tauler de les peces que no són gràfics
+                             («broll:ID», «zoom:ID», «so:ID»; vot «si» o «potser»; què és i a quina paraula
+                             comença, per a Claude): els gràfics ho porten a dins
 """
 from __future__ import annotations
 
@@ -36,7 +40,30 @@ def estat_buit(pausa_maxima: float | None = PAUSA_MAXIMA) -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": pausa_maxima, "pauses_mantingudes": [],
             "subtitols": True, "ordre": None, "zooms": [], "destacades": {}, "titol": None,
-            "sons_apagats": [], "grafics": [], "sons": [], "estil": {}}
+            "sons_apagats": [], "grafics": [], "sons": [], "estil": {}, "ronda": 0, "vots": {}}
+
+
+MIDA_NOTA_VOT = 600
+
+
+def vots_nets(vots) -> dict:
+    """Els vots del tauler de les peces que no són gràfics, comprovats: {clau: {vot, nota}}."""
+    sortida = {}
+    for clau, v in (vots.items() if isinstance(vots, dict) else []):
+        if not (isinstance(clau, str) and 0 < len(clau) <= 60 and isinstance(v, dict)) or v.get("vot") not in ("si", "potser"):
+            continue
+        nota = " ".join(str(v.get("nota") or "").split())[:MIDA_NOTA_VOT]
+        paraula = v.get("paraula")
+        paraula = paraula if isinstance(paraula, int) and not isinstance(paraula, bool) and paraula >= 0 else None
+        sortida[clau] = {"vot": v["vot"], "nota": nota, "nom": " ".join(str(v.get("nom") or "").split())[:80],
+                         "paraula": paraula}
+        if len(sortida) >= 500:
+            break
+    return sortida
+
+
+def ronda_neta(ronda) -> int:
+    return ronda if isinstance(ronda, int) and not isinstance(ronda, bool) and 0 <= ronda < 10 ** 6 else 0
 
 
 def titol_net(titol) -> dict | None:

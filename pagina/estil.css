@@ -1474,6 +1474,137 @@ body.vestint .vesteix-dreta .notes {
 /* Una finestra estreta (el Safari al costat de l'app de Claude, per exemple). A Edita: el text i el vídeo, i la
    columna de l'esquerra en un calaix que s'obre amb el botó de la barra del text (les estacions hi van a la barra).
    A Vesteix: la galeria i el vídeo, i la peça i les notes a sota del vídeo. */
+/* --- El tauler de Vesteix ---------------------------------------------------------------------------
+   Totes les peces en targetes, cadascuna amb el seu tros de vídeo (app.js, pintaTauler). Ocupa el lloc del vídeo i de
+   la columna de la dreta; mentre es retoca el que és de tot el vídeo, tornen. */
+.tauler[hidden] { display: none !important; }
+body.vestint.amb-tauler { grid-template-columns: var(--amplada-galeria) minmax(0, 1fr); }
+body.vestint.amb-tauler .reproductor, body.vestint.amb-tauler .vesteix-dreta { display: none !important; }
+.tauler { grid-column: 2; height: 100vh; min-width: 0; display: flex; flex-direction: column; }
+.tauler-cap {
+  flex: none; display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--e3) var(--e4);
+  padding: var(--e5) var(--e6) var(--e3);
+}
+.tauler-titol { flex: 1 1 260px; min-width: 0; }
+.tauler-titol h2 { margin: 0; font-size: var(--t-titol); line-height: 1.2; display: flex; align-items: center; gap: var(--e2); }
+.xip-ronda {
+  font-size: var(--t-peu); font-weight: 700; color: var(--accent-text); background: var(--accent-suau);
+  padding: 2px 10px; border-radius: 99px;
+}
+.xip-ronda[hidden] { display: none; }
+.filtres-tauler .compte { margin-left: 3px; color: var(--text-3); font-weight: 500; }
+.accions-tauler { display: flex; align-items: center; gap: var(--e2); }
+.accions-tauler .feina .barra-progres { width: 56px; }
+.graella-tauler {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(188px, 1fr)); gap: var(--e4); align-content: start;
+  padding: var(--e2) var(--e6) var(--e6);
+}
+.buit-filtre { margin: 0 var(--e6) var(--e4); }
+.tauler-buit { margin: var(--e6) auto; max-width: 30rem; padding: var(--e8) var(--e6); text-align: center; }
+.tauler-buit h3 { margin: 0; font-size: var(--t-titol); }
+.tauler-buit .detall { margin: var(--e2) 0 var(--e5); font-size: var(--t-cos); }
+.tauler-buit .estat-ronda { margin-top: var(--e4); }
+
+.carta-tauler {
+  position: relative; min-width: 0; display: flex; flex-direction: column; gap: var(--e2);
+  padding: var(--e2) var(--e2) var(--e3); border-radius: var(--radi-mitja); background: var(--superficie);
+  box-shadow: 0 0 0 0.5px var(--linia), 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 150ms ease-out, opacity 150ms ease-out;
+}
+.carta-tauler.activa { box-shadow: 0 0 0 2px var(--accent), 0 6px 18px rgba(0, 113, 227, 0.16); }
+.carta-tauler.vot-no { opacity: 0.55; }
+.carta-tauler.vot-no.activa, .carta-tauler.vot-no:focus-within { opacity: 1; }
+.carta-cap { display: flex; align-items: center; gap: var(--e2); min-height: 20px; font-size: var(--t-peu); }
+.carta-cap .temps { font-weight: 700; color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.tipus-peca { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-weight: 600; color: var(--text); }
+.tipus-peca span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tipus-peca i { flex: none; width: 8px; height: 8px; border-radius: 3px; background: var(--c-grafic); }
+.peca-broll .tipus-peca i, .peca-sticker .tipus-peca i { background: var(--c-broll); }
+.peca-zoom .tipus-peca i { background: var(--c-zoom); }
+.peca-so .tipus-peca i { background: var(--c-so); }
+.insignia { flex: none; margin-left: auto; padding: 1px 7px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+.insignia[hidden] { display: none; }
+.insignia.nova { color: var(--accent-text); background: var(--accent-suau); }
+.insignia.canviada { color: var(--proposta); background: var(--proposta-suau); }
+.insignia.teva { color: var(--verd); background: var(--verd-suau); }
+
+/* El tros de vídeo: el fotograma (o el vídeo, a la que es mou) i, a sobre, les capes a 1080 × 1920. */
+.clip {
+  position: relative; aspect-ratio: 9 / 16; border-radius: var(--radi); overflow: hidden; isolation: isolate;
+  background: linear-gradient(165deg, #3a3a3c, #1c1c1e); cursor: pointer; outline: none;
+}
+.clip:focus-visible { box-shadow: 0 0 0 3px var(--focus); }
+.clip-fons { position: absolute; inset: 0; }
+.clip-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; }
+.clip-media[hidden] { display: none; }
+.clip-capa { z-index: 1; }
+.clip-capa > * { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; }
+.clip-marca { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; pointer-events: none; }
+.clip-marca:empty { display: none; }
+.ona-so { display: flex; align-items: center; gap: 4px; height: 44px; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5)); }
+.ona-so i { width: 5px; border-radius: 3px; background: #fff; animation: ona-so 1.1s ease-in-out infinite; }
+.ona-so i:nth-child(1), .ona-so i:nth-child(5) { height: 12px; }
+.ona-so i:nth-child(2), .ona-so i:nth-child(4) { height: 24px; animation-delay: 0.1s; }
+.ona-so i:nth-child(3) { height: 36px; animation-delay: 0.2s; }
+@keyframes ona-so { 0%, 100% { transform: scaleY(0.5); } 50% { transform: scaleY(1); } }
+.marc-zoom { width: 58%; fill: none; stroke: rgba(255, 255, 255, 0.85); stroke-width: 2.5; stroke-linecap: round;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5)); }
+.activa .marc-zoom { opacity: 0; transition: opacity 300ms ease-out; }
+.clip-so {
+  position: absolute; right: 8px; bottom: 12px; z-index: 3; width: 30px; height: 30px; padding: 0; border: 0;
+  border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff;
+  background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.clip-so svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.clip-so[aria-pressed="true"] { background: var(--accent); }
+.clip-progres { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; height: 3px; background: rgba(255, 255, 255, 0.25); opacity: 0; }
+.activa .clip-progres { opacity: 1; }
+.clip-progres i { display: block; width: 0; height: 100%; background: #fff; }
+.capturador { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+
+.carta-motiu { margin: 0; font-size: var(--t-peu); line-height: 1.35; color: var(--text-2); overflow-wrap: anywhere; }
+.carta-avis { margin: 0; font-size: var(--t-peu); color: var(--auto); }
+.carta-avis[hidden] { display: none; }
+.carta-accions { display: flex; flex-direction: column; gap: var(--e2); }
+.vots-carta { display: flex; width: 100%; }
+.vots-carta button { flex: 1; padding: 0; }
+.vots-carta button[data-vot="si"][aria-checked="true"] { background: var(--verd); color: var(--superficie); font-weight: 700; }
+.vots-carta button[data-vot="potser"][aria-checked="true"] { background: #ffcc00; color: #3d2a00; font-weight: 700; }
+.vots-carta button[data-vot="no"][aria-checked="true"] { font-weight: 700; }
+.carta-nota[hidden] { display: none; }
+.carta-nota .enllac { font-size: var(--t-peu); }
+.nota-carta { width: 100%; min-height: 44px; resize: none; font-size: var(--t-petit); line-height: 1.4; background: var(--proposta-suau); }
+.tria-alternativa { color: var(--accent-text); }
+
+/* Dues opcions per al mateix moment: juntes, en un requadre. */
+.grup-tauler {
+  grid-column: span 2; display: flex; flex-direction: column; gap: var(--e2); padding: var(--e2);
+  border-radius: calc(var(--radi-mitja) + 6px); background: var(--accent-suau); box-shadow: inset 0 0 0 1px rgba(0, 113, 227, 0.22);
+}
+.grup-cap { display: flex; justify-content: space-between; align-items: baseline; gap: var(--e2); padding: 2px var(--e1) 0; font-size: var(--t-petit); }
+.grup-cap span { flex: none; color: var(--text-2); }
+.grup-cartes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e2); }
+.grup-tauler .cap-de-les-dues { align-self: center; font-size: var(--t-peu); }
+
+/* La ronda següent: a baix, sempre a la vista. */
+.ronda {
+  flex: none; margin: 0 var(--e6) var(--e5); padding: var(--e2) var(--e2) var(--e2) var(--e4);
+  border-radius: var(--radi-mitja); background: var(--vidre); box-shadow: 0 0 0 0.5px var(--linia), 0 8px 24px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+.ronda[hidden] { display: none; }
+.ronda-fila { display: flex; align-items: center; gap: var(--e3); }
+.ronda .falten { flex: none; font-size: var(--t-ui); color: var(--text-2); }
+.ronda .falten b { color: var(--text); }
+#nota-ronda { flex: 1; min-width: 0; height: 34px; }
+.estat-ronda { margin: var(--e2) 0 var(--e1); }
+.estat-ronda.en-curs::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
+  background: var(--accent); animation: batec 1.2s ease-in-out infinite; vertical-align: 1px; }
+@keyframes batec { 50% { opacity: 0.3; } }
+.torna-tauler { margin: 0 var(--e1) 0 0; font-size: var(--t-ui); }
+@media (prefers-reduced-motion: reduce) { .ona-so i, .estat-ronda.en-curs::before { animation: none; } }
+
 @media (max-width: 1100px) and (min-width: 701px) {
   body:not(.vestint):not(.revisant) { grid-template-columns: minmax(0, 1fr) var(--amplada-reproductor); }
   body:not(.vestint):not(.revisant) .text { grid-column: 1; }
@@ -1496,6 +1627,8 @@ body.vestint .vesteix-dreta .notes {
   body.vestint .peca { flex: none; overflow: visible; }
   body.vestint .vesteix-dreta .notes { max-height: none; }
   body.vestint .vesteix-dreta .llista-notes { overflow: visible; }
+  body.vestint.amb-tauler { grid-template-columns: 264px minmax(0, 1fr); }
+  .tauler { grid-row: 1 / span 2; }
 }
 @media (max-width: 700px) {
   /* Tot en una columna que baixa sencera (la pàgina fa de barra de desplaçament, no cada columna). */
@@ -1516,4 +1649,12 @@ body.vestint .vesteix-dreta .notes {
   .peca { flex: none; overflow: visible; }
   .vesteix-dreta .notes { max-height: none !important; }
   .transcripcio { padding-bottom: var(--e8); }
+  body.vestint.amb-tauler { grid-template-columns: minmax(0, 1fr); }
+  .tauler { grid-column: 1 !important; height: auto; }
+  .graella-tauler { overflow: visible; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); padding: var(--e2) var(--e4) var(--e4); }
+  .tauler-cap { padding: var(--e4) var(--e4) var(--e2); }
+  .ronda { position: sticky; bottom: var(--e2); margin: 0 var(--e2) var(--e2); }
+  .ronda-fila { flex-wrap: wrap; }
+  #nota-ronda { order: 3; flex: 1 1 100%; }
+  .grup-tauler { grid-column: 1 / -1; }
 }

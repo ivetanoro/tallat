@@ -528,16 +528,21 @@ def ordre_grafics(args) -> None:
         try:
             pla = projecte.importa_imatges(pla)  # les imatges que són camins de fitxers, al projecte
             manera = "de-nou" if args.de_nou else args.accio
+            ronda = projecte.estat.get("ronda", 0) + 1  # cada pla que hi desa Claude és una ronda del tauler
             projecte.estat["grafics"] = grafics.fusiona(projecte.estat.get("grafics") or [], pla,
-                                                        len(projecte.dades["paraules"]), manera)
+                                                        len(projecte.dades["paraules"]), manera, ronda)
         except ValueError as e:
             sys.exit(str(e))
+        if any(g.get("ronda") == ronda for g in projecte.estat["grafics"]):
+            projecte.estat["ronda"] = ronda
+            # Els «Potser» i les notes de les altres peces (zooms, b-roll, sons) ja s'han atès en aquesta ronda.
+            projecte.estat["vots"] = {}
         projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1  # la pàgina oberta s'hi posa al dia
         projecte.desa()
     trams = projecte.trams()
     marca_kit = projecte.estil().get("marca") or {}
     pla = projecte.estat.get("grafics") or []
-    situats = {g["id"]: g for g in projecte.grafics(trams)}
+    situats = {g["id"]: g for g in projecte.grafics(trams, amb_alternatives=True)}
     frases = projecte.frases(trams)
     if args.json:
         print(json.dumps({"marca": {k: marca_kit.get(k) for k in ("compte", "public", "energia", "grafics", "crida",
@@ -559,7 +564,10 @@ def ordre_grafics(args) -> None:
         print("Encara no hi ha cap pla de gràfics. Per desar-ne un: tallat.py grafics proposa PLA.json --projecte …")
         return
     notes = sum(1 for g in pla if g["estat"] == "canvia")
-    print(f"Pla de gràfics ({len(pla)}" + (f"; {notes} amb nota" if notes else "") + "):")
+    ronda = projecte.estat.get("ronda", 0)
+    print(f"Pla de gràfics ({len(pla)}" + (f"; {notes} per canviar" if notes else "") + (f"; ronda {ronda}" if ronda else "")
+          + "). Vot de la persona al tauler: SÍ, POTSER, NO o «per mirar»:")
+    vots = {"si": "SÍ", "potser": "POTSER", "no": "NO"}
     for g in pla:
         s = situats.get(g["id"])
         on = (_segons(s["inici"]) if s else "—" if g["estat"] == "tret"
@@ -569,10 +577,25 @@ def ordre_grafics(args) -> None:
         punts = " / ".join(("→ " if p.get("costat") == "enviat" else "") + p["text"] for p in g["punts"])
         punts = f"{g['forma']}, {g['costat']}" if g["tipus"] == "anotacio" else punts
         estat = {"canvia": "CANVIA", "mantingut": "mantingut", "tret": "tret"}.get(g["estat"], "proposat")
+        vot = vots.get(g.get("vot")) or {"mantingut": "SÍ", "tret": "NO"}.get(g["estat"], "per mirar")
+        extra = "".join(x for x in (f" · grup {g['grup']}" if g.get("grup") else "",
+                                    " (alternativa: no surt fins que la triï)" if s and s.get("alternativa") else "",
+                                    " · el va posar la persona" if g.get("origen") == "teu" else "") if x)
         print(f"  {g['id']:>4}  {g['tipus']:<11} {on:>14}  paraula {g['paraula'] if g['paraula'] is not None else 'final'}"
-              f"  {g.get('estil') or '(marca)'}  {estat}  «{text}»" + (f" [{punts}]" if punts else ""))
+              f"  {g.get('estil') or '(marca)'}  {estat} · {vot}{extra}  «{text}»" + (f" [{punts}]" if punts else ""))
         if g["nota"]:
             print(f"        nota: «{g['nota']}»")
+    altres = projecte.estat.get("vots") or {}
+    altres = {k: v for k, v in altres.items() if v["vot"] == "potser" or v["nota"]}
+    if altres:
+        print("Les altres peces del tauler amb un POTSER o una nota (b-roll, zooms i sons):")
+        paraules = projecte.dades["paraules"]
+        for clau, v in altres.items():
+            on = ""
+            if v.get("paraula") is not None and v["paraula"] < len(paraules):
+                k = v["paraula"]
+                on = f"  paraula {k}, a «{' '.join(w['text'].strip() for w in paraules[k:k + 6])}»"
+            print(f"  {v.get('nom') or clau}{on}  {vots[v['vot']]}" + (f"  nota: «{v['nota']}»" if v["nota"] else ""))
 
 
 NOMS_MARCA = {"compte": "El compte", "public": "Qui el mira", "referencia": "Reel de referència",

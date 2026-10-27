@@ -86,6 +86,8 @@ class Projecte:
             estat["grafics"] = grafics.neteja_llista(estat.get("grafics"))
             estat["sons"] = so.neteja_sons(estat.get("sons"), len(self.dades["paraules"]))
             estat["estil"] = marca.neteja_estil_video(estat.get("estil"))
+            estat["vots"] = edicio.vots_nets(estat.get("vots"))
+            estat["ronda"] = edicio.ronda_neta(estat.get("ronda"))
             return estat
         if (self.carpeta / EDICIO_TEXT).exists():
             text = (self.carpeta / EDICIO_TEXT).read_text(encoding="utf-8")
@@ -237,10 +239,11 @@ class Projecte:
             linies = self.linies_subtitols()
         return estil.get("marca") or {}, sub, grafics.alcada_subtitols(sub, linies) if sub else None
 
-    def grafics(self, trams=None, linies=None, sense_bloc: bool = False) -> list[dict]:
+    def grafics(self, trams=None, linies=None, sense_bloc: bool = False, amb_alternatives: bool = False) -> list[dict]:
         """Els gràfics del pla que surten al vídeo, en temps del muntatge (motor/grafics.py). Qui ja té
         les línies dels subtítols les pot passar (si són apilades, se n'ha de saber l'alçada).
-        `sense_bloc`: sense el bloc de color (els altres editors no el tenen)."""
+        `sense_bloc`: sense el bloc de color (els altres editors no el tenen). `amb_alternatives`: també les
+        alternatives que no surten (amb `alternativa: true`), per al tauler de Vesteix."""
         pla = self.estat.get("grafics")
         if not pla:
             return []
@@ -248,7 +251,8 @@ class Projecte:
         inicis, finals, bloc_de = grafics.temps_paraules(self._blocs(), mapa_muntatge(trams))
         marca_kit, sub, alcada = self._per_dibuixar(linies)
         return grafics.situa(pla, inicis, finals, sum(b - a for a, b in trams), marca_kit.get("energia"),
-                             marca_kit.get("crida") or "", sub, bloc_de, alcada, self.imatges_grafics(), sense_bloc)
+                             marca_kit.get("crida") or "", sub, bloc_de, alcada, self.imatges_grafics(), sense_bloc,
+                             amb_alternatives)
 
     # --- Les imatges dels gràfics (la web i el ventall) ------------------------------------------------
 

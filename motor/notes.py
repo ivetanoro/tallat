@@ -10,6 +10,7 @@ que s'allibera sol si el procés s'acaba (revisió de Codex: esborrar bloquejos 
 
 Cada nota és una conversa: {id, estat, projecte, reel, paraula, inici, cita, fil: [{de: "persona" | "claude",
 text, quan}]}. `projecte` és la carpeta que s'editava (la gravació o un reel; `reel`, el títol del reel).
+Les que fa el botó «Demana la ronda següent» del tauler de Vesteix porten `tipus: "ronda"`.
 Les de l'estació Revisa diuen també de quina versió són (`versio`: el nom de l'esborrany exportat), el segon
 d'aquella versió (`t_versio`) i la miniatura del fotograma (`miniatura`, a la carpeta MINIATURES).
 `paraula` i `inici` diuen on va (la paraula marcada i el segon de la gravació), o None si és per a tot el vídeo;
@@ -145,7 +146,8 @@ def _missatge(de: str, text: str) -> dict:
 
 def afegeix(carpeta: Path, text: str, paraula: int | None = None, inici: float | None = None,
             cita: str | None = None, projecte: str | None = None, reel: str | None = None,
-            versio: str | None = None, t_versio: float | None = None, miniatura: str | None = None) -> dict:
+            versio: str | None = None, t_versio: float | None = None, miniatura: str | None = None,
+            tipus: str | None = None) -> dict:
     """Una nota nova, encara per enviar."""
     def fes(dades):
         nota = {"id": dades["darrera"] + 1, "estat": "esborrany",
@@ -154,6 +156,8 @@ def afegeix(carpeta: Path, text: str, paraula: int | None = None, inici: float |
                 "fil": [_missatge("persona", text)]}
         if versio:
             nota.update(versio=versio, t_versio=t_versio, miniatura=miniatura)
+        if tipus:
+            nota["tipus"] = tipus
         dades["notes"].append(nota)
         return nota
     return _canvia(carpeta, fes, tot=True)
@@ -193,14 +197,15 @@ def respon_persona(carpeta: Path, id_: int, text: str) -> dict:
     return _canvia(carpeta, fes)
 
 
-def envia(carpeta: Path, projecte: str | None = None, versio=TOTES) -> int:
+def envia(carpeta: Path, projecte: str | None = None, versio=TOTES, nomes: int | None = None) -> int:
     """Les notes per enviar (totes, o només les d'un projecte: el que es veu a la pàgina), cap a Claude.
-    Amb `versio`, només les d'aquella versió (None: les que s'han fet editant, sense versió). Torna quantes."""
+    Amb `versio`, només les d'aquella versió (None: les que s'han fet editant, sense versió); amb `nomes`, només
+    aquella nota. Torna quantes."""
     def fes(notes):
         n = 0
         for nota in notes:
             if (nota["estat"] == "esborrany" and (projecte is None or nota.get("projecte") == projecte)
-                    and (versio is TOTES or nota.get("versio") == versio)):
+                    and (versio is TOTES or nota.get("versio") == versio) and nomes in (None, nota["id"])):
                 nota.update(estat="enviada", enviada_quan=time.time())
                 n += 1
         return n
@@ -365,6 +370,9 @@ def text_per_a_claude(nota: dict, durada_mmss, al_video: float | None = None, ca
         linies.append(f"  {'Tu' if m['de'] == 'claude' else 'La persona'}: {m['text']}")
     if nota.get("reagafada"):
         linies.append("  (Ja te l'havia donat i no l'has resposta: mira si ja l'havies feta abans de tornar-la a fer.)")
+    if nota.get("tipus") == "ronda":
+        linies.append("  (És el botó «Demana la ronda següent» del tauler de Vesteix: els vots i les notes de cada peça són a "
+                      "`tallat.py grafics`. Vegeu «El tauler» a les instruccions de tallat.)")
     if nota.get("miniatura") and carpeta is not None:
         linies.append(f"  El fotograma que mirava: {Path(carpeta) / MINIATURES / nota['miniatura']}")
     if nota["estat"] == "treballant":

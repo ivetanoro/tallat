@@ -36,6 +36,15 @@ class TestNotes(unittest.TestCase):
         self.assertEqual([m["de"] for m in dades["notes"][0]["fil"]], ["persona", "claude"])
         self.assertEqual(notes.pren(self.carpeta), [])
 
+    def test_la_ronda_s_envia_sola_i_diu_a_claude_on_mirar(self):
+        notes.afegeix(self.carpeta, "una que encara no ha enviat")
+        n = notes.afegeix(self.carpeta, "Ronda següent de propostes.", tipus="ronda")
+        self.assertEqual(notes.envia(self.carpeta, nomes=n["id"]), 1)  # només la de la ronda
+        self.assertEqual([x["estat"] for x in notes.llegeix(self.carpeta)["notes"]], ["esborrany", "enviada"])
+        presa = notes.pren(self.carpeta)[0]
+        self.assertEqual(presa["tipus"], "ronda")
+        self.assertIn("tallat.py grafics", notes.text_per_a_claude(presa, lambda s: f"{s:.0f} s"))
+
     def test_una_pregunta_i_la_resposta_de_la_persona(self):
         notes.afegeix(self.carpeta, "canvia el color")
         notes.envia(self.carpeta)

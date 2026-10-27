@@ -58,8 +58,8 @@
     </section>
     </div>
 
-    <!-- Vesteix: com es veu el vídeo. A dalt, el que val per a tot el vídeo; a sota, les peces: en tocar-ne una,
-         s'afegeix al moment on és el vídeo (i a la dreta es retoca). -->
+    <!-- Vesteix: com es veu el vídeo. A l'esquerra, el que val per a tot el vídeo; al mig, el tauler amb les peces
+         (les que proposa Claude i les teves), que es voten. -->
     <div class="vesteix-barra" id="vesteix-barra">
     <section class="seccio tot-el-video" aria-labelledby="titol-tot-video">
       <h2 id="titol-tot-video">Tot el vídeo</h2>
@@ -83,34 +83,16 @@
         <span class="fila-estil-text"><strong>Colors i lletres</strong><span id="nom-marca"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
-    </section>
-    <section class="seccio peces" aria-labelledby="titol-peces">
-      <h2 id="titol-peces">Peces</h2>
-      <div class="segmentat ample pestanyes-peces" role="tablist" aria-labelledby="titol-peces" id="pestanyes-peces">
-        <button role="tab" data-peces="grafics" aria-selected="true" aria-controls="galeria-peces">Gràfics</button>
-        <button role="tab" data-peces="broll" aria-selected="false" aria-controls="galeria-peces">B-roll</button>
-        <button role="tab" data-peces="zoom" aria-selected="false" aria-controls="galeria-peces">Zooms</button>
-        <button role="tab" data-peces="so" aria-selected="false" aria-controls="galeria-peces">So</button>
-      </div>
-      <p class="detall pista-peces" id="pista-peces">Toca'n una i s'afegeix on és el vídeo.</p>
-      <div class="galeria-peces" id="galeria-peces" role="tabpanel" aria-labelledby="titol-peces"></div>
-      <div class="peu-peces" data-peu="grafics">
-        <button class="boto suau ample" id="demana-grafics">Demana-li gràfics a Claude</button>
-      </div>
-      <div class="peu-peces" data-peu="broll" hidden>
-        <button class="fila-estil" id="obre-estil-broll" aria-label="B-roll: tria com surt a la pantalla">
-          <span class="mostra-estil" id="mostra-broll" aria-hidden="true"></span>
-          <span class="fila-estil-text"><strong>Com surt el b-roll</strong><span id="nom-estil-broll"></span></span>
-          <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
-        </button>
-      </div>
-      <div class="peu-peces" data-peu="so" hidden>
-        <button class="fila-estil" id="obre-so" aria-label="So: la neteja de la veu i els efectes">
-          <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></span>
-          <span class="fila-estil-text"><strong>La veu i els efectes</strong><span id="nom-so"></span></span>
-          <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
-        </button>
-      </div>
+      <button class="fila-estil" id="obre-estil-broll" aria-label="B-roll: tria com surt a la pantalla">
+        <span class="mostra-estil" id="mostra-broll" aria-hidden="true"></span>
+        <span class="fila-estil-text"><strong>Com surt el b-roll</strong><span id="nom-estil-broll"></span></span>
+        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+      </button>
+      <button class="fila-estil" id="obre-so" aria-label="So: la neteja de la veu i els efectes">
+        <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></span>
+        <span class="fila-estil-text"><strong>La veu i els efectes</strong><span id="nom-so"></span></span>
+        <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
+      </button>
     </section>
     </div>
 
@@ -728,10 +710,59 @@
     </section>
   </section>
 
-  <!-- Vesteix, a la dreta: la peça que has tocat (per retocar-la) o, si no n'has tocat cap, totes les del vídeo. A sota,
-       les notes per a Claude (les mateixes d'Edita: la pàgina les hi porta). -->
+  <!-- Vesteix, el tauler: totes les peces del vídeo en l'ordre en què surten, cadascuna amb el seu tros de vídeo (es mou
+       la que assenyales). Es voten (Sí, Potser o No, amb una nota) i Claude en fa una ronda nova. -->
+  <section class="tauler" id="tauler" aria-labelledby="titol-tauler" hidden>
+    <header class="tauler-cap">
+      <div class="tauler-titol">
+        <h2 id="titol-tauler">Propostes de Claude <span class="xip-ronda" id="xip-ronda" hidden></span></h2>
+        <p class="detall" id="pista-tauler">Mira-les d'una ullada. Passa per sobre d'una i es mou; amb l'altaveu, sona.</p>
+      </div>
+      <div class="segmentat petit filtres-tauler" role="radiogroup" aria-label="Quines veus" id="filtres-tauler">
+        <button role="radio" data-filtre="totes" aria-checked="true">Totes <span class="compte"></span></button>
+        <button role="radio" data-filtre="mirar" aria-checked="false">Per mirar <span class="compte"></span></button>
+        <button role="radio" data-filtre="si" aria-checked="false">Sí <span class="compte"></span></button>
+        <button role="radio" data-filtre="potser" aria-checked="false">Potser <span class="compte"></span></button>
+        <button role="radio" data-filtre="no" aria-checked="false">No <span class="compte"></span></button>
+      </div>
+      <div class="grup accions-tauler">
+        <button class="icona" data-desfes title="Desfés (⌘Z)" aria-label="Desfés" disabled>
+          <svg viewBox="0 0 20 20"><path d="M7.5 5 3.5 9l4 4M4 9h7.5a4.5 4.5 0 0 1 0 9H9"/></svg>
+        </button>
+        <button class="icona" data-refes title="Refés (⇧⌘Z)" aria-label="Refés" disabled>
+          <svg viewBox="0 0 20 20"><path d="m12.5 5 4 4-4 4M16 9H8.5a4.5 4.5 0 0 0 0 9H11"/></svg>
+        </button>
+        <div class="feina" id="tauler-feina" hidden>
+          <span id="tauler-feina-text">Construint…</span>
+          <span class="barra-progres"><span id="tauler-feina-progres"></span></span>
+        </div>
+        <button class="boto principal" id="tauler-exporta">Exporta</button>
+      </div>
+    </header>
+    <div class="graella-tauler" id="graella-tauler"></div>
+    <p class="detall buit-filtre" id="buit-filtre" hidden>No hi ha cap peça així. Toca «Totes» per veure-les.</p>
+    <div class="tauler-buit" id="tauler-buit" hidden>
+      <h3>Encara no hi ha cap proposta</h3>
+      <p class="detall">Claude escoltarà el que dius i hi proposarà gràfics. Després tu dius quins t'agraden.</p>
+      <button class="boto principal" id="primeres-propostes">Demana propostes a Claude</button>
+      <p class="detall estat-ronda" id="estat-ronda-buit" hidden></p>
+    </div>
+    <div class="ronda" id="ronda" hidden>
+      <div class="ronda-fila">
+        <span class="falten" id="falten"></span>
+        <input type="text" id="nota-ronda" maxlength="600" autocomplete="off"
+               placeholder="Una nota per a tota la ronda (si vols): «menys coses al final»" aria-label="Una nota per a tota la ronda">
+        <button class="boto principal" id="demana-ronda">Demana la ronda següent</button>
+      </div>
+      <p class="detall estat-ronda" id="estat-ronda" hidden></p>
+    </div>
+  </section>
+
+  <!-- Vesteix, mentre es retoca el que és de tot el vídeo (els subtítols, el títol, els colors…): el vídeo gran i, a la
+       dreta, l'editor. Les notes per a Claude (les mateixes d'Edita: la pàgina les hi porta), a la pestanya Notes. -->
   <aside class="vesteix-dreta" id="vesteix-dreta" aria-label="Les peces del vídeo" hidden>
     <header class="dreta-cap">
+      <button class="enllac torna-tauler" id="torna-tauler">‹ Tauler</button>
       <div class="grup">
         <button class="icona" data-desfes title="Desfés (⌘Z)" aria-label="Desfés" disabled>
           <svg viewBox="0 0 20 20"><path d="M7.5 5 3.5 9l4 4M4 9h7.5a4.5 4.5 0 0 1 0 9H9"/></svg>

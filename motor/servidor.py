@@ -259,7 +259,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
         trams = projecte.trams()
         brolls, enganxines = projecte.brolls(trams), projecte.stickers(trams)
         linies, titol = projecte.linies_subtitols(trams), projecte.titol(trams)
-        situats = projecte.grafics(trams, linies)
+        tots = projecte.grafics(trams, linies, amb_alternatives=True)
+        situats = [g for g in tots if not g.get("alternativa")]
         return {"estat": _estat_json(projecte.estat), "trams": edicio.trams_json(trams),
                 "durada_final": round(sum(b - a for a, b in trams), 3),
                 "zooms": projecte.zooms_per_tram(trams), "zoom": exporta.ZOOM,
@@ -272,6 +273,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                              for st in enganxines],
                 "subtitols": linies,
                 "titol": titol, "grafics": situats, "grafics_dibuix": projecte.dibuixos_grafics(linies),
+                "grafics_alternatives": [g for g in tots if g.get("alternativa")],
                 "blocs": projecte.blocs(trams, situats),
                 **info_efectes(projecte, trams, brolls, enganxines, titol, linies, situats),
                 **mostres_del_video(projecte),
@@ -555,6 +557,20 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     except Exception:  # la nota no s'ha desat: la seva miniatura no la farà servir ningú
                         notes.esborra_miniatura(arrel.carpeta, miniatura)
                         raise
+                elif accio == "ronda":
+                    # «Demana la ronda següent» (o, si encara no n'hi ha cap, les primeres propostes): una nota per a
+                    # tot el vídeo que surt de seguida. Els vots i les notes de cada peça, Claude els llegeix amb
+                    # `tallat.py grafics`.
+                    primera = not any(g.get("estat") != "tret" for g in p.estat.get("grafics") or [])
+                    text = "Proposa'm gràfics per a aquest vídeo." if primera else "Ronda següent de propostes."
+                    general = " ".join(str(cos.get("text") or "").split())[:600]
+                    if general:
+                        text += f" Per a tota la ronda: «{general}»."
+                    reel = None
+                    if p is not arrel:
+                        reel = next((r["titol"] for r in info_reels()["reels"] if r["id"] == p.carpeta.name), p.carpeta.name)
+                    nota = notes.afegeix(arrel.carpeta, text, projecte=str(p.carpeta), reel=reel, tipus="ronda")
+                    notes.envia(arrel.carpeta, nomes=nota["id"])  # només aquesta: les altres, quan la persona les enviï
                 elif accio == "esborra":
                     notes.esborra(arrel.carpeta, int(cos.get("id")))
                 elif accio == "respon":
@@ -957,6 +973,8 @@ def _estat_de_json(cos: dict) -> dict:
     estat["grafics"] = grafics.neteja_llista(estat.get("grafics"))
     estat["sons"] = so.neteja_sons(estat.get("sons"))
     estat["estil"] = marca.neteja_estil_video(estat.get("estil"))
+    estat["vots"] = edicio.vots_nets(estat.get("vots"))
+    estat["ronda"] = edicio.ronda_neta(estat.get("ronda"))
     apagats = estat.get("sons_apagats") if isinstance(estat.get("sons_apagats"), list) else []
     estat["sons_apagats"] = sorted({c for c in apagats if isinstance(c, str) and 0 < len(c) <= 60})[:500]
     for clau in ("mantingudes", "pauses_mantingudes"):

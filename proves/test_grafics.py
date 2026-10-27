@@ -43,6 +43,52 @@ class TestUnGrafic(unittest.TestCase):
         self.assertEqual(grafics.neteja_llista(None), [])
 
 
+class TestElTauler(unittest.TestCase):
+    """Els vots de la persona, les rondes de Claude i les dues opcions per a un moment."""
+
+    def test_el_vot_mana_sobre_l_estat(self):
+        estat = lambda **camps: grafics.net(g(**camps))["estat"]
+        self.assertEqual(estat(vot="no"), "tret")
+        self.assertEqual(estat(vot="potser"), "canvia")
+        self.assertEqual(estat(vot="si"), "mantingut")
+        self.assertEqual(estat(vot="si", nota="més petit"), "canvia")  # li agrada, però hi vol un canvi
+        self.assertEqual(estat(vot="", estat="mantingut"), "mantingut")  # sense vot, el d'abans
+        net = grafics.net(g(vot="potser!", grup="no val!", ronda=-3, novetat="x", origen="algú"))
+        self.assertEqual((net["vot"], net["grup"], net["ronda"], net["novetat"], net["origen"]), ("", None, None, "", ""))
+        self.assertEqual(grafics.net(g(grup=7))["grup"], "7")
+
+    def test_cada_ronda_marca_els_nous_i_els_canviats(self):
+        actuals = grafics.neteja_llista([g(id="g1", text="a", vot="si"), g(id="g2", paraula=1, text="b", vot="potser", nota="més curt"),
+                                         g(id="g3", paraula=2, text="c", vot="no"), g(id="g4", paraula=3, text="d")])
+        nou = grafics.fusiona(actuals, [g(id="g2", paraula=1, text="b!"), g(id="g4", paraula=3, text="d"), g(paraula=4, text="e")],
+                              manera="proposa", ronda=2)
+        per_id = {x["id"]: x for x in nou}
+        self.assertEqual(sorted(per_id), ["g1", "g2", "g3", "g4", "g5"])
+        self.assertEqual((per_id["g1"]["vot"], per_id["g3"]["estat"]), ("si", "tret"))  # els votats no es toquen
+        self.assertEqual({k: per_id["g2"][k] for k in ("estat", "vot", "nota", "ronda", "novetat", "origen")},
+                         {"estat": "proposat", "vot": "", "nota": "", "ronda": 2, "novetat": "canviat", "origen": "claude"})
+        self.assertEqual((per_id["g4"]["ronda"], per_id["g4"]["novetat"]), (None, ""))  # igual: com estava
+        self.assertEqual((per_id["g5"]["ronda"], per_id["g5"]["novetat"], per_id["g5"]["origen"]), (2, "nou", "claude"))
+        # Els que posa la persona continuen sent seus encara que Claude els canviï.
+        teu = grafics.fusiona(grafics.neteja_llista([g(id="g1", origen="teu")]), [g(id="g1", text="altre")], manera="canvia", ronda=3)
+        self.assertEqual(teu[0]["origen"], "teu")
+
+    def test_de_dues_opcions_al_video_nomes_n_hi_surt_una(self):
+        inicis, finals = {0: 0.0, 1: 0.5, 2: 1.0}, {0: 0.4, 1: 0.9, 2: 1.4}
+        pla = grafics.neteja_llista([g(id="g1", paraula=1, grup="a1", text="una"),
+                                     {"id": "g2", "tipus": "etiqueta", "paraula": 1, "grup": "a1", "text": "dues"},
+                                     {"id": "g3", "tipus": "etiqueta", "paraula": 2, "text": "tres", "posicio": "dalt"}])
+        self.assertEqual([x["id"] for x in grafics.situa(pla, inicis, finals, 10.0, [])], ["g1", "g3"])  # la primera
+        self.assertEqual(grafics.alternatives_amagades(pla), {"g2"})
+        tots = grafics.situa(pla, inicis, finals, 10.0, [], amb_alternatives=True)
+        alternativa = next(x for x in tots if x["id"] == "g2")
+        # Es posa com si sortís en lloc de la seva germana (que ocupa «dalt»), no en un altre lloc.
+        self.assertEqual((alternativa.get("alternativa"), alternativa["posicio"]), (True, "dalt"))
+        self.assertNotIn("alternativa", next(x for x in tots if x["id"] == "g1"))
+        pla[1]["vot"], pla[1]["estat"] = "si", "mantingut"  # la persona tria la segona
+        self.assertEqual([x["id"] for x in grafics.situa(pla, inicis, finals, 10.0, [])], ["g2", "g3"])
+
+
 class TestTipusNous(unittest.TestCase):
     def test_notificacio_xat_numero_i_anotacio(self):
         notif = grafics.net({"tipus": "notificacio", "paraula": 0, "de": "mama", "text": "on ets?"})
@@ -462,8 +508,20 @@ class TestAlProjecte(unittest.TestCase):
         self.assertIn("estil dels gràfics «editorial»", text)
         self.assertIn("p2.", text)  # les frases, per fer el pla
         self.assertIn("g1  frase", text)
+        projecte = Projecte(self.carpeta)
+        estat = projecte.estat
+        self.assertEqual(([x["id"] for x in estat["grafics"]], estat["revisio"], estat["ronda"]), (["g1", "g2"], 1, 1))
+        # Una ronda: la persona hi ha votat; Claude en canvia un. Els «Potser» de les altres peces ja s'han atès.
+        estat["grafics"][0].update(vot="potser", estat="canvia")
+        estat["vots"] = {"zoom:1.000": {"vot": "potser", "nota": "més suau", "nom": "Zoom", "paraula": 2}}
+        projecte.desa()
+        pla.write_text(json.dumps([g(id="g1", paraula=2, text="la *clau* de tot")]), encoding="utf-8")
+        sortida = io.StringIO()
+        with contextlib.redirect_stdout(sortida):
+            tallat.ordre_grafics(argparse.Namespace(accio="canvia", **args))
+        self.assertIn("ronda 2", sortida.getvalue())
         estat = Projecte(self.carpeta).estat
-        self.assertEqual(([x["id"] for x in estat["grafics"]], estat["revisio"]), (["g1", "g2"], 1))
+        self.assertEqual((estat["ronda"], estat["vots"], estat["grafics"][0]["novetat"]), (2, {}, "canviat"))
         pla.write_text(json.dumps([{"tipus": "frase", "text": "x"}]), encoding="utf-8")
         with self.assertRaises(SystemExit) as e, contextlib.redirect_stdout(io.StringIO()):
             tallat.ordre_grafics(argparse.Namespace(accio="canvia", **args))

@@ -34,6 +34,13 @@ de dalt.
 L'estil de cada gràfic (net, mac, scrapbook o editorial) és un dels de la marca. Estats:
 proposat (el veus al vídeo), mantingut (t'agrada: Claude no el toca), canvia (amb una nota per
 a Claude) i tret (no surt, però es guarda perquè Claude no el torni a proposar).
+
+El tauler de Vesteix: la persona hi vota cada proposta (`vot`: «si», «potser» o «no»), i el vot mana sobre
+l'estat (no → tret; potser, o sí amb una nota → canvia; sí → mantingut). Cada cop que Claude hi desa un pla
+és una ronda (`estat["ronda"]`): els gràfics nous o canviats en aquella ronda en porten el número (`ronda`) i
+què són (`novetat`: «nou» o «canviat»); `origen` diu qui l'ha posat («claude» o «teu»). Dues propostes per al
+mateix moment porten el mateix `grup`: al vídeo només en surt una (la triada o, si no se n'ha triat cap, la
+primera); les altres es veuen al tauler.
 """
 from __future__ import annotations
 
@@ -65,6 +72,8 @@ ALCADA = 1920
 ZONA_SEGURA = (0.14, 0.65)
 MARGE_SUBTITOLS = 28  # px entre un gràfic i els subtítols
 ESTATS = ("proposat", "mantingut", "canvia", "tret")
+VOTS = ("si", "potser", "no")  # el que diu la persona al tauler de Vesteix
+GRUP = re.compile(r"[A-Za-z0-9_-]{1,20}")  # les alternatives per a un mateix moment
 DURADES = {"frase": 2.8, "etiqueta": 2.2, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "xat": 5.0,
            "numero": 2.8, "anotacio": 2.5, "web": 4.0, "ventall": 4.5}
 # On va cada tipus si no es diu: en un vídeo de cap parlant, la cara sol omplir el mig.
@@ -87,7 +96,10 @@ ENTRADA_PUNT = 0.35  # quan surt el primer punt d'una llista sense paraules (des
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_FRASE = 0.7    # un silenci així també tanca una frase
 CAMPS = ("id", "tipus", "paraula", "fins", "durada", "text", "punts", "de", "xifra", "forma", "costat", "imatge",
-         "estil", "posicio", "amaga_subtitols", "bloc", "motiu", "estat", "nota")
+         "estil", "posicio", "amaga_subtitols", "bloc", "motiu", "grup", "estat", "nota", "vot", "ronda", "novetat",
+         "origen")
+# El que no és el gràfic sinó el que se'n pensa (si Claude torna un gràfic amb això canviat, no l'ha canviat).
+DE_LA_REVISIO = ("id", "estat", "nota", "vot", "ronda", "novetat", "origen")
 # El bloc de color, en px de 1080 × 1920: la targeta on va el vídeo (4:5, a baix i centrada) i el tros del
 # vídeo que s'hi veu (de dalt, on sol haver-hi la cara). El vídeo s'hi encongeix i en torna a sortir en
 # ANIMACIO_BLOC segons. La mateixa geometria a l'export (motor/exporta.py) i a la pàgina (app.js).
@@ -198,8 +210,22 @@ def net(g: dict, paraules: int | None = None) -> dict:
     bloc = g.get("bloc")
     sortida["bloc"] = bloc if isinstance(bloc, bool) else None  # None: el de cada tipus (BLOC_PER_DEFECTE)
     sortida["motiu"] = _text(g.get("motiu"), "motiu", 200, retalla=True)
-    sortida["estat"] = g.get("estat") if g.get("estat") in ESTATS else "proposat"
+    grup = str(g["grup"]) if isinstance(g.get("grup"), (str, int)) and not isinstance(g.get("grup"), bool) else ""
+    sortida["grup"] = grup if GRUP.fullmatch(grup) else None
     sortida["nota"] = _text(g.get("nota"), "nota", MIDA_NOTA, retalla=True)
+    sortida["vot"] = g.get("vot") if g.get("vot") in VOTS else ""
+    ronda = g.get("ronda")
+    sortida["ronda"] = ronda if isinstance(ronda, int) and not isinstance(ronda, bool) and 0 < ronda < 10 ** 6 else None
+    sortida["novetat"] = g.get("novetat") if g.get("novetat") in ("nou", "canviat") else ""
+    sortida["origen"] = g.get("origen") if g.get("origen") in ("claude", "teu") else ""
+    estat = g.get("estat") if g.get("estat") in ESTATS else "proposat"
+    if sortida["vot"] == "no":
+        estat = "tret"
+    elif sortida["vot"] == "potser" or (sortida["vot"] == "si" and sortida["nota"]):
+        estat = "canvia"
+    elif sortida["vot"] == "si":
+        estat = "mantingut"
+    sortida["estat"] = estat
     return sortida
 
 
@@ -224,21 +250,23 @@ def _id_nou(ids) -> str:
 
 
 def _contingut(g: dict) -> dict:
-    return {k: g[k] for k in CAMPS if k not in ("id", "estat", "nota")}
+    return {k: g[k] for k in CAMPS if k not in DE_LA_REVISIO}
 
 
 MANERES = ("proposa", "canvia", "de-nou")
 
 
-def fusiona(actuals: list[dict], pla: list, paraules: int | None = None, manera: str = "proposa") -> list[dict]:
+def fusiona(actuals: list[dict], pla: list, paraules: int | None = None, manera: str = "proposa",
+            ronda: int | None = None) -> list[dict]:
     """Posa al dia el pla amb el que envia Claude.
 
-    - Un gràfic amb l'«id» d'un que ja hi era el substitueix: torna a «proposat» i se'n treu la nota
-      (Claude ja l'ha atès). Si no ha canviat res, es queda com estava.
+    - Un gràfic amb l'«id» d'un que ja hi era el substitueix: torna a «proposat» i se'n treuen la nota i el
+      vot (Claude ja l'ha atès). Si no ha canviat res, es queda com estava.
     - Un gràfic sense «id» és nou.
-    - Els que ja hi eren i no s'esmenten: amb «proposa» (un pla nou), els proposats se'n van i els
-      mantinguts, els que tenen una nota pendent i els trets es queden; amb «canvia» (atendre les
-      notes), es queden tots; amb «de-nou», no se'n queda cap."""
+    - Els que ja hi eren i no s'esmenten: amb «proposa» (un pla nou), els proposats (els que la persona encara
+      no ha votat) se'n van i els mantinguts, els que tenen una nota pendent i els trets es queden; amb
+      «canvia» (atendre les notes), es queden tots; amb «de-nou», no se'n queda cap.
+    - `ronda`: el número d'aquesta ronda, que porten els nous i els canviats (amb `novetat`)."""
     if manera not in MANERES:
         raise ValueError(f"Manera desconeguda: {manera}")
     if not isinstance(pla, list):
@@ -259,13 +287,14 @@ def fusiona(actuals: list[dict], pla: list, paraules: int | None = None, manera:
         vell = per_id.get(g["id"])
         if vell is not None and g["id"] not in tocats:
             if _contingut(g) == _contingut(vell):
-                g.update(estat=vell["estat"], nota=vell["nota"])
+                g.update({k: vell[k] for k in DE_LA_REVISIO})
             else:
-                g.update(estat="proposat", nota="")
+                g.update(estat="proposat", nota="", vot="", ronda=ronda, novetat="canviat",
+                         origen=vell["origen"] or "claude")
             tocats.add(g["id"])
         else:
             g["id"] = _id_nou(ids)
-            g.update(estat="proposat", nota="")
+            g.update(estat="proposat", nota="", vot="", ronda=ronda, novetat="nou", origen="claude")
         ids.add(g["id"])
         nous.append(g)
     queden = [g for g in actuals if g["id"] not in tocats and (manera == "canvia" or g["estat"] != "proposat")]
@@ -365,6 +394,8 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
          "estil": g.get("estil") or next((e for e in estils if e in ESTILS), "net"),
          "posicio": POSICIO[g["tipus"]] if g.get("posicio") is None else g["posicio"],
          "amaga_subtitols": amaga, "limits": limits(subtitols, amaga, alcada)}
+    if g.get("grup"):
+        d["grup"] = g["grup"]
     if bloc:
         # El fons: el principal sota les targetes clares (mac, scrapbook); el fosc sota el text clar.
         d["bloc"] = "principal" if d["estil"] in ("mac", "scrapbook") else "fosc"
@@ -405,17 +436,39 @@ def mostres(estils, crida: str = "") -> dict:
     return sortida
 
 
+def alternatives_amagades(grafics: list[dict]) -> set[str]:
+    """Els ids de les alternatives que no surten al vídeo: de cada `grup`, només hi surt la triada (la que la persona
+    ha mantingut) o, si encara no n'ha triat cap, la primera."""
+    grups: dict = {}
+    for g in grafics:
+        if g.get("grup") and g.get("estat") != "tret":
+            grups.setdefault(g["grup"], []).append(g)
+    amagades = set()
+    for membres in grups.values():
+        triades = [g for g in membres if g.get("estat") == "mantingut" or g.get("vot") == "si"]
+        if not triades:
+            triades = [min(membres, key=lambda g: (g["paraula"] if g["paraula"] is not None else 10 ** 9, g["id"]))]
+        amagades |= {g["id"] for g in membres if g not in triades}
+    return amagades
+
+
 def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils: list[str],
           crida: str = "", subtitols: dict | None = None, bloc_de: dict | None = None,
-          alcada: float | None = None, imatges=None, sense_bloc: bool = False) -> list[dict]:
+          alcada: float | None = None, imatges=None, sense_bloc: bool = False,
+          amb_alternatives: bool = False) -> list[dict]:
     """Els gràfics que surten al vídeo (no els trets), a punt per dibuixar, en temps del muntatge:
     el `dibuix` de cadascun amb `inici`, `final` i, als punts, `t`. Els que són d'una frase que ja no
     surt al vídeo no hi són. `subtitols`: l'estil dels subtítols, si el vídeo en porta (perquè els
     gràfics no els tapin), i `alcada`, la del seu bloc més alt. `bloc_de`: el bloc de cada paraula
     (temps_paraules): el final i els punts d'un gràfic han de ser del mateix bloc que el començament.
-    `imatges`: les que hi ha al projecte (la web i el ventall sense imatge no surten)."""
+    `imatges`: les que hi ha al projecte (la web i el ventall sense imatge no surten).
+    `amb_alternatives`: també les alternatives que no surten (amb `alternativa: true`), situades com si
+    sortissin en lloc de la del seu grup (per al tauler de Vesteix)."""
+    amagades = alternatives_amagades(grafics)
     llista = []
     for g in grafics:
+        if g["id"] in amagades and not amb_alternatives:
+            continue
         situat = dibuix(g, estils, crida, subtitols, alcada, imatges, sense_bloc) if g.get("estat") != "tret" else None
         if situat is None or situat.get("falta"):
             continue
@@ -443,6 +496,8 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
                 t = inici + ENTRADA_PUNT + k * pas if t is None else t
                 punt["t"] = round(min(max(t, inici + 0.15), final - 0.3), 3)
         situat.update(inici=round(inici, 3), final=final)
+        if g["id"] in amagades:
+            situat["alternativa"] = True
         llista.append(situat)
     return _dins_dels_blocs(_sense_trepitjar(sorted(llista, key=lambda g: g["inici"])))
 
@@ -450,7 +505,7 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
 def _dins_dels_blocs(llista: list[dict]) -> list[dict]:
     """Un gràfic sense bloc que surt mentre n'hi ha un amb bloc no ha de tapar el gràfic de dalt: va sobre
     la targeta del vídeo, a la part que no tapa Instagram."""
-    blocs = [g for g in llista if g.get("bloc")]
+    blocs = [g for g in llista if g.get("bloc") and not g.get("alternativa")]
     for g in llista:
         if not g.get("bloc") and any(b["inici"] < g["final"] and g["inici"] < b["final"] for b in blocs):
             g["limits"] = [BLOC["y"] + 30, round(ZONA_SEGURA[1] * ALCADA) - 20]
@@ -497,15 +552,18 @@ def _zona(posicio) -> str:
 
 def _sense_trepitjar(llista: list[dict]) -> list[dict]:
     """Si dos gràfics surten alhora al mateix lloc, el segon passa a un lloc lliure (si n'hi ha).
-    Els que porten un lloc exacte (un número) es deixen on són, però els altres no s'hi posen."""
+    Els que porten un lloc exacte (un número) es deixen on són, però els altres no s'hi posen.
+    Una alternativa que no surt no ocupa lloc, i es posa com si fos la del seu grup (sense mirar-ne les altres)."""
     ocupats: list[dict] = []
     for g in llista:
         ocupats = [o for o in ocupats if o["final"] > g["inici"]]
-        if isinstance(g["posicio"], str) and any(_zona(o["posicio"]) == g["posicio"] for o in ocupats):
-            lliure = next((p for p in POSICIONS if all(_zona(o["posicio"]) != p for o in ocupats)), None)
+        altres = [o for o in ocupats if not (g.get("grup") and o.get("grup") == g["grup"])]
+        if isinstance(g["posicio"], str) and any(_zona(o["posicio"]) == g["posicio"] for o in altres):
+            lliure = next((p for p in POSICIONS if all(_zona(o["posicio"]) != p for o in altres)), None)
             if lliure:
                 g["posicio"] = lliure
-        ocupats.append(g)
+        if not g.get("alternativa"):
+            ocupats.append(g)
     return llista
 
 

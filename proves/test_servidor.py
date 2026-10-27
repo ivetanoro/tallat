@@ -390,6 +390,26 @@ class TestServidor(unittest.TestCase):
         self.assertEqual(r["estil_subtitols"]["mida"], 0.11)
         self.assertEqual(marca.carrega(kit=kit)["marca"]["energia"], ["mac"])
 
+    def test_el_tauler_vots_i_ronda(self):
+        dades = json.loads(self.peticio("GET", "/api/projecte")[1])
+        grafics_ = [{"id": "g1", "tipus": "frase", "paraula": 1, "text": "una", "grup": "a1"},
+                    {"id": "g2", "tipus": "etiqueta", "paraula": 1, "text": "dues", "grup": "a1", "vot": "potser", "nota": "més gran"}]
+        nou = {**dades["estat"], "grafics": grafics_, "ronda": 1,
+               "vots": {"broll:i1": {"vot": "potser", "nota": " més  curt ", "nom": "B-roll", "paraula": 1}, "zoom:x": {"vot": "no"}}}
+        estat, cos = self.peticio("POST", "/api/estat", nou, self.bones())
+        self.assertEqual(estat, 200)
+        r = json.loads(cos)
+        self.assertEqual(r["estat"]["vots"], {"broll:i1": {"vot": "potser", "nota": "més curt", "nom": "B-roll", "paraula": 1}})
+        self.assertEqual(r["estat"]["grafics"][1]["estat"], "canvia")
+        self.assertEqual([g["id"] for g in r["grafics"]], ["g1"])  # al vídeo, només una de les dues
+        self.assertEqual([g["id"] for g in r["grafics_alternatives"]], ["g2"])  # l'altra, per al tauler
+        # «Demana la ronda següent»: una nota per a tot el vídeo, que surt de seguida.
+        estat, cos = self.peticio("POST", "/api/notes", {"accio": "ronda", "text": "menys coses"}, self.bones())
+        self.assertEqual(estat, 200)
+        nota = json.loads(cos)["notes"][-1]
+        self.assertEqual((nota["tipus"], nota["estat"], nota["paraula"]), ("ronda", "enviada", None))
+        self.assertEqual(nota["fil"][0]["text"], "Ronda següent de propostes. Per a tota la ronda: «menys coses».")
+
     def test_un_so_posat_a_ma_sona_al_seu_moment(self):
         dades = json.loads(self.peticio("GET", "/api/projecte")[1])
         nou = {**dades["estat"], "sons": [{"id": "s1", "so": "pop", "paraula": 2}, {"so": "rugit", "paraula": 1}]}
