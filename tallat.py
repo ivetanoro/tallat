@@ -223,7 +223,12 @@ def ordre_revisa(args) -> None:
 
     projecte = _carrega(args)
     proxy = projecte.fitxer(PROXY)
-    if not proxy.exists() or proxy.stat().st_mtime < projecte.video.stat().st_mtime:
+    if not projecte.video.exists():  # s'ha mogut o esborrat l'original: la pàgina funciona amb la còpia lleugera
+        if not proxy.exists():
+            sys.exit(f"No trobo el vídeo original ({projecte.video}) ni la còpia lleugera. Torna'l a posar on era.")
+        print(f"No trobo el vídeo original ({projecte.video}): la pàgina fa servir la còpia lleugera. "
+              "Per exportar el vídeo final, torna'l a posar on era.")
+    elif not proxy.exists() or proxy.stat().st_mtime < projecte.video.stat().st_mtime:
         print("Preparant la còpia lleugera del vídeo (només el primer cop)…")
         exporta.fes_proxy(projecte.video, proxy, progres=_barra("còpia"))
 

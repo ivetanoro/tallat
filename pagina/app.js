@@ -5417,8 +5417,8 @@ const PASSES_GUIA = [
 let passaGuia = -1;
 let passesVisibles = [];
 // Puja quan la pàgina canvia prou perquè qui ja havia vist la visita la torni a veure (2: la pàgina simplificada;
-// 3: les tres estacions; 4: el tauler de Vesteix).
-const VERSIO_GUIA = 4;
+// 3: les tres estacions).
+const VERSIO_GUIA = 3;
 
 function esVeu(el) {
   if (!el) return false;
