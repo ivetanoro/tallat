@@ -71,6 +71,19 @@ class TestRecursosDelReel(unittest.TestCase):
         self.assertLess(brolls[0]["inici"], 0.1)  # al principi del reel (amb el petit marge d'abans de la paraula)
 
 
+class TestVideoMogut(unittest.TestCase):
+    def test_el_video_original_mogut_a_la_carpeta_del_projecte_es_troba(self):
+        with tempfile.TemporaryDirectory() as d:
+            carpeta = Path(d).resolve() / "projecte"
+            carpeta.mkdir()
+            on_era = Path(d) / "Descàrregues" / "gravacio.mov"
+            projecte = projecte_amb(carpeta, [])
+            projecte.dades["video"] = str(on_era)
+            self.assertEqual(projecte.video, on_era)  # no hi és enlloc: el de sempre (per a l'avís)
+            (carpeta / "gravacio.mov").write_bytes(b"")
+            self.assertEqual(projecte.video, carpeta / "gravacio.mov")
+
+
 def projecte_amb(carpeta: Path, instruccions_: list[dict]) -> Projecte:
     (carpeta / "transcripcio.json").write_text(json.dumps(
         {"video": str(carpeta / "no-hi-es.mov"), "fps": "30", "durada": 5.0, "paraules": paraules(10)}),

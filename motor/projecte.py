@@ -73,7 +73,15 @@ class Projecte:
 
     @property
     def video(self) -> Path:
-        return Path(self.dades["video"])
+        """El vídeo original: on era quan es va transcriure o, si s'ha mogut dins de la carpeta del projecte (o
+        de la de la gravació sencera), allà."""
+        desat = Path(self.dades["video"])
+        if desat.exists():
+            return desat
+        for carpeta in (self.carpeta, self.arrel):
+            if (carpeta / desat.name).is_file():
+                return carpeta / desat.name
+        return desat
 
     @property
     def fps(self) -> float:

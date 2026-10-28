@@ -121,7 +121,7 @@ def ordre_realinea(args) -> None:
     print(f"Calculant de nou el temps de {len(paraules)} paraules (pot trigar uns minuts; el primer cop baixa el model)…",
           flush=True)
     t0 = time.time()
-    video = Path(dades["video"])
+    video = projecte.video
     if not video.exists():  # s'ha mogut l'original: la còpia lleugera té el mateix so i el mateix temps
         video = path.parent / PROXY
         print(f"No trobo el vídeo original: faig servir la còpia lleugera ({video.name}).")
@@ -225,9 +225,10 @@ def ordre_revisa(args) -> None:
     proxy = projecte.fitxer(PROXY)
     if not projecte.video.exists():  # s'ha mogut o esborrat l'original: la pàgina funciona amb la còpia lleugera
         if not proxy.exists():
-            sys.exit(f"No trobo el vídeo original ({projecte.video}) ni la còpia lleugera. Torna'l a posar on era.")
+            sys.exit(f"No trobo el vídeo original ({projecte.video}) ni la còpia lleugera. "
+                     "Torna'l a posar on era o dins de la carpeta del projecte.")
         print(f"No trobo el vídeo original ({projecte.video}): la pàgina fa servir la còpia lleugera. "
-              "Per exportar el vídeo final, torna'l a posar on era.")
+              "Per exportar el vídeo final, torna'l a posar on era o dins de la carpeta del projecte.")
     elif not proxy.exists() or proxy.stat().st_mtime < projecte.video.stat().st_mtime:
         print("Preparant la còpia lleugera del vídeo (només el primer cop)…")
         exporta.fes_proxy(projecte.video, proxy, progres=_barra("còpia"))
