@@ -3844,7 +3844,7 @@ function pintaTauler() {
   const falten = elements.filter((x) => votElement(x) === "").length;
   $("#falten").innerHTML = falten ? `Te'n falten <b>${falten}</b> per mirar` : "Ho tens tot mirat";
   pintaEstatRonda();
-  const sigDibuix = JSON.stringify([estilSub, estilTitol, paletaGrafics, estat.subtitols !== false, zoomVideo,
+  const sigDibuix = JSON.stringify([estilSub, paletaGrafics, estat.subtitols !== false, zoomVideo,
     P.estil_stickers || null]);
   const cont = $("#graella-tauler");
   const vius = new Set();
@@ -4037,29 +4037,27 @@ function pintaNotaCarta(c, alternativa) {
   requestAnimationFrame(() => ajustaAlcada(camp));
 }
 
-// El que es veu en el tros de la targeta: els gràfics que hi surten (el seu, en lloc del de la seva alternativa), les
-// línies dels subtítols, el títol, el b-roll, els stickers i el bloc de color.
+// El que es veu a la targeta: només la seva peça (les altres tenen la seva targeta), sobre el vídeo amb els subtítols
+// d'aquell moment. Un gràfic porta el seu bloc de color, si en té.
 function contextCarta(p) {
-  if (p.t == null) {
-    const d = p.tipus === "grafic" && dibuixosGrafics[p.id];
-    return { grafs: d ? [sencer(d)] : [], linies: [], titol: null, amaga: [], brolls: [], stickers: [], blocs: [] };
-  }
-  const [a, b] = [p.t0, p.t1];
-  const dins = (x0, x1) => x0 < b && x1 > a;
-  let grafs = graficsVisibles().filter((s) => dins(s.inici, s.final));
+  const res = { grafs: [], linies: [], amaga: [], brolls: [], stickers: [], blocs: [], zoom: null };
   if (p.tipus === "grafic") {
-    grafs = grafs.filter((s) => s.id !== p.id && !(p.g.grup && s.grup === p.g.grup));
-    const propi = p.s || (dibuixosGrafics[p.id] && sencer(dibuixosGrafics[p.id]));
-    if (propi) grafs.push(propi);
+    const d = dibuixosGrafics[p.id];
+    // Si un altre gràfic hi feia bloc, aquest anava a sota; sol, torna al seu lloc.
+    const propi = p.t == null ? d && sencer(d) : p.s ? { ...p.s, limits: d?.limits ?? p.s.limits } : d && sencer(d);
+    if (propi) res.grafs.push(propi);
+    if (propi?.bloc && p.t != null && paletaGrafics?.[propi.bloc]) {
+      res.blocs.push({ inici: propi.inici, final: propi.final, color: paletaGrafics[propi.bloc] });
+    }
   }
-  const titol = titolMuntatge && dins(titolMuntatge.inici, titolMuntatge.final) ? titolMuntatge : null;
-  const amaga = [...(titol && estilTitol?.amaga_subtitols ? [[titol.inici, titol.final]] : []),
-    ...grafs.filter((g) => g.amaga_subtitols).map((g) => [g.inici, g.final])];
-  return { grafs, titol, amaga,
-    linies: estat.subtitols !== false && estilSub ? liniesSub.filter((l) => dins(l.inici, l.final)) : [],
-    brolls: brollsMuntatge.filter((x) => dins(x.inici, x.fins ?? x.inici + x.durada)),
-    stickers: stickersMuntatge.map((st, k) => ({ ...st, k })).filter((st) => dins(st.inici, st.inici + st.durada)),
-    blocs: blocsMuntatge.filter((x) => dins(x.inici, x.final)) };
+  if (p.t == null) return res;
+  const dins = (x0, x1) => x0 < p.t1 && x1 > p.t0;
+  res.amaga = res.grafs.filter((g) => g.amaga_subtitols).map((g) => [g.inici, g.final]);
+  res.linies = estat.subtitols !== false && estilSub ? liniesSub.filter((l) => dins(l.inici, l.final)) : [];
+  if (p.tipus === "broll") res.brolls = [p.b];
+  if (p.tipus === "sticker") res.stickers = [{ ...p.st, k: stickersMuntatge.indexOf(p.st) }];
+  if (p.tipus === "zoom") res.zoom = p.k;
+  return res;
 }
 
 function capaCarta(c) {
@@ -4075,12 +4073,6 @@ function capaCarta(c) {
   const tlSub = window.TallatSubtitols && ctx.linies.length
     ? TallatSubtitols.construeix(ts, ctx.linies, estilSub, { familia: familiaCss(estilSub), amaga: ctx.amaga }) : null;
   if (tlSub) c.tls.push(tlSub);
-  if (window.TallatSubtitols && ctx.titol && estilTitol) {
-    const tt = capa();
-    c.tls.push(TallatSubtitols.titol(tt, ctx.titol, estilTitol, { familia: familiaCss({ font: estilTitol.font || estilSub?.font }) }));
-    // Com al vídeo: mentre surt el títol, els subtítols que el toquen s'aparten.
-    if (tlSub && !estilTitol.amaga_subtitols) TallatSubtitols.aparta(ts, tt, ctx.titol, tlSub);
-  }
   if (window.TallatGrafics && paletaGrafics && ctx.grafs.length) c.tls.push(TallatGrafics.construeix(capa(), ctx.grafs, paletaGrafics, OP_GRAFICS));
   c.stHost = capa("capa-st");
   // La marca de les peces que no es veuen soles: el so (unes ones) i el zoom (un marc).
@@ -4112,8 +4104,7 @@ function pintaClip(c, m) {
   for (const tl of c.tls) tl?.seek(m, false);
   const { el, ctx } = c;
   const media = TV.c === c ? TV.v : el.querySelector(".clip-imatge");
-  const k = trosDe(m);
-  const z = zoomsTram[k] ? zoomVideo : 1;
+  const z = ctx.zoom != null && trosDe(m) === ctx.zoom ? zoomVideo : 1;
   const bloc = ctx.blocs.find((b) => m >= b.inici && m < b.final);
   const e = bloc ? pasBloc(m, bloc.inici, bloc.final) : 0;
   const actius = ctx.brolls.filter((b) => m >= b.inici && m < (b.fins ?? b.inici + b.durada));
