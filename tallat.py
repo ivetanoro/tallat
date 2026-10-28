@@ -534,12 +534,14 @@ def ordre_grafics(args) -> None:
         try:
             pla = projecte.importa_imatges(pla)  # les imatges que són camins de fitxers, al projecte
             manera = "de-nou" if args.de_nou else args.accio
-            ronda = projecte.estat.get("ronda", 0) + 1  # cada pla que hi desa Claude és una ronda del tauler
-            projecte.estat["grafics"] = grafics.fusiona(projecte.estat.get("grafics") or [], pla,
+            actuals = projecte.estat.get("grafics") or []
+            # Cada pla que hi desa Claude és una ronda del tauler (menys els retocs dels que acaba de proposar).
+            ronda = grafics.ronda_del_pla(actuals, pla, projecte.estat.get("ronda", 0), manera)
+            projecte.estat["grafics"] = grafics.fusiona(actuals, pla,
                                                         len(projecte.dades["paraules"]), manera, ronda)
         except ValueError as e:
             sys.exit(str(e))
-        if any(g.get("ronda") == ronda for g in projecte.estat["grafics"]):
+        if ronda > projecte.estat.get("ronda", 0) and any(g.get("ronda") == ronda for g in projecte.estat["grafics"]):
             projecte.estat["ronda"] = ronda
             # Els «Potser» i les notes de les altres peces (zooms, b-roll, sons) ja s'han atès en aquesta ronda.
             projecte.estat["vots"] = {}

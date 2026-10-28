@@ -73,6 +73,18 @@ class TestElTauler(unittest.TestCase):
         teu = grafics.fusiona(grafics.neteja_llista([g(id="g1", origen="teu")]), [g(id="g1", text="altre")], manera="canvia", ronda=3)
         self.assertEqual(teu[0]["origen"], "teu")
 
+    def test_retocar_els_que_acabes_de_proposar_no_es_una_ronda_nova(self):
+        actuals = grafics.neteja_llista([g(id="g1", text="a", ronda=1, novetat="nou"),
+                                         g(id="g2", paraula=1, text="b", ronda=1, novetat="nou", vot="potser")])
+        retoc = [g(id="g1", text="a", posicio="baix")]
+        self.assertEqual(grafics.ronda_del_pla(actuals, retoc, 1, "canvia"), 1)
+        self.assertEqual(grafics.fusiona(actuals, retoc, manera="canvia", ronda=1)[0]["novetat"], "nou")
+        # Una ronda nova: un pla nou, un gràfic que ja ha votat o un de nou.
+        self.assertEqual(grafics.ronda_del_pla(actuals, retoc, 1, "proposa"), 2)
+        self.assertEqual(grafics.ronda_del_pla(actuals, [g(id="g2", paraula=1, text="c")], 1, "canvia"), 2)
+        self.assertEqual(grafics.ronda_del_pla(actuals, [g(paraula=2, text="d")], 1, "canvia"), 2)
+        self.assertEqual(grafics.ronda_del_pla([], [g(text="e")], 0, "canvia"), 1)
+
     def test_de_dues_opcions_al_video_nomes_n_hi_surt_una(self):
         inicis, finals = {0: 0.0, 1: 0.5, 2: 1.0}, {0: 0.4, 1: 0.9, 2: 1.4}
         pla = grafics.neteja_llista([g(id="g1", paraula=1, grup="a1", text="una"),

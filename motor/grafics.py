@@ -289,7 +289,10 @@ def fusiona(actuals: list[dict], pla: list, paraules: int | None = None, manera:
             if _contingut(g) == _contingut(vell):
                 g.update({k: vell[k] for k in DE_LA_REVISIO})
             else:
-                g.update(estat="proposat", nota="", vot="", ronda=ronda, novetat="canviat",
+                # Un de nou d'aquesta mateixa ronda que Claude encara retoca (el lloc, després de mirar-ne el
+                # fotograma) continua sent nou.
+                nou = vell.get("ronda") == ronda and vell.get("novetat") == "nou"
+                g.update(estat="proposat", nota="", vot="", ronda=ronda, novetat="nou" if nou else "canviat",
                          origen=vell["origen"] or "claude")
             tocats.add(g["id"])
         else:
@@ -299,6 +302,17 @@ def fusiona(actuals: list[dict], pla: list, paraules: int | None = None, manera:
         nous.append(g)
     queden = [g for g in actuals if g["id"] not in tocats and (manera == "canvia" or g["estat"] != "proposat")]
     return sorted(queden + nous, key=lambda g: (g["paraula"] if g["paraula"] is not None else 10 ** 9, g["id"]))
+
+
+def ronda_del_pla(actuals: list[dict], pla: list, ronda: int, manera: str) -> int:
+    """El número de ronda d'un pla que desa Claude: el següent, tret que només retoqui (amb «canvia») els que
+    acaba de proposar en aquesta ronda i que la persona encara no ha votat. Això no és una ronda nova."""
+    per_id = {g.get("id"): g for g in actuals}
+    vells = [per_id.get(g.get("id")) if isinstance(g, dict) else None for g in pla]
+    if manera == "canvia" and ronda > 0 and vells and all(
+            v is not None and v.get("ronda") == ronda and not v.get("vot") for v in vells):
+        return ronda
+    return ronda + 1
 
 
 # --- On van, al muntatge -------------------------------------------------------------------------
