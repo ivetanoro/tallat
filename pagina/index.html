@@ -736,6 +736,7 @@
           <span id="tauler-feina-text">Construint…</span>
           <span class="barra-progres"><span id="tauler-feina-progres"></span></span>
         </div>
+        <button class="boto" id="afegeix-peca" title="Posa-hi un sticker, una imatge o un vídeo teu">+ Afegeix</button>
         <button class="boto principal" id="tauler-exporta">Exporta</button>
       </div>
     </header>
@@ -961,7 +962,39 @@
     </section>
   </div>
 
+  <!-- El tauler, «+ Afegeix»: una peça teva (un sticker, o una imatge o un vídeo que ocupa la pantalla). Primer què
+       és i el fitxer; després, la paraula on surt. -->
+  <div class="full afegeix-peca" id="full-afegeix" role="dialog" aria-modal="true" aria-labelledby="titol-afegeix" hidden>
+    <div class="cap-full">
+      <h2 id="titol-afegeix">Afegeix una peça teva</h2>
+      <span class="detall"></span>
+      <button class="icona" id="tanca-afegeix" title="Tanca" aria-label="Tanca">
+        <svg viewBox="0 0 20 20"><path d="m5.5 5.5 9 9m0-9-9 9"/></svg>
+      </button>
+    </div>
+    <div id="afegeix-que">
+      <div class="opcions-export">
+        <button class="opcio-export" data-afegeix="sticker">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12.5V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h5.5z"/><path d="M20 12.5 12.5 20v-4.5a3 3 0 0 1 3-3z"/></svg>
+          <strong>Un sticker</strong><span>Una imatge petita a sobre del vídeo (millor un PNG sense fons)</span>
+        </button>
+        <button class="opcio-export" data-afegeix="broll">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m3.5 15 4.5-4 4 3.5 3-2.5 5.5 4.5"/><circle cx="15.5" cy="9" r="1.5"/></svg>
+          <strong>Una imatge o un vídeo</strong><span>Ocupa tota la pantalla una estona</span>
+        </button>
+      </div>
+    </div>
+    <div id="afegeix-on" hidden>
+      <div class="afegeix-fitxer"><img id="afegeix-mostra" alt="" hidden><span id="afegeix-nom"></span>
+        <button class="enllac" id="afegeix-un-altre">Un altre fitxer</button></div>
+      <p class="detall">Toca la paraula on ha de sortir.</p>
+      <div class="frases-afegeix" id="frases-afegeix"></div>
+    </div>
+  </div>
+
   <input type="file" id="fitxer-broll" accept="image/*,video/*" hidden>
+  <input type="file" id="fitxer-peca" hidden>
+  <input type="file" id="fitxer-referencia" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
   <input type="file" id="fitxer-grafic" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   <input type="file" id="fitxer-font" accept=".ttf,.otf,.woff,.woff2" hidden>
   <div class="avis-flotant" id="avis-flotant" role="status" aria-live="polite"></div>

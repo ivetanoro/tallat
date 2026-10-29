@@ -489,24 +489,24 @@ class Projecte:
         self._desa_instruccions(base, llista)
         return ins
 
-    def afegeix_broll(self, paraula: int, origen: Path) -> dict:
-        """Un b-roll posat a la pàgina (Vesteix) en una paraula: una instrucció a mà amb `pagina` i el seu
-        fitxer. Si el fitxer no es pot preparar, no en queda res."""
+    def afegeix_broll(self, paraula: int, origen: Path, tipus: str = "broll") -> dict:
+        """Un b-roll (o un sticker, amb `tipus`) posat a la pàgina (Vesteix) en una paraula: una instrucció a mà
+        amb `pagina` i el seu fitxer. Si el fitxer no es pot preparar, no en queda res."""
         if not 0 <= paraula < len(self.dades["paraules"]):
             raise ValueError(f"No hi ha cap paraula amb el número {paraula}")
-        ins = self.afegeix_instruccio("broll", paraula, "b-roll")
+        ins = self.afegeix_instruccio(tipus, paraula, "b-roll" if tipus == "broll" else "sticker")
         llista = self.instruccions()
         next(i for i in llista if i["id"] == ins["id"])["pagina"] = True
         self._desa_instruccions(self.carpeta_instruccions(), llista)
         try:
-            return self.assigna_broll(ins["id"], origen)
+            return self.assigna_recurs(ins["id"], origen)
         except Exception:
             self.esborra_broll(ins["id"])
             raise
 
     def esborra_broll(self, iid: str) -> None:
-        """Treu del tot un b-roll posat a la pàgina (amb els seus fitxers). Els de les instruccions de veu no
-        s'esborren: es descarten (i es poden tornar a posar)."""
+        """Treu del tot un b-roll o un sticker posat a la pàgina (amb els seus fitxers). Els de les instruccions de
+        veu no s'esborren: es descarten (i es poden tornar a posar)."""
         base = self.carpeta_instruccions()
         llista = self.instruccions()
         ins = next((i for i in llista if i["id"] == iid), None)

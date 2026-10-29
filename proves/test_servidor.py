@@ -395,11 +395,13 @@ class TestServidor(unittest.TestCase):
         grafics_ = [{"id": "g1", "tipus": "frase", "paraula": 1, "text": "una", "grup": "a1"},
                     {"id": "g2", "tipus": "etiqueta", "paraula": 1, "text": "dues", "grup": "a1", "vot": "potser", "nota": "més gran"}]
         nou = {**dades["estat"], "grafics": grafics_, "ronda": 1,
-               "vots": {"broll:i1": {"vot": "potser", "nota": " més  curt ", "nom": "B-roll", "paraula": 1}, "zoom:x": {"vot": "no"}}}
+               "vots": {"broll:i1": {"vot": "potser", "nota": " més  curt ", "nom": "B-roll", "paraula": 1,
+                                     "referencies": ["0123abcd.png", "../fora.png"]}, "zoom:x": {"vot": "no"}}}
         estat, cos = self.peticio("POST", "/api/estat", nou, self.bones())
         self.assertEqual(estat, 200)
         r = json.loads(cos)
-        self.assertEqual(r["estat"]["vots"], {"broll:i1": {"vot": "potser", "nota": "més curt", "nom": "B-roll", "paraula": 1}})
+        self.assertEqual(r["estat"]["vots"], {"broll:i1": {"vot": "potser", "nota": "més curt", "nom": "B-roll", "paraula": 1,
+                                                           "referencies": ["0123abcd.png"]}})
         self.assertEqual(r["estat"]["grafics"][1]["estat"], "canvia")
         self.assertEqual([g["id"] for g in r["grafics"]], ["g1"])  # al vídeo, només una de les dues
         self.assertEqual([g["id"] for g in r["grafics_alternatives"]], ["g2"])  # l'altra, per al tauler
@@ -447,6 +449,38 @@ class TestServidor(unittest.TestCase):
         self.assertEqual(sum(1 for i in Projecte(self.carpeta).instruccions() if i.get("pagina")), 1)
         # Els de les instruccions de veu no s'esborren; els de la pàgina, sí (amb els seus fitxers).
         self.assertEqual(self.peticio("POST", "/api/broll/esborra", {"instruccio": "i1"}, self.bones())[0], 400)
+        estat, cos = self.peticio("POST", "/api/broll/esborra", {"instruccio": nou["id"]}, self.bones())
+        self.assertEqual(estat, 200)
+        self.assertFalse(any(i.get("pagina") for i in json.loads(cos)["instruccions"]))
+        self.assertFalse((self.carpeta / nou["fitxer"]).exists())
+
+    def test_una_imatge_de_referencia_per_a_la_nota(self):
+        bones = {k: v for k, v in self.bones().items() if k != "Content-Type"}
+        self.assertEqual(self.peticio("POST", "/api/referencia?nom=x.exe", b"hola", bones)[0], 400)
+        estat, cos = self.peticio("POST", "/api/referencia?nom=com-aquesta.jpeg", b"una foto", bones)
+        self.assertEqual(estat, 200, cos)
+        nom = json.loads(cos)["imatge"]
+        self.assertTrue(nom.endswith(".jpg"))
+        self.assertEqual(self.peticio("GET", f"/imatges-grafics/{nom}")[1], "una foto")
+
+    def test_un_sticker_posat_des_del_tauler(self):
+        import shutil
+        import subprocess
+        if not shutil.which("ffmpeg"):
+            self.skipTest("cal ffmpeg")
+        foto = self.carpeta / "cor.png"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64", "-frames:v", "1", str(foto)],
+                       check=True)
+        bones = self.bones(**{"Content-Type": "application/octet-stream"})
+        self.assertEqual(self.peticio("POST", "/api/broll/puja?paraula=3&tipus=sticker&nom=x.mp4", b"hola", bones)[0], 400)
+        estat, cos = self.peticio("POST", "/api/broll/puja?paraula=3&tipus=sticker&nom=cor.png", foto.read_bytes(), bones)
+        self.assertEqual(estat, 200, cos)
+        r = json.loads(cos)
+        nou = next(i for i in r["instruccions"] if i.get("pagina"))
+        self.assertEqual((nou["tipus"], nou["ancora"], nou["estat"]), ("sticker", 3, "acceptada"))
+        self.assertTrue((self.carpeta / nou["fitxer"]).exists())
+        self.assertIn(nou["id"], [s["id"] for s in r["stickers"]])
+        # Treure'l del tauler l'esborra (amb el fitxer), com el b-roll posat des de la pàgina.
         estat, cos = self.peticio("POST", "/api/broll/esborra", {"instruccio": nou["id"]}, self.bones())
         self.assertEqual(estat, 200)
         self.assertFalse(any(i.get("pagina") for i in json.loads(cos)["instruccions"]))

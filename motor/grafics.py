@@ -96,10 +96,11 @@ ENTRADA_PUNT = 0.35  # quan surt el primer punt d'una llista sense paraules (des
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_FRASE = 0.7    # un silenci així també tanca una frase
 CAMPS = ("id", "tipus", "paraula", "fins", "durada", "text", "punts", "de", "xifra", "forma", "costat", "imatge",
-         "estil", "posicio", "amaga_subtitols", "bloc", "motiu", "grup", "estat", "nota", "vot", "ronda", "novetat",
-         "origen")
+         "estil", "posicio", "amaga_subtitols", "bloc", "motiu", "grup", "estat", "nota", "referencies", "vot", "ronda",
+         "novetat", "origen")
 # El que no és el gràfic sinó el que se'n pensa (si Claude torna un gràfic amb això canviat, no l'ha canviat).
-DE_LA_REVISIO = ("id", "estat", "nota", "vot", "ronda", "novetat", "origen")
+DE_LA_REVISIO = ("id", "estat", "nota", "referencies", "vot", "ronda", "novetat", "origen")
+MAX_REFERENCIES = 4  # les imatges de referència que la persona hi posa amb la nota («fes-ho com aquesta»)
 # El bloc de color, en px de 1080 × 1920: la targeta on va el vídeo (4:5, a baix i centrada) i el tros del
 # vídeo que s'hi veu (de dalt, on sol haver-hi la cara). El vídeo s'hi encongeix i en torna a sortir en
 # ANIMACIO_BLOC segons. La mateixa geometria a l'export (motor/exporta.py) i a la pàgina (app.js).
@@ -213,6 +214,7 @@ def net(g: dict, paraules: int | None = None) -> dict:
     grup = str(g["grup"]) if isinstance(g.get("grup"), (str, int)) and not isinstance(g.get("grup"), bool) else ""
     sortida["grup"] = grup if GRUP.fullmatch(grup) else None
     sortida["nota"] = _text(g.get("nota"), "nota", MIDA_NOTA, retalla=True)
+    sortida["referencies"] = referencies_netes(g.get("referencies"))
     sortida["vot"] = g.get("vot") if g.get("vot") in VOTS else ""
     ronda = g.get("ronda")
     sortida["ronda"] = ronda if isinstance(ronda, int) and not isinstance(ronda, bool) and 0 < ronda < 10 ** 6 else None
@@ -221,12 +223,21 @@ def net(g: dict, paraules: int | None = None) -> dict:
     estat = g.get("estat") if g.get("estat") in ESTATS else "proposat"
     if sortida["vot"] == "no":
         estat = "tret"
-    elif sortida["vot"] == "potser" or (sortida["vot"] == "si" and sortida["nota"]):
+    elif sortida["vot"] == "potser" or (sortida["vot"] == "si" and (sortida["nota"] or sortida["referencies"])):
         estat = "canvia"
     elif sortida["vot"] == "si":
         estat = "mantingut"
     sortida["estat"] = estat
     return sortida
+
+
+def referencies_netes(valor) -> list[str]:
+    """Les imatges de referència d'una peça: noms d'imatges ja copiades al projecte, sense repetir."""
+    noms = []
+    for nom in valor if isinstance(valor, list) else []:
+        if imatge_valida(nom) and nom not in noms:
+            noms.append(nom)
+    return noms[:MAX_REFERENCIES]
 
 
 def neteja_llista(llista, paraules: int | None = None) -> list[dict]:
@@ -292,12 +303,12 @@ def fusiona(actuals: list[dict], pla: list, paraules: int | None = None, manera:
                 # Un de nou d'aquesta mateixa ronda que Claude encara retoca (el lloc, després de mirar-ne el
                 # fotograma) continua sent nou.
                 nou = vell.get("ronda") == ronda and vell.get("novetat") == "nou"
-                g.update(estat="proposat", nota="", vot="", ronda=ronda, novetat="nou" if nou else "canviat",
-                         origen=vell["origen"] or "claude")
+                g.update(estat="proposat", nota="", referencies=[], vot="", ronda=ronda,
+                         novetat="nou" if nou else "canviat", origen=vell["origen"] or "claude")
             tocats.add(g["id"])
         else:
             g["id"] = _id_nou(ids)
-            g.update(estat="proposat", nota="", vot="", ronda=ronda, novetat="nou", origen="claude")
+            g.update(estat="proposat", nota="", referencies=[], vot="", ronda=ronda, novetat="nou", origen="claude")
         ids.add(g["id"])
         nous.append(g)
     queden = [g for g in actuals if g["id"] not in tocats and (manera == "canvia" or g["estat"] != "proposat")]

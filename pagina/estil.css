@@ -614,6 +614,26 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
 
 /* --- Exporta: l'esborrany, el vídeo final, els altres editors i els vídeos fets ------------------ */
 .full.exporta { width: min(520px, calc(100vw - var(--e8))); max-height: calc(100vh - var(--e8)); overflow-y: auto; }
+/* «+ Afegeix» (el tauler): què és, el fitxer i la paraula on surt. */
+.full.afegeix-peca { width: min(560px, calc(100vw - var(--e8))); max-height: calc(100vh - var(--e8)); overflow-y: auto; }
+#afegeix-on { margin-top: var(--e4); }
+.afegeix-fitxer { display: flex; align-items: center; gap: var(--e3); font-size: var(--t-ui); }
+.afegeix-fitxer img { width: 40px; height: 40px; object-fit: contain; border-radius: var(--radi-petit); background: var(--omplir); }
+.afegeix-fitxer span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.afegeix-fitxer .enllac { margin-left: auto; flex: none; font-size: var(--t-peu); }
+#afegeix-on > .detall { margin: var(--e3) 0 var(--e2); }
+.frases-afegeix { max-height: min(50vh, 420px); overflow-y: auto; overscroll-behavior: contain; margin: 0 calc(-1 * var(--e2));
+  padding: 0 var(--e2); }
+.frase-afegeix { display: flex; gap: var(--e3); padding: 5px 0; border-top: 0.5px solid var(--linia); line-height: 1.6; }
+.frase-afegeix:first-child { border-top: 0; }
+.frase-afegeix .temps { flex: none; width: 2.6em; padding-top: 1px; color: var(--accent-text); font-size: var(--t-peu);
+  font-weight: 600; font-variant-numeric: tabular-nums; }
+.frase-afegeix .paraules { min-width: 0; font-size: var(--t-ui); }
+.frase-afegeix button {
+  padding: 1px 2px; margin: 0 -2px; border: 0; border-radius: 4px; background: none; color: var(--text); font: inherit;
+  cursor: pointer;
+}
+.frase-afegeix button:hover, .frase-afegeix button:focus-visible { background: var(--accent); color: #fff; outline: none; }
 .cap-full { display: flex; align-items: center; gap: var(--e3); }
 .cap-full h2 { font-size: var(--t-titol); }
 .cap-full .detall { flex: 1; margin: 0; font-variant-numeric: tabular-nums; }
@@ -1612,6 +1632,24 @@ body.vestint.amb-tauler .reproductor, body.vestint.amb-tauler .vesteix-dreta { d
 .carta-nota[hidden] { display: none; }
 .carta-nota .enllac { font-size: var(--t-peu); }
 .nota-carta { width: 100%; min-height: 44px; resize: none; font-size: var(--t-petit); line-height: 1.4; background: var(--proposta-suau); }
+.carta-nota { display: flex; flex-direction: column; gap: var(--e2); }
+.peu-nota { display: flex; flex-wrap: wrap; gap: 2px var(--e3); }
+/* Les imatges de referència de la nota: petites, i la creu per treure-les surt en passar-hi per sobre. */
+.refs-carta { display: flex; flex-wrap: wrap; gap: 6px; }
+.ref-carta { position: relative; width: 44px; height: 44px; border-radius: var(--radi-petit); overflow: hidden;
+  box-shadow: 0 0 0 0.5px var(--linia); background: var(--omplir); }
+.ref-carta img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.treu-ref {
+  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; background: rgba(29, 29, 31, 0.72); color: #fff; cursor: pointer;
+  opacity: 0; transition: opacity 120ms ease-out;
+}
+.treu-ref svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.ref-carta:hover .treu-ref, .treu-ref:focus-visible { opacity: 1; }
+@media (hover: none) { .treu-ref { opacity: 1; } }
+/* Deixar anar una imatge a la targeta (una referència) i la targeta que s'acaba de posar. */
+.carta-tauler.deixa-aqui { box-shadow: 0 0 0 2px var(--accent), 0 1px 3px rgba(0, 0, 0, 0.05); }
+.carta-tauler.llum { animation: llum-nota 1.4s var(--molla); }
 .tria-alternativa { color: var(--accent-text); }
 
 /* Dues opcions per al mateix moment: juntes, en un requadre. */

@@ -29,6 +29,8 @@ import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from motor import grafics
+
 MARGE = 0.04          # segons d'aire abans i després de cada tros conservat
 MAXIM_ALLARGA = 1.5   # com a molt, l'última paraula s'allarga això si la veu continua
 PAUSA_MAXIMA = 0.35   # segons: els silencis entre paraules no duraran més que això
@@ -47,7 +49,7 @@ MIDA_NOTA_VOT = 600
 
 
 def vots_nets(vots) -> dict:
-    """Els vots del tauler de les peces que no són gràfics, comprovats: {clau: {vot, nota}}."""
+    """Els vots del tauler de les peces que no són gràfics, comprovats: {clau: {vot, nota, referencies}}."""
     sortida = {}
     for clau, v in (vots.items() if isinstance(vots, dict) else []):
         if not (isinstance(clau, str) and 0 < len(clau) <= 60 and isinstance(v, dict)) or v.get("vot") not in ("si", "potser"):
@@ -56,7 +58,7 @@ def vots_nets(vots) -> dict:
         paraula = v.get("paraula")
         paraula = paraula if isinstance(paraula, int) and not isinstance(paraula, bool) and paraula >= 0 else None
         sortida[clau] = {"vot": v["vot"], "nota": nota, "nom": " ".join(str(v.get("nom") or "").split())[:80],
-                         "paraula": paraula}
+                         "paraula": paraula, "referencies": grafics.referencies_netes(v.get("referencies"))}
         if len(sortida) >= 500:
             break
     return sortida

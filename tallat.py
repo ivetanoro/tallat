@@ -593,10 +593,12 @@ def ordre_grafics(args) -> None:
               f"  {g.get('estil') or '(marca)'}  {estat} · {vot}{extra}  «{text}»" + (f" [{punts}]" if punts else ""))
         if g["nota"]:
             print(f"        nota: «{g['nota']}»")
+        for nom in g.get("referencies") or []:
+            print(f"        referència (mira-la, i que s'hi assembli): {projecte.carpeta_imatges / nom}")
     altres = projecte.estat.get("vots") or {}
-    altres = {k: v for k, v in altres.items() if v["vot"] == "potser" or v["nota"]}
+    altres = {k: v for k, v in altres.items() if v["vot"] == "potser" or v["nota"] or v.get("referencies")}
     if altres:
-        print("Les altres peces del tauler amb un POTSER o una nota (b-roll, zooms i sons):")
+        print("Les altres peces del tauler amb un POTSER, una nota o una referència (b-roll, stickers, zooms i sons):")
         paraules = projecte.dades["paraules"]
         for clau, v in altres.items():
             on = ""
@@ -604,6 +606,8 @@ def ordre_grafics(args) -> None:
                 k = v["paraula"]
                 on = f"  paraula {k}, a «{' '.join(w['text'].strip() for w in paraules[k:k + 6])}»"
             print(f"  {v.get('nom') or clau}{on}  {vots[v['vot']]}" + (f"  nota: «{v['nota']}»" if v["nota"] else ""))
+            for nom in v.get("referencies") or []:
+                print(f"        referència: {projecte.carpeta_imatges / nom}")
 
 
 NOMS_MARCA = {"compte": "El compte", "public": "Qui el mira", "referencia": "Reel de referència",

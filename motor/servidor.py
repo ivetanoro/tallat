@@ -37,10 +37,12 @@ RUTES_DEL_PROJECTE = {"/api/estat", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
-                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/notes", "/api/estil/a-tots"}
+                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/notes", "/api/estil/a-tots",
+                      "/api/referencia"}
 mimetypes.add_type("audio/mp4", ".m4a")  # Python diu «audio/mp4a-latm», que els navegadors no reprodueixen
 mimetypes.add_type("audio/wav", ".wav")
-RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge"}  # el cos és el fitxer mateix
+RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge",
+                   "/api/referencia"}  # el cos és el fitxer mateix
 
 
 def clau_de(projecte: Projecte) -> str:
@@ -621,6 +623,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._puja_broll(projecte)
             if ruta == "/api/grafics/imatge":
                 return self._puja_imatge_grafic(projecte)
+            if ruta == "/api/referencia":
+                return self._puja_referencia()
             if ruta == "/api/exports/carpeta":
                 return self._carpeta_exports(projecte)
             if ruta == "/api/marca/font":
@@ -819,10 +823,13 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             iid = (consulta.get("instruccio") or [""])[0]
             nom = Path((consulta.get("nom") or ["fitxer"])[0]).name
             mida = int(self.headers.get("Content-Length") or 0)
-            # Vesteix: un b-roll nou, a la paraula on era el vídeo (en lloc d'una instrucció que ja hi era).
+            # El tauler: un b-roll o un sticker nou en una paraula (en lloc d'una instrucció que ja hi era).
             paraula = (consulta.get("paraula") or [""])[0]
             paraula = int(paraula) if paraula.isdigit() and not iid else None
-            if not (broll.es_compatible(Path(nom)) or (paraula is None and stickers.es_compatible(Path(nom)))):
+            sticker = paraula is not None and (consulta.get("tipus") or [""])[0] == "sticker"
+            if sticker and not stickers.es_compatible(Path(nom)):
+                return self._no_permesa(HTTPStatus.BAD_REQUEST, "Un sticker ha de ser una imatge PNG, WebP, GIF o SVG")
+            if not sticker and not (broll.es_compatible(Path(nom)) or (paraula is None and stickers.es_compatible(Path(nom)))):
                 return self._no_permesa(HTTPStatus.BAD_REQUEST, "Aquest tipus de fitxer no serveix: ha de ser un vídeo o una imatge")
             if not 0 < mida <= MIDA_MAXIMA_PUJADA:
                 return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "El fitxer és buit o massa gran (2 GB com a màxim)")
@@ -855,7 +862,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                         return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
                     try:
                         if paraula is not None:
-                            obert["p"].afegeix_broll(paraula, temporal)
+                            obert["p"].afegeix_broll(paraula, temporal, "sticker" if sticker else "broll")
                         else:
                             obert["p"].assigna_recurs(iid, temporal)  # en fa una còpia al projecte
                     except KeyError:
@@ -903,6 +910,28 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
                 projecte.desa()
                 return self._json(instantania())
+
+        def _puja_referencia(self):
+            """Rep una imatge de referència per a la nota d'una peça del tauler («fes-ho com aquesta»): la copia
+            a la carpeta d'imatges del projecte i en torna el nom. La pàgina l'afegeix a la peça."""
+            nom = Path((parse_qs(urlparse(self.path).query).get("nom") or ["imatge"])[0]).name
+            mida = int(self.headers.get("Content-Length") or 0)
+            if Path(nom).suffix.lower() not in grafics.FORMATS_IMATGE:
+                return self._no_permesa(HTTPStatus.BAD_REQUEST, "Ha de ser una imatge PNG, JPG, WebP o GIF")
+            if not 0 < mida <= MIDA_MAXIMA_IMATGE:
+                return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "La imatge és buida o massa gran (60 MB com a màxim)")
+            contingut = self.rfile.read(mida)
+            if len(contingut) != mida:
+                self.close_connection = True
+                return
+            with bloqueig:
+                projecte = obert["p"]
+                if self.headers.get("X-Tallat-Projecte") != clau_de(projecte):
+                    return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
+                with tempfile.TemporaryDirectory() as temporal:
+                    fitxer = Path(temporal) / f"imatge{Path(nom).suffix.lower()}"
+                    fitxer.write_bytes(contingut)
+                    return self._json({"imatge": projecte.importa_imatge(fitxer)})
 
         def _puja_font(self):
             """Rep una font (.ttf, .otf, .woff o .woff2) i la fa servir per als subtítols."""
