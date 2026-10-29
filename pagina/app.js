@@ -3991,7 +3991,17 @@ function cartaTauler(p, sigDibuix, { alternativa = null } = {}) {
   pintaAccionsCarta(c, alternativa);
   pintaNotaCarta(c, !!alternativa);
   const ctx = contextCarta(p);
-  const sig = sigDibuix + JSON.stringify([p.t0, p.t1, p.tp, ctx, p.tipus === "grafic" ? dibuixosGrafics[p.id] : null]);
+  // Si només ha canviat on és el sticker (l'has arrossegat), es mou al seu lloc nou i prou: ni es refà la targeta ni
+  // el vídeo torna a començar.
+  const sense = { ...ctx, stickers: ctx.stickers.map(({ x, y, ...st }) => st) };
+  const sig = sigDibuix + JSON.stringify([p.t0, p.t1, p.tp, sense, p.tipus === "grafic" ? dibuixosGrafics[p.id] : null]);
+  if (sig === c.sig && JSON.stringify(ctx.stickers) !== JSON.stringify(c.ctx?.stickers)) {
+    c.ctx = ctx;
+    for (const st of ctx.stickers) {
+      const img = c.stHost?.querySelector(`[data-id="${CSS.escape(st.id)}"]`);
+      if (img) situaSticker(img, st);
+    }
+  }
   if (sig !== c.sig) {
     c.sig = sig;
     c.ctx = ctx;
