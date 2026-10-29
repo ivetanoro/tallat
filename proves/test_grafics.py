@@ -115,6 +115,16 @@ class TestTipusNous(unittest.TestCase):
                 grafics.net(dolent)
             self.assertIn(paraula, str(e.exception))
 
+    def test_el_ratllat_canvia_quan_es_diu_la_paraula_nova(self):
+        rt = grafics.net({"tipus": "ratllat", "paraula": 1, "text": "no és",
+                          "punts": ["mandra", {"text": "cansament", "paraula": 4}, "i tres"]})
+        self.assertEqual([p["text"] for p in rt["punts"]], ["mandra", "cansament"])  # només dos
+        with self.assertRaises(ValueError) as e:
+            grafics.net({"tipus": "ratllat", "paraula": 1, "punts": ["sol"]})
+        self.assertIn("dos", str(e.exception))
+        situat, = grafics.situa(grafics.neteja_llista([rt]), {1: 1.0, 4: 2.2}, {}, 10.0, [])
+        self.assertEqual((situat["punts"][1]["t"], situat["amaga_subtitols"], situat["posicio"]), (2.2, True, "dalt"))
+
     def test_el_comentari_que_es_respon(self):
         com = grafics.net({"tipus": "comentari", "paraula": 0, "de": "marta", "text": "I això com es fa?"})
         self.assertEqual((com["de"], com["text"], com["estat"]), ("marta", "I això com es fa?", "proposat"))

@@ -1,5 +1,5 @@
-/* tallat · els gràfics del pla: frase clau, etiqueta, llista, crida, notificació, comentari, xat, número,
- * anotació, web (una captura dins d'una finestra) i ventall (unes quantes fotos).
+/* tallat · els gràfics del pla: frase clau, etiqueta, ratllat, llista, crida, notificació, comentari, xat,
+ * número, anotació, web (una captura dins d'una finestra) i ventall (unes quantes fotos).
  *
  * Com els subtítols, el mateix codi els dibuixa a la vista prèvia i al vídeo final (dins de la
  * composició de HyperFrames). Treballa sobre una caixa de 1080 × 1920 px; qui el fa servir l'escala.
@@ -14,7 +14,7 @@
  * d'Instagram sense els subtítols. El gràfic no en surt mai.
  * `paleta`: {text, principal, destacat, secundari, clar, fosc, lletra_titols, lletra_text, lletra_accent}.
  * A la frase i a la crida, el que va *entre asteriscs* surt destacat. La notificació porta qui l'envia
- * (`de`), el comentari qui l'ha escrit (`de`), el xat els missatges a `punts` (cadascun amb `costat`: rebut o enviat), el número la `xifra`
+ * (`de`), el comentari qui l'ha escrit (`de`), el ratllat el que es ratlla i el que hi va (els dos `punts`), el xat els missatges a `punts` (cadascun amb `costat`: rebut o enviat), el número la `xifra`
  * ({abans, valor, decimals, despres, milers}) i l'anotació la `forma` (cercle, subratllat o fletxa) i el
  * `costat` on va. L'anotació s'escriu amb la lletra de mà i el color secundari de la marca.
  * La web porta la captura a `imatge` (i l'adreça de la barra a `text`); el ventall, les fotos als `punts`
@@ -50,7 +50,8 @@
 }
 .tg-scrapbook .tg-clau { font-style: normal; }
 .tg-scrapbook.tg-frase .tg-cos::before, .tg-scrapbook.tg-llista .tg-cos::before, .tg-scrapbook.tg-crida .tg-cos::before,
-.tg-scrapbook.tg-notificacio .tg-cos::before, .tg-scrapbook.tg-comentari .tg-cos::before, .tg-scrapbook.tg-web .tg-cos::before {
+.tg-scrapbook.tg-notificacio .tg-cos::before, .tg-scrapbook.tg-comentari .tg-cos::before, .tg-scrapbook.tg-web .tg-cos::before,
+.tg-scrapbook.tg-ratllat .tg-cos::before {
   content: ""; position: absolute; left: 50%; top: -24px; width: 190px; height: 48px; margin-left: -95px;
   background: var(--tg-cinta); rotate: 3deg;
 }
@@ -163,6 +164,43 @@
   color: var(--tg-text); background: none; box-shadow: none; border-radius: 0; padding: 26px 0;
   border-top: 3px solid var(--tg-text); border-bottom: 3px solid var(--tg-text); text-shadow: 0 2px 14px var(--tg-ombra);
 }
+
+/* El ratllat: el que es diu primer, que es ratlla, i a sota el que hi va, més gran. */
+.tg-ratllat .tg-cos {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  font-family: var(--tg-f-titols); font-weight: 700; color: var(--tg-text); letter-spacing: -0.01em;
+}
+.tg-rt-titol { font-size: 46px; font-weight: 600; line-height: 1.1; margin-bottom: 6px; opacity: 0.85; }
+.tg-vell { position: relative; font-size: 86px; line-height: 1.06; }
+.tg-ratlla {
+  position: absolute; left: -5%; right: -5%; top: 54%; height: 13px; margin-top: -6px; border-radius: 7px;
+  background: var(--tg-destacat); transform-origin: 0 50%; rotate: -3deg;
+}
+.tg-nou { font-size: 118px; line-height: 1.02; letter-spacing: -0.02em; color: var(--tg-destacat); }
+.tg-net.tg-ratllat .tg-cos { text-shadow: 0 4px 22px var(--tg-ombra); }
+.tg-mac.tg-ratllat .tg-cos, .tg-scrapbook.tg-ratllat .tg-cos { color: var(--tg-fosc); background: var(--tg-clar); text-shadow: none; }
+.tg-mac.tg-ratllat .tg-cos {
+  font-family: var(--tg-f-text); padding: 38px 64px 46px; border-radius: 44px;
+  box-shadow: 0 30px 70px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia);
+}
+.tg-scrapbook.tg-ratllat .tg-cos {
+  font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); font-weight: 400; padding: 46px 64px 42px;
+  border-radius: 6px; rotate: -2deg; box-shadow: 8px 10px 0 var(--tg-ombra-suau);
+}
+/* Sobre la targeta clara, la paraula nova va amb un marcador del color principal (el destacat no sempre s'hi llegeix). */
+.tg-mac.tg-ratllat .tg-nou, .tg-scrapbook.tg-ratllat .tg-nou { color: inherit; }
+.tg-mac.tg-ratllat .tg-nou span, .tg-scrapbook.tg-ratllat .tg-nou span {
+  padding: 0 10px; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  background: linear-gradient(transparent 58%, var(--tg-principal) 58%, var(--tg-principal) 90%, transparent 90%);
+}
+.tg-mac.tg-ratllat .tg-ratlla, .tg-scrapbook.tg-ratllat .tg-ratlla { background: var(--tg-principal); }
+.tg-scrapbook.tg-ratllat .tg-ratlla { rotate: -7deg; height: 11px; }
+.tg-editorial.tg-ratllat .tg-cos {
+  font-weight: 400; padding: 28px 0 30px; border-top: 3px solid var(--tg-text); border-bottom: 3px solid var(--tg-text);
+  text-shadow: 0 3px 18px var(--tg-ombra-suau);
+}
+.tg-editorial.tg-ratllat .tg-ratlla { height: 6px; margin-top: -3px; rotate: 0deg; border-radius: 0; background: var(--tg-text); }
+.tg-editorial.tg-ratllat .tg-nou { font-family: var(--tg-f-accent); font-style: italic; font-weight: 400; }
 
 /* El comentari: una targeta com les de sota dels vídeos (sense ser de cap xarxa): la inicial de qui l'ha escrit, el
    nom, un cor i el que diu. */
@@ -445,6 +483,14 @@
       ambDestacat(doc, text, g.text);
       dins.append(cap, text);
       c.append(dins);
+    } else if (g.tipus === "ratllat") {
+      const [vell, nou] = g.punts || [];
+      if (g.text) c.append(element(doc, "div", "tg-rt-titol", g.text));
+      const v = element(doc, "div", "tg-vell", vell?.text || "");
+      v.append(element(doc, "i", "tg-ratlla"));
+      const n = element(doc, "div", "tg-nou");
+      n.append(element(doc, "span", null, nou?.text || ""));  // el marcador, línia a línia
+      c.append(v, n);
     } else if (g.tipus === "comentari") {
       const NS = "http://www.w3.org/2000/svg";
       const cor = doc.createElementNS(NS, "svg");
@@ -555,7 +601,7 @@
   // Si un gràfic és massa alt (un text llarg, una lletra ampla), es fa més petit fins que hi cap: la
   // frase, amb la lletra (el text torna a repartir-se en línies); la llista i la crida, senceres.
   // Mai més alt que l'espai que té (amb el bloc de color, el de sobre la targeta).
-  const ALCADA_MAXIMA = { frase: 330, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
+  const ALCADA_MAXIMA = { frase: 330, ratllat: 420, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
     ventall: 680 };
   function encaixa({ g, lloc, c }) {
     if (!ALCADA_MAXIMA[g.tipus]) return;
@@ -682,6 +728,13 @@
       if (img) {  // si la captura és més llarga que la finestra, baixa a poc a poc (com quan es llegeix)
         tl.fromTo(img, { objectPosition: "50% 0%" }, { objectPosition: "50% 100%", ease: "sine.inOut",
           duration: Math.max(0.5, g.final - g.inici - 1.6) }, g.inici + 0.8);
+      }
+      if (g.tipus === "ratllat" && g.punts?.[1]) {  // quan es diu la paraula nova, es ratlla la d'abans i surt la nova
+        const t = Math.max(g.inici + 0.45, g.punts[1].t);
+        tl.fromTo(c.querySelector(".tg-ratlla"), { scaleX: 0 }, { scaleX: 1, duration: 0.3, ease: "power2.inOut" }, t - 0.3);
+        tl.fromTo(c.querySelector(".tg-vell"), { opacity: 1 }, { opacity: 0.6, duration: 0.25, immediateRender: false }, t);
+        tl.fromTo(c.querySelector(".tg-nou"), { opacity: 0, y: 26, scale: 0.9 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.42, ease: "back.out(1.8)" }, t);
       }
       let abans = g.inici;
       punts.forEach((el, k) => {

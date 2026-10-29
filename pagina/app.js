@@ -3287,6 +3287,7 @@ function textGrafic(g) {
   if (g.tipus === "llista") return [text, ...g.punts.map((p) => `· ${p.text}`)].filter(Boolean).join("  ");
   if (g.tipus === "xat") return [text, ...g.punts.map((p) => `${p.costat === "enviat" ? "→" : "←"} ${p.text}`)].filter(Boolean).join("  ");
   if (g.tipus === "notificacio" || g.tipus === "comentari") return `${g.de ? `${g.de}: ` : ""}«${text}»`;
+  if (g.tipus === "ratllat") return [text, g.punts.map((p) => p.text).join(" → ")].filter(Boolean).join(" ");
   if (g.tipus === "numero") return `${g.xifra}${text ? ` · ${text}` : ""}`;
   if (g.tipus === "web") return text ? `Web: ${text}` : "Captura d'una web";
   if (g.tipus === "ventall") {
@@ -3398,14 +3399,14 @@ let tretsOberts = false;
 let liniesDreta = [];
 
 const NOMS_SO = { whoosh: "Whoosh", pop: "Pop", tecla: "Teclat", brill: "Brillantor", tic: "Tic" };
-const TIPUS_GALERIA = [["frase", "Frase"], ["etiqueta", "Etiqueta"], ["llista", "Llista"], ["numero", "Número"],
+const TIPUS_GALERIA = [["frase", "Frase"], ["etiqueta", "Etiqueta"], ["ratllat", "Ratllat"], ["llista", "Llista"], ["numero", "Número"],
   ["notificacio", "Notificació"], ["comentari", "Comentari"], ["xat", "Xat"], ["anotacio", "Anotació"], ["web", "Web"], ["ventall", "Fotos"],
   ["crida", "Crida"]];
 const NOMS_GRAFIC = Object.fromEntries(TIPUS_GALERIA);
 // Com al servidor (motor/grafics.py): un text més llarg no s'hi desaria.
-const MIDA_TEXT_GRAFIC = { frase: 140, etiqueta: 40, llista: 80, crida: 90, notificacio: 120, comentari: 140, xat: 30, numero: 60,
+const MIDA_TEXT_GRAFIC = { frase: 140, etiqueta: 40, ratllat: 40, llista: 80, crida: 90, notificacio: 120, comentari: 140, xat: 30, numero: 60,
   anotacio: 40, web: 60, ventall: 60 };
-const DURADES_GRAFIC = { frase: 2.8, etiqueta: 2.2, llista: 4.5, crida: 3.5, notificacio: 3.0, comentari: 3.5, xat: 5.0, numero: 2.8,
+const DURADES_GRAFIC = { frase: 2.8, etiqueta: 2.2, ratllat: 3.0, llista: 4.5, crida: 3.5, notificacio: 3.0, comentari: 3.5, xat: 5.0, numero: 2.8,
   anotacio: 2.5, web: 4.0, ventall: 4.5 };
 const ICONES_PECA = {
   grafic: '<svg viewBox="0 0 24 24"><path d="M11 3.5l1.9 5.1 5.1 1.9-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/></svg>',
@@ -3450,6 +3451,7 @@ function graficNou(tipus, paraula) {
   if (tipus === "frase") g.text = retalla(frase, 60) || "La teva frase";
   else if (tipus === "etiqueta" || tipus === "anotacio") g.text = retalla(textDes(paraula, 2), 30) || "Aquí";
   else if (tipus === "llista") g.punts = [{ text: "Primer" }, { text: "Segon" }, { text: "Tercer" }];
+  else if (tipus === "ratllat") g.punts = [{ text: retalla(textDes(paraula, 2), 30) || "abans" }, { text: "ara" }];
   else if (tipus === "xat") g.punts = [{ text: retalla(frase, 70) || "Hola!", costat: "rebut" }, { text: "De veritat?", costat: "enviat" }];
   else if (tipus === "notificacio") Object.assign(g, { de: "Missatge", text: retalla(frase, 100) || "Tens un missatge" });
   else if (tipus === "comentari") Object.assign(g, { de: "algú", text: retalla(frase, 100) || "I això com es fa?" });
@@ -4956,6 +4958,14 @@ function editorGrafic(cos, g) {
     ambText("El text de sota", "", { valid: () => true });
   } else if (g.tipus === "web") ambText("L'adreça de dalt", "", { placeholder: "elteuweb.cat", valid: () => true });
   else if (g.tipus === "ventall") ambText("Un títol", "", { valid: () => true });
+  if (g.tipus === "ratllat") {
+    ambText("A dalt (si vols)", "", { valid: () => true, placeholder: "no és…" });
+    camp(cos, "El que es ratlla i el que hi va, un a cada línia",
+      campText(g.punts.map((x) => x.text).join("\n"), { linies: 2, clau: "punts",
+        valid: (v) => v.split("\n").filter((l) => l.trim()).length >= 2,
+        desa: (v) => canviaGrafic(id, { punts: v.split("\n").map((l) => textPla(l).slice(0, 80)).filter(Boolean).slice(0, 2)
+          .map((text, k) => ({ text, paraula: g.punts[k]?.text === text ? g.punts[k].paraula : null })) }) }));
+  }
   if (g.tipus === "llista" || g.tipus === "xat") {
     if (g.tipus === "llista") ambText("El títol", "", { valid: () => true, placeholder: "Si no en vols, deixa-ho buit" });
     const valor = g.punts.map((x) => x.text).join("\n");

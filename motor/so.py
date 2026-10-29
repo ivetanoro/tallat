@@ -247,7 +247,8 @@ def _lletres_titol(titol: dict, animacio: str) -> list[float]:
 # El so de cada gràfic del pla: (so, nom, si també hi és amb «pocs»). Amb «pocs», els de cada punt d'una
 # llista o d'un xat tampoc no hi són.
 SONS_GRAFICS = {"frase": ("whoosh", "Frase", True), "llista": ("pop", "Llista", True),
-                "etiqueta": ("pop", "Etiqueta", False), "crida": ("brill", "Crida", True),
+                "etiqueta": ("pop", "Etiqueta", False), "ratllat": ("whoosh", "Ratllat", True),
+                "crida": ("brill", "Crida", True),
                 "notificacio": ("brill", "Notificació", True), "comentari": ("pop", "Comentari", True),
                 "xat": ("pop", "Xat", True),
                 "numero": ("tic", "Número", True), "anotacio": ("tic", "Anotació", False),

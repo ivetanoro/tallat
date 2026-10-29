@@ -10,6 +10,8 @@ transcripció: si es mouen els talls, el gràfic segueix la seva frase.
 Tipus:
   frase        una frase clau en gran (*entre asteriscs*, la part destacada); amaga els subtítols
   etiqueta     una paraula o dues en una etiqueta petita («mite», «pas 1»)
+  ratllat      el que es diu primer es ratlla i a sota surt el que hi va («no és mandra, és cansament»): els
+               dos «punts» (el segon, quan es diu); «text», si es vol, a dalt («no és…»); amaga els subtítols
   llista       una targeta amb uns quants punts, que surten un a un (cadascun quan es diu); amaga els
                subtítols i va a baix, al seu lloc
   crida        la crida a l'acció del final (si no té text, la de la marca)
@@ -53,13 +55,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-TIPUS = ("frase", "etiqueta", "llista", "crida", "notificacio", "comentari", "xat", "numero", "anotacio", "web",
-         "ventall")
-NOMS = {"frase": "Frase", "etiqueta": "Etiqueta", "llista": "Llista", "crida": "Crida",
+TIPUS = ("frase", "etiqueta", "ratllat", "llista", "crida", "notificacio", "comentari", "xat", "numero", "anotacio",
+         "web", "ventall")
+NOMS = {"frase": "Frase", "etiqueta": "Etiqueta", "ratllat": "Ratllat", "llista": "Llista", "crida": "Crida",
         "notificacio": "Notificació", "comentari": "Comentari", "xat": "Xat", "numero": "Número",
         "anotacio": "Anotació", "web": "Web", "ventall": "Fotos"}
 AMB_AUTOR = ("notificacio", "comentari")  # els que diuen qui ho envia o qui ho ha escrit («de»)
-AMB_PUNTS = ("llista", "xat", "ventall")  # els que tenen punts que surten un a un
+AMB_PUNTS = ("llista", "xat", "ventall", "ratllat")  # els que tenen punts que surten un a un
 AMB_IMATGE = ("web", "ventall")
 BLOC_PER_DEFECTE = ("web", "ventall")  # els grans: amb el bloc de color si no es diu el contrari
 CARPETA_IMATGES = "imatges-grafics"  # dins del projecte
@@ -77,15 +79,15 @@ MARGE_SUBTITOLS = 28  # px entre un gràfic i els subtítols
 ESTATS = ("proposat", "mantingut", "canvia", "tret")
 VOTS = ("si", "potser", "no")  # el que diu la persona al tauler de Vesteix
 GRUP = re.compile(r"[A-Za-z0-9_-]{1,20}")  # les alternatives per a un mateix moment
-DURADES = {"frase": 2.8, "etiqueta": 2.2, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "comentari": 3.5,
+DURADES = {"frase": 2.8, "etiqueta": 2.2, "ratllat": 3.0, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "comentari": 3.5,
            "xat": 5.0, "numero": 2.8, "anotacio": 2.5, "web": 4.0, "ventall": 4.5}
 # On va cada tipus si no es diu: en un vídeo de cap parlant, la cara sol omplir el mig.
-POSICIO = {"frase": "dalt", "etiqueta": "dalt", "llista": "baix", "crida": "baix", "notificacio": "dalt",
+POSICIO = {"frase": "dalt", "etiqueta": "dalt", "ratllat": "dalt", "llista": "baix", "crida": "baix", "notificacio": "dalt",
            "comentari": "dalt", "xat": "baix", "numero": "dalt", "anotacio": "mig", "web": "mig", "ventall": "mig"}
 # Els que amaguen els subtítols mentre surten (el que hi diu és el que se sent).
-AMAGA = {"frase": True, "llista": True, "etiqueta": False, "crida": False, "notificacio": False, "comentari": False,
+AMAGA = {"frase": True, "llista": True, "etiqueta": False, "ratllat": True, "crida": False, "notificacio": False, "comentari": False,
          "xat": True, "numero": False, "anotacio": False, "web": True, "ventall": True}
-MIDA_TEXT = {"frase": 140, "etiqueta": 40, "llista": 80, "crida": 90, "notificacio": 120, "comentari": 140,
+MIDA_TEXT = {"frase": 140, "etiqueta": 40, "ratllat": 40, "llista": 80, "crida": 90, "notificacio": 120, "comentari": 140,
              "xat": 30, "numero": 60, "anotacio": 40, "web": 60, "ventall": 60}
 MIDA_PEU = 30  # el peu de cada foto del ventall
 CAL_TEXT = ("frase", "etiqueta", "notificacio", "comentari", "anotacio")
@@ -192,6 +194,10 @@ def net(g: dict, paraules: int | None = None) -> dict:
                     punt["costat"] = p.get("costat") if p.get("costat") in ("rebut", "enviat") else \
                         ("rebut" if k % 2 == 0 else "enviat")
                 punts.append(punt)
+        if tipus == "ratllat":
+            if len(punts) < 2:
+                raise ValueError("Un ratllat necessita dos «punts»: el que es ratlla i el que hi va [\"mandra\", \"cansament\"]")
+            punts = punts[:2]
         if not punts:
             raise ValueError(f"{'Una llista' if tipus == 'llista' else 'Un xat'} necessita «punts»: [\"un\", \"dos\"…]")
     sortida["punts"] = punts[:MAX_PUNTS]
@@ -435,6 +441,7 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
 # Les mostres de la galeria de Vesteix: com queda cada tipus amb l'estil de la persona (sense imatges: la
 # web i les fotos es dibuixen a la pàgina amb una icona).
 MOSTRES = {"frase": {"text": "Menys és *més*"}, "etiqueta": {"text": "Pas 1"},
+           "ratllat": {"punts": ["mandra", "cansament"]},
            "llista": {"text": "Tres claus", "punts": ["Llum", "So", "Ritme"]},
            "numero": {"xifra": "73 %", "text": "ho fan així"},
            "notificacio": {"de": "Missatge", "text": "Ja és aquí!"},
