@@ -1,4 +1,4 @@
-/* tallat · els gràfics del pla: frase clau, etiqueta, ratllat, llista, crida, notificació, comentari, xat,
+/* tallat · els gràfics del pla: frase clau, marcador, etiqueta, ratllat, llista, crida, notificació, comentari, xat,
  * número, anotació, web (una captura dins d'una finestra) i ventall (unes quantes fotos).
  *
  * Com els subtítols, el mateix codi els dibuixa a la vista prèvia i al vídeo final (dins de la
@@ -13,7 +13,8 @@
  * mig, baix o un número (on va el centre, de 0 a 1); `limits`: [dalt, baix] en px, la zona segura
  * d'Instagram sense els subtítols. El gràfic no en surt mai.
  * `paleta`: {text, principal, destacat, secundari, clar, fosc, lletra_titols, lletra_text, lletra_accent}.
- * A la frase i a la crida, el que va *entre asteriscs* surt destacat. La notificació porta qui l'envia
+ * A la frase i a la crida, el que va *entre asteriscs* surt destacat; al marcador (una frase), hi passa un marcador
+ * (si no n'hi ha, per tota la frase). La notificació porta qui l'envia
  * (`de`), el comentari qui l'ha escrit (`de`), el ratllat el que es ratlla i el que hi va (els dos `punts`), el xat els missatges a `punts` (cadascun amb `costat`: rebut o enviat), el número la `xifra`
  * ({abans, valor, decimals, despres, milers}) i l'anotació la `forma` (cercle, subratllat o fletxa) i el
  * `costat` on va. L'anotació s'escriu amb la lletra de mà i el color secundari de la marca.
@@ -165,6 +166,16 @@
   border-top: 3px solid var(--tg-text); border-bottom: 3px solid var(--tg-text); text-shadow: 0 2px 14px var(--tg-ombra);
 }
 
+/* El marcador: la part marcada, amb el color destacat al darrere i el text del color que s'hi llegeix. Es dibuixa
+   d'esquerra a dreta (--tg-marcat) i, si ocupa dues línies, a cadascuna. */
+.tg-marca {
+  display: inline-block; color: var(--tg-sobre-destacat); text-shadow: none;
+  padding: 0 0.2em; margin: 0 -0.17em; border-radius: 0.08em;  /* la franja tapa també l'espai entre paraules */
+  background: linear-gradient(var(--tg-destacat), var(--tg-destacat)) no-repeat 0 55% / var(--tg-marcat, 100%) 80%;
+}
+.tg-editorial .tg-marca { color: inherit; background-size: var(--tg-marcat, 100%) 30%; background-position: 0 90%; }
+.tg-scrapbook .tg-marca { border-radius: 0.3em 0.05em 0.35em 0.08em; }
+
 /* El ratllat: el que es diu primer, que es ratlla, i a sota el que hi va, més gran. */
 .tg-ratllat .tg-cos {
   display: flex; flex-direction: column; align-items: center; text-align: center;
@@ -187,12 +198,7 @@
   font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); font-weight: 400; padding: 46px 64px 42px;
   border-radius: 6px; rotate: -2deg; box-shadow: 8px 10px 0 var(--tg-ombra-suau);
 }
-/* Sobre la targeta clara, la paraula nova va amb un marcador del color principal (el destacat no sempre s'hi llegeix). */
-.tg-mac.tg-ratllat .tg-nou, .tg-scrapbook.tg-ratllat .tg-nou { color: inherit; }
-.tg-mac.tg-ratllat .tg-nou span, .tg-scrapbook.tg-ratllat .tg-nou span {
-  padding: 0 10px; -webkit-box-decoration-break: clone; box-decoration-break: clone;
-  background: linear-gradient(transparent 58%, var(--tg-principal) 58%, var(--tg-principal) 90%, transparent 90%);
-}
+/* Sobre la targeta clara, la paraula nova va amb el marcador (vegeu .tg-marca), ja dibuixat. */
 .tg-mac.tg-ratllat .tg-ratlla, .tg-scrapbook.tg-ratllat .tg-ratlla { background: var(--tg-principal); }
 .tg-scrapbook.tg-ratllat .tg-ratlla { rotate: -7deg; height: 11px; }
 .tg-editorial.tg-ratllat .tg-cos {
@@ -398,6 +404,7 @@
       "--tg-text": p.text, "--tg-principal": p.principal, "--tg-destacat": p.destacat,
       "--tg-secundari": p.secundari, "--tg-clar": p.clar, "--tg-fosc": p.fosc,
       "--tg-sobre-principal": sobre(p.principal, p), "--tg-sobre-secundari": sobre(p.secundari, p),
+      "--tg-sobre-destacat": sobre(p.destacat, p),
       "--tg-ombra": rgba(p.fosc, 0.45), "--tg-ombra-suau": rgba(p.fosc, 0.28), "--tg-ombra-forta": rgba(p.fosc, 0.8),
       "--tg-vel": rgba(p.fosc, 0.42),
       "--tg-linia": rgba(p.fosc, 0.1), "--tg-linia-forta": rgba(p.fosc, 0.2),
@@ -423,6 +430,18 @@
     String(text || "").split("*").forEach((tros, k) => {
       if (tros) pare.append(k % 2 ? element(doc, "span", "tg-clau", tros) : doc.createTextNode(tros));
     });
+  }
+
+  // El marcador, paraula a paraula: cada paraula és una caixa de l'alçada de la línia (no de la lletra, que n'hi ha
+  // amb molt d'aire a dalt i a baix), i així la franja és igual amb totes les lletres i no tapa la línia del costat.
+  function ambMarcador(doc, pare, text) {
+    const t = String(text || "");
+    if (/^\s/.test(t)) pare.append(doc.createTextNode(" "));
+    t.split(/\s+/).filter(Boolean).forEach((mot, k) => {
+      if (k) pare.append(doc.createTextNode(" "));
+      pare.append(element(doc, "span", "tg-marca", mot));
+    });
+    if (/\s$/.test(t)) pare.append(doc.createTextNode(" "));
   }
 
   const inicial = (text) => (String(text || "").trim()[0] || "✉").toUpperCase();
@@ -453,11 +472,17 @@
   function cos(doc, g, op) {
     const imatge = (nom) => (op.imatges ?? "imatges/") + encodeURIComponent(nom);
     const c = element(doc, "div", "tg-cos");
-    if (g.tipus === "frase") {
+    if (g.tipus === "frase" || g.tipus === "marcador") {
       const n = String(g.text || "").length;
       c.dataset.escala = n > 90 ? 0.74 : n > 55 ? 0.86 : 1;
       c.style.setProperty("--tg-escala", c.dataset.escala);
-      ambDestacat(doc, c, g.text);
+      if (g.tipus === "frase") ambDestacat(doc, c, g.text);
+      else {  // la part *entre asteriscs* (o tota la frase) porta el marcador
+        const trossos = String(g.text || "").split("*");
+        trossos.forEach((tros, k) => {
+          if (k % 2 || trossos.length < 3) ambMarcador(doc, c, tros); else if (tros) c.append(doc.createTextNode(tros));
+        });
+      }
     } else if (g.tipus === "etiqueta") {
       c.textContent = g.text;
     } else if (g.tipus === "llista") {
@@ -489,7 +514,7 @@
       const v = element(doc, "div", "tg-vell", vell?.text || "");
       v.append(element(doc, "i", "tg-ratlla"));
       const n = element(doc, "div", "tg-nou");
-      n.append(element(doc, "span", null, nou?.text || ""));  // el marcador, línia a línia
+      if (g.estil === "mac" || g.estil === "scrapbook") ambMarcador(doc, n, nou?.text); else n.textContent = nou?.text || "";
       c.append(v, n);
     } else if (g.tipus === "comentari") {
       const NS = "http://www.w3.org/2000/svg";
@@ -601,12 +626,12 @@
   // Si un gràfic és massa alt (un text llarg, una lletra ampla), es fa més petit fins que hi cap: la
   // frase, amb la lletra (el text torna a repartir-se en línies); la llista i la crida, senceres.
   // Mai més alt que l'espai que té (amb el bloc de color, el de sobre la targeta).
-  const ALCADA_MAXIMA = { frase: 330, ratllat: 420, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
+  const ALCADA_MAXIMA = { frase: 330, marcador: 330, ratllat: 420, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
     ventall: 680 };
   function encaixa({ g, lloc, c }) {
     if (!ALCADA_MAXIMA[g.tipus]) return;
     const maxima = Math.min(ALCADA_MAXIMA[g.tipus], g.limits ? g.limits[1] - g.limits[0] : Infinity);
-    const frase = g.tipus === "frase";
+    const frase = g.tipus === "frase" || g.tipus === "marcador";
     const base = frase ? Number(c.dataset.escala) : 1;
     const posa = (k) => (frase ? c.style.setProperty("--tg-escala", (base * k).toFixed(3)) : (c.style.zoom = k === 1 ? "" : k.toFixed(2)));
     posa(1);
@@ -678,7 +703,8 @@
     }
     const fets = (grafics || []).map((g) => {
       const costat = g.tipus === "anotacio" && g.costat === "dreta" ? " tg-a-dreta" : "";
-      const lloc = element(doc, "div", `tg-lloc tg-${g.tipus} tg-${g.estil || "net"}${costat}`);
+      const tipus = g.tipus === "marcador" ? "frase tg-marcador" : g.tipus;  // el marcador és una frase
+      const lloc = element(doc, "div", `tg-lloc tg-${tipus} tg-${g.estil || "net"}${costat}`);
       if (g.id) lloc.dataset.id = g.id;  // la pàgina hi troba el que es toca al vídeo
       const c = cos(doc, g, op);
       lloc.append(c);
@@ -729,6 +755,11 @@
         tl.fromTo(img, { objectPosition: "50% 0%" }, { objectPosition: "50% 100%", ease: "sine.inOut",
           duration: Math.max(0.5, g.final - g.inici - 1.6) }, g.inici + 0.8);
       }
+      const marques = g.tipus === "marcador" ? [...c.querySelectorAll(".tg-marca")] : [];
+      marques.forEach((marca, k) => {  // el marcador passa quan la frase ja hi és, paraula darrere paraula
+        const pas = Math.min(0.22, 0.6 / marques.length);
+        tl.fromTo(marca, { "--tg-marcat": "0%" }, { "--tg-marcat": "100%", duration: pas + 0.05, ease: "none" }, g.inici + 0.35 + k * pas);
+      });
       if (g.tipus === "ratllat" && g.punts?.[1]) {  // quan es diu la paraula nova, es ratlla la d'abans i surt la nova
         const t = Math.max(g.inici + 0.45, g.punts[1].t);
         tl.fromTo(c.querySelector(".tg-ratlla"), { scaleX: 0 }, { scaleX: 1, duration: 0.3, ease: "power2.inOut" }, t - 0.3);

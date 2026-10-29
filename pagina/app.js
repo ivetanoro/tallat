@@ -3399,14 +3399,14 @@ let tretsOberts = false;
 let liniesDreta = [];
 
 const NOMS_SO = { whoosh: "Whoosh", pop: "Pop", tecla: "Teclat", brill: "Brillantor", tic: "Tic" };
-const TIPUS_GALERIA = [["frase", "Frase"], ["etiqueta", "Etiqueta"], ["ratllat", "Ratllat"], ["llista", "Llista"], ["numero", "Número"],
+const TIPUS_GALERIA = [["frase", "Frase"], ["marcador", "Marcador"], ["etiqueta", "Etiqueta"], ["ratllat", "Ratllat"], ["llista", "Llista"], ["numero", "Número"],
   ["notificacio", "Notificació"], ["comentari", "Comentari"], ["xat", "Xat"], ["anotacio", "Anotació"], ["web", "Web"], ["ventall", "Fotos"],
   ["crida", "Crida"]];
 const NOMS_GRAFIC = Object.fromEntries(TIPUS_GALERIA);
 // Com al servidor (motor/grafics.py): un text més llarg no s'hi desaria.
-const MIDA_TEXT_GRAFIC = { frase: 140, etiqueta: 40, ratllat: 40, llista: 80, crida: 90, notificacio: 120, comentari: 140, xat: 30, numero: 60,
+const MIDA_TEXT_GRAFIC = { frase: 140, marcador: 140, etiqueta: 40, ratllat: 40, llista: 80, crida: 90, notificacio: 120, comentari: 140, xat: 30, numero: 60,
   anotacio: 40, web: 60, ventall: 60 };
-const DURADES_GRAFIC = { frase: 2.8, etiqueta: 2.2, ratllat: 3.0, llista: 4.5, crida: 3.5, notificacio: 3.0, comentari: 3.5, xat: 5.0, numero: 2.8,
+const DURADES_GRAFIC = { frase: 2.8, marcador: 2.8, etiqueta: 2.2, ratllat: 3.0, llista: 4.5, crida: 3.5, notificacio: 3.0, comentari: 3.5, xat: 5.0, numero: 2.8,
   anotacio: 2.5, web: 4.0, ventall: 4.5 };
 const ICONES_PECA = {
   grafic: '<svg viewBox="0 0 24 24"><path d="M11 3.5l1.9 5.1 5.1 1.9-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/></svg>',
@@ -3448,7 +3448,7 @@ const retalla = (text, mida) => (text.length > mida ? text.slice(0, mida).replac
 function graficNou(tipus, paraula) {
   const frase = textDes(paraula, 7);
   const g = { tipus, paraula, text: "", punts: [], estat: "mantingut", nota: "", vot: "si", origen: "teu" };
-  if (tipus === "frase") g.text = retalla(frase, 60) || "La teva frase";
+  if (tipus === "frase" || tipus === "marcador") g.text = retalla(frase, 60) || "La teva frase";
   else if (tipus === "etiqueta" || tipus === "anotacio") g.text = retalla(textDes(paraula, 2), 30) || "Aquí";
   else if (tipus === "llista") g.punts = [{ text: "Primer" }, { text: "Segon" }, { text: "Tercer" }];
   else if (tipus === "ratllat") g.punts = [{ text: retalla(textDes(paraula, 2), 30) || "abans" }, { text: "ara" }];
@@ -4945,6 +4945,7 @@ function editorGrafic(cos, g) {
     cos.append(imatges);
   }
   if (g.tipus === "frase") ambText("El text", "El que posis *entre asteriscs* surt destacat.", { linies: 2 });
+  else if (g.tipus === "marcador") ambText("El text", "El que posis *entre asteriscs* porta el marcador (si no n'hi poses, tota la frase).", { linies: 2 });
   else if (g.tipus === "etiqueta" || g.tipus === "anotacio") ambText("El text");
   else if (g.tipus === "crida") ambText("El text", "", { placeholder: estilMarca?.crida || "Segueix-me per a més",
     valid: (v) => v.trim() || estilMarca?.crida });

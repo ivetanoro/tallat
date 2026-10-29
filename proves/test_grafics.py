@@ -115,6 +115,13 @@ class TestTipusNous(unittest.TestCase):
                 grafics.net(dolent)
             self.assertIn(paraula, str(e.exception))
 
+    def test_el_marcador_es_una_frase_amb_la_part_important_marcada(self):
+        m = grafics.net({"tipus": "marcador", "paraula": 0, "text": "el truc és la *constància*"})
+        situat, = grafics.situa(grafics.neteja_llista([m]), {0: 1.0}, {}, 10.0, [])
+        self.assertEqual((situat["text"], situat["amaga_subtitols"], situat["posicio"]), ("el truc és la *constància*", True, "dalt"))
+        with self.assertRaises(ValueError):
+            grafics.net({"tipus": "marcador", "paraula": 0})
+
     def test_el_ratllat_canvia_quan_es_diu_la_paraula_nova(self):
         rt = grafics.net({"tipus": "ratllat", "paraula": 1, "text": "no és",
                           "punts": ["mandra", {"text": "cansament", "paraula": 4}, "i tres"]})
