@@ -194,13 +194,15 @@ async function miraNovetats() {
     if (n.revisio > estat.revisio) {
       const r = await api("/api/instantania");
       if (esperada !== cua || pendent) return;
+      const rondaNova = (r.estat.ronda || 0) > (estat.ronda || 0);
       estat = r.estat;
       desfer.length = 0;
       refer.length = 0;
       aplicaTrams(r);
       refresca(true);
       marcaPausa();
-      avis("Claude ha fet canvis al vídeo. Ja els veus aquí.", 4000);
+      if (!rondaNova) avis("Claude ha fet canvis al vídeo. Ja els veus aquí.", 4000);
+      else if ($("#tauler").hidden) avis(`La ronda ${estat.ronda} és a punt: la tens a Vesteix.`, 5000);
     }
   } catch { /* el servidor no respon: ja ho dirà la propera acció */ }
 }
@@ -3649,6 +3651,9 @@ const cartesTauler = new Map(); // clau de la peça → {el, p, tls, ctx, sig}
 const grupsTauler = new Map();  // grup d'alternatives → l'element que les agrupa
 const visiblesTauler = new Set();
 let ambSoTauler = false;
+let rondaPintada = null;          // la ronda que hi havia l'últim cop que es va pintar el tauler
+let esperaTreta = null;           // la nota de ronda de la qual has tret l'espera («Continua votant»)
+let novetatRonda = null;          // {ronda, nous, canviats}: l'avís de dalt quan n'arriba una de nova, fins que el tanques
 const NOMS_VOT = { si: "Sí", potser: "Potser", no: "No" };
 const ICONA_SO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 const ICONA_MUT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg>';
@@ -3830,6 +3835,13 @@ function pintaTauler() {
     b.querySelector(".compte").textContent = n ? String(n) : "";
   }
   const ronda = estat.ronda || 0;
+  const novaRonda = rondaPintada != null && ronda > rondaPintada;
+  rondaPintada = ronda;
+  if (novaRonda) {
+    const deLaRonda = (estat.grafics || []).filter((g) => g.ronda === ronda && g.estat !== "tret");
+    novetatRonda = { ronda, nous: deLaRonda.filter((g) => g.novetat === "nou").length,
+      canviats: deLaRonda.filter((g) => g.novetat === "canviat").length };
+  }
   $("#xip-ronda").hidden = ronda < 1;
   $("#xip-ronda").textContent = `Ronda ${ronda}`;
   const hiHa = peces.length > 0;
@@ -3880,6 +3892,21 @@ function pintaTauler() {
   // Les capes es dibuixen ja a la pàgina: els gràfics i els subtítols en mesuren la mida.
   escalaTauler();
   for (const c of cartesTauler.values()) if (c.refes) { c.refes = false; capaCarta(c); }
+  if (novaRonda) revelaRonda(cont, ordre);
+}
+
+// Una ronda nova: el tauler torna a dalt, les targetes hi entren d'una en una i el número de la ronda fa un salt.
+function revelaRonda(cont, ordre) {
+  cont.scrollTo({ top: 0 });
+  $("#novetat-ronda").scrollIntoView({ block: "nearest" });  // amb el mòbil, la que es desplaça és la pàgina
+  ordre.forEach((el, i) => el.style.setProperty("--i", String(Math.min(i, 12))));
+  for (const [el, classe] of [[cont, "ronda-nova"], [$("#xip-ronda"), "salta"]]) {
+    el.classList.remove(classe);
+    void el.offsetWidth;  // perquè l'animació torni a començar
+    el.classList.add(classe);
+  }
+  clearTimeout(revelaRonda.temps);
+  revelaRonda.temps = setTimeout(() => cont.classList.remove("ronda-nova"), 1500);
 }
 
 function grupTauler(x, sigDibuix, vius) {
@@ -4399,12 +4426,33 @@ function pintaEstatRonda() {
   const enCurs = n && ["enviada", "treballant"].includes(n.estat);
   boto.disabled = !!enCurs;
   const darrer = n?.fil.filter((m) => m.de === "claude").at(-1);
+  // Mentre Claude la prepara (fins que arriba una ronda més nova que la que hi havia en demanar-la), les targetes es
+  // queden quietes i esvaïdes, amb un rètol al mig.
+  const ara = estat.ronda || 0;
+  const espera = hiHa && !!enCurs && (n.estat === "treballant" || claudeConnectat) && ara <= (n.ronda ?? ara)
+    && esperaTreta !== n.id;
+  $("#tauler").classList.toggle("esperant", espera);
+  $("#esperant-ronda").hidden = !espera;
+  $("#esperant-ronda-titol").textContent = ara ? `Claude prepara la ronda ${ara + 1}…` : "Claude prepara les propostes…";
+  // Quan arriba: a dalt, què hi ha de nou i el que en diu Claude.
+  const nov = novetatRonda;
+  $("#novetat-ronda").hidden = !nov;
+  const resposta = nov && n?.estat === "feta" && darrer ? darrer.text : "";
+  if (nov) {
+    const parts = [nov.nous && `${nov.nous} ${nov.nous === 1 ? "proposta nova" : "propostes noves"}`,
+      nov.canviats && `${nov.canviats} ${nov.canviats === 1 ? "canviada" : "canviades"}`].filter(Boolean);
+    $("#novetat-ronda-titol").textContent = `La ronda ${nov.ronda} és a punt.`;
+    $("#novetat-ronda-compte").textContent = parts.length ? `Hi ha ${parts.join(" i ")}.` : "";
+    $("#novetat-ronda-claude").hidden = !resposta;
+    $("#novetat-ronda-claude").textContent = `Claude: ${resposta}`;
+  }
   let text = "";
-  if (n?.estat === "enviada") {
+  if (espera) text = "";
+  else if (n?.estat === "enviada") {
     text = claudeConnectat ? "Enviada a Claude. Ara s'hi posa." : "Enviada. Claude encara no hi és: escriu-li «mira les meves notes» al xat.";
   } else if (n?.estat === "treballant") text = "Claude hi treballa…";
   else if (n?.estat === "pregunta" && darrer) text = `Claude et pregunta: ${darrer.text} (respon-li a Edita, a les notes)`;
-  else if (n?.estat === "feta" && darrer && Date.now() / 1000 - darrer.quan < 15 * 60) text = `Claude: ${darrer.text}`;
+  else if (n?.estat === "feta" && darrer && !resposta && Date.now() / 1000 - darrer.quan < 15 * 60) text = `Claude: ${darrer.text}`;
   el.hidden = !text;
   el.textContent = text;
   el.classList.toggle("en-curs", !!enCurs);
@@ -4417,6 +4465,7 @@ async function demanaRonda() {
     respostaNotes(await api("/api/notes", { accio: "ronda", text: $("#tauler-buit").hidden ? camp.value : "" }));
     camp.value = "";
     votatsAra.clear();
+    novetatRonda = null;
     avis("Enviat a Claude. Quan acabi, ho veuràs aquí.", 4000);
   } catch (e) { avis(e.message, 5000); }
   pintaTauler();
@@ -4427,6 +4476,8 @@ function instalaTauler() {
     b.addEventListener("click", () => { filtreTauler = b.dataset.filtre; pintaTauler(); });
   }
   $("#demana-ronda").addEventListener("click", demanaRonda);
+  $("#continua-votant").addEventListener("click", () => { esperaTreta = notaRondaDarrera()?.id ?? null; pintaEstatRonda(); });
+  $("#tanca-novetat-ronda").addEventListener("click", () => { novetatRonda = null; pintaEstatRonda(); });
   $("#primeres-propostes").addEventListener("click", demanaRonda);
   $("#nota-ronda").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); demanaRonda(); } });
   $("#tauler-exporta").addEventListener("click", obreFinal);

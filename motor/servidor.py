@@ -569,7 +569,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     reel = None
                     if p is not arrel:
                         reel = next((r["titol"] for r in info_reels()["reels"] if r["id"] == p.carpeta.name), p.carpeta.name)
-                    nota = notes.afegeix(arrel.carpeta, text, projecte=str(p.carpeta), reel=reel, tipus="ronda")
+                    nota = notes.afegeix(arrel.carpeta, text, projecte=str(p.carpeta), reel=reel, tipus="ronda",
+                                         ronda=p.estat.get("ronda", 0))
                     notes.envia(arrel.carpeta, nomes=nota["id"])  # només aquesta: les altres, quan la persona les enviï
                 elif accio == "esborra":
                     notes.esborra(arrel.carpeta, int(cos.get("id")))

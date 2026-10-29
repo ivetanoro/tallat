@@ -1498,7 +1498,44 @@ body.vestint.amb-tauler .reproductor, body.vestint.amb-tauler .vesteix-dreta { d
 .graella-tauler {
   flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   display: grid; grid-template-columns: repeat(auto-fill, minmax(188px, 1fr)); gap: var(--e4); align-content: start;
-  padding: var(--e2) var(--e6) var(--e6);
+  padding: var(--e2) var(--e6) var(--e6); transition: opacity 300ms ease-out, filter 300ms ease-out;
+}
+
+/* Mentre Claude prepara la ronda: les targetes, quietes i esvaïdes; al mig, un rètol. Quan arriba, a dalt, un avís
+   amb el que hi ha de nou, i les targetes hi entren d'una en una. */
+.tauler { position: relative; }
+.tauler.esperant .graella-tauler { opacity: 0.35; filter: saturate(0.4); pointer-events: none; }
+.esperant-ronda {
+  position: absolute; left: 50%; top: 42%; z-index: 5; transform: translate(-50%, -50%);
+  width: min(24rem, calc(100% - 2 * var(--e4))); display: flex; align-items: flex-start; gap: var(--e3);
+  padding: var(--e4) var(--e5); border-radius: var(--radi-mitja); background: var(--vidre);
+  box-shadow: 0 0 0 0.5px var(--linia), 0 12px 32px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  animation: apareix 250ms ease-out;
+}
+.esperant-ronda[hidden] { display: none; }
+.esperant-ronda .roda-nota { width: 18px; height: 18px; margin-top: 2px; border-width: 2.5px; }
+.esperant-ronda strong { display: block; font-size: var(--t-cos); }
+.esperant-ronda .detall { display: block; margin: 2px 0 var(--e2); }
+.esperant-ronda .enllac { font-size: var(--t-ui); }
+.novetat-ronda {
+  flex: none; display: flex; align-items: flex-start; gap: var(--e3);
+  margin: 0 var(--e6) var(--e3); padding: var(--e3) var(--e2) var(--e3) var(--e4);
+  border-radius: var(--radi-mitja); background: var(--accent-suau); font-size: var(--t-ui);
+  animation: baixa-novetat 360ms var(--molla);
+}
+.novetat-ronda[hidden] { display: none; }
+.novetat-ronda > div { flex: 1; min-width: 0; padding-top: 3px; }
+.novetat-ronda strong { color: var(--accent-text); }
+.novetat-ronda .detall { margin: 2px 0 0; }
+.novetat-ronda .icona { flex: none; }
+@keyframes baixa-novetat { from { opacity: 0; transform: translateY(-6px); } }
+.graella-tauler.ronda-nova > * { animation: entra-carta 480ms var(--molla) both; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes entra-carta { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
+.xip-ronda.salta { animation: salta-xip 560ms var(--molla); }
+@keyframes salta-xip { 35% { transform: scale(1.2); } }
+@media (prefers-reduced-motion: reduce) {
+  .graella-tauler.ronda-nova > *, .xip-ronda.salta, .novetat-ronda, .esperant-ronda { animation: none; }
 }
 .buit-filtre { margin: 0 var(--e6) var(--e4); }
 .tauler-buit { margin: var(--e6) auto; max-width: 30rem; padding: var(--e8) var(--e6); text-align: center; }
@@ -1654,6 +1691,8 @@ body.vestint.amb-tauler .reproductor, body.vestint.amb-tauler .vesteix-dreta { d
   .graella-tauler { overflow: visible; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); padding: var(--e2) var(--e4) var(--e4); }
   .tauler-cap { padding: var(--e4) var(--e4) var(--e2); }
   .ronda { position: sticky; bottom: var(--e2); margin: 0 var(--e2) var(--e2); }
+  .esperant-ronda { position: fixed; top: 50%; }  /* la pàgina és llarga: al mig del que es veu */
+  .novetat-ronda { margin: 0 var(--e4) var(--e2); }
   .ronda-fila { flex-wrap: wrap; }
   #nota-ronda { order: 3; flex: 1 1 100%; }
   .grup-tauler { grid-column: 1 / -1; }

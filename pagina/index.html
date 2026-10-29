@@ -739,7 +739,22 @@
         <button class="boto principal" id="tauler-exporta">Exporta</button>
       </div>
     </header>
+    <!-- Quan arriba una ronda nova: què hi ha de nou i què diu Claude. -->
+    <div class="novetat-ronda" id="novetat-ronda" role="status" hidden>
+      <div><strong id="novetat-ronda-titol"></strong> <span id="novetat-ronda-compte"></span>
+        <p class="detall" id="novetat-ronda-claude" hidden></p></div>
+      <button class="icona" id="tanca-novetat-ronda" title="Tanca" aria-label="Tanca l'avís de la ronda">
+        <svg viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></svg>
+      </button>
+    </div>
     <div class="graella-tauler" id="graella-tauler"></div>
+    <!-- Mentre Claude prepara la ronda: les targetes es queden quietes a sota (els vots ja són seus). -->
+    <div class="esperant-ronda" id="esperant-ronda" role="status" hidden>
+      <span class="roda-nota" aria-hidden="true"></span>
+      <div><strong id="esperant-ronda-titol"></strong>
+        <span class="detall">Mira els teus vots i les teves notes. Quan acabi, les propostes noves surten aquí.</span>
+        <button class="enllac" id="continua-votant">Continua votant</button></div>
+    </div>
     <p class="detall buit-filtre" id="buit-filtre" hidden>No hi ha cap peça així. Toca «Totes» per veure-les.</p>
     <div class="tauler-buit" id="tauler-buit" hidden>
       <h3>Encara no hi ha cap proposta</h3>

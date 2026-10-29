@@ -10,7 +10,7 @@ que s'allibera sol si el procés s'acaba (revisió de Codex: esborrar bloquejos 
 
 Cada nota és una conversa: {id, estat, projecte, reel, paraula, inici, cita, fil: [{de: "persona" | "claude",
 text, quan}]}. `projecte` és la carpeta que s'editava (la gravació o un reel; `reel`, el títol del reel).
-Les que fa el botó «Demana la ronda següent» del tauler de Vesteix porten `tipus: "ronda"`.
+Les que fa el botó «Demana la ronda següent» del tauler de Vesteix porten `tipus: "ronda"` i la ronda que hi havia (`ronda`).
 Les de l'estació Revisa diuen també de quina versió són (`versio`: el nom de l'esborrany exportat), el segon
 d'aquella versió (`t_versio`) i la miniatura del fotograma (`miniatura`, a la carpeta MINIATURES).
 `paraula` i `inici` diuen on va (la paraula marcada i el segon de la gravació), o None si és per a tot el vídeo;
@@ -147,8 +147,9 @@ def _missatge(de: str, text: str) -> dict:
 def afegeix(carpeta: Path, text: str, paraula: int | None = None, inici: float | None = None,
             cita: str | None = None, projecte: str | None = None, reel: str | None = None,
             versio: str | None = None, t_versio: float | None = None, miniatura: str | None = None,
-            tipus: str | None = None) -> dict:
-    """Una nota nova, encara per enviar."""
+            tipus: str | None = None, ronda: int | None = None) -> dict:
+    """Una nota nova, encara per enviar. Les de la ronda porten la ronda que hi havia en demanar-la (`ronda`): la
+    pàgina espera la següent."""
     def fes(dades):
         nota = {"id": dades["darrera"] + 1, "estat": "esborrany",
                 "projecte": projecte, "reel": reel,
@@ -158,6 +159,8 @@ def afegeix(carpeta: Path, text: str, paraula: int | None = None, inici: float |
             nota.update(versio=versio, t_versio=t_versio, miniatura=miniatura)
         if tipus:
             nota["tipus"] = tipus
+        if ronda is not None:
+            nota["ronda"] = ronda
         dades["notes"].append(nota)
         return nota
     return _canvia(carpeta, fes, tot=True)

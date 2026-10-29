@@ -407,7 +407,7 @@ class TestServidor(unittest.TestCase):
         estat, cos = self.peticio("POST", "/api/notes", {"accio": "ronda", "text": "menys coses"}, self.bones())
         self.assertEqual(estat, 200)
         nota = json.loads(cos)["notes"][-1]
-        self.assertEqual((nota["tipus"], nota["estat"], nota["paraula"]), ("ronda", "enviada", None))
+        self.assertEqual((nota["tipus"], nota["estat"], nota["paraula"], nota["ronda"]), ("ronda", "enviada", None, 1))
         self.assertEqual(nota["fil"][0]["text"], "Ronda següent de propostes. Per a tota la ronda: «menys coses».")
 
     def test_un_so_posat_a_ma_sona_al_seu_moment(self):
