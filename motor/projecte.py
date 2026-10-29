@@ -457,7 +457,14 @@ class Projecte:
         temporal = proxy.with_name(f".{proxy.stem}-{hashlib.sha1(os.urandom(8)).hexdigest()[:8]}.mp4")
         try:
             exporta.fes_proxy(self.video, temporal, progres=progres, encaix=encaix)
-            temporal.replace(proxy)
+            for intent in range(20):  # a Windows no es pot substituir mentre el navegador la llegeix: s'espera una mica
+                try:
+                    temporal.replace(proxy)
+                    break
+                except PermissionError:
+                    if intent == 19:
+                        raise
+                    time.sleep(0.5)
         finally:
             temporal.unlink(missing_ok=True)
         return True
