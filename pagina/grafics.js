@@ -1,5 +1,6 @@
-/* tallat · els gràfics del pla: frase clau, marcador, etiqueta, ratllat, llista, crida, notificació, comentari, xat,
- * número, progrés, anotació, web (una captura dins d'una finestra) i ventall (unes quantes fotos).
+/* tallat · els gràfics del pla: frase clau, marcador, etiqueta, ratllat, llista, crida, segueix-me, notificació,
+ * comentari, publicació, xat, notes, número, progrés, anotació, REC, web (una captura dins d'una finestra), ventall
+ * (unes quantes fotos), abans i després i carrusel.
  *
  * Com els subtítols, el mateix codi els dibuixa a la vista prèvia i al vídeo final (dins de la
  * composició de HyperFrames). Treballa sobre una caixa de 1080 × 1920 px; qui el fa servir l'escala.
@@ -53,7 +54,7 @@
 .tg-scrapbook .tg-clau { font-style: normal; }
 .tg-scrapbook.tg-frase .tg-cos::before, .tg-scrapbook.tg-llista .tg-cos::before, .tg-scrapbook.tg-crida .tg-cos::before,
 .tg-scrapbook.tg-notificacio .tg-cos::before, .tg-scrapbook.tg-comentari .tg-cos::before, .tg-scrapbook.tg-web .tg-cos::before,
-.tg-scrapbook.tg-ratllat .tg-cos::before {
+.tg-scrapbook.tg-ratllat .tg-cos::before, .tg-scrapbook.tg-publicacio .tg-cos::before, .tg-scrapbook.tg-notes .tg-cos::before {
   content: ""; position: absolute; left: 50%; top: -24px; width: 190px; height: 48px; margin-left: -95px;
   background: var(--tg-cinta); rotate: 3deg;
 }
@@ -406,7 +407,139 @@
 .tg-editorial.tg-ventall .tg-carta img, .tg-editorial.tg-ventall .tg-falta-foto { border-radius: 0; border: 3px solid var(--tg-text); box-sizing: border-box; }
 .tg-editorial.tg-ventall figcaption {
   font-size: 24px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--tg-text); text-shadow: 0 2px 10px var(--tg-ombra);
-}`;
+}
+/* La publicació citada: una targeta de post (sense ser de cap xarxa): qui l'ha escrit, què diu i les icones de sota. */
+.tg-publicacio .tg-cos {
+  width: 840px; padding: 40px 46px 34px; text-align: left; font-family: var(--tg-f-text); color: var(--tg-fosc);
+  background: var(--tg-clar); border-radius: 40px; box-shadow: 0 30px 70px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia);
+}
+.tg-pub-cap { display: flex; align-items: center; gap: 22px; margin-bottom: 22px; }
+.tg-pub-cap .tg-avatar { grid-row: auto; width: 84px; height: 84px; font-size: 40px; }
+.tg-pub-nom { font-size: 40px; font-weight: 700; }
+.tg-pub-text { font-size: 52px; line-height: 1.24; }
+.tg-pub-peu { display: flex; gap: 70px; margin-top: 28px; opacity: 0.5; }
+.tg-pub-peu svg { width: 46px; height: 46px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tg-net.tg-publicacio .tg-cos { box-shadow: 0 18px 44px var(--tg-ombra-suau); }
+.tg-scrapbook.tg-publicacio .tg-cos { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); border-radius: 4px; rotate: -1.5deg; box-shadow: 8px 10px 0 var(--tg-ombra-suau); }
+.tg-editorial.tg-publicacio .tg-cos {
+  color: var(--tg-text); background: none; box-shadow: none; border-radius: 0; padding: 30px 0 26px;
+  border-top: 3px solid var(--tg-text); border-bottom: 3px solid var(--tg-text); text-shadow: 0 2px 14px var(--tg-ombra);
+}
+.tg-editorial.tg-publicacio .tg-avatar { background: none; color: var(--tg-text); border: 3px solid var(--tg-text); }
+.tg-editorial.tg-publicacio .tg-pub-text { font-family: var(--tg-f-titols); font-size: 60px; }
+
+/* Les notes del mòbil: una nota que s'escriu sola, línia a línia, amb el cursor on s'escriu. */
+.tg-notes .tg-cos {
+  width: 840px; overflow: hidden; text-align: left; font-family: var(--tg-f-text); color: var(--tg-fosc);
+  background: var(--tg-clar); border-radius: 40px; box-shadow: 0 30px 70px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia);
+}
+.tg-notes-barra {
+  display: flex; justify-content: space-between; padding: 26px 40px 18px; font-size: 36px; font-weight: 600;
+  color: var(--tg-principal); border-bottom: 1.5px solid var(--tg-linia);
+}
+.tg-notes-full { padding: 24px 44px 40px; }
+.tg-notes-full h3 { margin: 0 0 14px; font-size: 56px; font-weight: 800; line-height: 1.1; }
+.tg-linia-nota { margin: 0; min-height: 1.3em; font-size: 46px; line-height: 1.3; }
+.tg-cursor { display: inline-block; width: 4px; height: 1.05em; margin-left: 3px; vertical-align: -0.15em; background: var(--tg-principal); opacity: 0; }
+.tg-net.tg-notes .tg-cos { box-shadow: 0 18px 44px var(--tg-ombra-suau); }
+.tg-scrapbook.tg-notes .tg-cos { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); border-radius: 4px; rotate: -1.5deg; box-shadow: 8px 10px 0 var(--tg-ombra-suau);
+  background: repeating-linear-gradient(transparent 0 58px, var(--tg-linia) 58px 60px), var(--tg-clar); }
+.tg-editorial.tg-notes .tg-cos { color: var(--tg-text); background: var(--tg-vel); box-shadow: none; border-radius: 0; border: 3px solid var(--tg-text); }
+.tg-editorial.tg-notes .tg-notes-barra { color: var(--tg-text); border-bottom-color: var(--tg-text); text-transform: uppercase; letter-spacing: 0.12em; font-size: 28px; }
+
+/* «Segueix-me»: la targeta del compte i un botó que es prem sol (un dit el toca i passa a «Seguint»). */
+.tg-segueix .tg-cos {
+  position: relative; width: 840px; display: flex; align-items: center; gap: 26px; padding: 30px 32px 30px 30px;
+  text-align: left; font-family: var(--tg-f-text); color: var(--tg-fosc); background: var(--tg-clar); border-radius: 999px;
+  box-shadow: 0 30px 70px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia);
+}
+.tg-segueix .tg-avatar { grid-row: auto; flex: none; width: 110px; height: 110px; font-size: 54px; }
+.tg-seg-dades { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tg-seg-dades b { font-size: 44px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-seg-dades span { font-size: 32px; line-height: 1.2; opacity: 0.65; }
+.tg-seg-boto { position: relative; flex: none; display: grid; }
+.tg-seg-boto > span {
+  grid-area: 1 / 1; padding: 22px 40px; border-radius: 999px; font-size: 38px; font-weight: 700; text-align: center; white-space: nowrap;
+}
+.tg-seg-a { background: var(--tg-principal); color: var(--tg-sobre-principal); }
+.tg-seg-b { background: var(--tg-linia); color: var(--tg-fosc); opacity: 0; }
+.tg-dit {
+  position: absolute; left: 50%; top: 50%; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55); box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.12); opacity: 0; pointer-events: none;
+}
+.tg-net.tg-segueix .tg-cos { box-shadow: 0 18px 44px var(--tg-ombra-suau); }
+.tg-scrapbook.tg-segueix .tg-cos { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); border-radius: 6px; rotate: -1.5deg; box-shadow: 8px 10px 0 var(--tg-ombra-suau); }
+.tg-editorial.tg-segueix .tg-cos {
+  color: var(--tg-text); background: none; box-shadow: none; border-radius: 0; padding: 26px 0;
+  border-top: 3px solid var(--tg-text); border-bottom: 3px solid var(--tg-text); text-shadow: 0 2px 14px var(--tg-ombra);
+}
+.tg-editorial.tg-segueix .tg-avatar { background: none; color: var(--tg-text); border: 3px solid var(--tg-text); }
+.tg-editorial.tg-segueix .tg-seg-a { border-radius: 0; }
+.tg-editorial.tg-segueix .tg-seg-b { border-radius: 0; color: var(--tg-text); background: none; border: 3px solid var(--tg-text); }
+
+/* El REC: el marc d'una càmera que grava, a tota la zona segura (l'alçada la posa cos()). */
+.tg-rec .tg-cos { width: 840px; box-sizing: border-box; color: var(--tg-text); font-family: ui-monospace, "SF Mono", Menlo, monospace; text-shadow: 0 2px 10px var(--tg-ombra); }
+.tg-rec-cant { position: absolute; width: 80px; height: 80px; border: 0 solid currentColor; filter: drop-shadow(0 2px 6px var(--tg-ombra)); }
+.tg-rec-cant:nth-of-type(1) { left: 0; top: 0; border-width: 7px 0 0 7px; }
+.tg-rec-cant:nth-of-type(2) { right: 0; top: 0; border-width: 7px 7px 0 0; }
+.tg-rec-cant:nth-of-type(3) { left: 0; bottom: 0; border-width: 0 0 7px 7px; }
+.tg-rec-cant:nth-of-type(4) { right: 0; bottom: 0; border-width: 0 7px 7px 0; }
+.tg-rec-dalt, .tg-rec-baix { position: absolute; left: 44px; right: 44px; display: flex; justify-content: space-between; align-items: center; font-size: 46px; font-weight: 600; letter-spacing: 0.04em; }
+.tg-rec-dalt { top: 40px; } .tg-rec-baix { bottom: 40px; }
+.tg-rec-punt { display: inline-block; width: 30px; height: 30px; margin-right: 16px; border-radius: 50%; background: #FF3B30; vertical-align: 2px; }
+.tg-rec-bat { display: inline-block; position: relative; width: 74px; height: 36px; border: 4px solid currentColor; border-radius: 8px; box-sizing: border-box; }
+.tg-rec-bat::before { content: ""; position: absolute; left: 4px; top: 4px; bottom: 4px; width: 62%; border-radius: 3px; background: currentColor; }
+.tg-rec-bat::after { content: ""; position: absolute; right: -11px; top: 8px; width: 6px; height: 12px; border-radius: 0 3px 3px 0; background: currentColor; }
+.tg-mac.tg-rec .tg-rec-cant { border-radius: 26px; }
+.tg-scrapbook.tg-rec .tg-cos { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); }
+.tg-scrapbook.tg-rec .tg-rec-cant { border-radius: 6px; rotate: -2deg; }
+.tg-editorial.tg-rec .tg-rec-cant { width: 60px; height: 60px; border-width: 3px; }
+.tg-editorial.tg-rec .tg-rec-cant:nth-of-type(1) { border-width: 3px 0 0 3px; } .tg-editorial.tg-rec .tg-rec-cant:nth-of-type(2) { border-width: 3px 3px 0 0; }
+.tg-editorial.tg-rec .tg-rec-cant:nth-of-type(3) { border-width: 0 0 3px 3px; } .tg-editorial.tg-rec .tg-rec-cant:nth-of-type(4) { border-width: 0 3px 3px 0; }
+.tg-editorial.tg-rec .tg-rec-dalt, .tg-editorial.tg-rec .tg-rec-baix { font-size: 34px; letter-spacing: 0.16em; }
+
+/* Abans i després: les dues fotos, una damunt de l'altra; una ratlla s'hi mou i descobreix el després. */
+.tg-abans .tg-cos, .tg-carrusel .tg-cos { width: 840px; text-align: center; }
+.tg-abans h3, .tg-carrusel h3 {
+  margin: 0 0 18px; font-family: var(--tg-f-titols); font-size: 64px; font-weight: 700; line-height: 1.05;
+  color: var(--tg-text); text-shadow: 0 3px 18px var(--tg-ombra);
+}
+.tg-abans h3 .tg-clau, .tg-carrusel h3 .tg-clau { color: var(--tg-destacat); }
+.tg-comparacio { --tg-tall: 50%; position: relative; height: 760px; overflow: hidden; border-radius: 30px; background: var(--tg-vel);
+  box-shadow: 0 30px 70px var(--tg-ombra-suau); }
+.tg-ab { position: absolute; inset: 0; margin: 0; }
+.tg-ab img, .tg-ab .tg-falta-foto { width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; border-radius: 0; }
+.tg-ab-despres { clip-path: inset(0 0 0 var(--tg-tall)); }
+.tg-ab figcaption {
+  position: absolute; bottom: 26px; padding: 10px 22px; border-radius: 999px; font-family: var(--tg-f-text); font-size: 34px;
+  font-weight: 700; background: var(--tg-clar); color: var(--tg-fosc);
+}
+.tg-ab-abans figcaption { left: 26px; } .tg-ab-despres figcaption { right: 26px; }
+.tg-ab-linia { position: absolute; top: 0; bottom: 0; left: var(--tg-tall); width: 8px; margin-left: -4px; background: var(--tg-clar);
+  box-shadow: 0 0 18px var(--tg-ombra); }
+.tg-ab-linia::after { content: ""; position: absolute; left: 50%; top: 50%; width: 66px; height: 66px; margin: -33px 0 0 -33px;
+  border-radius: 50%; background: var(--tg-clar); box-shadow: 0 4px 16px var(--tg-ombra); }
+.tg-mac.tg-abans .tg-comparacio { box-shadow: 0 30px 70px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia); }
+.tg-scrapbook.tg-abans .tg-comparacio { border-radius: 4px; rotate: -1.5deg; border: 16px solid var(--tg-clar); box-shadow: 8px 10px 0 var(--tg-ombra-suau); }
+.tg-scrapbook.tg-abans figcaption, .tg-scrapbook.tg-abans h3, .tg-scrapbook.tg-carrusel h3 { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); font-weight: 400; }
+.tg-editorial.tg-abans .tg-comparacio { border-radius: 0; border: 3px solid var(--tg-text); }
+.tg-editorial.tg-abans figcaption { border-radius: 0; font-size: 26px; text-transform: uppercase; letter-spacing: 0.16em; }
+.tg-editorial.tg-abans .tg-ab-linia { width: 4px; margin-left: -2px; }
+.tg-editorial.tg-abans .tg-ab-linia::after { display: none; }
+
+/* El carrusel: les fotos giren en roda; les del davant, més grans i més clares (les posa rodaCarrusel). */
+.tg-roda { position: relative; height: 640px; }
+.tg-carta-roda {
+  position: absolute; left: 50%; top: 50%; width: 420px; margin: -262px 0 0 -210px; box-sizing: border-box; padding: 12px;
+  border-radius: 26px; background: var(--tg-clar); box-shadow: 0 24px 60px var(--tg-ombra-suau);
+}
+.tg-carta-roda img, .tg-carta-roda .tg-falta-foto { display: block; width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 16px; }
+.tg-mac.tg-carrusel .tg-carta-roda { padding: 0; overflow: hidden; box-shadow: 0 30px 70px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia); }
+.tg-mac.tg-carrusel .tg-carta-roda img { border-radius: 0; }
+.tg-scrapbook.tg-carrusel .tg-carta-roda { padding: 14px 14px 40px; border-radius: 3px; box-shadow: 6px 8px 0 var(--tg-ombra-suau); }
+.tg-scrapbook.tg-carrusel .tg-carta-roda img { border-radius: 0; }
+.tg-editorial.tg-carrusel .tg-carta-roda { padding: 0; border-radius: 0; background: none; border: 3px solid var(--tg-text); }
+.tg-editorial.tg-carrusel .tg-carta-roda img { border-radius: 0; }`;
 
   const { rgba, familiaDe } = global.TallatSubtitols;
 
@@ -500,6 +633,36 @@
     });
   }
 
+  // Una icona de traç (les de sota de la publicació), en un quadrat de 24.
+  function icona(doc, d) {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = doc.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    const cami = doc.createElementNS(NS, "path");
+    cami.setAttribute("d", d);
+    svg.append(cami);
+    return svg;
+  }
+  const COR = "M12 20.5S3.5 15.4 3.5 9.3A4.6 4.6 0 0 1 12 6.9a4.6 4.6 0 0 1 8.5 2.4c0 6.1-8.5 11.2-8.5 11.2z";
+  const ICONES_PUBLICACIO = ["M4 5.5h16v10H9l-5 4z", "M7 7h11l-3-3M17 17H6l3 3M18 7v5M6 17v-5", COR];
+
+  // Les fotos del carrusel en roda, girada `angle` (radiants): les del davant, més grans, més clares i a sobre.
+  function rodaCarrusel(cartes, angle) {
+    const n = cartes.length;
+    const mida = Number(cartes[0]?.parentElement?.dataset.mida || 1);  // com de gran és la roda (l'espai que té)
+    cartes.forEach((carta, k) => {
+      const a = angle + (k * 2 * Math.PI) / n;
+      const davant = (Math.cos(a) + 1) / 2;  // 1, al davant; 0, al darrere
+      carta.style.transform = `translateX(${(Math.sin(a) * 320).toFixed(1)}px) translateY(${((1 - davant) * -40 * mida).toFixed(1)}px) ` +
+        `scale(${((0.58 + 0.42 * davant) * mida).toFixed(3)})`;
+      carta.style.opacity = (0.5 + 0.5 * davant).toFixed(3);
+      carta.style.zIndex = String(Math.round(davant * 100));
+    });
+  }
+
+  // Quan s'escriu cada línia de les notes, i quant triga (com si s'escrivís de debò).
+  const durEscriu = (text) => Math.min(1.4, 0.15 + String(text || "").length * 0.045);
+
   function cos(doc, g, op) {
     const imatge = (nom) => (op.imatges ?? "imatges/") + encodeURIComponent(nom);
     const c = element(doc, "div", "tg-cos");
@@ -547,6 +710,78 @@
       const n = element(doc, "div", "tg-nou");
       if (g.estil === "mac" || g.estil === "scrapbook") ambMarcador(doc, n, nou?.text); else n.textContent = nou?.text || "";
       c.append(v, n);
+    } else if (g.tipus === "publicacio") {
+      const cap = element(doc, "div", "tg-pub-cap");
+      cap.append(element(doc, "i", "tg-avatar", inicial(g.de)), element(doc, "b", "tg-pub-nom", g.de || ""));
+      const text = element(doc, "div", "tg-pub-text");
+      ambDestacat(doc, text, g.text);
+      const peu = element(doc, "div", "tg-pub-peu");
+      for (const d of ICONES_PUBLICACIO) peu.append(icona(doc, d));
+      c.append(cap, text, peu);
+    } else if (g.tipus === "notes") {
+      const barra = element(doc, "div", "tg-notes-barra");
+      barra.append(element(doc, "span", null, "‹ Notes"), element(doc, "span", null, "Fet"));
+      const full = element(doc, "div", "tg-notes-full");
+      if (g.text) full.append(element(doc, "h3", null, g.text));
+      for (const p of g.punts || []) {
+        const linia = element(doc, "p", "tg-linia-nota");
+        linia.append(element(doc, "span", "tg-escrit", p.text), element(doc, "i", "tg-cursor"));
+        full.append(linia);
+      }
+      c.append(barra, full);
+    } else if (g.tipus === "segueix") {
+      const dades = element(doc, "div", "tg-seg-dades");
+      dades.append(element(doc, "b", null, g.de || ""));
+      if (g.text) dades.append(element(doc, "span", null, g.text));
+      const boto = element(doc, "span", "tg-seg-boto");
+      boto.append(element(doc, "span", "tg-seg-a", "Segueix"), element(doc, "span", "tg-seg-b", "Seguint ✓"), element(doc, "i", "tg-dit"));
+      c.append(element(doc, "i", "tg-avatar", inicial(g.de)), dades, boto);
+    } else if (g.tipus === "rec") {
+      // A tota la zona on pot anar (la mateixa que fa servir colloca).
+      const [dalt, baix] = g.limits || [269, 1248];
+      c.style.height = `${Math.max(400, baix - dalt)}px`;
+      for (let k = 0; k < 4; k++) c.append(element(doc, "i", "tg-rec-cant"));
+      const dalt_ = element(doc, "div", "tg-rec-dalt");
+      const rec = element(doc, "span");
+      rec.append(element(doc, "i", "tg-rec-punt"), doc.createTextNode("REC"));
+      dalt_.append(rec, element(doc, "i", "tg-rec-bat"));
+      const baix_ = element(doc, "div", "tg-rec-baix");
+      baix_.append(element(doc, "span", "tg-rec-temps", "00:00:00"), element(doc, "span", null, g.text || ""));
+      c.append(dalt_, baix_);
+    } else if (g.tipus === "abans" || g.tipus === "carrusel") {
+      if (g.text) { const h = element(doc, "h3"); ambDestacat(doc, h, g.text); c.append(h); }
+      const foto = (p, classe) => {
+        const fig = element(doc, "figure", classe);
+        if (p?.imatge) {
+          const img = element(doc, "img");
+          Object.assign(img, { src: imatge(p.imatge), alt: "" });
+          fig.append(img);
+        } else fig.append(element(doc, "div", "tg-falta-foto"));
+        return fig;
+      };
+      // Les fotos ocupen l'alçada que hi ha (amb el bloc de color, la de sobre la targeta del vídeo).
+      const [dalt, baix] = g.limits || [269, 1248];
+      const lliure = baix - dalt - (g.text ? 100 : 0);
+      if (g.tipus === "abans") {
+        const comp = element(doc, "div", "tg-comparacio");
+        comp.style.height = `${Math.round(Math.max(320, Math.min(900, lliure)))}px`;
+        const [a, d] = g.punts || [];
+        const fa = foto(a, "tg-ab tg-ab-abans");
+        fa.append(element(doc, "figcaption", null, a?.text || "abans"));
+        const fd = foto(d, "tg-ab tg-ab-despres");
+        fd.append(element(doc, "figcaption", null, d?.text || "després"));
+        comp.append(fa, fd, element(doc, "i", "tg-ab-linia"));
+        c.append(comp);
+      } else {
+        const roda = element(doc, "div", "tg-roda");
+        const alt = Math.max(360, Math.min(640, lliure));
+        roda.style.height = `${Math.round(alt)}px`;
+        roda.dataset.mida = (alt / 640).toFixed(3);
+        const fotos = (g.punts || []).length ? g.punts : [{}, {}, {}, {}];  // sense fotos: on aniran
+        for (const p of fotos) roda.append(foto(p, "tg-carta-roda"));
+        rodaCarrusel([...roda.children], 0);
+        c.append(roda);
+      }
     } else if (g.tipus === "comentari") {
       const NS = "http://www.w3.org/2000/svg";
       const cor = doc.createElementNS(NS, "svg");
@@ -680,7 +915,8 @@
   // Si un gràfic és massa alt (un text llarg, una lletra ampla), es fa més petit fins que hi cap: la
   // frase, amb la lletra (el text torna a repartir-se en línies); la llista i la crida, senceres.
   // Mai més alt que l'espai que té (amb el bloc de color, el de sobre la targeta).
-  const ALCADA_MAXIMA = { frase: 330, marcador: 330, ratllat: 420, progres: 640, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
+  const ALCADA_MAXIMA = { frase: 330, marcador: 330, ratllat: 420, progres: 640, publicacio: 560, notes: 620, segueix: 260,
+    abans: 900, carrusel: 760, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
     ventall: 680 };
   function encaixa({ g, lloc, c }) {
     if (!ALCADA_MAXIMA[g.tipus]) return;
@@ -822,6 +1058,52 @@
         const pas = Math.min(0.22, 0.6 / marques.length);
         tl.fromTo(marca, { "--tg-marcat": "0%" }, { "--tg-marcat": "100%", duration: pas + 0.05, ease: "none" }, g.inici + 0.35 + k * pas);
       });
+      if (g.tipus === "notes") {  // cada línia s'escriu lletra a lletra quan es diu, amb el cursor al final
+        c.querySelectorAll(".tg-linia-nota").forEach((linia, k) => {
+          const escrit = linia.querySelector(".tg-escrit");
+          const cursor = linia.querySelector(".tg-cursor");
+          const text = g.punts[k]?.text || "";
+          const t = Math.max(g.inici + 0.35, g.punts[k]?.t ?? g.inici + 0.35);
+          const dur = durEscriu(text);
+          const compte = { n: 0 };
+          const posa = () => { escrit.textContent = text.slice(0, Math.round(compte.n)); };
+          posa();
+          tl.fromTo(compte, { n: 0 }, { n: text.length, duration: dur, ease: "none", onUpdate: posa }, t);
+          tl.fromTo(cursor, { opacity: 0 }, { opacity: 1, duration: 0.01 }, t);
+          tl.to(cursor, { opacity: 0, duration: 0.01 }, k + 1 < g.punts.length ? Math.max(t + dur, g.punts[k + 1].t ?? 0) : g.final);
+        });
+      }
+      if (g.tipus === "segueix") {  // un dit toca el botó, que s'enfonsa i passa a «Seguint»
+        const t = g.inici + Math.min(1.2, Math.max(0.6, (g.final - g.inici) * 0.4));
+        const dit = c.querySelector(".tg-dit");
+        tl.fromTo(dit, { opacity: 0, scale: 1.6 }, { opacity: 1, scale: 1, duration: 0.25, ease: "power2.out" }, t - 0.25);
+        tl.fromTo(c.querySelector(".tg-seg-boto"), { scale: 1 }, { scale: 0.92, duration: 0.1, yoyo: true, repeat: 1 }, t);
+        tl.fromTo(c.querySelector(".tg-seg-b"), { opacity: 0 }, { opacity: 1, duration: 0.15 }, t + 0.1);
+        tl.fromTo(c.querySelector(".tg-seg-a"), { opacity: 1 }, { opacity: 0, duration: 0.15, immediateRender: false }, t + 0.1);
+        tl.to(dit, { opacity: 0, scale: 1.4, duration: 0.3 }, t + 0.25);
+      }
+      if (g.tipus === "rec") {  // el punt vermell parpelleja i el temps corre
+        const punt = c.querySelector(".tg-rec-punt");
+        for (let t = g.inici + 0.5; t < g.final - 0.3; t += 1) {
+          tl.fromTo(punt, { opacity: 1 }, { opacity: 0.15, duration: 0.01, immediateRender: false }, t);
+          tl.to(punt, { opacity: 1, duration: 0.01 }, t + 0.5);
+        }
+        const temps = c.querySelector(".tg-rec-temps");
+        const rellotge = { s: 0 };
+        const dos = (n) => String(Math.floor(n)).padStart(2, "0");
+        tl.fromTo(rellotge, { s: 0 }, { s: g.final - g.inici, duration: g.final - g.inici, ease: "none",
+          onUpdate: () => { temps.textContent = `00:${dos(rellotge.s / 60)}:${dos(rellotge.s % 60)}`; } }, g.inici);
+      }
+      if (g.tipus === "abans") {  // la ratlla es mou i descobreix el després (quan es diu, si es diu on)
+        const t = Math.max(g.inici + 0.6, g.punts?.[1]?.t ?? g.inici + 0.9);
+        tl.fromTo(c.querySelector(".tg-comparacio"), { "--tg-tall": "100%" }, { "--tg-tall": "50%", duration: 0.9, ease: "power2.inOut" }, t);
+      }
+      if (g.tipus === "carrusel") {  // la roda gira a poc a poc mentre dura
+        const cartes = [...c.querySelectorAll(".tg-carta-roda")];
+        const gir = { a: 0 };
+        tl.fromTo(gir, { a: 0 }, { a: -Math.PI * 1.2, duration: Math.max(0.5, g.final - g.inici), ease: "sine.inOut",
+          onUpdate: () => rodaCarrusel(cartes, gir.a) }, g.inici);
+      }
       if (g.tipus === "ratllat" && g.punts?.[1]) {  // quan es diu la paraula nova, es ratlla la d'abans i surt la nova
         const t = Math.max(g.inici + 0.45, g.punts[1].t);
         tl.fromTo(c.querySelector(".tg-ratlla"), { scaleX: 0 }, { scaleX: 1, duration: 0.3, ease: "power2.inOut" }, t - 0.3);

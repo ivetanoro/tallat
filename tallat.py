@@ -564,7 +564,8 @@ def ordre_grafics(args) -> None:
     energia = ", ".join(energia if isinstance(energia, list) else [energia])
     quants = marca_kit.get("grafics") or "normal"
     print(f"Marca: estil dels gràfics «{energia}» · quants: «{quants}» ({grafics.DENSITAT.get(quants, '')})"
-          + (f" · crida: «{marca_kit['crida']}»" if marca_kit.get("crida") else " · sense crida a la marca"))
+          + (f" · crida: «{marca_kit['crida']}»" if marca_kit.get("crida") else " · sense crida a la marca")
+          + (f" · compte: «{marca_kit['compte']}»" if marca_kit.get("compte") else ""))
     print(f"Vídeo de {_segons(sum(b - a for a, b in trams))}. Frases (on comença · paraules · text):")
     for f in frases:
         print(f"  {_segons(f['inici']):>8}  {f['paraula']}–{f['fins']}  {f['text']}")

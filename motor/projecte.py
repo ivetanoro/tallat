@@ -303,7 +303,7 @@ class Projecte:
         for g in pla if isinstance(pla, list) else []:
             if isinstance(g, dict) and g.get("tipus") == "web" and g.get("imatge"):
                 g = {**g, "imatge": nom(g["imatge"])}
-            elif isinstance(g, dict) and g.get("tipus") == "ventall" and isinstance(g.get("punts"), list):
+            elif isinstance(g, dict) and g.get("tipus") in grafics.AMB_FOTOS and isinstance(g.get("punts"), list):
                 g = {**g, "punts": [{**p, "imatge": nom(p.get("imatge"))} if isinstance(p, dict) else nom(p)
                                     for p in g["punts"]]}
             sortida.append(g)

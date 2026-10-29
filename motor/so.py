@@ -252,7 +252,10 @@ SONS_GRAFICS = {"frase": ("whoosh", "Frase", True), "marcador": ("whoosh", "Marc
                 "notificacio": ("brill", "Notificació", True), "comentari": ("pop", "Comentari", True),
                 "xat": ("pop", "Xat", True),
                 "numero": ("tic", "Número", True), "progres": ("tic", "Progrés", True), "anotacio": ("tic", "Anotació", False),
-                "web": ("whoosh", "Web", True), "ventall": ("pop", "Fotos", True)}
+                "web": ("whoosh", "Web", True), "ventall": ("pop", "Fotos", True),
+                "segueix": ("brill", "Segueix-me", True), "publicacio": ("pop", "Publicació", True),
+                "notes": ("tecla", "Notes", True), "rec": ("tic", "REC", False), "abans": ("whoosh", "Abans i després", True),
+                "carrusel": ("whoosh", "Carrusel", True)}
 
 
 def esdeveniments(brolls: list[dict], stickers: list[dict], titol: dict | None, animacio_titol: str,

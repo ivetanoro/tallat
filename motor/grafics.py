@@ -27,6 +27,17 @@ Tipus:
   anotacio     una nota escrita a mà amb un cercle, un subratllat o una fletxa («forma») que es dibuixa
   web          una captura de pantalla dins d'una finestra de navegador («imatge»; «text»: l'adreça que
                surt a la barra), que baixa a poc a poc si la captura és llarga; amaga els subtítols
+  publicacio   una publicació citada en una targeta (sense ser de cap xarxa): qui l'ha escrit («de») i què diu («text»)
+  notes        una nota del mòbil que s'escriu sola: el títol («text») i les línies («punts»), cadascuna quan es diu;
+               amaga els subtítols
+  segueix      la targeta del compte («de»: el nom, «text»: una línia de presentació) amb un botó de seguir que es
+               prem sol; sense «paraula», als últims segons
+  rec          el marc d'una càmera que grava (REC, la bateria i el temps que corre), a tota la pantalla; «text», si
+               es vol, a la cantonada de baix («dia 1»)
+  abans        abans i després: dues fotos («punts», cadascuna amb «imatge» i, si es vol, «text») que es comparen amb
+               una ratlla que es mou; «text»: un títol; amaga els subtítols
+  carrusel     unes quantes fotos («punts», amb «imatge») que giren en roda, les del davant més grans; «text»: un
+               títol; amaga els subtítols
   ventall      unes quantes fotos obertes en ventall (els «punts», cadascun amb la seva «imatge» i, si
                es vol, un peu de foto a «text»), que surten una a una; «text»: un títol; amaga els subtítols
 
@@ -59,15 +70,19 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-TIPUS = ("frase", "marcador", "etiqueta", "ratllat", "llista", "crida", "notificacio", "comentari", "xat", "numero",
-         "progres", "anotacio", "web", "ventall")
+TIPUS = ("frase", "marcador", "etiqueta", "ratllat", "llista", "crida", "segueix", "notificacio", "comentari",
+         "publicacio", "xat", "notes", "numero", "progres", "anotacio", "rec", "web", "ventall", "abans", "carrusel")
 NOMS = {"frase": "Frase", "marcador": "Marcador", "etiqueta": "Etiqueta", "ratllat": "Ratllat", "llista": "Llista", "crida": "Crida",
-        "notificacio": "Notificació", "comentari": "Comentari", "xat": "Xat", "numero": "Número", "progres": "Progrés",
-        "anotacio": "Anotació", "web": "Web", "ventall": "Fotos"}
-AMB_AUTOR = ("notificacio", "comentari")  # els que diuen qui ho envia o qui ho ha escrit («de»)
-AMB_PUNTS = ("llista", "xat", "ventall", "ratllat")  # els que tenen punts que surten un a un
-AMB_IMATGE = ("web", "ventall")
-BLOC_PER_DEFECTE = ("web", "ventall")  # els grans: amb el bloc de color si no es diu el contrari
+        "segueix": "Segueix-me", "notificacio": "Notificació", "comentari": "Comentari", "publicacio": "Publicació",
+        "xat": "Xat", "notes": "Notes", "numero": "Número", "progres": "Progrés", "anotacio": "Anotació", "rec": "REC",
+        "web": "Web", "ventall": "Fotos", "abans": "Abans i després", "carrusel": "Carrusel"}
+AMB_AUTOR = ("notificacio", "comentari", "publicacio", "segueix")  # els que diuen qui ho envia o qui ho ha escrit («de»)
+AMB_PUNTS = ("llista", "xat", "ventall", "ratllat", "notes", "abans", "carrusel")  # els que tenen punts que surten un a un
+AMB_IMATGE = ("web", "ventall", "abans", "carrusel")
+AMB_FOTOS = {"ventall": 1, "abans": 2, "carrusel": 3}  # els de fotos (punts amb imatge), i quantes en calen com a mínim
+MAX_FOTOS = {"abans": 2}  # si no, MAX_PUNTS
+SENSE_TEXT = ("crida", "segueix", "rec")  # els que es poden dibuixar sense text (amb el de la marca o sense)
+BLOC_PER_DEFECTE = ("web", "ventall", "abans", "carrusel")  # els grans: amb el bloc de color si no es diu el contrari
 CARPETA_IMATGES = "imatges-grafics"  # dins del projecte
 FORMATS_IMATGE = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 NOM_IMATGE = re.compile(r"[A-Za-z0-9_-]{1,80}\.(?:png|jpe?g|webp|gif)")  # el nom d'una imatge ja copiada
@@ -86,17 +101,21 @@ ESTATS = ("proposat", "mantingut", "canvia", "tret")
 VOTS = ("si", "potser", "no")  # el que diu la persona al tauler de Vesteix
 GRUP = re.compile(r"[A-Za-z0-9_-]{1,20}")  # les alternatives per a un mateix moment
 DURADES = {"frase": 2.8, "marcador": 2.8, "etiqueta": 2.2, "ratllat": 3.0, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "comentari": 3.5,
-           "xat": 5.0, "numero": 2.8, "progres": 3.0, "anotacio": 2.5, "web": 4.0, "ventall": 4.5}
+           "xat": 5.0, "numero": 2.8, "progres": 3.0, "anotacio": 2.5, "web": 4.0, "ventall": 4.5, "segueix": 3.5, "publicacio": 4.0, "notes": 5.0, "rec": 4.0, "abans": 4.5,
+           "carrusel": 5.0}
 # On va cada tipus si no es diu: en un vídeo de cap parlant, la cara sol omplir el mig.
 POSICIO = {"frase": "dalt", "marcador": "dalt", "etiqueta": "dalt", "ratllat": "dalt", "llista": "baix", "crida": "baix", "notificacio": "dalt",
-           "comentari": "dalt", "xat": "baix", "numero": "dalt", "progres": "dalt", "anotacio": "mig", "web": "mig", "ventall": "mig"}
+           "comentari": "dalt", "xat": "baix", "numero": "dalt", "progres": "dalt", "anotacio": "mig", "web": "mig", "ventall": "mig", "segueix": "baix", "publicacio": "dalt", "notes": "baix", "rec": "mig",
+           "abans": "mig", "carrusel": "mig"}
 # Els que amaguen els subtítols mentre surten (el que hi diu és el que se sent).
 AMAGA = {"frase": True, "marcador": True, "llista": True, "etiqueta": False, "ratllat": True, "crida": False, "notificacio": False, "comentari": False,
-         "xat": True, "numero": False, "progres": False, "anotacio": False, "web": True, "ventall": True}
+         "xat": True, "numero": False, "progres": False, "anotacio": False, "web": True, "ventall": True, "segueix": False, "publicacio": False, "notes": True, "rec": False,
+         "abans": True, "carrusel": True}
 MIDA_TEXT = {"frase": 140, "marcador": 140, "etiqueta": 40, "ratllat": 40, "llista": 80, "crida": 90, "notificacio": 120, "comentari": 140,
-             "xat": 30, "numero": 60, "progres": 60, "anotacio": 40, "web": 60, "ventall": 60}
+             "xat": 30, "numero": 60, "progres": 60, "anotacio": 40, "web": 60, "ventall": 60, "segueix": 60, "publicacio": 220, "notes": 60, "rec": 30,
+             "abans": 60, "carrusel": 60}
 MIDA_PEU = 30  # el peu de cada foto del ventall
-CAL_TEXT = ("frase", "marcador", "etiqueta", "notificacio", "comentari", "anotacio")
+CAL_TEXT = ("frase", "marcador", "etiqueta", "publicacio", "notificacio", "comentari", "anotacio")
 XIFRA = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?")  # «10.000», «2,5», «73»
 DENSITAT = {"pocs": "un cada 8-12 s", "normal": "un cada 4-6 s", "molts": "un cada 2-4 s"}  # com la marca
 MAX_PUNTS = 6
@@ -166,7 +185,7 @@ def net(g: dict, paraules: int | None = None) -> dict:
     for clau in ("paraula", "fins"):
         if paraules is not None and sortida[clau] is not None and sortida[clau] >= paraules:
             raise ValueError(f"No hi ha cap paraula amb el número {sortida[clau]} (n'hi ha de 0 a {paraules - 1})")
-    if sortida["paraula"] is None and tipus != "crida":
+    if sortida["paraula"] is None and tipus not in ("crida", "segueix"):
         raise ValueError(f"Al gràfic «{g.get('text') or tipus}» li falta «paraula»: on comença")
     if sortida["fins"] is not None and sortida["paraula"] is not None and sortida["fins"] < sortida["paraula"]:
         sortida["fins"] = None
@@ -178,7 +197,7 @@ def net(g: dict, paraules: int | None = None) -> dict:
     if tipus in CAL_TEXT and not sortida["text"]:
         raise ValueError(f"Al gràfic {NOMS[tipus].lower()} li falta «text»")
     punts = []
-    if tipus == "ventall":  # les fotos: cadascuna amb la seva imatge (un text sol és el camí de la imatge)
+    if tipus in AMB_FOTOS:  # les fotos: cadascuna amb la seva imatge (un text sol és el camí de la imatge)
         for p in g.get("punts") or []:
             p = p if isinstance(p, dict) else {"imatge": p}
             imatge = _imatge(p.get("imatge"))
@@ -200,13 +219,15 @@ def net(g: dict, paraules: int | None = None) -> dict:
                     punt["costat"] = p.get("costat") if p.get("costat") in ("rebut", "enviat") else \
                         ("rebut" if k % 2 == 0 else "enviat")
                 punts.append(punt)
+        if tipus == "notes" and not punts:
+            raise ValueError("Unes notes necessiten «punts»: les línies que s'escriuen [\"comprar llet\", \"trucar a la mama\"]")
         if tipus == "ratllat":
             if len(punts) < 2:
                 raise ValueError("Un ratllat necessita dos «punts»: el que es ratlla i el que hi va [\"mandra\", \"cansament\"]")
             punts = punts[:2]
         if not punts:
             raise ValueError(f"{'Una llista' if tipus == 'llista' else 'Un xat'} necessita «punts»: [\"un\", \"dos\"…]")
-    sortida["punts"] = punts[:MAX_PUNTS]
+    sortida["punts"] = punts[:MAX_FOTOS.get(tipus, MAX_PUNTS)]
     sortida["de"] = _text(g.get("de"), "de", 30) if tipus in AMB_AUTOR else ""
     sortida["xifra"] = _text(g.get("xifra"), "xifra", 24) if tipus in ("numero", "progres") else ""
     if tipus == "numero" and not XIFRA.search(sortida["xifra"]):
@@ -400,8 +421,8 @@ def limits(subtitols: dict | None, amaga: bool, alcada: float | None = None) -> 
 
 
 def _punts_visibles(g: dict, imatges) -> list[dict]:
-    """Els punts que es veuen: al ventall, només les fotos que ja són al projecte."""
-    if g["tipus"] != "ventall":
+    """Els punts que es veuen: als de fotos, només les que ja són al projecte."""
+    if g["tipus"] not in AMB_FOTOS:
         return g["punts"]
     return [p for p in g["punts"] if imatge_valida(p.get("imatge"), imatges)]
 
@@ -416,7 +437,7 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
     tenen el bloc de color). També el fa servir la pàgina per a les miniatures (dels trets, per exemple)."""
     estils = [estils] if isinstance(estils, str) else (estils or [])  # els kits d'abans: un sol estil
     text = g["text"] or (crida.strip()[:MIDA_TEXT["crida"]] if g["tipus"] == "crida" else "")
-    if g["tipus"] not in AMB_IMATGE and not (text or g["punts"] or g.get("xifra")):
+    if g["tipus"] not in AMB_IMATGE + SENSE_TEXT[1:] and not (text or g["punts"] or g.get("xifra")):
         return None
     # Amb el bloc de color, el gràfic fa de diapositiva: per defecte, sense subtítols.
     bloc = False if sense_bloc else g["tipus"] in BLOC_PER_DEFECTE if g.get("bloc") is None else g["bloc"]
@@ -444,8 +465,8 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
         d.update(forma=g.get("forma") or "fletxa", costat=g.get("costat") or "esquerra")
     elif g["tipus"] == "web":
         d["imatge"] = g["imatge"] if imatge_valida(g.get("imatge"), imatges) else ""
-    if g["tipus"] in AMB_IMATGE and not (d.get("imatge") or d["punts"]):
-        d["falta"] = True
+    if g["tipus"] == "web" and not d.get("imatge") or len(d["punts"]) < AMB_FOTOS.get(g["tipus"], 0):
+        d["falta"] = True  # sense la captura, o amb menys fotos de les que calen
     return d
 
 
@@ -456,6 +477,9 @@ MOSTRES = {"frase": {"text": "Menys és *més*"}, "marcador": {"text": "el truc 
            "ratllat": {"punts": ["mandra", "cansament"]},
            "llista": {"text": "Tres claus", "punts": ["Llum", "So", "Ritme"]},
            "numero": {"xifra": "73 %", "text": "ho fan així"},
+           "publicacio": {"de": "una compte", "text": "El millor consell que m'han donat: *comença petit*."},
+           "notes": {"text": "Per fer", "punts": ["dormir més", "beure aigua"]},
+           "segueix": {"de": "el teu compte", "text": "un vídeo nou cada setmana"}, "rec": {"text": "dia 1"},
            "progres": {"xifra": "70 %", "text": "del camí", "forma": "cercle"},
            "notificacio": {"de": "Missatge", "text": "Ja és aquí!"},
            "comentari": {"de": "marta", "text": "I això com es fa?"},
@@ -527,7 +551,7 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
         final = round(min(total, max(inici + MINIM, final)), 3)
         if g["tipus"] in AMB_PUNTS:
             n = len(situat["punts"])
-            pas = min(0.9 if g["tipus"] == "xat" else 0.7, max(0.2, (final - inici - 0.8) / max(1, n)))
+            pas = min(0.9 if g["tipus"] in ("xat", "notes") else 0.7, max(0.2, (final - inici - 0.8) / max(1, n)))
             for k, (p, punt) in enumerate(zip(_punts_visibles(g, imatges), situat["punts"])):
                 paraula = p.get("paraula")
                 t = inicis.get(paraula) if paraula is not None and mateix_bloc(paraula) else None

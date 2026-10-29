@@ -115,6 +115,34 @@ class TestTipusNous(unittest.TestCase):
                 grafics.net(dolent)
             self.assertIn(paraula, str(e.exception))
 
+    def test_publicacio_notes_segueix_i_rec(self):
+        pub = grafics.net({"tipus": "publicacio", "paraula": 0, "de": "una compte", "text": "comença *petit*"})
+        self.assertEqual((pub["de"], pub["text"]), ("una compte", "comença *petit*"))
+        with self.assertRaises(ValueError):
+            grafics.net({"tipus": "publicacio", "paraula": 0, "de": "algú"})  # sense el que diu, no és res
+        with self.assertRaises(ValueError) as e:
+            grafics.net({"tipus": "notes", "paraula": 0, "text": "Per fer"})
+        self.assertIn("punts", str(e.exception))
+        notes = grafics.net({"tipus": "notes", "paraula": 0, "punts": ["dormir", {"text": "beure aigua", "paraula": 2}]})
+        segueix = grafics.net({"tipus": "segueix", "de": "el meu compte"})  # sense paraula: al final
+        rec = grafics.net({"tipus": "rec", "paraula": 1})  # sense text, també
+        situats = grafics.situa(grafics.neteja_llista([notes, segueix, rec]), {0: 0.0, 1: 1.0, 2: 1.6}, {}, 12.0, [])
+        nota, final, marc = sorted(situats, key=lambda g: ["notes", "segueix", "rec"].index(g["tipus"]))
+        self.assertEqual([p["t"] for p in nota["punts"]], [0.35, 1.6])
+        self.assertEqual((final["tipus"], final["inici"], final["de"]), ("segueix", 8.5, "el meu compte"))
+        self.assertEqual((marc["tipus"], marc["amaga_subtitols"]), ("rec", False))
+
+    def test_les_fotos_de_l_abans_i_despres_i_del_carrusel(self):
+        abans = grafics.net({"tipus": "abans", "paraula": 0, "punts": ["a.jpg", "b.jpg", "c.jpg"]})
+        self.assertEqual([p["imatge"] for p in abans["punts"]], ["a.jpg", "b.jpg"])  # només dues
+        carrusel = grafics.net({"tipus": "carrusel", "paraula": 1, "punts": ["a.jpg", "b.jpg"]})
+        pla = grafics.neteja_llista([abans, carrusel])
+        # Amb les fotos que calen, surten; amb menys (al carrusel en calen tres), es veuen al tauler per pujar-les.
+        self.assertEqual([g["tipus"] for g in grafics.situa(pla, {0: 0.0, 1: 5.0}, {}, 12.0, [], imatges={"a.jpg", "b.jpg"})],
+                         ["abans"])
+        self.assertTrue(grafics.dibuix(pla[1], [], imatges={"a.jpg", "b.jpg"})["falta"])
+        self.assertTrue(grafics.dibuix(pla[0], [], imatges={"a.jpg"})["falta"])
+
     def test_el_progres_sap_quina_part_s_omple(self):
         for xifra, part in (("70 %", 0.7), ("3 de 5", 0.6), ("7/10", 0.7), ("3 de cada 4", 0.75), ("1.000 de 2.000", 0.5),
                             ("150 %", 1.0)):

@@ -3286,11 +3286,14 @@ function textGrafic(g) {
   const text = (g.text || (g.tipus === "crida" ? estilMarca?.crida || "La teva crida habitual" : "")).replaceAll("*", "");
   if (g.tipus === "llista") return [text, ...g.punts.map((p) => `· ${p.text}`)].filter(Boolean).join("  ");
   if (g.tipus === "xat") return [text, ...g.punts.map((p) => `${p.costat === "enviat" ? "→" : "←"} ${p.text}`)].filter(Boolean).join("  ");
-  if (g.tipus === "notificacio" || g.tipus === "comentari") return `${g.de ? `${g.de}: ` : ""}«${text}»`;
+  if (["notificacio", "comentari", "publicacio"].includes(g.tipus)) return `${g.de ? `${g.de}: ` : ""}«${text}»`;
+  if (g.tipus === "notes") return [text, ...g.punts.map((p) => `· ${p.text}`)].filter(Boolean).join("  ");
+  if (g.tipus === "segueix") return [g.de || "El teu compte", text].filter(Boolean).join(" · ");
+  if (g.tipus === "rec") return text ? `REC · ${text}` : "El marc d'una càmera que grava";
   if (g.tipus === "ratllat") return [text, g.punts.map((p) => p.text).join(" → ")].filter(Boolean).join(" ");
   if (g.tipus === "numero" || g.tipus === "progres") return `${g.xifra}${text ? ` · ${text}` : ""}`;
   if (g.tipus === "web") return text ? `Web: ${text}` : "Captura d'una web";
-  if (g.tipus === "ventall") {
+  if (g.tipus in MAX_FOTOS) {
     const n = g.punts.length;
     return [text, n ? `${n} ${n === 1 ? "foto" : "fotos"}` : "Encara sense fotos"].filter(Boolean).join(" · ");
   }
@@ -3308,7 +3311,7 @@ function pintaImatgesGrafic(cont, g) {
     const img = document.createElement("img");
     Object.assign(img, { src: OP_GRAFICS.imatges + encodeURIComponent(nom), alt: "" });
     foto.append(img);
-    if (g.tipus === "ventall") {
+    if (g.tipus in MAX_FOTOS) {
       const treu = document.createElement("button");
       Object.assign(treu, { className: "treu-foto", title: "Treu aquesta foto" });
       treu.setAttribute("aria-label", "Treu aquesta foto");
@@ -3318,7 +3321,7 @@ function pintaImatgesGrafic(cont, g) {
     }
     cont.append(foto);
   });
-  if (g.tipus === "ventall" && fotos.length >= 6) return;
+  if (g.tipus in MAX_FOTOS && fotos.length >= MAX_FOTOS[g.tipus]) return;
   const puja = document.createElement("button");
   puja.className = `boto petit puja-imatge${fotos.length ? "" : " principal"}`;
   puja.textContent = g.tipus === "web" ? (fotos.length ? "Canvia la captura" : "Puja la captura")
@@ -3333,7 +3336,7 @@ let graficPerPujar = null;
 function triaImatgesGrafic(g) {
   graficPerPujar = g.id;
   const tria = $("#fitxer-grafic");
-  tria.multiple = g.tipus === "ventall";
+  tria.multiple = g.tipus in MAX_FOTOS;
   tria.click();
 }
 
@@ -3399,15 +3402,18 @@ let tretsOberts = false;
 let liniesDreta = [];
 
 const NOMS_SO = { whoosh: "Whoosh", pop: "Pop", tecla: "Teclat", brill: "Brillantor", tic: "Tic" };
-const TIPUS_GALERIA = [["frase", "Frase"], ["marcador", "Marcador"], ["etiqueta", "Etiqueta"], ["ratllat", "Ratllat"], ["llista", "Llista"], ["numero", "Número"], ["progres", "Progrés"],
-  ["notificacio", "Notificació"], ["comentari", "Comentari"], ["xat", "Xat"], ["anotacio", "Anotació"], ["web", "Web"], ["ventall", "Fotos"],
-  ["crida", "Crida"]];
+const TIPUS_GALERIA = [["frase", "Frase"], ["marcador", "Marcador"], ["etiqueta", "Etiqueta"], ["ratllat", "Ratllat"], ["llista", "Llista"],
+  ["numero", "Número"], ["progres", "Progrés"], ["notificacio", "Notificació"], ["comentari", "Comentari"], ["publicacio", "Publicació"],
+  ["xat", "Xat"], ["notes", "Notes"], ["anotacio", "Anotació"], ["rec", "REC"], ["web", "Web"], ["ventall", "Fotos"],
+  ["abans", "Abans i després"], ["carrusel", "Carrusel"], ["crida", "Crida"], ["segueix", "Segueix-me"]];
+// Els de fotos (punts amb imatge) i quantes s'hi poden posar.
+const MAX_FOTOS = { ventall: 6, abans: 2, carrusel: 6 };
 const NOMS_GRAFIC = Object.fromEntries(TIPUS_GALERIA);
 // Com al servidor (motor/grafics.py): un text més llarg no s'hi desaria.
 const MIDA_TEXT_GRAFIC = { frase: 140, marcador: 140, etiqueta: 40, ratllat: 40, llista: 80, crida: 90, notificacio: 120, comentari: 140, xat: 30, numero: 60, progres: 60,
-  anotacio: 40, web: 60, ventall: 60 };
+  anotacio: 40, web: 60, ventall: 60, publicacio: 220, notes: 60, segueix: 60, rec: 30, abans: 60, carrusel: 60 };
 const DURADES_GRAFIC = { frase: 2.8, marcador: 2.8, etiqueta: 2.2, ratllat: 3.0, llista: 4.5, crida: 3.5, notificacio: 3.0, comentari: 3.5, xat: 5.0, numero: 2.8, progres: 3.0,
-  anotacio: 2.5, web: 4.0, ventall: 4.5 };
+  anotacio: 2.5, web: 4.0, ventall: 4.5, publicacio: 4.0, notes: 5.0, segueix: 3.5, rec: 4.0, abans: 4.5, carrusel: 5.0 };
 const ICONES_PECA = {
   grafic: '<svg viewBox="0 0 24 24"><path d="M11 3.5l1.9 5.1 5.1 1.9-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/></svg>',
   broll: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="m3.5 15 4.5-4 4 3.5 3-2.5 5.5 4.5"/><circle cx="15.5" cy="9" r="1.5"/></svg>',
@@ -3455,6 +3461,9 @@ function graficNou(tipus, paraula) {
   else if (tipus === "xat") g.punts = [{ text: retalla(frase, 70) || "Hola!", costat: "rebut" }, { text: "De veritat?", costat: "enviat" }];
   else if (tipus === "notificacio") Object.assign(g, { de: "Missatge", text: retalla(frase, 100) || "Tens un missatge" });
   else if (tipus === "comentari") Object.assign(g, { de: "algú", text: retalla(frase, 100) || "I això com es fa?" });
+  else if (tipus === "publicacio") Object.assign(g, { de: "algú", text: retalla(frase, 160) || "El que diu la publicació" });
+  else if (tipus === "notes") Object.assign(g, { text: "Notes", punts: [{ text: retalla(frase, 70) || "La primera línia" }] });
+  else if (tipus === "segueix") Object.assign(g, { de: retalla(estilMarca?.compte || "", 30) });
   else if (tipus === "numero") {
     const xifra = textDes(paraula, 14).match(/\d+(?:[.,]\d+)*(?:\s?%)?/);
     g.xifra = xifra ? xifra[0] : "3";
@@ -3491,7 +3500,7 @@ function afegeixGrafic(tipus) {
     previaBruta = true;
     pecaPerVeure = { tipus: "grafic", id: g.id };
     triaPeca("grafic", g.id, { enfoca: true });
-    if (tipus === "web" || tipus === "ventall") triaImatgesGrafic(g);  // dins del mateix clic: el Safari l'obre
+    if (tipus === "web" || tipus in MAX_FOTOS) triaImatgesGrafic(g);  // dins del mateix clic: el Safari l'obre
   });
 }
 
@@ -4941,7 +4950,7 @@ function editorGrafic(cos, g) {
     n.textContent = `La teva nota: ${g.nota}`;
     cos.append(n);
   }
-  if (g.tipus === "web" || g.tipus === "ventall") {
+  if (g.tipus === "web" || g.tipus in MAX_FOTOS) {
     const imatges = document.createElement("div");
     imatges.className = "grafic-imatges";
     pintaImatgesGrafic(imatges, g);
@@ -4967,7 +4976,13 @@ function editorGrafic(cos, g) {
     ambText("El text de sota", "", { valid: () => true });
     segmentatPeca(cos, "Forma", [["cercle", "Cercle"], ["barra", "Barra"]], g.forma || "cercle", (forma) => canviaGrafic(id, { forma }));
   } else if (g.tipus === "web") ambText("L'adreça de dalt", "", { placeholder: "elteuweb.cat", valid: () => true });
-  else if (g.tipus === "ventall") ambText("Un títol", "", { valid: () => true });
+  else if (g.tipus in MAX_FOTOS) ambText("Un títol", "", { valid: () => true, placeholder: "Si no en vols, deixa-ho buit" });
+  else if (g.tipus === "publicacio" || g.tipus === "segueix") {
+    camp(cos, g.tipus === "segueix" ? "El compte" : "Qui l'ha escrit",
+      campText(g.de || "", { mida: 30, clau: "de", valid: () => true, desa: (v) => canviaGrafic(id, { de: textPla(v) }) }));
+    ambText(g.tipus === "segueix" ? "Una línia de presentació" : "El que diu", "",
+      g.tipus === "segueix" ? { valid: () => true, placeholder: "un vídeo nou cada setmana" } : { linies: 3 });
+  } else if (g.tipus === "rec") ambText("A la cantonada de baix (si vols)", "", { valid: () => true, placeholder: "dia 1" });
   if (g.tipus === "ratllat") {
     ambText("A dalt (si vols)", "", { valid: () => true, placeholder: "no és…" });
     camp(cos, "El que es ratlla i el que hi va, un a cada línia",
@@ -4976,15 +4991,16 @@ function editorGrafic(cos, g) {
         desa: (v) => canviaGrafic(id, { punts: v.split("\n").map((l) => textPla(l).slice(0, 80)).filter(Boolean).slice(0, 2)
           .map((text, k) => ({ text, paraula: g.punts[k]?.text === text ? g.punts[k].paraula : null })) }) }));
   }
-  if (g.tipus === "llista" || g.tipus === "xat") {
-    if (g.tipus === "llista") ambText("El títol", "", { valid: () => true, placeholder: "Si no en vols, deixa-ho buit" });
+  if (g.tipus === "llista" || g.tipus === "xat" || g.tipus === "notes") {
+    if (g.tipus !== "xat") ambText("El títol", "", { valid: () => true, placeholder: "Si no en vols, deixa-ho buit" });
     const valor = g.punts.map((x) => x.text).join("\n");
-    camp(cos, g.tipus === "llista" ? "Els punts, un a cada línia" : "Els missatges, un a cada línia",
+    camp(cos, g.tipus === "xat" ? "Els missatges, un a cada línia" : g.tipus === "notes" ? "Les línies de la nota" : "Els punts, un a cada línia",
       campText(valor, { linies: Math.min(6, Math.max(3, g.punts.length + 1)), clau: "punts",
         valid: (v) => v.split("\n").some((l) => l.trim()),
         desa: (v) => canviaGrafic(id, { punts: v.split("\n").map((l) => textPla(l).slice(0, 80)).filter(Boolean).slice(0, 6)
           .map((text, k) => ({ text, paraula: null, ...(g.tipus === "xat" ? { costat: g.punts[k]?.costat || (k % 2 ? "enviat" : "rebut") } : {}) })) }) }),
-      g.tipus === "xat" ? "Un a l'esquerra (el que reps) i l'altre a la dreta (el que envies), per torns." : "Surten d'un en un.");
+      g.tipus === "xat" ? "Un a l'esquerra (el que reps) i l'altre a la dreta (el que envies), per torns."
+        : g.tipus === "notes" ? "S'escriuen d'una en una." : "Surten d'un en un.");
   }
   if (g.tipus === "anotacio") {
     segmentatPeca(cos, "Forma", [["fletxa", "Fletxa"], ["cercle", "Cercle"], ["subratllat", "Subratllat"]], g.forma || "fletxa",

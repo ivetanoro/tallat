@@ -871,7 +871,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 temporal.unlink(missing_ok=True)
 
         def _puja_imatge_grafic(self, projecte):
-            """Rep una imatge per a un gràfic: la captura de la web (la canvia) o una foto més del ventall."""
+            """Rep una imatge per a un gràfic: la captura de la web (la canvia) o una foto més (el ventall, l'abans i
+            després o el carrusel)."""
             consulta = parse_qs(urlparse(self.path).query)
             gid = (consulta.get("grafic") or [""])[0]
             nom = Path((consulta.get("nom") or ["imatge"])[0]).name
@@ -892,8 +893,9 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 g = next((x for x in projecte.estat.get("grafics") or [] if x["id"] == gid), None)
                 if g is None or g["tipus"] not in grafics.AMB_IMATGE:
                     return self._json({"error": "No trobo aquest gràfic"}, HTTPStatus.NOT_FOUND)
-                if g["tipus"] == "ventall" and len(g["punts"]) >= grafics.MAX_PUNTS:
-                    return self._json({"error": f"Hi caben {grafics.MAX_PUNTS} fotos com a molt"}, HTTPStatus.BAD_REQUEST)
+                maxim = grafics.MAX_FOTOS.get(g["tipus"], grafics.MAX_PUNTS)
+                if g["tipus"] in grafics.AMB_FOTOS and len(g["punts"]) >= maxim:
+                    return self._json({"error": f"Hi caben {maxim} fotos com a molt"}, HTTPStatus.BAD_REQUEST)
                 with tempfile.TemporaryDirectory() as temporal:
                     fitxer = Path(temporal) / f"imatge{Path(nom).suffix.lower()}"
                     fitxer.write_bytes(contingut)
