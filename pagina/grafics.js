@@ -1,5 +1,5 @@
-/* tallat · els gràfics del pla: frase clau, etiqueta, llista, crida, notificació, xat, número, anotació,
- * web (una captura dins d'una finestra) i ventall (unes quantes fotos).
+/* tallat · els gràfics del pla: frase clau, etiqueta, llista, crida, notificació, comentari, xat, número,
+ * anotació, web (una captura dins d'una finestra) i ventall (unes quantes fotos).
  *
  * Com els subtítols, el mateix codi els dibuixa a la vista prèvia i al vídeo final (dins de la
  * composició de HyperFrames). Treballa sobre una caixa de 1080 × 1920 px; qui el fa servir l'escala.
@@ -14,7 +14,7 @@
  * d'Instagram sense els subtítols. El gràfic no en surt mai.
  * `paleta`: {text, principal, destacat, secundari, clar, fosc, lletra_titols, lletra_text, lletra_accent}.
  * A la frase i a la crida, el que va *entre asteriscs* surt destacat. La notificació porta qui l'envia
- * (`de`), el xat els missatges a `punts` (cadascun amb `costat`: rebut o enviat), el número la `xifra`
+ * (`de`), el comentari qui l'ha escrit (`de`), el xat els missatges a `punts` (cadascun amb `costat`: rebut o enviat), el número la `xifra`
  * ({abans, valor, decimals, despres, milers}) i l'anotació la `forma` (cercle, subratllat o fletxa) i el
  * `costat` on va. L'anotació s'escriu amb la lletra de mà i el color secundari de la marca.
  * La web porta la captura a `imatge` (i l'adreça de la barra a `text`); el ventall, les fotos als `punts`
@@ -50,7 +50,7 @@
 }
 .tg-scrapbook .tg-clau { font-style: normal; }
 .tg-scrapbook.tg-frase .tg-cos::before, .tg-scrapbook.tg-llista .tg-cos::before, .tg-scrapbook.tg-crida .tg-cos::before,
-.tg-scrapbook.tg-notificacio .tg-cos::before, .tg-scrapbook.tg-web .tg-cos::before {
+.tg-scrapbook.tg-notificacio .tg-cos::before, .tg-scrapbook.tg-comentari .tg-cos::before, .tg-scrapbook.tg-web .tg-cos::before {
   content: ""; position: absolute; left: 50%; top: -24px; width: 190px; height: 48px; margin-left: -95px;
   background: var(--tg-cinta); rotate: 3deg;
 }
@@ -163,6 +163,29 @@
   color: var(--tg-text); background: none; box-shadow: none; border-radius: 0; padding: 26px 0;
   border-top: 3px solid var(--tg-text); border-bottom: 3px solid var(--tg-text); text-shadow: 0 2px 14px var(--tg-ombra);
 }
+
+/* El comentari: una targeta com les de sota dels vídeos (sense ser de cap xarxa): la inicial de qui l'ha escrit, el
+   nom, un cor i el que diu. */
+.tg-comentari .tg-cos {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 4px 24px; align-items: center; min-width: 560px;
+  padding: 30px 38px 34px 30px; text-align: left; font-family: var(--tg-f-text); color: var(--tg-fosc);
+  background: var(--tg-clar); border-radius: 44px; box-shadow: 0 30px 70px var(--tg-ombra-suau), 0 0 0 1.5px var(--tg-linia);
+}
+.tg-avatar {
+  grid-row: span 2; align-self: start; display: flex; align-items: center; justify-content: center; width: 92px; height: 92px;
+  border-radius: 50%; font-style: normal; font-size: 46px; font-weight: 700; background: var(--tg-principal); color: var(--tg-sobre-principal);
+}
+.tg-com-qui { font-size: 38px; font-weight: 700; line-height: 1.15; opacity: 0.7; }
+.tg-cor { grid-row: span 2; align-self: center; width: 52px; height: 52px; fill: none; stroke: currentColor; stroke-width: 2.2; opacity: 0.55; }
+.tg-com-text { font-size: 52px; line-height: 1.18; }
+.tg-net.tg-comentari .tg-cos { box-shadow: 0 18px 44px var(--tg-ombra-suau); }
+.tg-net.tg-comentari .tg-cor { stroke: var(--tg-destacat); opacity: 1; }
+.tg-scrapbook.tg-comentari .tg-cos { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); border-radius: 4px; rotate: -2deg; box-shadow: 8px 10px 0 var(--tg-ombra-suau); }
+.tg-editorial.tg-comentari .tg-cos {
+  color: var(--tg-text); background: none; box-shadow: none; border-radius: 0; padding: 26px 0;
+  border-top: 3px solid var(--tg-text); border-bottom: 3px solid var(--tg-text); text-shadow: 0 2px 14px var(--tg-ombra);
+}
+.tg-editorial.tg-comentari .tg-avatar { background: none; color: var(--tg-text); border: 3px solid var(--tg-text); }
 
 .tg-xat .tg-cos { width: 840px; display: flex; flex-direction: column; gap: 14px; font-family: var(--tg-f-text); }
 .tg-xat-qui {
@@ -422,6 +445,17 @@
       ambDestacat(doc, text, g.text);
       dins.append(cap, text);
       c.append(dins);
+    } else if (g.tipus === "comentari") {
+      const NS = "http://www.w3.org/2000/svg";
+      const cor = doc.createElementNS(NS, "svg");
+      cor.setAttribute("class", "tg-cor");
+      cor.setAttribute("viewBox", "0 0 24 24");
+      const cami = doc.createElementNS(NS, "path");
+      cami.setAttribute("d", "M12 20.5S3.5 15.4 3.5 9.3A4.6 4.6 0 0 1 12 6.9a4.6 4.6 0 0 1 8.5 2.4c0 6.1-8.5 11.2-8.5 11.2z");
+      cor.append(cami);
+      const text = element(doc, "div", "tg-com-text");
+      ambDestacat(doc, text, g.text);
+      c.append(element(doc, "i", "tg-avatar", inicial(g.de)), element(doc, "span", "tg-com-qui", g.de || ""), cor, text);
     } else if (g.tipus === "xat") {
       if (g.text) {
         const qui = element(doc, "div", "tg-xat-qui");
@@ -498,11 +532,15 @@
   }
 
   // Com entra cada estil: net puja, mac s'acosta suau, scrapbook s'enganxa, editorial es descobreix.
-  // La notificació cau de dalt, com al mòbil.
+  // La notificació cau de dalt, com al mòbil; el comentari salta a la vista i, al cap d'un moment, el cor fa un batec.
   function entra(tl, c, g) {
     const t = g.inici;
     if (g.tipus === "notificacio" && g.estil !== "editorial") {
       tl.fromTo(c, { opacity: 0, y: -130, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.55, ease: "back.out(1.4)" }, t);
+    } else if (g.tipus === "comentari" && g.estil !== "editorial") {
+      tl.fromTo(c, { opacity: 0, y: 40, scale: 0.86 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.7)" }, t);
+      const cor = c.querySelector(".tg-cor");
+      if (cor) tl.fromTo(cor, { scale: 1 }, { scale: 1.3, duration: 0.16, yoyo: true, repeat: 1, ease: "power2.out" }, t + 0.75);
     } else if (g.estil === "mac") {
       tl.fromTo(c, { opacity: 0, scale: 0.9, y: 22 }, { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: "expo.out" }, t);
     } else if (g.estil === "scrapbook") {
@@ -517,7 +555,8 @@
   // Si un gràfic és massa alt (un text llarg, una lletra ampla), es fa més petit fins que hi cap: la
   // frase, amb la lletra (el text torna a repartir-se en línies); la llista i la crida, senceres.
   // Mai més alt que l'espai que té (amb el bloc de color, el de sobre la targeta).
-  const ALCADA_MAXIMA = { frase: 330, llista: 470, crida: 230, notificacio: 300, xat: 560, numero: 400, web: 700, ventall: 680 };
+  const ALCADA_MAXIMA = { frase: 330, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
+    ventall: 680 };
   function encaixa({ g, lloc, c }) {
     if (!ALCADA_MAXIMA[g.tipus]) return;
     const maxima = Math.min(ALCADA_MAXIMA[g.tipus], g.limits ? g.limits[1] - g.limits[0] : Infinity);

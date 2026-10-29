@@ -248,7 +248,8 @@ def _lletres_titol(titol: dict, animacio: str) -> list[float]:
 # llista o d'un xat tampoc no hi són.
 SONS_GRAFICS = {"frase": ("whoosh", "Frase", True), "llista": ("pop", "Llista", True),
                 "etiqueta": ("pop", "Etiqueta", False), "crida": ("brill", "Crida", True),
-                "notificacio": ("brill", "Notificació", True), "xat": ("pop", "Xat", True),
+                "notificacio": ("brill", "Notificació", True), "comentari": ("pop", "Comentari", True),
+                "xat": ("pop", "Xat", True),
                 "numero": ("tic", "Número", True), "anotacio": ("tic", "Anotació", False),
                 "web": ("whoosh", "Web", True), "ventall": ("pop", "Fotos", True)}
 

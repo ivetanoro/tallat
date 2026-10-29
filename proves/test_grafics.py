@@ -115,6 +115,15 @@ class TestTipusNous(unittest.TestCase):
                 grafics.net(dolent)
             self.assertIn(paraula, str(e.exception))
 
+    def test_el_comentari_que_es_respon(self):
+        com = grafics.net({"tipus": "comentari", "paraula": 0, "de": "marta", "text": "I això com es fa?"})
+        self.assertEqual((com["de"], com["text"], com["estat"]), ("marta", "I això com es fa?", "proposat"))
+        with self.assertRaises(ValueError):
+            grafics.net({"tipus": "comentari", "paraula": 0, "de": "marta"})  # sense el que diu, no és res
+        situat, = grafics.situa(grafics.neteja_llista([com]), {0: 1.0}, {}, 10.0, [])
+        self.assertEqual((situat["de"], situat["posicio"], situat["amaga_subtitols"], situat["final"]),
+                         ("marta", "dalt", False, 4.5))
+
     def test_la_lletra_de_ma_pot_anar_sempre_en_majuscules(self):
         self.assertFalse(grafics.paleta({"marca": {"majuscules_ma": True}})["majuscules_ma"])  # sense lletra de mà, res
         paleta = grafics.paleta({"marca": {"lletra_ma": "La Meva Mà", "majuscules_ma": True}})

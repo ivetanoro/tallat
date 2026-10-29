@@ -14,6 +14,7 @@ Tipus:
                subtítols i va a baix, al seu lloc
   crida        la crida a l'acció del final (si no té text, la de la marca)
   notificacio  una notificació del mòbil: qui l'envia («de») i el missatge («text»)
+  comentari    el comentari d'algú en una targeta, per respondre'l: qui l'ha escrit («de») i què diu («text»)
   xat          una conversa: els «punts» són els missatges (rebuts o enviats, «costat»), que surten
                un a un; amaga els subtítols
   numero       una xifra que compta des de zero («xifra»: «73 %», «10.000 €»), amb un text a sota
@@ -52,10 +53,12 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-TIPUS = ("frase", "etiqueta", "llista", "crida", "notificacio", "xat", "numero", "anotacio", "web", "ventall")
+TIPUS = ("frase", "etiqueta", "llista", "crida", "notificacio", "comentari", "xat", "numero", "anotacio", "web",
+         "ventall")
 NOMS = {"frase": "Frase", "etiqueta": "Etiqueta", "llista": "Llista", "crida": "Crida",
-        "notificacio": "Notificació", "xat": "Xat", "numero": "Número", "anotacio": "Anotació",
-        "web": "Web", "ventall": "Fotos"}
+        "notificacio": "Notificació", "comentari": "Comentari", "xat": "Xat", "numero": "Número",
+        "anotacio": "Anotació", "web": "Web", "ventall": "Fotos"}
+AMB_AUTOR = ("notificacio", "comentari")  # els que diuen qui ho envia o qui ho ha escrit («de»)
 AMB_PUNTS = ("llista", "xat", "ventall")  # els que tenen punts que surten un a un
 AMB_IMATGE = ("web", "ventall")
 BLOC_PER_DEFECTE = ("web", "ventall")  # els grans: amb el bloc de color si no es diu el contrari
@@ -74,18 +77,18 @@ MARGE_SUBTITOLS = 28  # px entre un gràfic i els subtítols
 ESTATS = ("proposat", "mantingut", "canvia", "tret")
 VOTS = ("si", "potser", "no")  # el que diu la persona al tauler de Vesteix
 GRUP = re.compile(r"[A-Za-z0-9_-]{1,20}")  # les alternatives per a un mateix moment
-DURADES = {"frase": 2.8, "etiqueta": 2.2, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "xat": 5.0,
-           "numero": 2.8, "anotacio": 2.5, "web": 4.0, "ventall": 4.5}
+DURADES = {"frase": 2.8, "etiqueta": 2.2, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "comentari": 3.5,
+           "xat": 5.0, "numero": 2.8, "anotacio": 2.5, "web": 4.0, "ventall": 4.5}
 # On va cada tipus si no es diu: en un vídeo de cap parlant, la cara sol omplir el mig.
 POSICIO = {"frase": "dalt", "etiqueta": "dalt", "llista": "baix", "crida": "baix", "notificacio": "dalt",
-           "xat": "baix", "numero": "dalt", "anotacio": "mig", "web": "mig", "ventall": "mig"}
+           "comentari": "dalt", "xat": "baix", "numero": "dalt", "anotacio": "mig", "web": "mig", "ventall": "mig"}
 # Els que amaguen els subtítols mentre surten (el que hi diu és el que se sent).
-AMAGA = {"frase": True, "llista": True, "etiqueta": False, "crida": False, "notificacio": False, "xat": True,
-         "numero": False, "anotacio": False, "web": True, "ventall": True}
-MIDA_TEXT = {"frase": 140, "etiqueta": 40, "llista": 80, "crida": 90, "notificacio": 120, "xat": 30,
-             "numero": 60, "anotacio": 40, "web": 60, "ventall": 60}
+AMAGA = {"frase": True, "llista": True, "etiqueta": False, "crida": False, "notificacio": False, "comentari": False,
+         "xat": True, "numero": False, "anotacio": False, "web": True, "ventall": True}
+MIDA_TEXT = {"frase": 140, "etiqueta": 40, "llista": 80, "crida": 90, "notificacio": 120, "comentari": 140,
+             "xat": 30, "numero": 60, "anotacio": 40, "web": 60, "ventall": 60}
 MIDA_PEU = 30  # el peu de cada foto del ventall
-CAL_TEXT = ("frase", "etiqueta", "notificacio", "anotacio")
+CAL_TEXT = ("frase", "etiqueta", "notificacio", "comentari", "anotacio")
 XIFRA = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?")  # «10.000», «2,5», «73»
 DENSITAT = {"pocs": "un cada 8-12 s", "normal": "un cada 4-6 s", "molts": "un cada 2-4 s"}  # com la marca
 MAX_PUNTS = 6
@@ -192,7 +195,7 @@ def net(g: dict, paraules: int | None = None) -> dict:
         if not punts:
             raise ValueError(f"{'Una llista' if tipus == 'llista' else 'Un xat'} necessita «punts»: [\"un\", \"dos\"…]")
     sortida["punts"] = punts[:MAX_PUNTS]
-    sortida["de"] = _text(g.get("de"), "de", 30) if tipus == "notificacio" else ""
+    sortida["de"] = _text(g.get("de"), "de", 30) if tipus in AMB_AUTOR else ""
     sortida["xifra"] = _text(g.get("xifra"), "xifra", 24) if tipus == "numero" else ""
     if tipus == "numero" and not XIFRA.search(sortida["xifra"]):
         raise ValueError("Un número necessita «xifra», amb un número a dins («73 %», «10.000 €», «3 de cada 4»)")
@@ -416,7 +419,7 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
         d["limits"] = [round(ZONA_SEGURA[0] * ALCADA), BLOC["y"] - 40]  # tot l'espai de sobre la targeta
         if g.get("posicio") is None:
             d["posicio"] = "mig"
-    if g["tipus"] == "notificacio":
+    if g["tipus"] in AMB_AUTOR:
         d["de"] = g.get("de") or ""
     elif g["tipus"] == "numero":
         d["xifra"] = llegeix_xifra(g["xifra"])
@@ -435,6 +438,7 @@ MOSTRES = {"frase": {"text": "Menys és *més*"}, "etiqueta": {"text": "Pas 1"},
            "llista": {"text": "Tres claus", "punts": ["Llum", "So", "Ritme"]},
            "numero": {"xifra": "73 %", "text": "ho fan així"},
            "notificacio": {"de": "Missatge", "text": "Ja és aquí!"},
+           "comentari": {"de": "marta", "text": "I això com es fa?"},
            "xat": {"punts": ["Ho has vist?", "Sí, és genial"]},
            "anotacio": {"text": "aquí!", "forma": "fletxa"}, "crida": {"text": ""}}
 
