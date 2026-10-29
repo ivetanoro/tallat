@@ -73,17 +73,6 @@ class TestElTauler(unittest.TestCase):
         teu = grafics.fusiona(grafics.neteja_llista([g(id="g1", origen="teu")]), [g(id="g1", text="altre")], manera="canvia", ronda=3)
         self.assertEqual(teu[0]["origen"], "teu")
 
-    def test_les_imatges_de_referencia_de_la_nota(self):
-        net = grafics.net(g(vot="si", referencies=["0123abcd.png", "0123abcd.png", "../fora.png", 7, "b.jpg"]))
-        self.assertEqual(net["referencies"], ["0123abcd.png", "b.jpg"])
-        self.assertEqual(net["estat"], "canvia")  # li agrada, però vol que s'assembli a la imatge
-        self.assertEqual(len(grafics.net(g(referencies=[f"{k}.png" for k in range(9)]))["referencies"]), grafics.MAX_REFERENCIES)
-        # Quan Claude el canvia, la referència ja està atesa (com la nota); si no el toca, s'hi queda.
-        actuals = grafics.neteja_llista([g(id="g1", text="a", vot="potser", referencies=["a.png"]),
-                                         g(id="g2", paraula=1, text="b", vot="potser", referencies=["b.png"])])
-        nou = {x["id"]: x for x in grafics.fusiona(actuals, [g(id="g1", text="a!")], manera="canvia", ronda=2)}
-        self.assertEqual((nou["g1"]["referencies"], nou["g2"]["referencies"]), ([], ["b.png"]))
-
     def test_retocar_els_que_acabes_de_proposar_no_es_una_ronda_nova(self):
         actuals = grafics.neteja_llista([g(id="g1", text="a", ronda=1, novetat="nou"),
                                          g(id="g2", paraula=1, text="b", ronda=1, novetat="nou", vot="potser")])

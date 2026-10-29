@@ -3729,10 +3729,7 @@ function votDe(p) {
   return p.g.vot || { mantingut: "si", tret: "no", canvia: "potser" }[p.g.estat] || "";
 }
 const notaDe = (p) => (p.tipus === "grafic" ? p.g.nota : estat.vots?.[p.clau]?.nota) || "";
-// Les imatges de referència de la nota («fes-ho com aquesta»): noms d'imatges del projecte (/imatges-grafics/).
-const MAX_REFERENCIES = 4;
-const referenciesDe = (p) => (p.tipus === "grafic" ? p.g.referencies : estat.vots?.[p.clau]?.referencies) || [];
-// Com al servidor (motor/grafics.py, net): el vot mana sobre l'estat. Un Sí amb una nota o una referència vol un canvi.
+// Com al servidor (motor/grafics.py, net): el vot mana sobre l'estat.
 const estatDeVot = (vot, nota) => (vot === "no" ? "tret" : vot === "potser" || (vot === "si" && nota) ? "canvia"
   : vot === "si" ? "mantingut" : "proposat");
 
@@ -3752,7 +3749,7 @@ function vota(p, vot) {
     const nou = votDe(p) === vot ? "" : vot;  // tornar a tocar el que ja hi ha el treu: torna a estar per mirar
     canvia((e) => {
       const g = e.grafics.find((x) => x.id === p.id);
-      if (g) Object.assign(g, { vot: nou, estat: estatDeVot(nou, g.nota || g.referencies?.length) });
+      if (g) Object.assign(g, { vot: nou, estat: estatDeVot(nou, g.nota) });
     });
     previaBruta = true;
     if (nou === "no") votatsAra.add(p.clau);
@@ -3760,7 +3757,7 @@ function vota(p, vot) {
   }
   if (vot === "no") { treuDelTauler(p); return; }
   if (votDe(p) === vot) return;
-  canvia((e) => { e.vots = { ...(e.vots || {}), [p.clau]: { ...sobreLaPeca(p), nota: notaDe(p), referencies: referenciesDe(p), vot } }; });
+  canvia((e) => { e.vots = { ...(e.vots || {}), [p.clau]: { ...sobreLaPeca(p), nota: notaDe(p), vot } }; });
 }
 
 function treuDelTauler(p) {
@@ -3783,49 +3780,11 @@ function desaNotaPeca(p, text) {
       const g = e.grafics.find((x) => x.id === p.id);
       if (!g) return;
       const vot = g.vot || (nota ? "potser" : "");  // una nota sense vot és que hi vols un canvi
-      Object.assign(g, { nota, vot, estat: vot ? estatDeVot(vot, nota || g.referencies?.length) : g.estat });
+      Object.assign(g, { nota, vot, estat: vot ? estatDeVot(vot, nota) : g.estat });
     });
     return;
   }
-  canvia((e) => { e.vots = { ...(e.vots || {}), [p.clau]: { ...sobreLaPeca(p), vot: votDe(p), nota, referencies: referenciesDe(p) } }; });
-}
-
-function desaReferenciesPeca(p, refs) {
-  refs = [...new Set(refs)].slice(0, MAX_REFERENCIES);
-  if (p.tipus === "grafic") {
-    canvia((e) => {
-      const g = e.grafics.find((x) => x.id === p.id);
-      if (!g) return;
-      const vot = g.vot || (refs.length ? "potser" : "");  // com la nota: si li ensenyes com la vols, hi vols un canvi
-      Object.assign(g, { referencies: refs, vot, estat: vot ? estatDeVot(vot, g.nota || refs.length) : g.estat });
-    });
-    return;
-  }
-  canvia((e) => { e.vots = { ...(e.vots || {}), [p.clau]: { ...sobreLaPeca(p), vot: votDe(p), nota: notaDe(p), referencies: refs } }; });
-}
-
-// Una o més imatges de referència per a una peça (amb «+ Referència» o deixant-les anar a la targeta).
-let clauPerReferencia = null;
-async function afegeixReferencies(clau, fitxers) {
-  const imatges = [...fitxers].filter((f) => /^image\/(png|jpeg|webp|gif)$/.test(f.type));
-  if (!imatges.length) { avis("La referència ha de ser una imatge PNG, JPG, WebP o GIF.", 5000); return; }
-  const p0 = cartesTauler.get(clau)?.p;
-  if (!p0) return;
-  const lloc = MAX_REFERENCIES - referenciesDe(p0).length;
-  if (lloc <= 0) { avis(`Hi caben ${MAX_REFERENCIES} referències com a molt: treu-ne alguna abans.`, 5000); return; }
-  avis(imatges.length > 1 ? "Pujant les referències…" : "Pujant la referència…", 20000);
-  const noms = [];
-  try {
-    for (const f of imatges.slice(0, lloc)) {
-      const r = await resposta(await fetch(`/api/referencia?nom=${encodeURIComponent(f.name)}`,
-        { method: "POST", headers: capcaleres(), body: f }));
-      noms.push(r.imatge);
-    }
-  } catch (e) { avis(e.message, 6000); if (!noms.length) return; }
-  const p = cartesTauler.get(clau)?.p;
-  if (!p) return;
-  desaReferenciesPeca(p, [...referenciesDe(p), ...noms]);
-  avis(`${noms.length > 1 ? "Referències posades" : "Referència posada"}. Claude ${noms.length > 1 ? "les" : "la"} veurà a la ronda següent.`, 4000);
+  canvia((e) => { e.vots = { ...(e.vots || {}), [p.clau]: { ...sobreLaPeca(p), vot: votDe(p), nota } }; });
 }
 
 // De dues alternatives, la triada es queda (sí) i les altres se'n van (no); amb `id` null, cap.
@@ -3834,7 +3793,7 @@ function triaAlternativa(membres, id) {
     for (const g of e.grafics) {
       if (!membres.includes(g.id)) continue;
       const vot = g.id === id ? "si" : "no";
-      Object.assign(g, { vot, estat: estatDeVot(vot, g.nota || g.referencies?.length) });
+      Object.assign(g, { vot, estat: estatDeVot(vot, g.nota) });
     }
   });
   previaBruta = true;
@@ -4000,16 +3959,6 @@ function cartaTauler(p, sigDibuix, { alternativa = null } = {}) {
     cartaDe.set(el, c);
     instalaClip(c);
     observaTauler.observe(el);
-    // Una imatge deixada anar a la targeta: una referència per a la nota (menys a les de dues opcions).
-    const ambFitxer = (e) => [...(e.dataTransfer?.items || [])].some((i) => i.kind === "file") && !el.closest(".grup-tauler");
-    el.addEventListener("dragover", (e) => { if (ambFitxer(e)) { e.preventDefault(); el.classList.add("deixa-aqui"); } });
-    el.addEventListener("dragleave", (e) => { if (!el.contains(e.relatedTarget)) el.classList.remove("deixa-aqui"); });
-    el.addEventListener("drop", (e) => {
-      el.classList.remove("deixa-aqui");
-      if (!ambFitxer(e)) return;
-      e.preventDefault();
-      afegeixReferencies(c.p.clau, e.dataTransfer.files);
-    });
   }
   c.p = p;
   const { el } = c;
@@ -4083,60 +4032,26 @@ function pintaAccionsCarta(c, alternativa) {
   cont.append(seg);
 }
 
-// La nota de cada peça: «+ Nota» l'obre; es desa sola mentre s'escriu. Mentre s'hi escriu, no es refà. A sota, les
-// imatges de referència («+ Referència», o deixar-les anar a la targeta), que Claude mira a la ronda següent.
+// La nota de cada peça: «+ Nota» l'obre; es desa sola mentre s'escriu. Mentre s'hi escriu, no es refà.
 function pintaNotaCarta(c, alternativa) {
   const cont = c.el.querySelector(".carta-nota");
-  if (document.activeElement?.tagName === "TEXTAREA" && cont.contains(document.activeElement)) return;
+  if (cont.contains(document.activeElement)) return;
   const p = c.p;
   const nota = notaDe(p);
-  const refs = referenciesDe(p);
-  cont.hidden = alternativa && !nota && !refs.length;
-  const sig = JSON.stringify([nota, refs, c.notaOberta, alternativa]);
+  cont.hidden = alternativa && !nota;
+  const sig = JSON.stringify([nota, c.notaOberta, alternativa]);
   if (cont.dataset.sig === sig) return;
   cont.dataset.sig = sig;
   cont.textContent = "";
-  if (nota || c.notaOberta) cont.append(campNotaCarta(c, nota));
-  if (refs.length) {
-    const fila = document.createElement("div");
-    fila.className = "refs-carta";
-    for (const nom of refs) {
-      const ref = document.createElement("span");
-      ref.className = "ref-carta";
-      ref.innerHTML = `<img alt="La teva referència"><button class="treu-ref" type="button" aria-label="Treu aquesta referència" title="Treu-la">
-        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8m0-8-8 8"/></svg></button>`;
-      ref.querySelector("img").src = `/imatges-grafics/${encodeURIComponent(nom)}`;
-      ref.querySelector("button").addEventListener("click", () => {
-        const ara = cartesTauler.get(p.clau)?.p || p;
-        desaReferenciesPeca(ara, referenciesDe(ara).filter((x) => x !== nom));
-      });
-      fila.append(ref);
-    }
-    cont.append(fila);
-  }
-  if (alternativa) return;
-  const peu = document.createElement("div");
-  peu.className = "peu-nota";
   if (!nota && !c.notaOberta) {
+    if (alternativa) return;
     const b = document.createElement("button");
     b.className = "enllac afegeix-nota";
     b.textContent = "+ Nota";
     b.addEventListener("click", () => { c.notaOberta = true; pintaNotaCarta(c, false); cont.querySelector("textarea")?.focus(); });
-    peu.append(b);
+    cont.append(b);
+    return;
   }
-  if (refs.length < MAX_REFERENCIES) {
-    const b = document.createElement("button");
-    b.className = "enllac afegeix-ref";
-    b.textContent = "+ Referència";
-    b.title = "Una imatge perquè Claude vegi com la vols";
-    b.addEventListener("click", () => { clauPerReferencia = p.clau; $("#fitxer-referencia").click(); });
-    peu.append(b);
-  }
-  cont.append(peu);
-}
-
-function campNotaCarta(c, nota) {
-  const p = c.p;
   const camp = document.createElement("textarea");
   Object.assign(camp, { className: "camp-text nota-carta", rows: 2, value: nota, maxLength: 600,
     placeholder: "Què hi canviaries? «més petit», «a baix», «una altra paraula»…" });
@@ -4150,8 +4065,8 @@ function campNotaCarta(c, nota) {
     if (!camp.value.trim()) setTimeout(() => pintaNotaCarta(c, false), 0);
   });
   camp.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); camp.blur(); } });
+  cont.append(camp);
   requestAnimationFrame(() => ajustaAlcada(camp));
-  return camp;
 }
 
 // El que es veu a la targeta: només la seva peça (les altres tenen la seva targeta), sobre el vídeo amb els subtítols
@@ -4674,11 +4589,6 @@ function instalaTauler() {
     if (b) posaPecaTeva(Number(b.dataset.paraula));
   });
   $("#full-afegeix").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); tancaAfegeix(); } });
-  $("#fitxer-referencia").addEventListener("change", (e) => {
-    const fitxers = [...e.target.files];
-    e.target.value = "";
-    if (clauPerReferencia) afegeixReferencies(clauPerReferencia, fitxers);
-  });
   $("#continua-votant").addEventListener("click", () => { esperaTreta = notaRondaDarrera()?.id ?? null; pintaEstatRonda(); });
   $("#tanca-novetat-ronda").addEventListener("click", () => { novetatRonda = null; pintaEstatRonda(); });
   $("#primeres-propostes").addEventListener("click", demanaRonda);

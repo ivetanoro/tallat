@@ -37,12 +37,10 @@ RUTES_DEL_PROJECTE = {"/api/estat", "/api/instruccio", "/api/broll/biblioteca",
                       "/api/marca", "/api/marca/restableix", "/api/marca/font", "/api/marca/lletra",
                       "/api/kit/tria", "/api/kit/nou",
                       "/api/kit/nom", "/api/kit/per-defecte", "/api/kit/esborra", "/api/kit/importa",
-                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/notes", "/api/estil/a-tots",
-                      "/api/referencia"}
+                      "/api/so/mostres", "/api/grafics/imatge", "/api/previa", "/api/notes", "/api/estil/a-tots"}
 mimetypes.add_type("audio/mp4", ".m4a")  # Python diu «audio/mp4a-latm», que els navegadors no reprodueixen
 mimetypes.add_type("audio/wav", ".wav")
-RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge",
-                   "/api/referencia"}  # el cos és el fitxer mateix
+RUTES_DE_FITXER = {"/api/broll/puja", "/api/marca/font", "/api/kit/importa", "/api/grafics/imatge"}  # el cos és el fitxer mateix
 
 
 def clau_de(projecte: Projecte) -> str:
@@ -623,8 +621,6 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._puja_broll(projecte)
             if ruta == "/api/grafics/imatge":
                 return self._puja_imatge_grafic(projecte)
-            if ruta == "/api/referencia":
-                return self._puja_referencia()
             if ruta == "/api/exports/carpeta":
                 return self._carpeta_exports(projecte)
             if ruta == "/api/marca/font":
@@ -910,28 +906,6 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1
                 projecte.desa()
                 return self._json(instantania())
-
-        def _puja_referencia(self):
-            """Rep una imatge de referència per a la nota d'una peça del tauler («fes-ho com aquesta»): la copia
-            a la carpeta d'imatges del projecte i en torna el nom. La pàgina l'afegeix a la peça."""
-            nom = Path((parse_qs(urlparse(self.path).query).get("nom") or ["imatge"])[0]).name
-            mida = int(self.headers.get("Content-Length") or 0)
-            if Path(nom).suffix.lower() not in grafics.FORMATS_IMATGE:
-                return self._no_permesa(HTTPStatus.BAD_REQUEST, "Ha de ser una imatge PNG, JPG, WebP o GIF")
-            if not 0 < mida <= MIDA_MAXIMA_IMATGE:
-                return self._no_permesa(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "La imatge és buida o massa gran (60 MB com a màxim)")
-            contingut = self.rfile.read(mida)
-            if len(contingut) != mida:
-                self.close_connection = True
-                return
-            with bloqueig:
-                projecte = obert["p"]
-                if self.headers.get("X-Tallat-Projecte") != clau_de(projecte):
-                    return self._json({"error": "projecte-canviat"}, HTTPStatus.CONFLICT)
-                with tempfile.TemporaryDirectory() as temporal:
-                    fitxer = Path(temporal) / f"imatge{Path(nom).suffix.lower()}"
-                    fitxer.write_bytes(contingut)
-                    return self._json({"imatge": projecte.importa_imatge(fitxer)})
 
         def _puja_font(self):
             """Rep una font (.ttf, .otf, .woff o .woff2) i la fa servir per als subtítols."""
