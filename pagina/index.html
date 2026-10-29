@@ -764,10 +764,16 @@
     </div>
     <div class="ronda" id="ronda" hidden>
       <div class="ronda-fila">
-        <span class="falten" id="falten"></span>
-        <input type="text" id="nota-ronda" maxlength="600" autocomplete="off"
-               placeholder="Una nota per a tota la ronda (si vols): «menys coses al final»" aria-label="Una nota per a tota la ronda">
-        <button class="boto principal" id="demana-ronda">Demana la ronda següent</button>
+        <div class="ronda-estat">
+          <span class="falten" id="falten"></span>
+          <!-- Quan ja ho has mirat tot: un esborrany amb el que hi ha ara, per mirar-lo sencer a Revisa. -->
+          <button class="boto suau" id="ja-esta" hidden title="Fa un esborrany amb els canvis d'ara i el mires sencer a Revisa">Ja està: mira'l sencer</button>
+        </div>
+        <div class="ronda-demana">
+          <input type="text" id="nota-ronda" maxlength="600" autocomplete="off"
+                 placeholder="Una nota per a tota la ronda (si vols): «menys coses al final»" aria-label="Una nota per a tota la ronda">
+          <button class="boto principal" id="demana-ronda">Demana la ronda següent</button>
+        </div>
       </div>
       <p class="detall estat-ronda" id="estat-ronda" hidden></p>
     </div>

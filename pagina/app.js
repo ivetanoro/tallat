@@ -2828,7 +2828,9 @@ function seguimentFeina(feina) {
   $("#revisa-feina").hidden = !ocupat;
   $("#vesteix-feina").hidden = !ocupat;
   $("#tauler-feina").hidden = !ocupat;
-  for (const b of [$("#nova-versio"), $("#primera-versio"), $("#vesteix-exporta"), $("#tauler-exporta")]) b.disabled = ocupat;
+  for (const b of [$("#nova-versio"), $("#primera-versio"), $("#vesteix-exporta"), $("#tauler-exporta"), $("#ja-esta")]) {
+    b.disabled = ocupat;
+  }
   if (ocupat) {
     const nom = feina.qualitat === "esborrany" ? "Construint l'esborrany"
       : feina.qualitat === "editors" ? "Exportant els trossos" : `Exportant en ${QUALITATS[feina.qualitat]}`;
@@ -3854,7 +3856,8 @@ function pintaTauler() {
   $("#titol-tauler").firstChild.textContent = deClaude ? "Propostes de Claude " : "Les peces del vídeo ";
   $("#demana-ronda").textContent = capGrafic ? "Demana propostes a Claude" : "Demana la ronda següent";
   const falten = elements.filter((x) => votElement(x) === "").length;
-  $("#falten").innerHTML = falten ? `Te'n falten <b>${falten}</b> per mirar` : "Ho tens tot mirat";
+  $("#falten").innerHTML = falten ? `Te'n falten <b>${falten}</b> per mirar` : "Ho tens tot mirat.";
+  $("#ja-esta").hidden = falten > 0;
   pintaEstatRonda();
   const sigDibuix = JSON.stringify([estilSub, paletaGrafics, estat.subtitols !== false, zoomVideo,
     P.estil_stickers || null]);
@@ -4476,6 +4479,7 @@ function instalaTauler() {
     b.addEventListener("click", () => { filtreTauler = b.dataset.filtre; pintaTauler(); });
   }
   $("#demana-ronda").addEventListener("click", demanaRonda);
+  $("#ja-esta").addEventListener("click", () => { canviaEstacio("revisa"); comencaRender("esborrany"); });
   $("#continua-votant").addEventListener("click", () => { esperaTreta = notaRondaDarrera()?.id ?? null; pintaEstatRonda(); });
   $("#tanca-novetat-ronda").addEventListener("click", () => { novetatRonda = null; pintaEstatRonda(); });
   $("#primeres-propostes").addEventListener("click", demanaRonda);

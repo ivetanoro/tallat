@@ -1631,7 +1631,10 @@ body.vestint.amb-tauler .reproductor, body.vestint.amb-tauler .vesteix-dreta { d
   backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 .ronda[hidden] { display: none; }
-.ronda-fila { display: flex; align-items: center; gap: var(--e3); }
+.ronda-fila { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e3); }
+.ronda-estat { flex: none; display: flex; align-items: center; gap: var(--e3); }
+.ronda-demana { flex: 1 1 24rem; min-width: 0; display: flex; align-items: center; gap: var(--e3); }  /* si no hi cap, a sota */
+.ronda-fila .boto { flex: none; }
 .ronda .falten { flex: none; font-size: var(--t-ui); color: var(--text-2); }
 .ronda .falten b { color: var(--text); }
 #nota-ronda { flex: 1; min-width: 0; height: 34px; }
@@ -1693,7 +1696,7 @@ body.vestint.amb-tauler .reproductor, body.vestint.amb-tauler .vesteix-dreta { d
   .ronda { position: sticky; bottom: var(--e2); margin: 0 var(--e2) var(--e2); }
   .esperant-ronda { position: fixed; top: 50%; }  /* la pàgina és llarga: al mig del que es veu */
   .novetat-ronda { margin: 0 var(--e4) var(--e2); }
-  .ronda-fila { flex-wrap: wrap; }
+  .ronda-demana { flex-wrap: wrap; }
   #nota-ronda { order: 3; flex: 1 1 100%; }
   .grup-tauler { grid-column: 1 / -1; }
 }
