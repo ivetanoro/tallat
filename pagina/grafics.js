@@ -1,5 +1,5 @@
 /* tallat · els gràfics del pla: frase clau, marcador, etiqueta, ratllat, llista, crida, notificació, comentari, xat,
- * número, anotació, web (una captura dins d'una finestra) i ventall (unes quantes fotos).
+ * número, progrés, anotació, web (una captura dins d'una finestra) i ventall (unes quantes fotos).
  *
  * Com els subtítols, el mateix codi els dibuixa a la vista prèvia i al vídeo final (dins de la
  * composició de HyperFrames). Treballa sobre una caixa de 1080 × 1920 px; qui el fa servir l'escala.
@@ -16,7 +16,8 @@
  * A la frase i a la crida, el que va *entre asteriscs* surt destacat; al marcador (una frase), hi passa un marcador
  * (si no n'hi ha, per tota la frase). La notificació porta qui l'envia
  * (`de`), el comentari qui l'ha escrit (`de`), el ratllat el que es ratlla i el que hi va (els dos `punts`), el xat els missatges a `punts` (cadascun amb `costat`: rebut o enviat), el número la `xifra`
- * ({abans, valor, decimals, despres, milers}) i l'anotació la `forma` (cercle, subratllat o fletxa) i el
+ * ({abans, valor, decimals, despres, milers}), el progrés la xifra, quina part s'omple (`fraccio`, de 0 a 1) i la
+ * `forma` (cercle o barra), i l'anotació la `forma` (cercle, subratllat o fletxa) i el
  * `costat` on va. L'anotació s'escriu amb la lletra de mà i el color secundari de la marca.
  * La web porta la captura a `imatge` (i l'adreça de la barra a `text`); el ventall, les fotos als `punts`
  * (cadascuna amb `imatge` i un peu, `text`). `op.imatges`: on són les imatges (per defecte, «imatges/»).
@@ -290,6 +291,36 @@
   border-top: 3px solid var(--tg-text);
 }
 
+/* El progrés: el número que compta, dins d'un cercle o damunt d'una barra que s'omple fins a la part que diu. */
+.tg-anell { position: relative; width: 430px; height: 430px; margin: 0 auto; }
+.tg-anell svg { position: absolute; inset: 0; width: 100%; height: 100%; rotate: -90deg; overflow: visible; }
+.tg-anell circle { fill: none; stroke-width: 11; }
+.tg-pista { stroke: var(--tg-ratlla); }
+.tg-arc { stroke: var(--tg-destacat); stroke-linecap: round; stroke-dasharray: 1; }
+.tg-anell .tg-xifra { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 118px; }
+.tg-progres .tg-cos { min-width: 600px; }
+.tg-barra-prog { position: relative; height: 46px; margin-top: 26px; border-radius: 23px; overflow: hidden; background: var(--tg-ratlla); }
+.tg-barra-prog i { position: absolute; inset: 0; border-radius: inherit; background: var(--tg-destacat); transform-origin: 0 50%; }
+.tg-progres .tg-barra-prog + .tg-xifra-text { margin-top: 22px; }
+.tg-mac.tg-numero .tg-anell .tg-xifra { font-size: 104px; }
+.tg-mac.tg-progres .tg-pista, .tg-scrapbook.tg-progres .tg-pista { stroke: var(--tg-linia-forta); }
+.tg-mac.tg-progres .tg-barra-prog, .tg-scrapbook.tg-progres .tg-barra-prog { background: var(--tg-linia-forta); }
+.tg-mac.tg-progres .tg-arc, .tg-scrapbook.tg-progres .tg-arc { stroke: var(--tg-principal); }
+.tg-mac.tg-progres .tg-xifra { color: var(--tg-fosc); }  /* el color ja el porta el cercle o la barra */
+.tg-mac.tg-progres .tg-barra-prog i, .tg-scrapbook.tg-progres .tg-barra-prog i { background: var(--tg-principal); }
+.tg-scrapbook.tg-progres .tg-cos {
+  padding: 46px 56px 42px; color: var(--tg-fosc); background: var(--tg-clar); border-radius: 6px; rotate: -2deg;
+  box-shadow: 8px 10px 0 var(--tg-ombra-suau);
+}
+.tg-scrapbook.tg-progres .tg-xifra, .tg-scrapbook.tg-progres .tg-xifra-text { text-shadow: none; }
+.tg-scrapbook.tg-progres .tg-barra-prog { border-radius: 6px; rotate: -1deg; }
+.tg-editorial.tg-progres .tg-anell circle { stroke-width: 4; }
+.tg-editorial.tg-progres .tg-arc { stroke: var(--tg-text); stroke-linecap: butt; }
+.tg-editorial.tg-progres .tg-anell .tg-xifra { font-size: 140px; }
+.tg-editorial.tg-progres .tg-barra-prog { height: 10px; border-radius: 0; }
+.tg-editorial.tg-progres .tg-barra-prog i { background: var(--tg-text); }
+.tg-editorial.tg-progres .tg-barra-prog + .tg-xifra-text { border-top: 0; padding-top: 0; }  /* la barra ja fa de ratlla */
+
 .tg-lloc.tg-anotacio { justify-content: flex-start; }
 .tg-lloc.tg-anotacio.tg-a-dreta { justify-content: flex-end; }
 .tg-anotacio .tg-cos {
@@ -548,6 +579,29 @@
     } else if (g.tipus === "numero") {
       c.append(element(doc, "span", "tg-xifra", formata(g.xifra, g.xifra?.valor ?? 0)));
       if (g.text) { const t = element(doc, "span", "tg-xifra-text"); ambDestacat(doc, t, g.text); c.append(t); }
+    } else if (g.tipus === "progres") {
+      const xifra = element(doc, "span", "tg-xifra", formata(g.xifra, g.xifra?.valor ?? 0));
+      if (g.forma === "barra") {
+        const barra = element(doc, "div", "tg-barra-prog");
+        const ple = element(doc, "i");
+        ple.style.transform = `scaleX(${g.fraccio ?? 0})`;  // sense GSAP, ja ple fins on toca
+        barra.append(ple);
+        c.append(xifra, barra);
+      } else {
+        const NS = "http://www.w3.org/2000/svg";
+        const anell = element(doc, "div", "tg-anell");
+        const svg = doc.createElementNS(NS, "svg");
+        svg.setAttribute("viewBox", "0 0 120 120");
+        for (const classe of ["tg-pista", "tg-arc"]) {
+          const cercle = doc.createElementNS(NS, "circle");
+          for (const [k, v] of [["cx", 60], ["cy", 60], ["r", 54], ["class", classe], ["pathLength", 1]]) cercle.setAttribute(k, v);
+          if (classe === "tg-arc") cercle.style.strokeDashoffset = 1 - (g.fraccio ?? 0);
+          svg.append(cercle);
+        }
+        anell.append(svg, xifra);
+        c.append(anell);
+      }
+      if (g.text) { const t = element(doc, "span", "tg-xifra-text"); ambDestacat(doc, t, g.text); c.append(t); }
     } else if (g.tipus === "web") {
       const barra = element(doc, "div", "tg-barra");
       barra.append(element(doc, "i"), element(doc, "i"), element(doc, "i"), element(doc, "span", "tg-adreca", g.text || ""));
@@ -626,7 +680,7 @@
   // Si un gràfic és massa alt (un text llarg, una lletra ampla), es fa més petit fins que hi cap: la
   // frase, amb la lletra (el text torna a repartir-se en línies); la llista i la crida, senceres.
   // Mai més alt que l'espai que té (amb el bloc de color, el de sobre la targeta).
-  const ALCADA_MAXIMA = { frase: 330, marcador: 330, ratllat: 420, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
+  const ALCADA_MAXIMA = { frase: 330, marcador: 330, ratllat: 420, progres: 640, llista: 470, crida: 230, notificacio: 300, comentari: 360, xat: 560, numero: 400, web: 700,
     ventall: 680 };
   function encaixa({ g, lloc, c }) {
     if (!ALCADA_MAXIMA[g.tipus]) return;
@@ -703,7 +757,8 @@
     }
     const fets = (grafics || []).map((g) => {
       const costat = g.tipus === "anotacio" && g.costat === "dreta" ? " tg-a-dreta" : "";
-      const tipus = g.tipus === "marcador" ? "frase tg-marcador" : g.tipus;  // el marcador és una frase
+      // El marcador és una frase, i el progrés, un número (en fan servir l'aspecte).
+      const tipus = g.tipus === "marcador" ? "frase tg-marcador" : g.tipus === "progres" ? "numero tg-progres" : g.tipus;
       const lloc = element(doc, "div", `tg-lloc tg-${tipus} tg-${g.estil || "net"}${costat}`);
       if (g.id) lloc.dataset.id = g.id;  // la pàgina hi troba el que es toca al vídeo
       const c = cos(doc, g, op);
@@ -742,13 +797,20 @@
       } else {
         entra(tl, c, g);
       }
-      if (g.tipus === "numero" && g.xifra) {  // compta des de zero
+      if ((g.tipus === "numero" || g.tipus === "progres") && g.xifra) {  // compta des de zero
         const xifra = c.querySelector(".tg-xifra");
         const compte = { v: 0 };
         tl.fromTo(compte, { v: 0 }, {
           v: g.xifra.valor, duration: 1.0, ease: "power2.out",
           onUpdate: () => { xifra.textContent = formata(g.xifra, compte.v); },
         }, g.inici + 0.15);
+      }
+      if (g.tipus === "progres") {  // i, alhora, el cercle o la barra s'omplen fins a la seva part
+        const f = g.fraccio ?? 0;
+        const arc = c.querySelector(".tg-arc");
+        if (arc) tl.fromTo(arc, { strokeDashoffset: 1 }, { strokeDashoffset: 1 - f, duration: 1.0, ease: "power2.out" }, g.inici + 0.15);
+        const ple = c.querySelector(".tg-barra-prog i");
+        if (ple) tl.fromTo(ple, { scaleX: 0 }, { scaleX: f, duration: 1.0, ease: "power2.out" }, g.inici + 0.15);
       }
       const img = g.tipus === "web" && c.querySelector(".tg-pantalla img");
       if (img) {  // si la captura és més llarga que la finestra, baixa a poc a poc (com quan es llegeix)

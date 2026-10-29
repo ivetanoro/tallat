@@ -251,7 +251,7 @@ SONS_GRAFICS = {"frase": ("whoosh", "Frase", True), "marcador": ("whoosh", "Marc
                 "crida": ("brill", "Crida", True),
                 "notificacio": ("brill", "Notificació", True), "comentari": ("pop", "Comentari", True),
                 "xat": ("pop", "Xat", True),
-                "numero": ("tic", "Número", True), "anotacio": ("tic", "Anotació", False),
+                "numero": ("tic", "Número", True), "progres": ("tic", "Progrés", True), "anotacio": ("tic", "Anotació", False),
                 "web": ("whoosh", "Web", True), "ventall": ("pop", "Fotos", True)}
 
 

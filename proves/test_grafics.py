@@ -115,6 +115,18 @@ class TestTipusNous(unittest.TestCase):
                 grafics.net(dolent)
             self.assertIn(paraula, str(e.exception))
 
+    def test_el_progres_sap_quina_part_s_omple(self):
+        for xifra, part in (("70 %", 0.7), ("3 de 5", 0.6), ("7/10", 0.7), ("3 de cada 4", 0.75), ("1.000 de 2.000", 0.5),
+                            ("150 %", 1.0)):
+            self.assertEqual(grafics.fraccio(xifra), part, xifra)
+        p = grafics.net({"tipus": "progres", "paraula": 0, "xifra": "3 de 5", "text": "fets", "forma": "estrella"})
+        self.assertEqual(p["forma"], "cercle")  # el que no és cap forma del progrés, el cercle
+        situat, = grafics.situa(grafics.neteja_llista([dict(p, forma="barra")]), {0: 1.0}, {}, 10.0, [])
+        self.assertEqual((situat["fraccio"], situat["forma"], situat["xifra"]["valor"]), (0.6, "barra", 3.0))
+        for dolenta in ("molts", "5"):  # sense percentatge ni total no se sap què s'omple
+            with self.assertRaises(ValueError):
+                grafics.net({"tipus": "progres", "paraula": 0, "xifra": dolenta})
+
     def test_el_marcador_es_una_frase_amb_la_part_important_marcada(self):
         m = grafics.net({"tipus": "marcador", "paraula": 0, "text": "el truc és la *constància*"})
         situat, = grafics.situa(grafics.neteja_llista([m]), {0: 1.0}, {}, 10.0, [])

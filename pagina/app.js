@@ -3288,7 +3288,7 @@ function textGrafic(g) {
   if (g.tipus === "xat") return [text, ...g.punts.map((p) => `${p.costat === "enviat" ? "→" : "←"} ${p.text}`)].filter(Boolean).join("  ");
   if (g.tipus === "notificacio" || g.tipus === "comentari") return `${g.de ? `${g.de}: ` : ""}«${text}»`;
   if (g.tipus === "ratllat") return [text, g.punts.map((p) => p.text).join(" → ")].filter(Boolean).join(" ");
-  if (g.tipus === "numero") return `${g.xifra}${text ? ` · ${text}` : ""}`;
+  if (g.tipus === "numero" || g.tipus === "progres") return `${g.xifra}${text ? ` · ${text}` : ""}`;
   if (g.tipus === "web") return text ? `Web: ${text}` : "Captura d'una web";
   if (g.tipus === "ventall") {
     const n = g.punts.length;
@@ -3399,14 +3399,14 @@ let tretsOberts = false;
 let liniesDreta = [];
 
 const NOMS_SO = { whoosh: "Whoosh", pop: "Pop", tecla: "Teclat", brill: "Brillantor", tic: "Tic" };
-const TIPUS_GALERIA = [["frase", "Frase"], ["marcador", "Marcador"], ["etiqueta", "Etiqueta"], ["ratllat", "Ratllat"], ["llista", "Llista"], ["numero", "Número"],
+const TIPUS_GALERIA = [["frase", "Frase"], ["marcador", "Marcador"], ["etiqueta", "Etiqueta"], ["ratllat", "Ratllat"], ["llista", "Llista"], ["numero", "Número"], ["progres", "Progrés"],
   ["notificacio", "Notificació"], ["comentari", "Comentari"], ["xat", "Xat"], ["anotacio", "Anotació"], ["web", "Web"], ["ventall", "Fotos"],
   ["crida", "Crida"]];
 const NOMS_GRAFIC = Object.fromEntries(TIPUS_GALERIA);
 // Com al servidor (motor/grafics.py): un text més llarg no s'hi desaria.
-const MIDA_TEXT_GRAFIC = { frase: 140, marcador: 140, etiqueta: 40, ratllat: 40, llista: 80, crida: 90, notificacio: 120, comentari: 140, xat: 30, numero: 60,
+const MIDA_TEXT_GRAFIC = { frase: 140, marcador: 140, etiqueta: 40, ratllat: 40, llista: 80, crida: 90, notificacio: 120, comentari: 140, xat: 30, numero: 60, progres: 60,
   anotacio: 40, web: 60, ventall: 60 };
-const DURADES_GRAFIC = { frase: 2.8, marcador: 2.8, etiqueta: 2.2, ratllat: 3.0, llista: 4.5, crida: 3.5, notificacio: 3.0, comentari: 3.5, xat: 5.0, numero: 2.8,
+const DURADES_GRAFIC = { frase: 2.8, marcador: 2.8, etiqueta: 2.2, ratllat: 3.0, llista: 4.5, crida: 3.5, notificacio: 3.0, comentari: 3.5, xat: 5.0, numero: 2.8, progres: 3.0,
   anotacio: 2.5, web: 4.0, ventall: 4.5 };
 const ICONES_PECA = {
   grafic: '<svg viewBox="0 0 24 24"><path d="M11 3.5l1.9 5.1 5.1 1.9-5.1 1.9L11 17.5l-1.9-5.1L4 10.5l5.1-1.9z"/></svg>',
@@ -3458,6 +3458,9 @@ function graficNou(tipus, paraula) {
   else if (tipus === "numero") {
     const xifra = textDes(paraula, 14).match(/\d+(?:[.,]\d+)*(?:\s?%)?/);
     g.xifra = xifra ? xifra[0] : "3";
+  } else if (tipus === "progres") {
+    const xifra = textDes(paraula, 14).match(/\d+(?:[.,]\d+)*\s?%|\d+\s*(?:de|\/)\s*\d+/);
+    Object.assign(g, { xifra: xifra ? xifra[0] : "70 %", forma: "cercle" });
   }
   if (tipus === "anotacio") g.forma = "fletxa";
   if (tipus === "crida") g.text = retalla(estilMarca?.crida || "Segueix-me per a més", 90);
@@ -4957,6 +4960,12 @@ function editorGrafic(cos, g) {
     camp(cos, "La xifra", campText(g.xifra || "", { mida: 24, clau: "xifra", valid: (v) => /\d/.test(v),
       desa: (v) => canviaGrafic(id, { xifra: textPla(v) }) }), "Compta des de zero: 73 %, 10.000 €…");
     ambText("El text de sota", "", { valid: () => true });
+  } else if (g.tipus === "progres") {
+    camp(cos, "La xifra", campText(g.xifra || "", { mida: 24, clau: "xifra",
+      valid: (v) => /\d\s*%|\d+\s*(?:de|\/|sobre)\s*\d/.test(v),
+      desa: (v) => canviaGrafic(id, { xifra: textPla(v) }) }), "Un percentatge (70 %) o una part d'un total (3 de 5, 7/10).");
+    ambText("El text de sota", "", { valid: () => true });
+    segmentatPeca(cos, "Forma", [["cercle", "Cercle"], ["barra", "Barra"]], g.forma || "cercle", (forma) => canviaGrafic(id, { forma }));
   } else if (g.tipus === "web") ambText("L'adreça de dalt", "", { placeholder: "elteuweb.cat", valid: () => true });
   else if (g.tipus === "ventall") ambText("Un títol", "", { valid: () => true });
   if (g.tipus === "ratllat") {

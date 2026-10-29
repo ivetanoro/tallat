@@ -22,6 +22,8 @@ Tipus:
   xat          una conversa: els «punts» són els missatges (rebuts o enviats, «costat»), que surten
                un a un; amaga els subtítols
   numero       una xifra que compta des de zero («xifra»: «73 %», «10.000 €»), amb un text a sota
+  progres      un percentatge o una part d'un total («xifra»: «70 %», «3 de 5») en un cercle o una barra («forma»)
+               que s'omple mentre el número compta, amb un text a sota
   anotacio     una nota escrita a mà amb un cercle, un subratllat o una fletxa («forma») que es dibuixa
   web          una captura de pantalla dins d'una finestra de navegador («imatge»; «text»: l'adreça que
                surt a la barra), que baixa a poc a poc si la captura és llarga; amaga els subtítols
@@ -57,10 +59,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-TIPUS = ("frase", "marcador", "etiqueta", "ratllat", "llista", "crida", "notificacio", "comentari", "xat", "numero", "anotacio",
-         "web", "ventall")
+TIPUS = ("frase", "marcador", "etiqueta", "ratllat", "llista", "crida", "notificacio", "comentari", "xat", "numero",
+         "progres", "anotacio", "web", "ventall")
 NOMS = {"frase": "Frase", "marcador": "Marcador", "etiqueta": "Etiqueta", "ratllat": "Ratllat", "llista": "Llista", "crida": "Crida",
-        "notificacio": "Notificació", "comentari": "Comentari", "xat": "Xat", "numero": "Número",
+        "notificacio": "Notificació", "comentari": "Comentari", "xat": "Xat", "numero": "Número", "progres": "Progrés",
         "anotacio": "Anotació", "web": "Web", "ventall": "Fotos"}
 AMB_AUTOR = ("notificacio", "comentari")  # els que diuen qui ho envia o qui ho ha escrit («de»)
 AMB_PUNTS = ("llista", "xat", "ventall", "ratllat")  # els que tenen punts que surten un a un
@@ -70,6 +72,8 @@ CARPETA_IMATGES = "imatges-grafics"  # dins del projecte
 FORMATS_IMATGE = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 NOM_IMATGE = re.compile(r"[A-Za-z0-9_-]{1,80}\.(?:png|jpe?g|webp|gif)")  # el nom d'una imatge ja copiada
 FORMES = ("cercle", "subratllat", "fletxa")  # de l'anotació
+FORMES_PROGRES = ("cercle", "barra")
+TOTAL = re.compile(r"(?:\bde(?:\s+cada)?\b|/|\bsobre\b)\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?")  # «3 de 5», «7/10»
 COSTATS = ("esquerra", "dreta")
 ESTILS = ("net", "mac", "scrapbook", "editorial")
 POSICIONS = ("dalt", "mig", "baix")  # o un número de 0 (dalt) a 1 (baix): on va el centre del gràfic
@@ -82,15 +86,15 @@ ESTATS = ("proposat", "mantingut", "canvia", "tret")
 VOTS = ("si", "potser", "no")  # el que diu la persona al tauler de Vesteix
 GRUP = re.compile(r"[A-Za-z0-9_-]{1,20}")  # les alternatives per a un mateix moment
 DURADES = {"frase": 2.8, "marcador": 2.8, "etiqueta": 2.2, "ratllat": 3.0, "llista": 4.5, "crida": 3.5, "notificacio": 3.0, "comentari": 3.5,
-           "xat": 5.0, "numero": 2.8, "anotacio": 2.5, "web": 4.0, "ventall": 4.5}
+           "xat": 5.0, "numero": 2.8, "progres": 3.0, "anotacio": 2.5, "web": 4.0, "ventall": 4.5}
 # On va cada tipus si no es diu: en un vídeo de cap parlant, la cara sol omplir el mig.
 POSICIO = {"frase": "dalt", "marcador": "dalt", "etiqueta": "dalt", "ratllat": "dalt", "llista": "baix", "crida": "baix", "notificacio": "dalt",
-           "comentari": "dalt", "xat": "baix", "numero": "dalt", "anotacio": "mig", "web": "mig", "ventall": "mig"}
+           "comentari": "dalt", "xat": "baix", "numero": "dalt", "progres": "dalt", "anotacio": "mig", "web": "mig", "ventall": "mig"}
 # Els que amaguen els subtítols mentre surten (el que hi diu és el que se sent).
 AMAGA = {"frase": True, "marcador": True, "llista": True, "etiqueta": False, "ratllat": True, "crida": False, "notificacio": False, "comentari": False,
-         "xat": True, "numero": False, "anotacio": False, "web": True, "ventall": True}
+         "xat": True, "numero": False, "progres": False, "anotacio": False, "web": True, "ventall": True}
 MIDA_TEXT = {"frase": 140, "marcador": 140, "etiqueta": 40, "ratllat": 40, "llista": 80, "crida": 90, "notificacio": 120, "comentari": 140,
-             "xat": 30, "numero": 60, "anotacio": 40, "web": 60, "ventall": 60}
+             "xat": 30, "numero": 60, "progres": 60, "anotacio": 40, "web": 60, "ventall": 60}
 MIDA_PEU = 30  # el peu de cada foto del ventall
 CAL_TEXT = ("frase", "marcador", "etiqueta", "notificacio", "comentari", "anotacio")
 XIFRA = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?")  # «10.000», «2,5», «73»
@@ -204,10 +208,13 @@ def net(g: dict, paraules: int | None = None) -> dict:
             raise ValueError(f"{'Una llista' if tipus == 'llista' else 'Un xat'} necessita «punts»: [\"un\", \"dos\"…]")
     sortida["punts"] = punts[:MAX_PUNTS]
     sortida["de"] = _text(g.get("de"), "de", 30) if tipus in AMB_AUTOR else ""
-    sortida["xifra"] = _text(g.get("xifra"), "xifra", 24) if tipus == "numero" else ""
+    sortida["xifra"] = _text(g.get("xifra"), "xifra", 24) if tipus in ("numero", "progres") else ""
     if tipus == "numero" and not XIFRA.search(sortida["xifra"]):
         raise ValueError("Un número necessita «xifra», amb un número a dins («73 %», «10.000 €», «3 de cada 4»)")
-    sortida["forma"] = (g.get("forma") if g.get("forma") in FORMES else "fletxa") if tipus == "anotacio" else None
+    if tipus == "progres" and fraccio(sortida["xifra"]) is None:
+        raise ValueError("Un progrés necessita «xifra»: un percentatge («70 %») o una part d'un total («3 de 5», «7/10»)")
+    sortida["forma"] = ((g.get("forma") if g.get("forma") in FORMES else "fletxa") if tipus == "anotacio"
+                        else (g.get("forma") if g.get("forma") in FORMES_PROGRES else "cercle") if tipus == "progres" else None)
     sortida["costat"] = (g.get("costat") if g.get("costat") in COSTATS else "esquerra") if tipus == "anotacio" else None
     sortida["imatge"] = _imatge(g.get("imatge")) if tipus == "web" else ""
     sortida["estil"] = g.get("estil") if g.get("estil") in ESTILS else None
@@ -431,6 +438,8 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
         d["de"] = g.get("de") or ""
     elif g["tipus"] == "numero":
         d["xifra"] = llegeix_xifra(g["xifra"])
+    elif g["tipus"] == "progres":
+        d.update(xifra=llegeix_xifra(g["xifra"]), fraccio=round(fraccio(g["xifra"]), 4), forma=g.get("forma") or "cercle")
     elif g["tipus"] == "anotacio":
         d.update(forma=g.get("forma") or "fletxa", costat=g.get("costat") or "esquerra")
     elif g["tipus"] == "web":
@@ -447,6 +456,7 @@ MOSTRES = {"frase": {"text": "Menys és *més*"}, "marcador": {"text": "el truc 
            "ratllat": {"punts": ["mandra", "cansament"]},
            "llista": {"text": "Tres claus", "punts": ["Llum", "So", "Ritme"]},
            "numero": {"xifra": "73 %", "text": "ho fan així"},
+           "progres": {"xifra": "70 %", "text": "del camí", "forma": "cercle"},
            "notificacio": {"de": "Missatge", "text": "Ja és aquí!"},
            "comentari": {"de": "marta", "text": "I això com es fa?"},
            "xat": {"punts": ["Ho has vist?", "Sí, és genial"]},
@@ -569,6 +579,20 @@ def llegeix_xifra(xifra: str) -> dict:
     enter, decimals = m.group(1), m.group(2) or ""
     return {"abans": xifra[:m.start()], "despres": xifra[m.end():], "milers": "." in enter,
             "valor": float(f"{enter.replace('.', '')}.{decimals or 0}"), "decimals": len(decimals)}
+
+
+def fraccio(xifra: str) -> float | None:
+    """Quina part s'omple d'un progrés (de 0 a 1): «70 %» → 0,7; «3 de 5», «7/10», «3 de cada 4» → la part del total.
+    None si no ho diu."""
+    m = XIFRA.search(xifra or "")
+    if not m:
+        return None
+    valor = llegeix_xifra(xifra)["valor"]
+    if "%" in xifra[m.end():]:
+        return min(1.0, max(0.0, valor / 100))
+    t = TOTAL.search(xifra, m.end())
+    total = float(f"{t.group(1).replace('.', '')}.{t.group(2) or 0}") if t else 0
+    return min(1.0, max(0.0, valor / total)) if total > 0 else None
 
 
 def _zona(posicio) -> str:
