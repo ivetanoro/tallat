@@ -96,6 +96,7 @@ class Projecte:
             estat["estil"] = marca.neteja_estil_video(estat.get("estil"))
             estat["vots"] = edicio.vots_nets(estat.get("vots"))
             estat["ronda"] = edicio.ronda_neta(estat.get("ronda"))
+            estat["llocs_stickers"] = edicio.llocs_stickers_nets(estat.get("llocs_stickers"))
             return estat
         if (self.carpeta / EDICIO_TEXT).exists():
             text = (self.carpeta / EDICIO_TEXT).read_text(encoding="utf-8")
@@ -577,7 +578,11 @@ class Projecte:
         return mapa_muntatge(trams)(t)
 
     def stickers(self, trams) -> list[dict]:
-        return self._recursos(trams, "sticker")
+        """Els stickers al muntatge, amb on van a la pantalla (x, y, mida, rotacio: motor/stickers.py, lloc)."""
+        estil = self.estil().get("stickers", {})
+        llocs = self.estat.get("llocs_stickers") or {}
+        return [{**st, **stickers.lloc(k, estil, llocs.get(st["id"]))}
+                for k, st in enumerate(self._recursos(trams, "sticker"))]
 
     def brolls(self, trams) -> list[dict]:
         """Els b-rolls al muntatge, amb on van a la pantalla i com entren (motor/targetes.py)."""

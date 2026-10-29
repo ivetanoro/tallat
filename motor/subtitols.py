@@ -22,6 +22,7 @@ import subprocess
 from pathlib import Path
 
 from motor import entorn
+from motor import stickers as stickers_  # aquí, «stickers» és el nom d'un paràmetre
 
 VERSIO_HYPERFRAMES = entorn.VERSIO_HYPERFRAMES
 VERSIO_GSAP = "3.14.2"
@@ -265,7 +266,8 @@ def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict]
 
     Els subtítols i el títol els dibuixa `subtitols.js`, i els gràfics, `grafics.js`: el mateix codi que
     fa servir la vista prèvia de la pàgina de revisió (s'han de copiar al costat d'aquest index.html).
-    `stickers`: [{"src": nom del fitxer dins la composició, "inici": s, "durada": s}]."""
+    `stickers`: [{"src": nom del fitxer dins la composició, "inici": s, "durada": s}], amb on va cadascun (x, y,
+    mida, rotacio; si no hi és, el de l'estil: motor/stickers.py, lloc)."""
     es = estil_stickers or {}
     et = estil_titol or {}
     amplada, alcada = round(AMPLADA * escala), round(ALCADA * escala)
@@ -284,14 +286,13 @@ def composicio(linies: list[dict], estil: dict, durada: float, fonts: list[dict]
 
     blocs, passos = [], []
     for k, st in enumerate(stickers or []):
-        # Si n'hi ha més d'un, s'alternen a banda i banda perquè no quedin sempre al mateix lloc.
-        x = es.get("x", 0.72) if k % 2 == 0 else 1 - es.get("x", 0.72)
-        rot = es.get("rotacio", 8) * (1 if k % 2 == 0 else -1)
+        lloc = {**stickers_.lloc(k, es), **{c: st[c] for c in ("x", "y", "mida", "rotacio") if c in st}}
+        rot = lloc["rotacio"]
         blocs.append(f'      <div id="s{k}" class="clip enganxina" data-start="{st["inici"]:.3f}" '
                      f'data-duration="{st["durada"]:.3f}" data-track-index="2">'
                      f'<img id="si{k}" class="sticker" src="{html.escape(st["src"])}" alt="" '
-                     f'style="left: {x * 100:.2f}%; top: {es.get("y", 0.3) * 100:.2f}%; '
-                     f'width: {es.get("mida", 0.34) * 100:.2f}%;" /></div>')
+                     f'style="left: {lloc["x"] * 100:.2f}%; top: {lloc["y"] * 100:.2f}%; '
+                     f'width: {lloc["mida"] * 100:.2f}%;" /></div>')
         sel = f'"#si{k}"'
         if es.get("animacio", "pop") == "pop":
             passos.append(f"      tl.fromTo({sel}, {{ xPercent: -50, yPercent: -50, scale: 0, rotation: {rot - 18}, opacity: 0 }}, "
@@ -365,7 +366,8 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     # L'esborrany es dibuixa a mitja mida (unes 3-4 vegades més ràpid); l'export final, a 1080 o en 4K.
     escala = {"4k": "4k", "esborrany": "540"}.get(qualitat, "1080")
     fonts = fonts or []
-    empremta_st = [[str(st["fitxer"]), _empremta(st["fitxer"]), st["inici"], st["durada"]] for st in stickers or []]
+    empremta_st = [[str(st["fitxer"]), _empremta(st["fitxer"]), st["inici"], st["durada"], st.get("x"), st.get("y")]
+                   for st in stickers or []]
     codi = [_empremta(CODI_ANIMACIO), _empremta(CODI_GRAFICS)]  # si canvien les animacions, cal tornar a dibuixar
     empremta_fonts = [[f["familia"], f["pes"], f.get("estil", "normal"), _empremta(f["fitxer"])] for f in fonts]
     clau = json.dumps([linies, estil, round(durada, 3), escala, VERSIO_HYPERFRAMES, empremta_st, estil_stickers, codi,
@@ -395,7 +397,8 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     for k, st in enumerate(stickers or []):
         nom = f"sticker{k}{Path(st['fitxer']).suffix.lower()}"
         shutil.copy(st["fitxer"], projecte / nom)
-        locals_st.append({"src": nom, "inici": st["inici"], "durada": st["durada"]})
+        locals_st.append({"src": nom, "inici": st["inici"], "durada": st["durada"],
+                          **{c: st[c] for c in ("x", "y", "mida", "rotacio") if c in st}})
     (projecte / "index.html").write_text(composicio(linies, estil, durada, fonts_locals, locals_st, estil_stickers,
                                                     escala=0.5 if escala == "540" else 1.0,
                                                     titol=titol, estil_titol=estil_titol,

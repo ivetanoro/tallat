@@ -269,6 +269,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                             "url": "/broll/" + b["fitxer"].name + f"?v={int(b['fitxer'].stat().st_mtime)}"}
                            for b in brolls],
                 "stickers": [{"id": st["id"], "inici": st["inici"], "durada": st["durada"],
+                              **{k: st[k] for k in ("x", "y", "mida", "rotacio")},
                               "url": "/stickers/" + st["fitxer"].name + f"?v={int(st['fitxer'].stat().st_mtime)}"}
                              for st in enganxines],
                 "subtitols": linies,
@@ -978,6 +979,7 @@ def _estat_de_json(cos: dict) -> dict:
     estat["sons"] = so.neteja_sons(estat.get("sons"))
     estat["estil"] = marca.neteja_estil_video(estat.get("estil"))
     estat["vots"] = edicio.vots_nets(estat.get("vots"))
+    estat["llocs_stickers"] = edicio.llocs_stickers_nets(estat.get("llocs_stickers"))
     estat["ronda"] = edicio.ronda_neta(estat.get("ronda"))
     apagats = estat.get("sons_apagats") if isinstance(estat.get("sons_apagats"), list) else []
     estat["sons_apagats"] = sorted({c for c in apagats if isinstance(c, str) and 0 < len(c) <= 60})[:500]

@@ -469,6 +469,12 @@ class TestServidor(unittest.TestCase):
         self.assertEqual((nou["tipus"], nou["ancora"], nou["estat"]), ("sticker", 3, "acceptada"))
         self.assertTrue((self.carpeta / nou["fitxer"]).exists())
         self.assertIn(nou["id"], [s["id"] for s in r["stickers"]])
+        # Arrossegat a la targeta: es desa a l'estat i el sticker surt allà.
+        estat, cos = self.peticio("POST", "/api/estat", {**r["estat"], "llocs_stickers": {nou["id"]: {"x": 0.2, "y": 0.75}}},
+                                  self.bones())
+        self.assertEqual(estat, 200, cos)
+        st = next(s for s in json.loads(cos)["stickers"] if s["id"] == nou["id"])
+        self.assertEqual((st["x"], st["y"]), (0.2, 0.75))
         # Treure'l del tauler l'esborra (amb el fitxer), com el b-roll posat des de la pàgina.
         estat, cos = self.peticio("POST", "/api/broll/esborra", {"instruccio": nou["id"]}, self.bones())
         self.assertEqual(estat, 200)

@@ -40,7 +40,7 @@ def estat_buit(pausa_maxima: float | None = PAUSA_MAXIMA) -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": pausa_maxima, "pauses_mantingudes": [],
             "subtitols": True, "ordre": None, "zooms": [], "destacades": {}, "titol": None,
-            "sons_apagats": [], "grafics": [], "sons": [], "estil": {}, "ronda": 0, "vots": {}}
+            "sons_apagats": [], "grafics": [], "sons": [], "estil": {}, "ronda": 0, "vots": {}, "llocs_stickers": {}}
 
 
 MIDA_NOTA_VOT = 600
@@ -58,6 +58,20 @@ def vots_nets(vots) -> dict:
         sortida[clau] = {"vot": v["vot"], "nota": nota, "nom": " ".join(str(v.get("nom") or "").split())[:80],
                          "paraula": paraula}
         if len(sortida) >= 500:
+            break
+    return sortida
+
+
+def llocs_stickers_nets(llocs) -> dict:
+    """On ha arrossegat la persona cada sticker (el centre, de 0 a 1): {id de la instrucció: {x, y}}."""
+    sortida = {}
+    for clau, v in (llocs.items() if isinstance(llocs, dict) else []):
+        if not (isinstance(clau, str) and 0 < len(clau) <= 40 and isinstance(v, dict)):
+            continue
+        x, y = v.get("x"), v.get("y")
+        if all(isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) for n in (x, y)):
+            sortida[clau] = {"x": round(min(1.0, max(0.0, float(x))), 3), "y": round(min(1.0, max(0.0, float(y))), 3)}
+        if len(sortida) >= 300:
             break
     return sortida
 

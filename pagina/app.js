@@ -110,7 +110,7 @@ let editantEstil = false;  // el panell dels subtítols és obert: el reproducto
 let instruccions = [];     // instruccions de veu «Claude, …»
 let zoomsTram = [];        // quins trossos porten zoom
 let brollsMuntatge = [];   // b-rolls situats al muntatge: [{id, inici, durada, url}]
-let stickersMuntatge = []; // stickers situats al muntatge: [{id, inici, durada, url}]
+let stickersMuntatge = []; // stickers situats al muntatge: [{id, inici, durada, url, x, y, mida, rotacio}]
 let biblioteca = { broll: [], sticker: [] };  // fitxers de ~/.tallat/broll/ i ~/.tallat/stickers/
 let darrerDesplacamentManual = 0;
 
@@ -3232,25 +3232,27 @@ function instalaBroll() {
   $("#restableix-broll").addEventListener("click", () => restableix("broll", "El b-roll ha tornat a l'estil de tallat."));
 }
 
-// Stickers en directe: mateixa posició, mida i rotació que tindran a l'export.
+// Stickers en directe: mateixa posició, mida i rotació que tindran a l'export (les calcula el servidor:
+// motor/stickers.py, lloc).
 const stickersVius = new Map();
+function situaSticker(img, st) {
+  Object.assign(img.style, { left: `${st.x * 100}%`, top: `${st.y * 100}%`, width: `${st.mida * 100}%` });
+  img.style.setProperty("--rot", `${st.rotacio}deg`);
+}
+
 function pintaStickers() {
   const m = tempsMuntatge();
   const e = P?.estil_stickers || {};
   const actius = new Set();
   if (vista === "directe") {
-    stickersMuntatge.forEach((st, k) => {
+    stickersMuntatge.forEach((st) => {
       if (m < st.inici || m >= st.inici + st.durada) return;
       actius.add(st.id);
       if (stickersVius.has(st.id)) return;
       const img = document.createElement("img");
       img.className = "sticker-viu";
       img.src = st.url;
-      const x = k % 2 === 0 ? (e.x ?? 0.72) : 1 - (e.x ?? 0.72);
-      img.style.left = `${x * 100}%`;
-      img.style.top = `${(e.y ?? 0.3) * 100}%`;
-      img.style.width = `${(e.mida ?? 0.34) * 100}%`;
-      img.style.setProperty("--rot", `${(e.rotacio ?? 8) * (k % 2 === 0 ? 1 : -1)}deg`);
+      situaSticker(img, st);
       if (e.ombra === false) img.style.setProperty("--ombra-sticker", "none");
       if (e.animacio === "cap") img.style.animation = "none";
       $("#capa-stickers").append(img);
@@ -4087,7 +4089,7 @@ function contextCarta(p) {
   res.amaga = res.grafs.filter((g) => g.amaga_subtitols).map((g) => [g.inici, g.final]);
   res.linies = estat.subtitols !== false && estilSub ? liniesSub.filter((l) => dins(l.inici, l.final)) : [];
   if (p.tipus === "broll") res.brolls = [p.b];
-  if (p.tipus === "sticker") res.stickers = [{ ...p.st, k: stickersMuntatge.indexOf(p.st) }];
+  if (p.tipus === "sticker") res.stickers = [p.st];
   if (p.tipus === "zoom") res.zoom = p.k;
   return res;
 }
@@ -4181,8 +4183,10 @@ function pintaClip(c, m) {
   pintaStickersCarta(c, m);
 }
 
-// Els stickers, com a pintaStickers (la mateixa posició, mida i rotació), en un tros de 1080 × 1920.
+// Els stickers, com a pintaStickers (la mateixa posició, mida i rotació), en un tros de 1080 × 1920. A la targeta
+// del sticker, s'hi pot arrossegar (vegeu mouSticker); mentre es mou, no es refà.
 function pintaStickersCarta(c, m) {
+  if (c.movent) return;
   const e = P?.estil_stickers || {};
   const sig = c.ctx.stickers.filter((st) => m >= st.inici && m < st.inici + st.durada).map((st) => st.id).join(",");
   if (c.stHost.dataset.sig === sig) return;
@@ -4194,9 +4198,12 @@ function pintaStickersCarta(c, m) {
     img.className = "sticker-viu";
     img.src = st.url;
     img.alt = "";
-    const x = st.k % 2 === 0 ? (e.x ?? 0.72) : 1 - (e.x ?? 0.72);
-    Object.assign(img.style, { left: `${x * 100}%`, top: `${(e.y ?? 0.3) * 100}%`, width: `${(e.mida ?? 0.34) * 100}%` });
-    img.style.setProperty("--rot", `${(e.rotacio ?? 8) * (st.k % 2 === 0 ? 1 : -1)}deg`);
+    img.dataset.id = st.id;
+    if (c.p.tipus === "sticker") {
+      img.classList.add("es-mou");
+      img.title = "Arrossega'l on el vulguis";
+    }
+    situaSticker(img, st);
     if (e.ombra === false) img.style.setProperty("--ombra-sticker", "none");
     if (e.animacio === "cap") img.style.animation = "none";
     c.stHost.append(img);
@@ -4211,12 +4218,56 @@ function pintaSoCarta(c) {
   b.setAttribute("aria-pressed", String(ambSoTauler));
 }
 
+// Un sticker es mou arrossegant-lo a la seva targeta: el vídeo s'atura mentre dura i, en deixar-lo, es desa on és
+// (`llocs_stickers`, a l'estat: es desfà com la resta) i surt allà al vídeo final.
+function mouSticker(c, e) {
+  const img = e.target.closest(".sticker-viu.es-mou");
+  if (!img || e.button !== 0) return false;
+  e.preventDefault();
+  e.stopPropagation();
+  const caixa = c.stHost.getBoundingClientRect();
+  const r = img.getBoundingClientRect();
+  const agafat = [e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)];  // on l'has agafat
+  const sonava = TV.c === c && TV.v && !TV.v.paused;
+  if (sonava) TV.v.pause();
+  c.movent = img.dataset.id;
+  img.classList.add("movent");
+  img.setPointerCapture(e.pointerId);
+  let lloc = null;
+  const mou = (ev) => {
+    lloc = { x: limita((ev.clientX - agafat[0] - caixa.left) / caixa.width, 0.04, 0.96),
+      y: limita((ev.clientY - agafat[1] - caixa.top) / caixa.height, 0.04, 0.96) };
+    Object.assign(img.style, { left: `${lloc.x * 100}%`, top: `${lloc.y * 100}%` });
+  };
+  const deixa = (ev) => {
+    img.removeEventListener("pointermove", mou);
+    img.removeEventListener("pointerup", deixa);
+    img.removeEventListener("pointercancel", deixa);
+    img.classList.remove("movent");
+    c.movent = null;
+    c.mogutAra = performance.now();  // el clic que ve després de deixar-lo no és un toc a la targeta
+    const id = img.dataset.id;
+    if (lloc) {
+      const x = Math.round(lloc.x * 1000) / 1000;
+      const y = Math.round(lloc.y * 1000) / 1000;
+      canvia((est) => { est.llocs_stickers = { ...(est.llocs_stickers || {}), [id]: { x, y } }; });
+    }
+    if (ev.pointerType === "mouse" && !c.el.querySelector(".clip").matches(":hover")) { if (TV.c === c) aturaCarta(); }
+    else if (sonava && TV.c === c) TV.v.play().catch(() => {});
+  };
+  img.addEventListener("pointermove", mou);
+  img.addEventListener("pointerup", deixa);
+  img.addEventListener("pointercancel", deixa);
+  return true;
+}
+
 function instalaClip(c) {
   const clip = c.el.querySelector(".clip");
+  clip.addEventListener("pointerdown", (e) => mouSticker(c, e));
   clip.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") activaCarta(c); });
-  clip.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse" && TV.c === c) aturaCarta(); });
+  clip.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse" && TV.c === c && !c.movent) aturaCarta(); });
   clip.addEventListener("click", (e) => {
-    if (e.target.closest(".clip-so")) return;
+    if (e.target.closest(".clip-so") || performance.now() - (c.mogutAra || 0) < 300) return;
     if (e.pointerType !== "mouse") TV.c === c ? aturaCarta() : activaCarta(c);  // amb el dit, un toc la mou o l'atura
   });
   clip.addEventListener("keydown", (e) => {

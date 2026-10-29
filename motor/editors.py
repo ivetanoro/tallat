@@ -92,13 +92,7 @@ def _plan(projecte, trams) -> dict:
             continue
         trossos.append({"a": fa, "b": fb, "offset": offset, "zoom": bool(zooms[k]) if k < len(zooms) else False})
         offset += fb - fa
-    est_st = projecte.estil().get("stickers", {})
-    stickers = []
-    for k, st in enumerate(projecte.stickers(trams)):
-        x = est_st.get("x", 0.72) if k % 2 == 0 else 1 - est_st.get("x", 0.72)
-        rot = est_st.get("rotacio", 8) * (1 if k % 2 == 0 else -1)
-        stickers.append(dict(st, x=x, y=est_st.get("y", 0.3), rot=rot, mida=est_st.get("mida", 0.34),
-                             px=_mida_imatge(st["fitxer"])))
+    stickers = [dict(st, rot=st["rotacio"], px=_mida_imatge(st["fitxer"])) for st in projecte.stickers(trams)]
     brolls = projecte.brolls(trams)
     return {"t": t, "info": info, "trossos": trossos, "total": offset,
             "brolls": brolls, "carrils": _carrils(brolls), "stickers": stickers}

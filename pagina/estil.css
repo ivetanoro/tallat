@@ -791,6 +791,9 @@ button.opcio-export:active { transform: scale(0.98); }
 @keyframes sticker-entra {
   from { transform: translate(-50%, -50%) rotate(calc(var(--rot, 8deg) - 18deg)) scale(0); opacity: 0; }
 }
+/* Al tauler, el sticker de la seva targeta es mou arrossegant-lo. */
+.sticker-viu.es-mou { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; -webkit-user-drag: none; }
+.sticker-viu.movent { cursor: grabbing; animation: none; filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.45)); }
 #ts-host, #tt-host, .estil-mostra > .ts-capa, .mostra-estil > .ts-capa, .estil-mostra > .tt-capa,
 .mostra-estil > .tt-capa { transform-origin: 0 0; }
 #tt-host { position: absolute; left: 0; top: 0; }

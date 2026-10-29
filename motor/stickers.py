@@ -43,6 +43,17 @@ def suggereix(text: str) -> Path | None:
     return None
 
 
+def lloc(k: int, estil: dict, propi: dict | None = None) -> dict:
+    """On va el sticker número `k` del vídeo (el centre, de 0 a 1 de l'amplada i l'alçada), com de gran i com de
+    girat: el de l'estil, a banda i banda si n'hi ha més d'un (perquè no quedin sempre al mateix lloc), o el lloc
+    on la persona l'ha arrossegat (`propi`)."""
+    costat = 1 if k % 2 == 0 else -1
+    x = estil.get("x", 0.72)
+    propi = propi or {}
+    return {"x": propi.get("x", x if costat > 0 else 1 - x), "y": propi.get("y", estil.get("y", 0.3)),
+            "mida": estil.get("mida", 0.34), "rotacio": estil.get("rotacio", 8) * costat}
+
+
 def copia(origen: Path, carpeta: Path, nom: str) -> Path:
     """Copia el sticker al projecte. Primer en un fitxer temporal: si la còpia falla, el d'abans
     es queda on era (el retira `retira_anteriors` quan ja s'ha desat l'assignació nova)."""

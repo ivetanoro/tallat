@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from motor import edicio, marca, subtitols
+from motor import edicio, marca, stickers, subtitols
 
 ESTIL = marca.carrega(marca.PER_DEFECTE)["subtitols"]
 
@@ -90,6 +90,22 @@ class TestGrups(unittest.TestCase):
                                            {"familia": "Inter", "pes": "100 1000", "src": "font1.woff2"}])
         self.assertIn("""@font-face { font-family: "Poppins"; src: url('font0.woff2'); font-weight: 700;""", html)
         self.assertIn("""font-family: "Inter"; src: url('font1.woff2'); font-weight: 100 1000;""", html)
+
+
+class TestLlocDelsStickers(unittest.TestCase):
+    def test_a_banda_i_banda_o_on_l_ha_arrossegat(self):
+        estil = {"x": 0.7, "y": 0.3, "mida": 0.3, "rotacio": 8}
+        self.assertEqual(stickers.lloc(0, estil), {"x": 0.7, "y": 0.3, "mida": 0.3, "rotacio": 8})
+        self.assertEqual(stickers.lloc(1, estil), {"x": 0.30000000000000004, "y": 0.3, "mida": 0.3, "rotacio": -8})
+        self.assertEqual(stickers.lloc(1, estil, {"x": 0.5, "y": 0.8})["x"], 0.5)
+        # El que no és un número, o surt de la pantalla, no es desa.
+        self.assertEqual(edicio.llocs_stickers_nets({"m3-1": {"x": 1.4, "y": -2}, "m4-1": {"x": "a", "y": 0.2},
+                                                     "m5-1": {"x": True, "y": 0.1}, 7: {"x": 0, "y": 0}}),
+                         {"m3-1": {"x": 1.0, "y": 0.0}})
+        # Al vídeo final, cada sticker va on diu el seu lloc.
+        html = subtitols.composicio([], ESTIL, 3.0, stickers=[{"src": "s.png", "inici": 0.5, "durada": 1, "x": 0.25, "y": 0.8,
+                                                               "mida": 0.3, "rotacio": -8}], estil_stickers=estil)
+        self.assertIn("left: 25.00%; top: 80.00%; width: 30.00%", html)
 
 
 class TestParaulesClau(unittest.TestCase):
