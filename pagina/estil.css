@@ -540,6 +540,10 @@ body.redimensionant, body.redimensionant * { cursor: col-resize !important; user
   background: none; text-align: left; cursor: pointer; transition: background-color 120ms ease-out;
 }
 .fila-estil:hover { background: var(--omplir); }
+.fila-encaix { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e3); margin-top: var(--e2); padding: var(--e2) 0; }
+.fila-encaix[hidden] { display: none; }
+.fila-encaix .fila-estil-text { flex: 1 1 8rem; }
+.fila-encaix .detall { flex: 1 1 100%; margin: 0; }
 .fila-estil:active { background: var(--omplir-fort); }
 .mostra-estil {
   flex: none; position: relative; width: 40px; height: 40px; border-radius: var(--radi); overflow: hidden;

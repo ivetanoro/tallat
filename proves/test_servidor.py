@@ -452,6 +452,26 @@ class TestServidor(unittest.TestCase):
         self.assertFalse(any(i.get("pagina") for i in json.loads(cos)["instruccions"]))
         self.assertFalse((self.carpeta / nou["fitxer"]).exists())
 
+    def test_canviar_com_entra_un_video_horitzontal_refa_la_copia(self):
+        import shutil
+        import subprocess
+        import time
+        if not shutil.which("ffmpeg"):
+            self.skipTest("cal ffmpeg")
+        video = self.carpeta / "no-hi-es.mov"  # el del projecte: ara sí que hi és, i és horitzontal
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=640x360:d=1:r=25", "-f", "lavfi",
+                        "-i", "sine=d=1", "-shortest", "-pix_fmt", "yuv420p", str(video)], check=True)
+        dades = json.loads(self.peticio("GET", "/api/projecte")[1])
+        estat, cos = self.peticio("POST", "/api/estat", {**dades["estat"], "encaix": "difumina"}, self.bones())
+        self.assertEqual((estat, json.loads(cos)["estat"]["encaix"]), (200, "difumina"))  # i no s'encalla
+        for _ in range(100):  # la còpia es fa en segon pla; la pàgina ho pregunta a les novetats
+            n = json.loads(self.peticio("GET", "/api/novetats")[1])
+            if not n["copia_fent"] and (self.carpeta / "proxy-encaix.txt").exists():
+                break
+            time.sleep(0.1)
+        self.assertEqual(((self.carpeta / "proxy-encaix.txt").read_text(encoding="utf-8"), n["copia_error"]), ("difumina", None))
+        self.assertTrue(n["copia"])
+
     def test_un_sticker_posat_des_del_tauler(self):
         import shutil
         import subprocess

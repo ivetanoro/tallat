@@ -518,7 +518,7 @@ def exporta_trossos(projecte, progres=None) -> Path:
     xifres = max(2, len(str(len(trams))))
     for i, tram in enumerate(trams, 1):
         exporta.exporta(projecte.video, [tram], desti / f"{i:0{xifres}d}.mp4", "1080",
-                        zooms=[bool(zooms[i - 1])] if i - 1 < len(zooms) else None)
+                        zooms=[bool(zooms[i - 1])] if i - 1 < len(zooms) else None, encaix=projecte.encaix)
         if progres:
             progres(round(i / len(trams) * 100))
     pla = _plan(projecte, trams)

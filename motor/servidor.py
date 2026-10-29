@@ -93,7 +93,7 @@ class Feina:
             exporta.exporta(projecte.font(qualitat), trams, sortida, qualitat,
                             progres=lambda pct: self._actualitza(progres=pct), capa=capa,
                             zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
-                            blocs=projecte.blocs(trams), **projecte.opcions_so(trams))
+                            blocs=projecte.blocs(trams), encaix=projecte.encaix, **projecte.opcions_so(trams))
             projecte.desa_talls(sortida, trams)
             copia, avis = _copia(sortida)  # també l'esborrany: la carpeta que es tria és per a tot
             durades = exporta.comprova_durades(sortida, sum(b - a for a, b in trams), projecte.dades["fps"])
@@ -188,6 +188,28 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
     origens = {f"http://{a}" for a in amfitrions}
     # La pàgina pot passar de la gravació sencera a qualsevol dels reels proposats.
     obert = {"p": inicial, "arrel": _arrel_de(inicial)}
+    # La còpia lleugera es refà quan canvia com entra un vídeo horitzontal (encaix): en segon pla, i la pàgina
+    # es torna a carregar quan és a punt.
+    copia = {"fent": False, "error": None}
+
+    def refes_copia(projecte: Projecte) -> None:
+        """Es crida amb `bloqueig` agafat (des de la petició que desa l'estat)."""
+        if copia["fent"]:
+            return
+        copia.update(fent=True, error=None)
+
+        def fes():
+            try:
+                while True:
+                    feta = projecte.encaix
+                    projecte.prepara_proxy()
+                    if projecte.encaix == feta:  # si mentrestant l'han tornat a canviar, una altra volta
+                        break
+            except Exception as e:
+                copia["error"] = f"No he pogut preparar el vídeo: {e}"
+            finally:
+                copia["fent"] = False
+        threading.Thread(target=fes, daemon=True).start()
 
     def info_reels() -> dict:
         arrel = obert["arrel"]
@@ -497,9 +519,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 with bloqueig:
                     projecte.al_dia()
                     info = info_notes()
+                    proxy = projecte.fitxer(PROXY)
                     return self._json({"clau_projecte": clau_de(projecte), "revisio": projecte.estat.get("revisio", 0),
                                        "estil": versio_estil(projecte), "versio_notes": info["versio_notes"],
-                                       "connectat": info["connectat"], "darrer_export": darrer_export(projecte)})
+                                       "connectat": info["connectat"], "darrer_export": darrer_export(projecte),
+                                       "copia": str(proxy.stat().st_mtime_ns) if proxy.exists() else "",
+                                       "copia_fent": copia["fent"], "copia_error": copia["error"]})
             if ruta == "/api/notes":
                 return self._json(info_notes())
             if ruta == "/api/instantania":
@@ -660,9 +685,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     if cos.get("revisio") != projecte.estat.get("revisio", 0):
                         # Una altra pestanya ha desat abans: no la trepitgem.
                         return self._json({"error": "conflicte", **instantania()}, HTTPStatus.CONFLICT)
+                    encaix = projecte.encaix
                     projecte.estat = _estat_de_json(cos)
                     projecte.estat["revisio"] = cos["revisio"] + 1
                     projecte.desa()
+                    if projecte.encaix != encaix and projecte.video.exists():
+                        refes_copia(projecte)
                     return self._json(instantania())
                 if ruta == "/api/previa":  # el muntatge d'ara en un vídeo continu (si no hi és, es fa)
                     return self._json(previa.demana(projecte, projecte.trams()))
@@ -982,6 +1010,7 @@ def _estat_de_json(cos: dict) -> dict:
     estat["estil"] = marca.neteja_estil_video(estat.get("estil"))
     estat["vots"] = edicio.vots_nets(estat.get("vots"))
     estat["llocs_stickers"] = edicio.llocs_stickers_nets(estat.get("llocs_stickers"))
+    estat["encaix"] = estat.get("encaix") if estat.get("encaix") in exporta.ENCAIXOS else "retalla"
     estat["ronda"] = edicio.ronda_neta(estat.get("ronda"))
     apagats = estat.get("sons_apagats") if isinstance(estat.get("sons_apagats"), list) else []
     estat["sons_apagats"] = sorted({c for c in apagats if isinstance(c, str) and 0 < len(c) <= 60})[:500]

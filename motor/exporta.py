@@ -177,8 +177,18 @@ def _so_del_tros(i: int, tram) -> str:
             f"afade=t=out:st={max(inici, final - fos):.6f}:d={fos:.6f}[a{i}];")
 
 
-def _enquadrament(amplada: int, alcada: int, ow: int, oh: int) -> str:
-    """Retalla el centre fins a 9:16 (si cal) i escala a la mida final."""
+ENCAIXOS = ("retalla", "difumina")  # com entra al vertical un vídeo més ample: retallat o sencer, amb el fons difuminat
+
+
+def _enquadrament(amplada: int, alcada: int, ow: int, oh: int, encaix: str = "retalla") -> str:
+    """Retalla el centre fins a 9:16 (si cal) i escala a la mida final. Amb `encaix` «difumina», un vídeo més
+    ample que 9:16 hi entra sencer, al mig, i el que queda a dalt i a baix és el mateix vídeo, gran i difuminat."""
+    if amplada * 16 > alcada * 9 and encaix == "difumina":
+        # El primer «scale=» ha de ser el de la mida final (el llegeix _filtre).
+        return (f"split=2[enq_f][enq_v];[enq_f]scale={ow}:{oh}:flags=bilinear:force_original_aspect_ratio=increase,"
+                f"crop={ow}:{oh},gblur=sigma={max(12, ow // 20)},eq=brightness=-0.06[enq_fons];"
+                f"[enq_v]scale={ow}:-2:flags=lanczos[enq_mig];"
+                f"[enq_fons][enq_mig]overlay=(W-w)/2:(H-h)/2,setsar=1,format=yuv420p")
     if amplada * 16 > alcada * 9:      # més ample que 9:16 (p. ex. horitzontal)
         retall = "crop=trunc(ih*9/16/2)*2:ih"
     elif amplada * 16 < alcada * 9:    # més estret que 9:16
@@ -340,16 +350,17 @@ def _executa(ordre: list[str], durada: float, progres) -> None:
 def exporta(video: Path, trams: list[tuple[float, float]], sortida: Path, qualitat: str,
             progres=None, capa: Path | None = None, zooms: list[bool] | None = None,
             brolls: list[dict] | None = None, neteja: str | None = None, efectes: Path | None = None,
-            blocs: list[dict] | None = None) -> Path:
+            blocs: list[dict] | None = None, encaix: str = "retalla") -> Path:
     """`brolls`: [{"fitxer": Path, "inici": segons del muntatge, "durada": segons}], ja disposats
     amb `targetes.disposa` (si no ho estan, van a pantalla sencera). `neteja`: el nivell de la
     neteja de la veu (motor/so.py) o None; `efectes`: la pista d'efectes de so (WAV) o None;
-    `blocs`: els blocs de color dels gràfics (Projecte.blocs) o None."""
+    `blocs`: els blocs de color dels gràfics (Projecte.blocs) o None; `encaix`: com hi entra un vídeo
+    horitzontal (_enquadrament)."""
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
     ow, oh, bitrate = QUALITATS[qualitat]
     info = info_video(video)
-    enquadrament = _enquadrament(info["amplada"], info["alcada"], ow, oh)
+    enquadrament = _enquadrament(info["amplada"], info["alcada"], ow, oh, encaix)
 
     brolls = [b if "caixa" in b else targetes.disposa([b], {})[0] for b in brolls or []]
     sortida.parent.mkdir(parents=True, exist_ok=True)
@@ -612,12 +623,13 @@ def _neteja_trossos(trossos: Path, en_us: set) -> None:
             pass
 
 
-def fes_proxy(video: Path, sortida: Path, progres=None) -> Path:
-    """Còpia lleugera i vertical de tota la gravació, per al reproductor de la pàgina de revisió.
+def fes_proxy(video: Path, sortida: Path, progres=None, encaix: str = "retalla") -> Path:
+    """Còpia lleugera i vertical de tota la gravació, per al reproductor de la pàgina de revisió (enquadrada com
+    el vídeo final: `encaix`, vegeu _enquadrament).
 
     Un fotograma clau cada mig segon perquè els salts entre trossos siguin instantanis."""
     info = info_video(video)
-    enquadrament = _enquadrament(info["amplada"], info["alcada"], 720, 1280).replace("lanczos", "fast_bilinear")
+    enquadrament = _enquadrament(info["amplada"], info["alcada"], 720, 1280, encaix).replace("lanczos", "fast_bilinear")
     temporal = sortida.with_suffix(".tmp.mp4")
     ordre = [
         "ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", "-i", str(video),

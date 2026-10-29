@@ -68,6 +68,15 @@
         <span class="fila-estil-text"><strong>Estil</strong><span id="nom-estil-video"></span></span>
         <svg class="xebro" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg>
       </button>
+      <!-- Només si la gravació és horitzontal: retallada (el centre) o sencera, amb el fons difuminat. -->
+      <div class="fila-encaix" id="fila-encaix" hidden>
+        <span class="fila-estil-text"><strong>Vídeo horitzontal</strong><span>Com entra al vertical</span></span>
+        <div class="segmentat petit" role="radiogroup" aria-label="Com entra el vídeo horitzontal" id="encaix">
+          <button role="radio" data-encaix="retalla" aria-checked="true" title="Se'n queda el centre">Retallat</button>
+          <button role="radio" data-encaix="difumina" aria-checked="false" title="Surt sencer; a dalt i a baix, el mateix vídeo difuminat">Fons difuminat</button>
+        </div>
+        <p class="detall" id="encaix-fent" hidden>Preparant el vídeo… Quan estigui, la pàgina es tornarà a carregar sola.</p>
+      </div>
       <button class="fila-estil" id="obre-subtitols" aria-label="Subtítols: retoca'ls (a la dreta)">
         <span class="mostra-estil icona-fila" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 11.5h4M14 11.5h3M7 15h10"/></svg></span>
         <span class="fila-estil-text"><strong>Subtítols</strong><span id="nom-estil-sub"></span></span>

@@ -215,3 +215,45 @@ class TestCanviarSticker(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVideoHoritzontal(unittest.TestCase):
+    """Un vídeo horitzontal entra al vertical retallat (el centre) o sencer, amb el fons difuminat."""
+
+    def test_l_enquadrament(self):
+        from motor import exporta
+        retalla = exporta._enquadrament(1920, 1080, 1080, 1920)
+        self.assertTrue(retalla.startswith("crop=trunc(ih*9/16/2)*2:ih,scale=1080:1920"))
+        difumina = exporta._enquadrament(1920, 1080, 1080, 1920, "difumina")
+        self.assertIn("gblur", difumina)
+        self.assertIn("overlay=(W-w)/2:(H-h)/2", difumina)
+        # El primer «scale=» és el de la mida final: _filtre el llegeix d'aquí.
+        self.assertEqual(difumina.split("scale=")[1].split(":flags")[0], "1080:1920")
+        # Un vídeo que ja és vertical no es difumina.
+        self.assertEqual(exporta._enquadrament(1080, 1920, 1080, 1920, "difumina"), exporta._enquadrament(1080, 1920, 1080, 1920))
+
+    def test_es_desa_al_video_i_la_copia_lleugera_el_segueix(self):
+        import shutil
+        import subprocess
+        if not shutil.which("ffmpeg"):
+            self.skipTest("cal ffmpeg")
+        from motor import exporta
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            video = d / "h.mp4"
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=640x360:d=1:r=25", "-f", "lavfi",
+                            "-i", "sine=d=1", "-shortest", "-pix_fmt", "yuv420p", str(video)], check=True)
+            (d / "transcripcio.json").write_text(json.dumps({"video": str(video), "durada": 1.0, "fps": "25",
+                                                            "paraules": [{"id": 0, "text": "hola", "inici": 0.1, "final": 0.5}]}),
+                                                 encoding="utf-8")
+            p = Projecte(d)
+            self.assertEqual(p.encaix, "retalla")
+            self.assertTrue(p.prepara_proxy())
+            self.assertFalse(p.prepara_proxy())  # ja hi és, i enquadrada igual
+            p.estat["encaix"] = "difumina"
+            self.assertTrue(p.prepara_proxy())
+            self.assertEqual((d / "proxy-encaix.txt").read_text(encoding="utf-8"), "difumina")
+            info = exporta.info_video(d / "proxy.mp4")
+            self.assertEqual((info["amplada"], info["alcada"]), (720, 1280))
+            p.estat["encaix"] = "res"
+            self.assertEqual(p.encaix, "retalla")  # el que no s'entén, retallat

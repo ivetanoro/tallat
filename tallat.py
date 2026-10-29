@@ -229,9 +229,11 @@ def ordre_revisa(args) -> None:
                      "Torna'l a posar on era o dins de la carpeta del projecte.")
         print(f"No trobo el vídeo original ({projecte.video}): la pàgina fa servir la còpia lleugera. "
               "Per exportar el vídeo final, torna'l a posar on era o dins de la carpeta del projecte.")
-    elif not proxy.exists() or proxy.stat().st_mtime < projecte.video.stat().st_mtime:
+    elif not proxy.exists():
         print("Preparant la còpia lleugera del vídeo (només el primer cop)…")
-        exporta.fes_proxy(projecte.video, proxy, progres=_barra("còpia"))
+        projecte.prepara_proxy(progres=_barra("còpia"))
+    elif projecte.prepara_proxy(progres=_barra("còpia")):  # el vídeo és més nou, o ha canviat com s'enquadra
+        print("\nHe tornat a fer la còpia lleugera del vídeo.")
 
     for port in range(args.port, args.port + 20):
         try:
@@ -363,7 +365,7 @@ def ordre_exporta(args) -> None:
     capa = projecte.capa_subtitols(trams, args.qualitat, avis=print)
     exporta.exporta(projecte.font(args.qualitat), trams, sortida, args.qualitat, progres=_barra("exportant"), capa=capa,
                     zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
-                    blocs=projecte.blocs(trams), **projecte.opcions_so(trams))
+                    blocs=projecte.blocs(trams), encaix=projecte.encaix, **projecte.opcions_so(trams))
     projecte.desa_talls(sortida, trams)
     avis = exporta.comprova_durades(sortida, sum(b - a for a, b in trams), projecte.dades["fps"])
     if avis:
@@ -793,6 +795,24 @@ def ordre_notes(args) -> None:
               f"{notes.text_per_a_claude(nota, _mmss, _al_video(nota), carpeta, numeros.get(nota['id']))}")
 
 
+def ordre_encaix(args) -> None:
+    projecte = _carrega(args)
+    info = exporta.info_video(projecte.fitxer(PROXY) if not projecte.video.exists() else projecte.video)
+    horitzontal = info["amplada"] * 16 > info["alcada"] * 9 if projecte.video.exists() else None
+    if args.encaix is None:
+        print(f"Ara: «{projecte.encaix}»." + ("" if horitzontal is not False else " (El vídeo ja és vertical: no hi fa res.)"))
+        return
+    projecte.estat["encaix"] = args.encaix
+    projecte.estat["revisio"] = projecte.estat.get("revisio", 0) + 1  # la pàgina oberta s'hi posa al dia
+    projecte.desa()
+    if not projecte.video.exists():
+        sys.exit("Desat, però no trobo el vídeo original per refer la còpia lleugera: torna'l a posar on era.")
+    if projecte.prepara_proxy(progres=_barra("còpia")):
+        print("\nFet: he refet la còpia lleugera (si tens la pàgina oberta, es tornarà a carregar).")
+    print({"retalla": "Ara el vídeo horitzontal es retalla: se'n queda el centre.",
+           "difumina": "Ara el vídeo horitzontal surt sencer, amb el mateix vídeo difuminat a dalt i a baix."}[args.encaix])
+
+
 def ordre_destaca(args) -> None:
     projecte = _carrega(args)
     destacades = projecte.estat.setdefault("destacades", {})
@@ -1055,6 +1075,11 @@ def main() -> None:
     gr.add_argument("--de-nou", action="store_true", help="El pla nou substitueix tots els d'abans (també els mantinguts)")
     gr.add_argument("--json", action="store_true", help="Ho mostra en JSON")
     gr.set_defaults(func=ordre_grafics)
+
+    en = sub.add_parser("encaix", help="Com entra al vertical un vídeo horitzontal: retallat o sencer amb el fons difuminat")
+    en.add_argument("encaix", nargs="?", choices=exporta.ENCAIXOS, help="retalla (el centre) o difumina (sencer)")
+    en.add_argument("--projecte", required=True)
+    en.set_defaults(func=ordre_encaix)
 
     de = sub.add_parser("destaca", help="Les paraules destacades dels subtítols (més grans i d'un altre color)")
     de.add_argument("--projecte", required=True)

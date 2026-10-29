@@ -187,6 +187,15 @@ async function miraNovetats() {
       actualitzaVersions(f.exports);
     }
     else if (n.connectat !== claudeConnectat) { claudeConnectat = n.connectat; pintaNotes(); }
+    if (copiaVista == null) copiaVista = n.copia;
+    pintaEncaix(n.copia_fent);
+    if (n.copia_error) avis(n.copia_error, 6000);
+    if (!n.copia_fent && n.copia && n.copia !== copiaVista) {  // la còpia lleugera és nova: es torna a carregar
+      copiaVista = n.copia;
+      avis("El vídeo ja és a punt. Torno a carregar la pàgina…", 3000);
+      setTimeout(() => location.reload(), 1200);
+      return;
+    }
     if (versioEstil == null) versioEstil = n.estil;
     if (n.estil !== versioEstil) {
       respostaEstil(await api("/api/marca/info"));
@@ -2924,14 +2933,27 @@ async function comencaRender(qualitat) {
   }
 }
 
+// Un vídeo horitzontal entra al vertical retallat (el centre) o sencer, amb el fons difuminat. Si es canvia, el
+// servidor refà la còpia lleugera (amb l'enquadrament nou) i la pàgina es torna a carregar quan és a punt.
+const esHoritzontal = () => { const o = P?.origen || {}; return !!o.amplada && o.amplada * 16 > o.alcada * 9; };
+let copiaVista = null;
+function pintaEncaix(fent = false) {
+  $("#fila-encaix").hidden = !esHoritzontal();
+  for (const b of $$("#encaix button")) b.setAttribute("aria-checked", String(b.dataset.encaix === (estat?.encaix || "retalla")));
+  $("#encaix-fent").hidden = !fent;
+}
+
 function obreFinal() {
   const o = P.origen || {};
   $("#fet-export").hidden = true;
   $("#final-durada").textContent = fmt(duradaFinal);
   const avisFinal = $("#final-avis");
-  if (o.amplada && o.amplada * 16 > o.alcada * 9) {
+  if (esHoritzontal()) {
     const ample = Math.round((o.alcada * 9) / 16);
-    avisFinal.textContent = `La gravació és horitzontal: el reel n'aprofita ${ample} × ${o.alcada} píxels. ` +
+    avisFinal.textContent = (estat.encaix === "difumina"
+      ? "La gravació és horitzontal: surt sencera, al mig, amb el mateix vídeo difuminat a dalt i a baix. "
+      : `La gravació és horitzontal: el reel n'aprofita ${ample} × ${o.alcada} píxels (el centre). Si la vols sencera, ` +
+        "a Vesteix tria «Fons difuminat». ") +
       "En 4K la imatge s'amplia i no guanya detall respecte a 1080, però hi ha plataformes que la tracten millor.";
     avisFinal.hidden = false;
   } else avisFinal.hidden = true;
@@ -3649,6 +3671,7 @@ function miraPecaNova() {
 
 function pintaVesteix() {
   if (!estat) return;
+  pintaEncaix();
   miraPecaNova();
   if (!vestint) return;
   actualitzaTauler();
@@ -4662,6 +4685,13 @@ function instalaTauler() {
   $("#demana-ronda").addEventListener("click", demanaRonda);
   $("#ja-esta").addEventListener("click", () => { canviaEstacio("revisa"); comencaRender("esborrany"); });
   $("#afegeix-peca").addEventListener("click", obreAfegeix);
+  for (const b of $$("#encaix button")) {
+    b.addEventListener("click", () => {
+      if ((estat.encaix || "retalla") === b.dataset.encaix) return;
+      canvia((e) => { e.encaix = b.dataset.encaix; });
+      pintaEncaix(true);
+    });
+  }
   $("#tanca-afegeix").addEventListener("click", tancaAfegeix);
   for (const b of $$("#full-afegeix [data-afegeix]")) b.addEventListener("click", () => triaFitxerPeca(b.dataset.afegeix));
   $("#fitxer-peca").addEventListener("change", (e) => fitxerPecaTriat(e.target.files[0]));

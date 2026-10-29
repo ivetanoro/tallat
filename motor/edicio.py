@@ -40,7 +40,8 @@ def estat_buit(pausa_maxima: float | None = PAUSA_MAXIMA) -> dict:
     return {"versio": 1, "revisio": 0, "esborrades": {}, "propostes": {}, "mantingudes": [],
             "correccions": {}, "pausa_maxima": pausa_maxima, "pauses_mantingudes": [],
             "subtitols": True, "ordre": None, "zooms": [], "destacades": {}, "titol": None,
-            "sons_apagats": [], "grafics": [], "sons": [], "estil": {}, "ronda": 0, "vots": {}, "llocs_stickers": {}}
+            "sons_apagats": [], "grafics": [], "sons": [], "estil": {}, "ronda": 0, "vots": {}, "llocs_stickers": {},
+            "encaix": "retalla"}
 
 
 MIDA_NOTA_VOT = 600

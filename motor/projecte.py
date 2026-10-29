@@ -18,7 +18,7 @@ from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 
-from motor import broll, edicio, entorn, grafics, instruccions, marca, neteja, so, stickers, subtitols, targetes
+from motor import broll, edicio, entorn, exporta, grafics, instruccions, marca, neteja, so, stickers, subtitols, targetes
 
 TRANSCRIPCIO = "transcripcio.json"
 EDICIO = "edicio.json"
@@ -26,6 +26,7 @@ EDICIO_TEXT = "edicio.txt"  # format de la fase 1: s'importa un cop
 ORIGINAL = "original.txt"
 REVISIO = "revisio.txt"
 PROXY = "proxy.mp4"
+PROXY_ENCAIX = "proxy-encaix.txt"  # com està enquadrada la còpia lleugera (motor/exporta.py, ENCAIXOS)
 PREVIES = "previa"  # el muntatge en un vídeo continu, per reproduir-lo a la pàgina sense salts
 EXPORTS = "exports"
 KIT_TRIAT = "kit-triat.json"
@@ -97,6 +98,7 @@ class Projecte:
             estat["vots"] = edicio.vots_nets(estat.get("vots"))
             estat["ronda"] = edicio.ronda_neta(estat.get("ronda"))
             estat["llocs_stickers"] = edicio.llocs_stickers_nets(estat.get("llocs_stickers"))
+            estat["encaix"] = estat.get("encaix") if estat.get("encaix") in exporta.ENCAIXOS else "retalla"
             return estat
         if (self.carpeta / EDICIO_TEXT).exists():
             text = (self.carpeta / EDICIO_TEXT).read_text(encoding="utf-8")
@@ -419,6 +421,26 @@ class Projecte:
             _poda(carpeta, "veu-neta-*.m4a")
             so.mostra(self.video, inici, despres, nivell)
         return {"abans": abans, "despres": despres}
+
+    @property
+    def encaix(self) -> str:
+        """Com entra al vertical un vídeo horitzontal: «retalla» (el centre) o «difumina» (sencer, amb el fons
+        difuminat). També la còpia lleugera, perquè la pàgina el vegi com quedarà."""
+        return self.estat.get("encaix") if self.estat.get("encaix") in exporta.ENCAIXOS else "retalla"
+
+    def prepara_proxy(self, progres=None, sempre: bool = False) -> bool:
+        """Fa la còpia lleugera si no hi és, si el vídeo és més nou o si està enquadrada d'una altra manera
+        (al costat, PROXY_ENCAIX diu com). Torna si l'ha feta."""
+        proxy, marca = self.fitxer(PROXY), self.fitxer(PROXY_ENCAIX)
+        fet = marca.read_text(encoding="utf-8").strip() if marca.exists() else "retalla"
+        if not sempre and proxy.exists() and fet == self.encaix and not (
+                self.video.exists() and proxy.stat().st_mtime < self.video.stat().st_mtime):
+            return False
+        temporal = proxy.with_name(f".{proxy.stem}-fent.mp4")
+        exporta.fes_proxy(self.video, temporal, progres=progres, encaix=self.encaix)
+        temporal.replace(proxy)
+        (proxy.parent / PROXY_ENCAIX).write_text(self.encaix, encoding="utf-8")
+        return True
 
     def opcions_so(self, trams) -> dict:
         """El que necessita l'export: la neteja de la veu i la pista d'efectes."""
