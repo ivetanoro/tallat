@@ -249,11 +249,15 @@ class TestVideoHoritzontal(unittest.TestCase):
             p = Projecte(d)
             self.assertEqual(p.encaix, "retalla")
             self.assertTrue(p.prepara_proxy())
-            self.assertFalse(p.prepara_proxy())  # ja hi és, i enquadrada igual
+            self.assertFalse(p.prepara_proxy())  # ja hi és
             p.estat["encaix"] = "difumina"
+            # Mentre no hi ha la difuminada, la pàgina fa servir la retallada i l'esborrany surt de l'original.
+            self.assertEqual((p.proxy.name, p.font("esborrany")), ("proxy.mp4", video))
             self.assertTrue(p.prepara_proxy())
-            self.assertEqual((d / "proxy-encaix.txt").read_text(encoding="utf-8"), "difumina")
-            info = exporta.info_video(d / "proxy.mp4")
+            self.assertEqual((p.proxy.name, p.font("esborrany").name), ("proxy-difumina.mp4", "proxy-difumina.mp4"))
+            self.assertTrue((d / "proxy.mp4").exists())  # cada enquadrament té la seva: no es trepitgen
+            info = exporta.info_video(d / "proxy-difumina.mp4")
             self.assertEqual((info["amplada"], info["alcada"]), (720, 1280))
+            self.assertEqual([f.name for f in d.glob(".proxy*")], [])  # cap temporal per enmig
             p.estat["encaix"] = "res"
             self.assertEqual(p.encaix, "retalla")  # el que no s'entén, retallat

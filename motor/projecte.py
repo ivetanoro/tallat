@@ -13,6 +13,7 @@ from __future__ import annotations
 import bisect
 import hashlib
 import json
+import os
 import time
 from collections import Counter
 from fractions import Fraction
@@ -26,7 +27,9 @@ EDICIO_TEXT = "edicio.txt"  # format de la fase 1: s'importa un cop
 ORIGINAL = "original.txt"
 REVISIO = "revisio.txt"
 PROXY = "proxy.mp4"
-PROXY_ENCAIX = "proxy-encaix.txt"  # com està enquadrada la còpia lleugera (motor/exporta.py, ENCAIXOS)
+# Una còpia lleugera per a cada manera d'enquadrar un vídeo horitzontal (motor/exporta.py, ENCAIXOS): cadascuna amb el
+# seu nom, i així no es barregen (ni entre els reels d'una gravació, que les comparteixen).
+PROXIES = {"retalla": PROXY, "difumina": "proxy-difumina.mp4"}
 PREVIES = "previa"  # el muntatge en un vídeo continu, per reproduir-lo a la pàgina sense salts
 EXPORTS = "exports"
 KIT_TRIAT = "kit-triat.json"
@@ -428,18 +431,35 @@ class Projecte:
         difuminat). També la còpia lleugera, perquè la pàgina el vegi com quedarà."""
         return self.estat.get("encaix") if self.estat.get("encaix") in exporta.ENCAIXOS else "retalla"
 
-    def prepara_proxy(self, progres=None, sempre: bool = False) -> bool:
-        """Fa la còpia lleugera si no hi és, si el vídeo és més nou o si està enquadrada d'una altra manera
-        (al costat, PROXY_ENCAIX diu com). Torna si l'ha feta."""
-        proxy, marca = self.fitxer(PROXY), self.fitxer(PROXY_ENCAIX)
-        fet = marca.read_text(encoding="utf-8").strip() if marca.exists() else "retalla"
-        if not sempre and proxy.exists() and fet == self.encaix and not (
-                self.video.exists() and proxy.stat().st_mtime < self.video.stat().st_mtime):
+    def proxy_de(self, encaix: str | None = None) -> Path:
+        """La còpia lleugera enquadrada així (si no es diu, com aquest vídeo)."""
+        return self.fitxer(PROXIES.get(encaix or self.encaix, PROXY))
+
+    @property
+    def proxy(self) -> Path:
+        """La còpia lleugera que fa servir la pàgina: la d'aquest enquadrament o, mentre es fa, la retallada."""
+        propi = self.proxy_de()
+        return propi if propi.exists() else self.fitxer(PROXY)
+
+    def proxy_al_dia(self, encaix: str | None = None) -> bool:
+        """Si la còpia d'aquest enquadrament ja hi és (i és més nova que el vídeo)."""
+        proxy = self.proxy_de(encaix)
+        return proxy.exists() and not (self.video.exists() and proxy.stat().st_mtime < self.video.stat().st_mtime)
+
+    def prepara_proxy(self, progres=None, encaix: str | None = None) -> bool:
+        """Fa la còpia lleugera d'aquest enquadrament si no hi és o si el vídeo és més nou. Torna si l'ha feta.
+        Primer en un fitxer temporal propi (si dues ordres la fan alhora, cap no trepitja l'altra) i després al
+        seu lloc, sencera."""
+        encaix = encaix or self.encaix
+        if self.proxy_al_dia(encaix):
             return False
-        temporal = proxy.with_name(f".{proxy.stem}-fent.mp4")
-        exporta.fes_proxy(self.video, temporal, progres=progres, encaix=self.encaix)
-        temporal.replace(proxy)
-        (proxy.parent / PROXY_ENCAIX).write_text(self.encaix, encoding="utf-8")
+        proxy = self.proxy_de(encaix)
+        temporal = proxy.with_name(f".{proxy.stem}-{hashlib.sha1(os.urandom(8)).hexdigest()[:8]}.mp4")
+        try:
+            exporta.fes_proxy(self.video, temporal, progres=progres, encaix=encaix)
+            temporal.replace(proxy)
+        finally:
+            temporal.unlink(missing_ok=True)
         return True
 
     def opcions_so(self, trams) -> dict:
@@ -521,6 +541,7 @@ class Projecte:
         llista = self.instruccions()
         next(i for i in llista if i["id"] == ins["id"])["pagina"] = True
         self._desa_instruccions(self.carpeta_instruccions(), llista)
+        self._oblida_peca(ins["id"])  # si una d'esborrada tenia aquest id, la nova no n'hereta el lloc ni el vot
         try:
             return self.assigna_recurs(ins["id"], origen)
         except Exception:
@@ -538,9 +559,25 @@ class Projecte:
         if not ins.get("pagina"):
             raise ValueError("Aquest b-roll ve d'una instrucció de veu: descarta-la")
         for clau in ("fitxer", "original"):
-            if ins.get(clau):
-                entorn.esborra_si_pots(base / ins[clau])
+            # Només els fitxers que tallat hi ha posat (a broll/ o a stickers/ del projecte): un instruccions.json
+            # tocat a mà o d'un altre lloc no ha de poder fer esborrar res més.
+            desti = (base / ins[clau]).resolve() if isinstance(ins.get(clau), str) and ins[clau] else None
+            if desti and any((base / c).resolve() in desti.parents for c in (broll.CARPETA, stickers.CARPETA)):
+                entorn.esborra_si_pots(desti)
         self._desa_instruccions(base, [i for i in llista if i["id"] != iid])
+        self._oblida_peca(iid)
+
+    def _oblida_peca(self, iid: str) -> None:
+        """Treu de l'estat el que era d'una peça posada a la pàgina (on s'ha arrossegat, el vot i la nota)."""
+        llocs, vots = self.estat.get("llocs_stickers") or {}, self.estat.get("vots") or {}
+        claus = [k for k in vots if k in (f"broll:{iid}", f"sticker:{iid}")]
+        if iid not in llocs and not claus:
+            return
+        llocs.pop(iid, None)
+        for k in claus:
+            vots.pop(k)
+        self.estat["revisio"] = self.estat.get("revisio", 0) + 1
+        self.desa()
 
     def treu_broll(self, iid: str) -> None:
         """Treu el fitxer (b-roll o sticker) assignat a una instrucció."""
@@ -672,17 +709,17 @@ class Projecte:
     def previa(self, trams, nom: str = "previa") -> Path:
         """On va (o és) el muntatge d'aquests talls en un sol vídeo (exporta.fes_previa). El nom diu els
         talls (també on comença i acaba el so de cadascun) i la còpia lleugera: si canvien, n'hi ha un altre."""
-        proxy = self.fitxer(PROXY)
+        proxy = self.proxy
         empremta = json.dumps([[round(a, 4), round(b, 4), *(round(x, 4) for x in edicio.so_del_tram(t))]
-                               for t in trams for a, b in [t]]) + str(proxy.stat().st_mtime_ns)
+                               for t in trams for a, b in [t]]) + proxy.name + str(proxy.stat().st_mtime_ns)
         return self.carpeta / PREVIES / f"{nom}_{hashlib.sha1(empremta.encode()).hexdigest()[:12]}.mp4"
 
     def font(self, qualitat: str) -> Path:
         """Vídeo d'on es fa l'export. L'esborrany surt de la còpia lleugera (ja és vertical i
-        petita): és molt més ràpid, sobretot amb vídeos d'iPhone (HEVC 4K)."""
-        proxy = self.fitxer(PROXY)
-        if qualitat == "esborrany" and proxy.exists():
-            return proxy
+        petita): és molt més ràpid, sobretot amb vídeos d'iPhone (HEVC 4K). Si la del seu enquadrament encara
+        no hi és (es fa), de l'original: una còpia ja vertical no es pot tornar a enquadrar."""
+        if qualitat == "esborrany" and (self.proxy_al_dia() or not self.video.exists()) and self.proxy.exists():
+            return self.proxy
         return self.video
 
     def desa_talls(self, sortida: Path, trams: list) -> None:

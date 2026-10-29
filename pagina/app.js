@@ -187,15 +187,10 @@ async function miraNovetats() {
       actualitzaVersions(f.exports);
     }
     else if (n.connectat !== claudeConnectat) { claudeConnectat = n.connectat; pintaNotes(); }
-    if (copiaVista == null) copiaVista = n.copia;
     pintaEncaix(n.copia_fent);
-    if (n.copia_error) avis(n.copia_error, 6000);
-    if (!n.copia_fent && n.copia && n.copia !== copiaVista) {  // la còpia lleugera és nova: es torna a carregar
-      copiaVista = n.copia;
-      avis("El vídeo ja és a punt. Torno a carregar la pàgina…", 3000);
-      setTimeout(() => location.reload(), 1200);
-      return;
-    }
+    if (n.copia_error && n.copia_error !== errorCopiaVist) avis(n.copia_error, 6000);
+    errorCopiaVist = n.copia_error;
+    if (n.copia && n.copia !== P.copia) canviaCopia(n.copia);  // la còpia lleugera ara és una altra
     if (versioEstil == null) versioEstil = n.estil;
     if (n.estil !== versioEstil) {
       respostaEstil(await api("/api/marca/info"));
@@ -216,7 +211,9 @@ async function miraNovetats() {
   } catch { /* el servidor no respon: ja ho dirà la propera acció */ }
 }
 
+let canvisFets = 0;  // quants canvis s'han fet aquí (una pujada que torna no ha de trepitjar els que són més nous)
 function canvia(fn, { repinta = false } = {}) {
+  canvisFets++;
   desfer.push(copia(estat));
   if (desfer.length > 300) desfer.shift();
   refer.length = 0;
@@ -2699,7 +2696,7 @@ function pintaMarques(llista, inicis, total) {
 }
 
 function instalaReproductor() {
-  R.proxy.src = "/proxy.mp4";
+  R.proxy.src = urlCopia();
   for (const v of [R.proxy, R.muntatge]) {
     for (const nom of ["play", "pause", "seeking", "seeked", "waiting", "stalled", "error", "ended"]) {
       v.addEventListener(nom, () => registre("v-" + nom, ev(v)));
@@ -2936,11 +2933,31 @@ async function comencaRender(qualitat) {
 // Un vídeo horitzontal entra al vertical retallat (el centre) o sencer, amb el fons difuminat. Si es canvia, el
 // servidor refà la còpia lleugera (amb l'enquadrament nou) i la pàgina es torna a carregar quan és a punt.
 const esHoritzontal = () => { const o = P?.origen || {}; return !!o.amplada && o.amplada * 16 > o.alcada * 9; };
-let copiaVista = null;
+let errorCopiaVist = null;
 function pintaEncaix(fent = false) {
   $("#fila-encaix").hidden = !esHoritzontal();
   for (const b of $$("#encaix button")) b.setAttribute("aria-checked", String(b.dataset.encaix === (estat?.encaix || "retalla")));
   $("#encaix-fent").hidden = !fent;
+}
+
+// La còpia lleugera que serveix el servidor, amb la seva versió a l'adreça (si canvia, el navegador no se'n queda
+// l'antiga). Quan n'arriba una de nova, el vídeo i les targetes la fan servir sense tornar a carregar la pàgina.
+const urlCopia = () => `/proxy.mp4?v=${encodeURIComponent(P?.copia || "")}`;
+function canviaCopia(versio) {
+  P.copia = versio;
+  const v = R.proxy;
+  const [t, sonava] = [v.currentTime, !v.paused];
+  v.src = urlCopia();
+  v.addEventListener("loadedmetadata", () => {
+    v.currentTime = t;
+    if (sonava) v.play().catch(() => {});
+  }, { once: true });
+  aturaCarta();
+  for (const c of cartesTauler.values()) c.sig = "";  // es tornen a fer amb els fotogrames nous
+  previaLlesta = null;
+  programaPrevia(0);
+  if (vestint) pintaTauler();
+  avis("Ja tens el vídeo enquadrat de la manera nova.", 3500);
 }
 
 function obreFinal() {
@@ -3258,6 +3275,7 @@ function instalaBroll() {
 // motor/stickers.py, lloc).
 const stickersVius = new Map();
 function situaSticker(img, st) {
+  st = { ...st, ...(estat?.llocs_stickers?.[st.id] || {}) };  // el lloc d'aquí (arrossegat, desfet) mana
   Object.assign(img.style, { left: `${st.x * 100}%`, top: `${st.y * 100}%`, width: `${st.mida * 100}%` });
   img.style.setProperty("--rot", `${st.rotacio}deg`);
 }
@@ -3270,7 +3288,7 @@ function pintaStickers() {
     stickersMuntatge.forEach((st) => {
       if (m < st.inici || m >= st.inici + st.durada) return;
       actius.add(st.id);
-      if (stickersVius.has(st.id)) return;
+      if (stickersVius.has(st.id)) { situaSticker(stickersVius.get(st.id), st); return; }  // potser l'han mogut
       const img = document.createElement("img");
       img.className = "sticker-viu";
       img.src = st.url;
@@ -3367,7 +3385,11 @@ async function pujaImatgesGrafic(id, fitxers) {
   avis(fitxers.length > 1 ? `Pujant ${fitxers.length} imatges…` : "Pujant la imatge…", 20000);
   const url = (f) => `/api/grafics/imatge?grafic=${encodeURIComponent(id)}&nom=${encodeURIComponent(f.name)}`;
   try { await canvisDesats(); } catch (e) { avis(e.message, 6000); return; }  // un gràfic acabat de posar: que ja hi sigui
-  if (await pujaFitxers(fitxers, url)) avis("Fet. Mira-ho al vídeo.");
+  const fusiona = (servidor) => {  // la foto nova (o la captura) del gràfic, damunt del que s'ha canviat aquí
+    const [g, aqui] = [servidor.grafics?.find((x) => x.id === id), estat.grafics?.find((x) => x.id === id)];
+    if (g && aqui) Object.assign(aqui, { imatge: g.imatge, punts: g.punts, estat: g.estat, vot: g.vot });
+  };
+  if (await pujaFitxers(fitxers, url, fusiona)) avis("Fet. Mira-ho al vídeo.");
 }
 
 // Un gràfic dibuixat petit dins de `caixa`, amb el mateix codi que el vídeo. `centra`: el mig de la pantalla (on van
@@ -3470,6 +3492,19 @@ function textDes(id, max) {
     if (/[.?!…]["'»”]*$/.test(text) || (paraules.length >= 3 && /[,:;]$/.test(text))) break;
   }
   return paraules.join(" ").replace(/^[«"“¿¡]+/, "").replace(/[.,;:!?…«»"“”]+$/, "");
+}
+// Quina part s'omple d'un progrés (com al servidor: motor/grafics.py, fraccio): «70 %», «3 de 5», «7/10», «3 de cada 4».
+// null si no ho diu (o si és negatiu o d'un total de zero): no es desaria.
+function fraccioProgres(text) {
+  const m = /(-?)(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?/.exec(text || "");
+  if (!m || m[1]) return null;
+  const nombre = (enter, dec) => Number(`${enter.replaceAll(".", "")}.${dec || 0}`);
+  const valor = nombre(m[2], m[3]);
+  const resta = text.slice(m.index + m[0].length);
+  if (/%/.test(resta)) return Math.min(1, valor / 100);
+  const t = /(?:\bde(?:\s+cada)?\b|\/|\bsobre\b)\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?/.exec(resta);
+  const total = t ? nombre(t[1], t[2]) : 0;
+  return total > 0 ? Math.min(1, valor / total) : null;
 }
 const retalla = (text, mida) => (text.length > mida ? text.slice(0, mida).replace(/\s+\S*$/, "") : text);
 
@@ -3789,7 +3824,14 @@ function vota(p, vot) {
     const nou = votDe(p) === vot ? "" : vot;  // tornar a tocar el que ja hi ha el treu: torna a estar per mirar
     canvia((e) => {
       const g = e.grafics.find((x) => x.id === p.id);
-      if (g) Object.assign(g, { vot: nou, estat: estatDeVot(nou, g.nota) });
+      if (!g) return;
+      Object.assign(g, { vot: nou, estat: estatDeVot(nou, g.nota) });
+      // De dues opcions per al mateix moment, només una: dir Sí a l'una és dir No a les altres.
+      if (nou === "si" && g.grup) {
+        for (const altra of e.grafics) {
+          if (altra !== g && altra.grup === g.grup && altra.estat !== "tret") Object.assign(altra, { vot: "no", estat: "tret" });
+        }
+      }
     });
     previaBruta = true;
     if (nou === "no") votatsAra.add(p.clau);
@@ -3937,7 +3979,7 @@ function pintaTauler() {
   // Les capes es dibuixen ja a la pàgina: els gràfics i els subtítols en mesuren la mida.
   escalaTauler();
   for (const c of cartesTauler.values()) {
-    if (c.refes) { c.refes = false; capaCarta(c); }
+    if (c.refes && !c.movent) { c.refes = false; capaCarta(c); }  // mentre s'arrossega un sticker, no
     if (c.tornaAMoure) {
       c.tornaAMoure = false;
       if (c.el.querySelector(".clip").matches(":hover, :focus-within")) activaCarta(c);
@@ -3975,12 +4017,9 @@ function grupTauler(x, sigDibuix, vius) {
   const ids = x.peces.map((p) => p.id);
   el.querySelector(".cap-de-les-dues").onclick = () => triaAlternativa(ids, null);
   const cartes = el.querySelector(".grup-cartes");
-  cartes.textContent = "";
-  for (const p of x.peces) {
-    const c = cartaTauler(p, sigDibuix, { alternativa: ids });
-    vius.add(p.clau);
-    cartes.append(c.el);
-  }
+  // Les targetes que ja hi són, s'hi queden (treure-les i tornar-les a posar aturaria la que es mou).
+  const llista = x.peces.map((p) => { vius.add(p.clau); return cartaTauler(p, sigDibuix, { alternativa: ids }).el; });
+  if (llista.some((carta, k) => cartes.children[k] !== carta) || cartes.children.length !== llista.length) cartes.replaceChildren(...llista);
   return el;
 }
 
@@ -4033,11 +4072,11 @@ function cartaTauler(p, sigDibuix, { alternativa = null } = {}) {
   // el vídeo torna a començar.
   const sense = { ...ctx, stickers: ctx.stickers.map(({ x, y, ...st }) => st) };
   const sig = sigDibuix + JSON.stringify([p.t0, p.t1, p.tp, sense, p.tipus === "grafic" ? dibuixosGrafics[p.id] : null]);
-  if (sig === c.sig && JSON.stringify(ctx.stickers) !== JSON.stringify(c.ctx?.stickers)) {
+  if (sig === c.sig) {  // potser només ha canviat on és (o s'ha desfet): sempre al lloc que toca
     c.ctx = ctx;
     for (const st of ctx.stickers) {
       const img = c.stHost?.querySelector(`[data-id="${CSS.escape(st.id)}"]`);
-      if (img) situaSticker(img, st);
+      if (img && !c.movent) situaSticker(img, st);
     }
   }
   if (sig !== c.sig) {
@@ -4171,14 +4210,14 @@ function capaCarta(c) {
   if (p.t == null) { img.hidden = true; } else {
     const t = originalDe(p.tp);
     c.fotograma = t;
-    fotogramaDe("/proxy.mp4", t, true).then((dades) => {
+    fotogramaDe(urlCopia(), t, true).then((dades) => {
       if (c.fotograma !== t || !dades) return;
       img.src = dades;
       img.hidden = false;
     });
   }
   escalaCarta(c);
-  pintaClip(c, p.tp ?? 0);
+  pintaClip(c, p.tp ?? 1.5);
 }
 
 function escalaCarta(c) {
@@ -4293,12 +4332,15 @@ function mouSticker(c, e) {
       y: limita((ev.clientY - agafat[1] - caixa.top) / caixa.height, 0.04, 0.96) };
     Object.assign(img.style, { left: `${lloc.x * 100}%`, top: `${lloc.y * 100}%` });
   };
+  let acabat = false;
   const deixa = (ev) => {
+    if (acabat) return;
+    acabat = true;
     img.removeEventListener("pointermove", mou);
-    img.removeEventListener("pointerup", deixa);
-    img.removeEventListener("pointercancel", deixa);
+    for (const nom of ["pointerup", "pointercancel", "lostpointercapture"]) img.removeEventListener(nom, deixa);
     img.classList.remove("movent");
     c.movent = null;
+    if (c.refes) { c.refes = false; capaCarta(c); }  // si mentrestant ha canviat alguna altra cosa
     c.mogutAra = performance.now();  // el clic que ve després de deixar-lo no és un toc a la targeta
     const id = img.dataset.id;
     if (lloc) {
@@ -4310,8 +4352,7 @@ function mouSticker(c, e) {
     else if (sonava && TV.c === c) TV.v.play().catch(() => {});
   };
   img.addEventListener("pointermove", mou);
-  img.addEventListener("pointerup", deixa);
-  img.addEventListener("pointercancel", deixa);
+  for (const nom of ["pointerup", "pointercancel", "lostpointercapture"]) img.addEventListener(nom, deixa);
   return true;
 }
 
@@ -4325,7 +4366,7 @@ function instalaClip(c) {
     if (e.pointerType !== "mouse") TV.c === c ? aturaCarta() : activaCarta(c);  // amb el dit, un toc la mou o l'atura
   });
   clip.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" && e.key !== " ") return;
+    if ((e.key !== "Enter" && e.key !== " ") || e.target !== clip) return;  // l'altaveu, que faci de botó
     e.preventDefault();
     TV.c === c ? aturaCarta() : activaCarta(c);
   });
@@ -4361,8 +4402,8 @@ function activaCarta(c) {
   TV.c = c;
   c.el.classList.add("activa");
   const v = videoTauler();
-  const font = previaLlesta && previaLlesta.trams === JSON.stringify(trams) ? previaLlesta.url : "/proxy.mp4";
-  TV.continu = font !== "/proxy.mp4";
+  const font = previaLlesta && previaLlesta.trams === JSON.stringify(trams) ? previaLlesta.url : urlCopia();
+  TV.continu = font !== urlCopia();
   if (v.getAttribute("src") !== font) v.src = font;
   v.muted = !ambSoTauler;
   c.el.querySelector(".clip-imatge").after(v);
@@ -4394,7 +4435,13 @@ function pasTauler() {
     else posaTempsTauler(c.p.t0);
   }
   let m = v.seeking ? NaN : tempsTauler();
-  if (m >= c.p.t1 || v.ended) { posaTempsTauler(c.p.t0); m = c.p.t0; TV.so = -1; }
+  if (m >= c.p.t1 || v.ended) {
+    const acabat = v.ended;
+    posaTempsTauler(c.p.t0);
+    if (acabat) v.play().catch(() => {});  // al final del fitxer s'atura sol: assignar-li el temps no el reprèn
+    m = c.p.t0;
+    TV.so = -1;
+  }
   if (Number.isFinite(m)) {
     pintaClip(c, m);
     c.el.querySelector(".clip-progres i").style.width = `${limita((m - c.p.t0) / (c.p.t1 - c.p.t0), 0, 1) * 100}%`;
@@ -4434,7 +4481,8 @@ const observaTauler = new IntersectionObserver((entrades) => {
 let darrerPasQuietes = 0;
 function animaQuietes(ara) {
   requestAnimationFrame(animaQuietes);
-  if (!MOU_QUIETES || document.hidden || $("#tauler").hidden || ara - darrerPasQuietes < 40) return;  // 25 per segon
+  if (!MOU_QUIETES || document.hidden || $("#tauler").hidden || $("#tauler").classList.contains("esperant")
+    || ara - darrerPasQuietes < 40) return;  // 25 per segon; mentre Claude prepara la ronda, quietes
   darrerPasQuietes = ara;
   for (const c of visiblesTauler) {
     if (c === TV.c || c.p.t == null || !c.tls.length) continue;
@@ -4568,8 +4616,13 @@ function pintaEstatRonda() {
   el.classList.toggle("en-curs", !!enCurs);
 }
 
+let demanantRonda = false;
 async function demanaRonda() {
   const camp = $("#nota-ronda");
+  // Amb Retorn al camp de la nota també s'hi arriba: que no se'n demanin dues mentre n'hi ha una en curs.
+  const boto = $("#tauler-buit").hidden ? $("#demana-ronda") : $("#primeres-propostes");
+  if (demanantRonda || boto.disabled) return;
+  demanantRonda = true;
   try {
     await canvisDesats();  // que Claude vegi els vots d'ara
     respostaNotes(await api("/api/notes", { accio: "ronda", text: $("#tauler-buit").hidden ? camp.value : "" }));
@@ -4578,6 +4631,7 @@ async function demanaRonda() {
     novetatRonda = null;
     avis("Enviat a Claude. Quan acabi, ho veuràs aquí.", 4000);
   } catch (e) { avis(e.message, 5000); }
+  demanantRonda = false;
   pintaTauler();
 }
 
@@ -4665,7 +4719,12 @@ async function posaPecaTeva(paraula) {
   if (!(await pujaFitxers([fitxer], url))) return;
   avis(tipus === "sticker" ? "Sticker posat. El tens al tauler." : "Posat. El tens al tauler.", 4000);
   const nova = instruccions.find((i) => !abans.has(i.id));
-  if (nova) requestAnimationFrame(() => mostraCarta(`${tipus}:${nova.id}`));
+  if (!nova) return;
+  if (!["totes", "si"].includes(filtreTauler)) {  // les peces teves són Sí: amb un altre filtre no es veuria
+    filtreTauler = "totes";
+    pintaTauler();
+  }
+  requestAnimationFrame(() => mostraCarta(`${tipus}:${nova.id}`));
 }
 
 // Porta la targeta a la vista i la fa brillar un moment (la que s'acaba de posar).
@@ -5000,8 +5059,7 @@ function editorGrafic(cos, g) {
       desa: (v) => canviaGrafic(id, { xifra: textPla(v) }) }), "Compta des de zero: 73 %, 10.000 €…");
     ambText("El text de sota", "", { valid: () => true });
   } else if (g.tipus === "progres") {
-    camp(cos, "La xifra", campText(g.xifra || "", { mida: 24, clau: "xifra",
-      valid: (v) => /\d\s*%|\d+\s*(?:de|\/|sobre)\s*\d/.test(v),
+    camp(cos, "La xifra", campText(g.xifra || "", { mida: 24, clau: "xifra", valid: (v) => fraccioProgres(v) != null,
       desa: (v) => canviaGrafic(id, { xifra: textPla(v) }) }), "Un percentatge (70 %) o una part d'un total (3 de 5, 7/10).");
     ambText("El text de sota", "", { valid: () => true });
     segmentatPeca(cos, "Forma", [["cercle", "Cercle"], ["barra", "Barra"]], g.forma || "cercle", (forma) => canviaGrafic(id, { forma }));
@@ -5950,8 +6008,11 @@ function instalaAssistent() {
 let instruccioPerPujar = null;
 // Puja fitxers un darrere l'altre (el cos de la petició és el fitxer) i aplica la darrera resposta bona,
 // també si un dels del mig falla: els d'abans ja són al servidor.
-async function pujaFitxers(fitxers, url) {
+// Si mentre es pujava s'ha canviat alguna cosa aquí, l'estat d'aquí es queda (i s'hi posa el que ha fet la pujada,
+// amb `fusiona`): si no, la resposta trepitjaria el canvi abans d'enviar-lo.
+async function pujaFitxers(fitxers, url, fusiona = null) {
   let json = null;
+  const abans = canvisFets;
   try {
     await esperaDesats();
     for (const fitxer of fitxers) {
@@ -5962,7 +6023,12 @@ async function pujaFitxers(fitxers, url) {
     avis(e.message, 6000);
     return false;
   } finally {
-    if (json) { estat = json.estat; aplicaTrams(json); refresca(true); }
+    if (json) {
+      if (canvisFets === abans) estat = json.estat;
+      else { fusiona?.(json.estat); estat.revisio = json.estat.revisio; }
+      aplicaTrams(json);
+      refresca(true);
+    }
   }
 }
 

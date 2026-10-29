@@ -439,7 +439,9 @@
 }
 .tg-notes-full { padding: 24px 44px 40px; }
 .tg-notes-full h3 { margin: 0 0 14px; font-size: 56px; font-weight: 800; line-height: 1.1; }
-.tg-linia-nota { margin: 0; min-height: 1.3em; font-size: 46px; line-height: 1.3; }
+.tg-linia-nota { position: relative; margin: 0; min-height: 1.3em; font-size: 46px; line-height: 1.3; }
+.tg-escrit-ple { visibility: hidden; }  /* el lloc del text sencer: la nota no canvia de mida mentre s'escriu */
+.tg-escrit-viu { position: absolute; left: 0; top: 0; right: 0; }
 .tg-cursor { display: inline-block; width: 4px; height: 1.05em; margin-left: 3px; vertical-align: -0.15em; background: var(--tg-principal); opacity: 0; }
 .tg-net.tg-notes .tg-cos { box-shadow: 0 18px 44px var(--tg-ombra-suau); }
 .tg-scrapbook.tg-notes .tg-cos { font-family: var(--tg-f-ma); text-transform: var(--tg-ma-majuscules); border-radius: 4px; rotate: -1.5deg; box-shadow: 8px 10px 0 var(--tg-ombra-suau);
@@ -479,13 +481,14 @@
 
 /* El REC: el marc d'una càmera que grava, a tota la zona segura (l'alçada la posa cos()). */
 .tg-rec .tg-cos { width: 840px; box-sizing: border-box; color: var(--tg-text); font-family: ui-monospace, "SF Mono", Menlo, monospace; text-shadow: 0 2px 10px var(--tg-ombra); }
-.tg-rec-cant { position: absolute; width: 80px; height: 80px; border: 0 solid currentColor; filter: drop-shadow(0 2px 6px var(--tg-ombra)); }
+.tg-rec-cant { position: absolute; width: calc(80px * var(--tg-rec-k, 1)); height: calc(80px * var(--tg-rec-k, 1)); border: 0 solid currentColor; filter: drop-shadow(0 2px 6px var(--tg-ombra)); }
 .tg-rec-cant:nth-of-type(1) { left: 0; top: 0; border-width: 7px 0 0 7px; }
 .tg-rec-cant:nth-of-type(2) { right: 0; top: 0; border-width: 7px 7px 0 0; }
 .tg-rec-cant:nth-of-type(3) { left: 0; bottom: 0; border-width: 0 0 7px 7px; }
 .tg-rec-cant:nth-of-type(4) { right: 0; bottom: 0; border-width: 0 7px 7px 0; }
-.tg-rec-dalt, .tg-rec-baix { position: absolute; left: 44px; right: 44px; display: flex; justify-content: space-between; align-items: center; font-size: 46px; font-weight: 600; letter-spacing: 0.04em; }
-.tg-rec-dalt { top: 40px; } .tg-rec-baix { bottom: 40px; }
+.tg-rec-dalt, .tg-rec-baix { position: absolute; left: 44px; right: 44px; display: flex; justify-content: space-between; align-items: center;
+  font-size: calc(46px * var(--tg-rec-k, 1)); font-weight: 600; letter-spacing: 0.04em; }
+.tg-rec-dalt { top: calc(40px * var(--tg-rec-k, 1)); } .tg-rec-baix { bottom: calc(40px * var(--tg-rec-k, 1)); }
 .tg-rec-punt { display: inline-block; width: 30px; height: 30px; margin-right: 16px; border-radius: 50%; background: #FF3B30; vertical-align: 2px; }
 .tg-rec-bat { display: inline-block; position: relative; width: 74px; height: 36px; border: 4px solid currentColor; border-radius: 8px; box-sizing: border-box; }
 .tg-rec-bat::before { content: ""; position: absolute; left: 4px; top: 4px; bottom: 4px; width: 62%; border-radius: 3px; background: currentColor; }
@@ -653,7 +656,8 @@
     cartes.forEach((carta, k) => {
       const a = angle + (k * 2 * Math.PI) / n;
       const davant = (Math.cos(a) + 1) / 2;  // 1, al davant; 0, al darrere
-      carta.style.transform = `translateX(${(Math.sin(a) * 320).toFixed(1)}px) translateY(${((1 - davant) * -40 * mida).toFixed(1)}px) ` +
+      const radi = Math.max(120, 420 - 0.79 * 210 * mida - 10);  // la foto del costat, sencera dins dels 840 px
+      carta.style.transform = `translateX(${(Math.sin(a) * radi).toFixed(1)}px) translateY(${((1 - davant) * -40 * mida).toFixed(1)}px) ` +
         `scale(${((0.58 + 0.42 * davant) * mida).toFixed(3)})`;
       carta.style.opacity = (0.5 + 0.5 * davant).toFixed(3);
       carta.style.zIndex = String(Math.round(davant * 100));
@@ -725,7 +729,9 @@
       if (g.text) full.append(element(doc, "h3", null, g.text));
       for (const p of g.punts || []) {
         const linia = element(doc, "p", "tg-linia-nota");
-        linia.append(element(doc, "span", "tg-escrit", p.text), element(doc, "i", "tg-cursor"));
+        const viu = element(doc, "span", "tg-escrit-viu");
+        viu.append(element(doc, "span", "tg-escrit", p.text), element(doc, "i", "tg-cursor"));
+        linia.append(element(doc, "span", "tg-escrit-ple", p.text), viu);
         full.append(linia);
       }
       c.append(barra, full);
@@ -739,7 +745,9 @@
     } else if (g.tipus === "rec") {
       // A tota la zona on pot anar (la mateixa que fa servir colloca).
       const [dalt, baix] = g.limits || [269, 1248];
-      c.style.height = `${Math.max(400, baix - dalt)}px`;
+      const alt = Math.max(160, baix - dalt);
+      c.style.height = `${alt}px`;
+      c.style.setProperty("--tg-rec-k", Math.min(1, alt / 640).toFixed(3));
       for (let k = 0; k < 4; k++) c.append(element(doc, "i", "tg-rec-cant"));
       const dalt_ = element(doc, "div", "tg-rec-dalt");
       const rec = element(doc, "span");
@@ -1084,10 +1092,9 @@
       }
       if (g.tipus === "rec") {  // el punt vermell parpelleja i el temps corre
         const punt = c.querySelector(".tg-rec-punt");
-        for (let t = g.inici + 0.5; t < g.final - 0.3; t += 1) {
-          tl.fromTo(punt, { opacity: 1 }, { opacity: 0.15, duration: 0.01, immediateRender: false }, t);
-          tl.to(punt, { opacity: 1, duration: 0.01 }, t + 0.5);
-        }
+        const cops = Math.max(0, Math.floor((Math.min(g.final, g.inici + 3600) - g.inici - 0.5) / 0.5));
+        tl.fromTo(punt, { opacity: 1 }, { opacity: 0.15, duration: 0.5, ease: "steps(1)", repeat: cops, yoyo: true,
+          immediateRender: false }, g.inici + 0.5);
         const temps = c.querySelector(".tg-rec-temps");
         const rellotge = { s: 0 };
         const dos = (n) => String(Math.floor(n)).padStart(2, "0");

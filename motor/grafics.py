@@ -557,6 +557,14 @@ def situa(grafics: list[dict], inicis: dict, finals: dict, total: float, estils:
                 t = inicis.get(paraula) if paraula is not None and mateix_bloc(paraula) else None
                 t = inici + ENTRADA_PUNT + k * pas if t is None else t
                 punt["t"] = round(min(max(t, inici + 0.15), final - 0.3), 3)
+            # El que s'anima després d'un punt (escriure l'última línia, la ratlla de l'abans i després) ha de
+            # tenir temps d'acabar abans que el gràfic se'n vagi.
+            if g["tipus"] == "notes" and situat["punts"]:
+                p = situat["punts"][-1]
+                final = max(final, p["t"] + min(1.4, 0.15 + len(p["text"]) * 0.045) + 0.8)
+            elif g["tipus"] == "abans" and len(situat["punts"]) > 1:
+                final = max(final, max(inici + 0.6, situat["punts"][1]["t"]) + 1.7)
+            final = round(min(total, final), 3)
         situat.update(inici=round(inici, 3), final=final)
         if g["id"] in amagades:
             situat["alternativa"] = True
@@ -609,7 +617,7 @@ def fraccio(xifra: str) -> float | None:
     """Quina part s'omple d'un progrés (de 0 a 1): «70 %» → 0,7; «3 de 5», «7/10», «3 de cada 4» → la part del total.
     None si no ho diu."""
     m = XIFRA.search(xifra or "")
-    if not m:
+    if not m or xifra[max(0, m.start() - 1):m.start()] == "-":  # un progrés negatiu no omple res
         return None
     valor = llegeix_xifra(xifra)["valor"]
     if "%" in xifra[m.end():]:

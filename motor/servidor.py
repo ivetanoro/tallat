@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from motor import broll, edicio, editors, entorn, exporta, grafics, marca, muntatge, notes, so, stickers, targetes
-from motor.projecte import EXPORTS, PREVIES, PROXY, Projecte
+from motor.projecte import EXPORTS, PREVIES, Projecte
 
 PAGINA = Path(__file__).resolve().parent.parent / "pagina"
 MIDA_MAXIMA_FONT = 20 * 1024 * 1024  # una font no passa mai d'uns quants MB
@@ -119,7 +119,7 @@ class Previa:
         self.fallades = {}  # fitxer → (quan, error) dels que no s'han pogut fer
 
     def demana(self, projecte: Projecte, trams) -> dict:
-        if not trams or not (projecte.fitxer(PROXY)).exists():
+        if not trams or not projecte.proxy.exists():
             return {"estat": "no", "trams": edicio.trams_json(trams)}
         desti = projecte.previa(trams)
         if desti.exists():
@@ -134,7 +134,7 @@ class Previa:
                 return {"estat": "error", "error": fallada[1], "trams": edicio.trams_json(trams)}
             if self.fent is None:  # si se'n fa una altra, la pàgina ho tornarà a demanar
                 self.fent = desti
-                threading.Thread(target=self._fes, args=(projecte.fitxer(PROXY), list(trams), desti),
+                threading.Thread(target=self._fes, args=(projecte.proxy, list(trams), desti),
                                  daemon=True).start()
         return {"estat": "fent", "trams": edicio.trams_json(trams)}
 
@@ -188,28 +188,33 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
     origens = {f"http://{a}" for a in amfitrions}
     # La pàgina pot passar de la gravació sencera a qualsevol dels reels proposats.
     obert = {"p": inicial, "arrel": _arrel_de(inicial)}
-    # La còpia lleugera es refà quan canvia com entra un vídeo horitzontal (encaix): en segon pla, i la pàgina
-    # es torna a carregar quan és a punt.
-    copia = {"fent": False, "error": None}
+    # Les còpies lleugeres de cada enquadrament d'un vídeo horitzontal (encaix) es fan en segon pla, la primera
+    # vegada que cal cadascuna (una per fitxer, encara que se'n demanin unes quantes alhora). La pàgina canvia de
+    # vídeo quan la seva és a punt (/api/novetats, «copia»).
+    copia = {"fent": set(), "error": None}
 
-    def refes_copia(projecte: Projecte) -> None:
-        """Es crida amb `bloqueig` agafat (des de la petició que desa l'estat)."""
-        if copia["fent"]:
+    def fes_copia(projecte: Projecte) -> None:
+        """Es crida amb `bloqueig` agafat (des de les peticions que desen l'estat o obren un projecte)."""
+        encaix, desti = projecte.encaix, projecte.proxy_de()
+        if desti in copia["fent"] or not projecte.video.exists() or projecte.proxy_al_dia(encaix):
             return
-        copia.update(fent=True, error=None)
+        copia["fent"].add(desti)
+        copia["error"] = None
 
         def fes():
             try:
-                while True:
-                    feta = projecte.encaix
-                    projecte.prepara_proxy()
-                    if projecte.encaix == feta:  # si mentrestant l'han tornat a canviar, una altra volta
-                        break
+                projecte.prepara_proxy(encaix=encaix)
             except Exception as e:
                 copia["error"] = f"No he pogut preparar el vídeo: {e}"
             finally:
-                copia["fent"] = False
+                with bloqueig:
+                    copia["fent"].discard(desti)
         threading.Thread(target=fes, daemon=True).start()
+
+    def versio_copia(projecte: Projecte) -> str:
+        """Quina còpia serveix /proxy.mp4 ara (la pàgina hi posa ?v=… i, si canvia, la torna a carregar)."""
+        proxy = projecte.proxy
+        return f"{proxy.name}:{proxy.stat().st_mtime_ns}" if proxy.exists() else ""
 
     def info_reels() -> dict:
         arrel = obert["arrel"]
@@ -478,7 +483,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
             if ruta.startswith("/pagina/"):
                 return self._segur(PAGINA, ruta[len("/pagina/"):])
             if ruta == "/proxy.mp4":
-                return self._fitxer(projecte.fitxer(PROXY))
+                return self._fitxer(projecte.proxy)
             if ruta.startswith("/broll/"):
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
             if ruta.startswith("/stickers/"):
@@ -505,7 +510,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     return self._json({
                         "nom": projecte.nom, "clau_projecte": clau_de(projecte),
                         "durada": projecte.dades["durada"], "fps": projecte.fps,
-                        "font": projecte.dades.get("font"), "origen": info,
+                        "font": projecte.dades.get("font"), "origen": info, "copia": versio_copia(projecte),
                         "paraules": projecte.dades["paraules"],
                         "paragrafs": projecte.paragrafs(),
                         "exports": projecte.exports(), "feina": feina.info(), **info_carpeta(projecte),
@@ -519,12 +524,11 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 with bloqueig:
                     projecte.al_dia()
                     info = info_notes()
-                    proxy = projecte.fitxer(PROXY)
                     return self._json({"clau_projecte": clau_de(projecte), "revisio": projecte.estat.get("revisio", 0),
                                        "estil": versio_estil(projecte), "versio_notes": info["versio_notes"],
                                        "connectat": info["connectat"], "darrer_export": darrer_export(projecte),
-                                       "copia": str(proxy.stat().st_mtime_ns) if proxy.exists() else "",
-                                       "copia_fent": copia["fent"], "copia_error": copia["error"]})
+                                       "copia": versio_copia(projecte), "copia_fent": projecte.proxy_de() in copia["fent"],
+                                       "copia_error": copia["error"]})
             if ruta == "/api/notes":
                 return self._json(info_notes())
             if ruta == "/api/instantania":
@@ -672,12 +676,14 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     rid = cos.get("reel")
                     if not rid:
                         obert["p"] = arrel
+                        fes_copia(arrel)
                         return self._json({"ok": True})
                     reels, _ = muntatge.llegeix_reels(arrel.carpeta, arrel.dades["paraules"])
                     reel = next((r for r in reels if r["id"] == rid), None)
                     if reel is None:
                         return self._json({"error": "No trobo aquest reel"}, HTTPStatus.NOT_FOUND)
                     obert["p"] = Projecte(muntatge.crea_reel(arrel, reel))
+                    fes_copia(obert["p"])  # el reel pot estar enquadrat d'una altra manera que la gravació
                     return self._json({"ok": True})
                 if ruta == "/api/notes":  # les notes per a Claude
                     return self._notes(cos)
@@ -685,12 +691,10 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     if cos.get("revisio") != projecte.estat.get("revisio", 0):
                         # Una altra pestanya ha desat abans: no la trepitgem.
                         return self._json({"error": "conflicte", **instantania()}, HTTPStatus.CONFLICT)
-                    encaix = projecte.encaix
                     projecte.estat = _estat_de_json(cos)
                     projecte.estat["revisio"] = cos["revisio"] + 1
                     projecte.desa()
-                    if projecte.encaix != encaix and projecte.video.exists():
-                        refes_copia(projecte)
+                    fes_copia(projecte)  # si ara se n'enquadra un d'horitzontal d'una altra manera
                     return self._json(instantania())
                 if ruta == "/api/previa":  # el muntatge d'ara en un vídeo continu (si no hi és, es fa)
                     return self._json(previa.demana(projecte, projecte.trams()))
@@ -921,8 +925,11 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 g = next((x for x in projecte.estat.get("grafics") or [] if x["id"] == gid), None)
                 if g is None or g["tipus"] not in grafics.AMB_IMATGE:
                     return self._json({"error": "No trobo aquest gràfic"}, HTTPStatus.NOT_FOUND)
+                # Les fotos que ja no hi són (esborrades, d'un pla amb un camí dolent) deixen el seu lloc lliure.
+                imatges = projecte.imatges_grafics()
+                buit = next((p for p in g["punts"] if not grafics.imatge_valida(p.get("imatge"), imatges)), None)
                 maxim = grafics.MAX_FOTOS.get(g["tipus"], grafics.MAX_PUNTS)
-                if g["tipus"] in grafics.AMB_FOTOS and len(g["punts"]) >= maxim:
+                if g["tipus"] in grafics.AMB_FOTOS and buit is None and len(g["punts"]) >= maxim:
                     return self._json({"error": f"Hi caben {maxim} fotos com a molt"}, HTTPStatus.BAD_REQUEST)
                 with tempfile.TemporaryDirectory() as temporal:
                     fitxer = Path(temporal) / f"imatge{Path(nom).suffix.lower()}"
@@ -930,6 +937,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                     nom_imatge = projecte.importa_imatge(fitxer)
                 if g["tipus"] == "web":
                     g["imatge"] = nom_imatge
+                elif buit is not None:
+                    buit["imatge"] = nom_imatge
                 else:
                     g["punts"].append({"imatge": nom_imatge, "text": "", "paraula": None})
                 if g["estat"] == "proposat":  # si hi poses la imatge, és que t'agrada

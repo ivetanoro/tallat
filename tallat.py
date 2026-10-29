@@ -222,7 +222,7 @@ def ordre_revisa(args) -> None:
     from motor.servidor import crea_servidor
 
     projecte = _carrega(args)
-    proxy = projecte.fitxer(PROXY)
+    proxy = projecte.proxy
     if not projecte.video.exists():  # s'ha mogut o esborrat l'original: la pàgina funciona amb la còpia lleugera
         if not proxy.exists():
             sys.exit(f"No trobo el vídeo original ({projecte.video}) ni la còpia lleugera. "
@@ -232,8 +232,8 @@ def ordre_revisa(args) -> None:
     elif not proxy.exists():
         print("Preparant la còpia lleugera del vídeo (només el primer cop)…")
         projecte.prepara_proxy(progres=_barra("còpia"))
-    elif projecte.prepara_proxy(progres=_barra("còpia")):  # el vídeo és més nou, o ha canviat com s'enquadra
-        print("\nHe tornat a fer la còpia lleugera del vídeo.")
+    elif projecte.prepara_proxy(progres=_barra("còpia")):  # el vídeo és més nou, o enquadrat d'una altra manera
+        print("\nHe preparat la còpia lleugera del vídeo.")
 
     for port in range(args.port, args.port + 20):
         try:
@@ -513,7 +513,7 @@ def ordre_grafics(args) -> None:
         situats = projecte.grafics(trams)
         if not situats:
             sys.exit("Aquest vídeo encara no té cap gràfic que surti al vídeo.")
-        proxy = projecte.fitxer(PROXY)
+        proxy = projecte.proxy
         quadres = [{"t": projecte.al_original(g["inici"] + min(1.0, (g["final"] - g["inici"]) / 2), trams),
                     "limits": g["limits"]} for g in situats]
         desti = grafics.full_de_fotogrames(proxy if proxy.exists() else projecte.video, quadres,
@@ -543,7 +543,7 @@ def ordre_grafics(args) -> None:
                                                         len(projecte.dades["paraules"]), manera, ronda)
         except ValueError as e:
             sys.exit(str(e))
-        if ronda > projecte.estat.get("ronda", 0) and any(g.get("ronda") == ronda for g in projecte.estat["grafics"]):
+        if ronda > projecte.estat.get("ronda", 0):  # també si només n'ha tret o no n'ha canviat cap: Claude ha respost
             projecte.estat["ronda"] = ronda
             # Els «Potser» i les notes de les altres peces (zooms, b-roll, sons) ja s'han atès en aquesta ronda.
             projecte.estat["vots"] = {}
@@ -559,7 +559,8 @@ def ordre_grafics(args) -> None:
                                                                   "colors_prohibits")},
                           "durada": round(sum(b - a for a, b in trams), 2), "frases": frases,
                           "grafics": [{**g, **({"inici": situats[g["id"]]["inici"], "final": situats[g["id"]]["final"]}
-                                               if g["id"] in situats else {})} for g in pla]},
+                                               if g["id"] in situats else {})} for g in pla],
+                          "altres_peces": _altres_peces(projecte)},
                          ensure_ascii=False, indent=1))
         return
     energia = marca_kit.get("energia") or ["net"]
@@ -573,6 +574,7 @@ def ordre_grafics(args) -> None:
         print(f"  {_segons(f['inici']):>8}  {f['paraula']}–{f['fins']}  {f['text']}")
     if not pla:
         print("Encara no hi ha cap pla de gràfics. Per desar-ne un: tallat.py grafics proposa PLA.json --projecte …")
+        _mostra_altres_peces(projecte)
         return
     notes = sum(1 for g in pla if g["estat"] == "canvia")
     ronda = projecte.estat.get("ronda", 0)
@@ -596,17 +598,27 @@ def ordre_grafics(args) -> None:
               f"  {g.get('estil') or '(marca)'}  {estat} · {vot}{extra}  «{text}»" + (f" [{punts}]" if punts else ""))
         if g["nota"]:
             print(f"        nota: «{g['nota']}»")
-    altres = projecte.estat.get("vots") or {}
-    altres = {k: v for k, v in altres.items() if v["vot"] == "potser" or v["nota"]}
-    if altres:
-        print("Les altres peces del tauler amb un POTSER o una nota (b-roll, zooms i sons):")
-        paraules = projecte.dades["paraules"]
-        for clau, v in altres.items():
-            on = ""
-            if v.get("paraula") is not None and v["paraula"] < len(paraules):
-                k = v["paraula"]
-                on = f"  paraula {k}, a «{' '.join(w['text'].strip() for w in paraules[k:k + 6])}»"
-            print(f"  {v.get('nom') or clau}{on}  {vots[v['vot']]}" + (f"  nota: «{v['nota']}»" if v["nota"] else ""))
+    _mostra_altres_peces(projecte)
+
+
+def _altres_peces(projecte) -> dict:
+    """Els «Potser» i les notes de les peces que no són gràfics (b-roll, stickers, zooms i sons), per a Claude."""
+    return {k: v for k, v in (projecte.estat.get("vots") or {}).items() if v["vot"] == "potser" or v["nota"]}
+
+
+def _mostra_altres_peces(projecte) -> None:
+    altres = _altres_peces(projecte)
+    if not altres:
+        return
+    vots = {"si": "SÍ", "potser": "POTSER", "no": "NO"}
+    print("Les altres peces del tauler amb un POTSER o una nota (b-roll, stickers, zooms i sons):")
+    paraules = projecte.dades["paraules"]
+    for clau, v in altres.items():
+        on = ""
+        if v.get("paraula") is not None and v["paraula"] < len(paraules):
+            k = v["paraula"]
+            on = f"  paraula {k}, a «{' '.join(w['text'].strip() for w in paraules[k:k + 6])}»"
+        print(f"  {v.get('nom') or clau}{on}  {vots[v['vot']]}" + (f"  nota: «{v['nota']}»" if v["nota"] else ""))
 
 
 NOMS_MARCA = {"compte": "El compte", "public": "Qui el mira", "referencia": "Reel de referència",
@@ -797,7 +809,7 @@ def ordre_notes(args) -> None:
 
 def ordre_encaix(args) -> None:
     projecte = _carrega(args)
-    info = exporta.info_video(projecte.fitxer(PROXY) if not projecte.video.exists() else projecte.video)
+    info = exporta.info_video(projecte.proxy if not projecte.video.exists() else projecte.video)
     horitzontal = info["amplada"] * 16 > info["alcada"] * 9 if projecte.video.exists() else None
     if args.encaix is None:
         print(f"Ara: «{projecte.encaix}»." + ("" if horitzontal is not False else " (El vídeo ja és vertical: no hi fa res.)"))

@@ -604,6 +604,24 @@ class TestAlProjecte(unittest.TestCase):
         with self.assertRaises(SystemExit) as e, contextlib.redirect_stdout(io.StringIO()):
             tallat.ordre_grafics(argparse.Namespace(accio="canvia", **args))
         self.assertIn("paraula", str(e.exception))
+        # Una ronda que només en treu (un pla buit: els «per mirar» se'n van) també és una ronda nova, i els «Potser» de
+        # les altres peces es veuen encara que no quedi cap gràfic.
+        projecte = Projecte(self.carpeta)
+        projecte.estat["grafics"] = [x for x in projecte.estat["grafics"] if x["id"] == "g1"]
+        projecte.estat["vots"] = {"sticker:m1-1": {"vot": "potser", "nota": "més petit", "nom": "Sticker", "paraula": 2}}
+        projecte.desa()
+        pla.write_text("[]", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            tallat.ordre_grafics(argparse.Namespace(accio="proposa", **args))
+        estat = Projecte(self.carpeta).estat
+        self.assertEqual((estat["ronda"], estat["grafics"], estat["vots"]), (3, [], {}))
+        projecte = Projecte(self.carpeta)
+        projecte.estat["vots"] = {"sticker:m1-1": {"vot": "potser", "nota": "més petit", "nom": "Sticker", "paraula": 2}}
+        projecte.desa()
+        sortida = io.StringIO()
+        with contextlib.redirect_stdout(sortida):
+            tallat.ordre_grafics(argparse.Namespace(accio=None, **{**args, "fitxer": None}))
+        self.assertIn("nota: «més petit»", sortida.getvalue())
 
     def test_un_sticker_amb_imatge_surt_encara_que_estigui_pendent(self):
         # Del feedback: s'havien pujat les imatges, s'havia tocat el ✓ (que desmarca) i no van sortir al vídeo.

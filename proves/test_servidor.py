@@ -186,6 +186,15 @@ class TestServidor(unittest.TestCase):
         self.assertEqual((len(g1["punts"]), g1["estat"]), (1, "mantingut"))
         nom = g1["punts"][0]["imatge"]
         self.assertEqual(self.peticio("GET", f"/imatges-grafics/{nom}")[1], "una foto")
+        # Un abans i després amb les dues fotos, però una que ja no hi és: la nova va al seu lloc.
+        p = Projecte(self.carpeta)
+        p.estat["grafics"].append(grafics.net({"id": "g3", "tipus": "abans", "paraula": 3, "punts": [nom, "0000aaaa.jpg"]}))
+        p.desa()
+        estat, cos = self.peticio("POST", "/api/grafics/imatge?grafic=g3&nom=despres.png", b"una altra", bones)
+        self.assertEqual(estat, 200, cos)
+        g3 = next(x for x in json.loads(cos)["estat"]["grafics"] if x["id"] == "g3")
+        self.assertEqual(len(g3["punts"]), 2)
+        self.assertNotEqual(g3["punts"][1]["imatge"], "0000aaaa.jpg")
         self.assertEqual(self.peticio("GET", "/imatges-grafics/../transcripcio.json")[0], 403)
 
     def test_la_previsualitzacio_continua(self):
@@ -197,6 +206,10 @@ class TestServidor(unittest.TestCase):
 
             def fitxer(self, nom):
                 return self.carpeta / nom
+
+            @property
+            def proxy(self):
+                return self.carpeta / "proxy.mp4"
 
             def previa(self, trams):
                 return self.carpeta / "previa" / f"previa_{len(trams)}.mp4"
@@ -248,6 +261,10 @@ class TestServidor(unittest.TestCase):
 
             def fitxer(self, nom):
                 return self.carpeta / nom
+
+            @property
+            def proxy(self):
+                return self.carpeta / "proxy.mp4"
 
             def previa(self, trams):
                 return self.carpeta / "previa" / f"previa_{len(trams)}.mp4"
@@ -466,11 +483,11 @@ class TestServidor(unittest.TestCase):
         self.assertEqual((estat, json.loads(cos)["estat"]["encaix"]), (200, "difumina"))  # i no s'encalla
         for _ in range(100):  # la còpia es fa en segon pla; la pàgina ho pregunta a les novetats
             n = json.loads(self.peticio("GET", "/api/novetats")[1])
-            if not n["copia_fent"] and (self.carpeta / "proxy-encaix.txt").exists():
+            if not n["copia_fent"] and (self.carpeta / "proxy-difumina.mp4").exists():
                 break
             time.sleep(0.1)
-        self.assertEqual(((self.carpeta / "proxy-encaix.txt").read_text(encoding="utf-8"), n["copia_error"]), ("difumina", None))
-        self.assertTrue(n["copia"])
+        self.assertEqual((n["copia"].split(":")[0], n["copia_error"]), ("proxy-difumina.mp4", None))
+        self.assertEqual(self.peticio("GET", "/proxy.mp4")[0], 200)  # i és la que serveix
 
     def test_un_sticker_posat_des_del_tauler(self):
         import shutil
@@ -495,11 +512,30 @@ class TestServidor(unittest.TestCase):
         self.assertEqual(estat, 200, cos)
         st = next(s for s in json.loads(cos)["stickers"] if s["id"] == nou["id"])
         self.assertEqual((st["x"], st["y"]), (0.2, 0.75))
-        # Treure'l del tauler l'esborra (amb el fitxer), com el b-roll posat des de la pàgina.
+        # Treure'l del tauler l'esborra (amb el fitxer), com el b-roll posat des de la pàgina, i també on s'havia
+        # arrossegat i el seu vot: un sticker nou amb el mateix id no n'ha d'heretar res.
+        p = Projecte(self.carpeta)
+        p.estat["vots"] = {f"sticker:{nou['id']}": {"vot": "potser", "nota": "més petit", "nom": "Sticker", "paraula": 3}}
+        p.desa()
         estat, cos = self.peticio("POST", "/api/broll/esborra", {"instruccio": nou["id"]}, self.bones())
         self.assertEqual(estat, 200)
-        self.assertFalse(any(i.get("pagina") for i in json.loads(cos)["instruccions"]))
+        r = json.loads(cos)
+        self.assertFalse(any(i.get("pagina") for i in r["instruccions"]))
         self.assertFalse((self.carpeta / nou["fitxer"]).exists())
+        self.assertEqual((r["estat"]["llocs_stickers"], r["estat"]["vots"]), ({}, {}))
+
+    def test_treure_una_peca_nomes_esborra_fitxers_de_tallat(self):
+        fora = Path(self.dir.name).parent / f"no-m-esborris-{self.port}.txt"
+        fora.write_text("important", encoding="utf-8")
+        self.addCleanup(fora.unlink, missing_ok=True)
+        llista = json.loads((self.carpeta / "instruccions.json").read_text(encoding="utf-8"))
+        llista.append({"id": "m1-9", "tipus": "sticker", "text": "sticker", "paraules": None, "inici": 0.5, "final": 0.5,
+                       "ancora": 1, "estat": "acceptada", "manual": True, "pagina": True, "fitxer": f"../{fora.name}",
+                       "original": str(fora)})
+        (self.carpeta / "instruccions.json").write_text(json.dumps(llista), encoding="utf-8")
+        estat, _ = self.peticio("POST", "/api/broll/esborra", {"instruccio": "m1-9"}, self.bones())
+        self.assertEqual(estat, 200)
+        self.assertTrue(fora.exists())  # fora de broll/ i stickers/: no es toca
 
     def test_els_fitxers_servits_no_poden_executar_scripts(self):
         # Segona revisió de Codex: un sticker SVG amb un script, obert directament, podia llegir el codi de la pàgina.
