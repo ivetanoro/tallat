@@ -3898,7 +3898,13 @@ function pintaTauler() {
   $("#buit-filtre").hidden = ordre.length > 0 || !hiHa;
   // Les capes es dibuixen ja a la pàgina: els gràfics i els subtítols en mesuren la mida.
   escalaTauler();
-  for (const c of cartesTauler.values()) if (c.refes) { c.refes = false; capaCarta(c); }
+  for (const c of cartesTauler.values()) {
+    if (c.refes) { c.refes = false; capaCarta(c); }
+    if (c.tornaAMoure) {
+      c.tornaAMoure = false;
+      if (c.el.querySelector(".clip").matches(":hover, :focus-within")) activaCarta(c);
+    }
+  }
   if (novaRonda) revelaRonda(cont, ordre);
 }
 
@@ -3989,7 +3995,7 @@ function cartaTauler(p, sigDibuix, { alternativa = null } = {}) {
   if (sig !== c.sig) {
     c.sig = sig;
     c.ctx = ctx;
-    if (TV.c === c) aturaCarta();
+    if (TV.c === c) { aturaCarta(); c.tornaAMoure = true; }  // si encara l'assenyales, es torna a moure refeta
     c.refes = true;  // quan ja sigui a la pàgina
   }
   return c;
