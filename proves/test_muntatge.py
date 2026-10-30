@@ -261,3 +261,29 @@ class TestVideoHoritzontal(unittest.TestCase):
             self.assertEqual([f.name for f in d.glob(".proxy*")], [])  # cap temporal per enmig
             p.estat["encaix"] = "res"
             self.assertEqual(p.encaix, "retalla")  # el que no s'entén, retallat
+
+    def test_el_projecte_per_a_editors_porta_el_fons(self):
+        import shutil
+        import subprocess
+        if not shutil.which("ffmpeg"):
+            self.skipTest("cal ffmpeg")
+        from motor import editors, exporta
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            video = d / "h.mp4"
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=640x360:d=6:r=25", "-f", "lavfi",
+                            "-i", "sine=d=6", "-shortest", "-pix_fmt", "yuv420p", str(video)], check=True)
+            (d / "transcripcio.json").write_text(json.dumps({"video": str(video), "durada": 6.0, "fps": "25",
+                                                            "paraules": [{"id": 0, "text": "hola", "inici": 3.0, "final": 3.4}]}),
+                                                 encoding="utf-8")
+            p = Projecte(d)
+            self.assertNotIn("fons-difuminat", (editors.exporta_editors(p) / "h.xml").read_text(encoding="utf-8"))
+            p.estat["encaix"] = "difumina"
+            desti = editors.exporta_editors(p)
+            fons = desti / "recursos" / "fons-difuminat.mp4"
+            info = exporta.info_video(fons)
+            self.assertEqual((info["amplada"], info["alcada"]), exporta.MIDA_FONS)
+            # Només el tros que fa servir el muntatge, amb 2 s a cada banda (no tota la gravació).
+            self.assertAlmostEqual(info["durada"], 4.4, delta=0.1)
+            self.assertIn("fons-difuminat", (desti / "h.fcpxml").read_text(encoding="utf-8"))
+            self.assertIn("Fons difuminat", (desti / "LLEGEIX-ME.txt").read_text(encoding="utf-8"))

@@ -16,7 +16,9 @@ El b-roll i els stickers sí que s'hi copien (a recursos/, els stickers en PNG p
 editors els llegeixin).
 Hi van els talls, els zooms, el b-roll i els stickers, cadascun a la seva pista. El tall i el
 so són exactes al fotograma; les posicions dels stickers són aproximades (cada editor les
-interpreta una mica diferent).
+interpreta una mica diferent). Amb l'encaix «difumina» (un vídeo horitzontal sencer, al mig), el
+fons difuminat es fa a part (recursos/fons-difuminat.mp4) i va en una pista a sota del vídeo,
+tallat igual.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ from motor import edicio, exporta, grafics, subtitols
 
 AMPLADA, ALCADA = 1080, 1920
 FPS_RECURSOS = 30  # el b-roll (motor/broll.py) i la capa de subtítols (motor/subtitols.py) es fan a 30 fps
+MARGE_FONS = 2.0  # segons de fons difuminat de més a cada banda dels talls: per poder-los allargar una mica
 
 
 def _mida_imatge(path: Path) -> tuple[int, int]:
@@ -95,7 +98,20 @@ def _plan(projecte, trams) -> dict:
     stickers = [dict(st, rot=st["rotacio"], px=_mida_imatge(st["fitxer"])) for st in projecte.stickers(trams)]
     brolls = projecte.brolls(trams)
     return {"t": t, "info": info, "trossos": trossos, "total": offset,
-            "brolls": brolls, "carrils": _carrils(brolls), "stickers": stickers}
+            "brolls": brolls, "carrils": _carrils(brolls), "stickers": stickers,
+            "difumina": exporta.difumina(info["amplada"], info["alcada"], projecte.encaix)}
+
+
+def _fes_fons(video: Path, pla: dict, desti: Path, progres=None) -> dict:
+    """Fa el fons difuminat del tros de la gravació que fa servir el muntatge (amb MARGE_FONS a cada banda) i
+    diu on és i a quin fotograma de la gravació comença."""
+    t, trossos = pla["t"], pla["trossos"]
+    marge = t.fotogrames(MARGE_FONS)
+    primer = max(0, min(x["a"] for x in trossos) - marge)
+    darrer = min(t.fotogrames(pla["info"]["durada"]), max(x["b"] for x in trossos) + marge)
+    fitxer = exporta.fes_fons(video, desti / "recursos" / "fons-difuminat.mp4", float(primer / t.fr),
+                              float(darrer / t.fr), str(t.fr), progres)
+    return {"fitxer": fitxer, "primer": primer, "fotogrames": darrer - primer}
 
 
 def _carrils(brolls: list[dict]) -> int:
@@ -230,12 +246,22 @@ def fcpxml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
                         f'format="r4"><media-rep kind="original-media" src="{_url(capa)}"/></asset>')
         connectats[0].append(f'<asset-clip ref="r{n}" lane="{carril_stickers + 1}" offset="{t.fcp(trossos[0]["a"])}" name="subtitols" '
                              f'start="0s" duration="{t.fcp(pla["total"])}"/>')
+    fons = pla.get("fons")
+    if fons:  # «difumina»: el vídeo hi cap sencer («fit») i, a sota de cada tall, el mateix tros del fons
+        rid_fons = f"r{n + 2}"
+        recursos.append(f'<format id="r{n + 1}" frameDuration="{t.durada_fotograma}" width="{exporta.MIDA_FONS[0]}" '
+                        f'height="{exporta.MIDA_FONS[1]}"/>')
+        recursos.append(f'<asset id="{rid_fons}" name="fons-difuminat" start="0s" duration="{t.fcp(fons["fotogrames"])}" '
+                        f'hasVideo="1" format="r{n + 1}"><media-rep kind="original-media" src="{_url(fons["fitxer"])}"/></asset>')
 
+    zoom = f'<adjust-transform scale="{exporta.ZOOM} {exporta.ZOOM}"/>'
     espina = []
     for i, x in enumerate(trossos):
-        ajustos = '<adjust-conform type="fill"/>'
-        if x["zoom"]:
-            ajustos += f'<adjust-transform scale="{exporta.ZOOM} {exporta.ZOOM}"/>'
+        ajustos = f'<adjust-conform type="{"fit" if fons else "fill"}"/>' + (zoom if x["zoom"] else "")
+        if fons:
+            clip_fons = (f'<asset-clip ref="{rid_fons}" lane="-1" offset="{t.fcp(x["a"])}" name="fons-difuminat" '
+                         f'start="{t.fcp(x["a"] - fons["primer"])}" duration="{t.fcp(x["b"] - x["a"])}"')
+            connectats[i].insert(0, f'{clip_fons}>{zoom}</asset-clip>' if x["zoom"] else f'{clip_fons}/>')
         espina.append(f'<asset-clip ref="r3" offset="{t.fcp(x["offset"])}" name="{_attr(video.stem)}" '
                       f'start="{t.fcp(x["a"])}" duration="{t.fcp(x["b"] - x["a"])}" format="r2" tcFormat="NDF">'
                       f'{ajustos}{"".join(connectats[i])}</asset-clip>')
@@ -273,7 +299,9 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         return f"<rate><timebase>{base}</timebase><ntsc>{'TRUE' if ntsc else 'FALSE'}</ntsc></rate>"
     rate, rate30 = rate_de(t), rate_de(t30)
     total_font = t.fotogrames(info["durada"])
-    omple = max(AMPLADA / info["amplada"], ALCADA / info["alcada"]) * 100  # que el vídeo ompli el 9:16
+    fons = pla.get("fons")
+    # Que el vídeo ompli el 9:16 o, amb el fons difuminat, que hi càpiga sencer.
+    omple = (min if fons else max)(AMPLADA / info["amplada"], ALCADA / info["alcada"]) * 100
     comptador = iter(range(1, 10_000))
 
     def moviment(escala: float, centre=(0.0, 0.0), rotacio: float = 0.0) -> str:
@@ -308,13 +336,18 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
                 f"<start>{inici}</start><end>{final}</end><in>{entrada}</in><out>{sortida}</out>"
                 f"{fitxer_xml}{pista}{filtre}</clipitem>")
 
-    v1, a1 = [], []
+    v0, v1, a1 = [], [], []
     for i, x in enumerate(trossos):
         ini, fi = x["offset"], x["offset"] + x["b"] - x["a"]
-        escala = omple * (exporta.ZOOM if x["zoom"] else 1)
+        zoom = exporta.ZOOM if x["zoom"] else 1
         f_xml = fitxer("file-1", video, total_font, info["amplada"], info["alcada"], True, i == 0)
-        v1.append(clip(video.stem, ini, fi, x["a"], x["b"], f_xml, moviment(escala), total_font))
+        v1.append(clip(video.stem, ini, fi, x["a"], x["b"], f_xml, moviment(omple * zoom), total_font))
         a1.append(clip(video.stem, ini, fi, x["a"], x["b"], '<file id="file-1"/>', "", total_font, "audio"))
+        if fons:  # a sota, el mateix tros del fons difuminat (comença al fotograma «primer» de la gravació)
+            w_fons, h_fons = exporta.MIDA_FONS
+            f_xml = fitxer("file-fons", fons["fitxer"], fons["fotogrames"], w_fons, h_fons, False, i == 0)
+            v0.append(clip("fons-difuminat", ini, fi, x["a"] - fons["primer"], x["b"] - fons["primer"], f_xml,
+                           moviment(AMPLADA / w_fons * 100 * zoom), fons["fotogrames"]))
 
     v2 = [[] for _ in range(pla.get("carrils", 1))]  # una pista per carril (les targetes que coincideixen)
     for k, br in enumerate(pla["brolls"]):
@@ -348,7 +381,7 @@ def xmeml(nom: str, video: Path, pla: dict, capa: Path | None = None) -> str:
         f_xml = fitxer("file-capa", capa, d30, AMPLADA, ALCADA, False, True, rate30)
         v4.append(clip("subtitols", 0, pla["total"], 0, d30, f_xml, moviment(100), rate_font=rate30))
 
-    pistes = "".join(f"<track>{''.join(p)}</track>" for p in (v1, *v2, v3, v4) if p)
+    pistes = "".join(f"<track>{''.join(p)}</track>" for p in (v0, v1, *v2, v3, v4) if p)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">'
             f'<sequence id="sequence-1"><name>{escape(nom)}</name><duration>{pla["total"]}</duration>{rate}'
             f"<media><video><format><samplecharacteristics>{rate}<width>{AMPLADA}</width><height>{ALCADA}</height>"
@@ -391,10 +424,17 @@ DaVinci Resolve
 CapCut
   CapCut no deixa importar projectes d'altres editors. A la pàgina de revisió de tallat, fes
   Final… → «Trossos per a CapCut o iMovie»: tindràs cada tros com un clip a part, en ordre.
-{capa}
+{fons}{capa}
 Els subtítols animats de tallat (estil, colors, animacions) no passen a cap editor amb el
 .srt: només el text i els temps. El títol del ganxo i els gràfics del pla només hi van amb
 la capa animada (a la pàgina, «Inclou-hi els subtítols i els gràfics de tallat»).
+"""
+
+AMB_FONS = """
+Fons difuminat («recursos/fons-difuminat.mp4»)
+  El vídeo és horitzontal i hi va sencer, al mig. El fons difuminat de dalt i de baix és a
+  la pista de sota del vídeo, tallat igual. Si allargues o escurces un tall, fes el mateix
+  al fons (n'hi ha {marge} segons de més a cada banda).
 """
 
 AMB_CAPA = """
@@ -422,8 +462,9 @@ def _efectes(projecte, trams, desti: Path) -> None:
     llegeix.write_text(llegeix.read_text(encoding="utf-8") + EFECTES, encoding="utf-8")
 
 
-def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
-    """Escriu la carpeta per a altres editors i en torna el camí."""
+def exporta_editors(projecte, amb_capa: bool = False, avis=None, progres=None) -> Path:
+    """Escriu la carpeta per a altres editors i en torna el camí. `progres(percentatge)`: com va el fons
+    difuminat (només amb l'encaix «difumina», i es fa al final)."""
     trams = edicio.cap_endins(projecte.trams(), projecte.fps)  # allà el so va lligat als fotogrames
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
@@ -445,10 +486,14 @@ def exporta_editors(projecte, amb_capa: bool = False, avis=None) -> Path:
                                    grafics=situats, paleta=grafics.paleta(estil), imatges=projecte.carpeta_imatges)
         capa = desti / "subtitols.mov"
         shutil.copy(mov, capa)
+    if pla.get("difumina"):
+        pla["fons"] = _fes_fons(projecte.video, pla, desti, progres)
     (desti / f"{nom}.fcpxml").write_text(fcpxml(nom, projecte.video, pla, capa), encoding="utf-8")
     (desti / f"{nom}.xml").write_text(xmeml(nom, projecte.video, pla, capa), encoding="utf-8")
     (desti / "LLEGEIX-ME.txt").write_text(
-        LLEGEIX_ME.format(nom=nom, video=projecte.video, capa=AMB_CAPA if capa else ""), encoding="utf-8")
+        LLEGEIX_ME.format(nom=nom, video=projecte.video, capa=AMB_CAPA if capa else "",
+                          fons=AMB_FONS.format(marge=f"{MARGE_FONS:g}") if pla.get("fons") else ""),
+        encoding="utf-8")
     _efectes(projecte, trams, desti)
     return desti
 

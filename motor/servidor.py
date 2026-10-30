@@ -81,7 +81,8 @@ class Feina:
                     carpeta = editors.exporta_trossos(projecte, progres=lambda pct: self._actualitza(progres=pct))
                 else:
                     self._actualitza(fase="subtitols" if capa else "editors")
-                    carpeta = editors.exporta_editors(projecte, amb_capa=capa)
+                    carpeta = editors.exporta_editors(projecte, amb_capa=capa,
+                                                      progres=lambda pct: self._actualitza(fase="fons", progres=pct))
                 copia, avis = _copia(carpeta)
                 self._actualitza(estat="fet", progres=100, fitxer=carpeta.name, copia=copia, avis=avis)
                 return

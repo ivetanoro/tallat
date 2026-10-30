@@ -2846,6 +2846,9 @@ function seguimentFeina(feina) {
     } else if (feina.fase === "subtitols") {
       $("#feina-text").textContent = "Dibuixant els subtítols…";
       $("#feina-progres").style.width = "12%";
+    } else if (feina.fase === "fons") {
+      $("#feina-text").textContent = `Fent el fons difuminat… ${feina.progres} %`;
+      $("#feina-progres").style.width = `${feina.progres}%`;
     } else {
       $("#feina-text").textContent = `${nom}… ${feina.progres} %`;
       $("#feina-progres").style.width = `${feina.progres}%`;

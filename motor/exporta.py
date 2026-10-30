@@ -178,15 +178,26 @@ def _so_del_tros(i: int, tram) -> str:
 
 
 ENCAIXOS = ("retalla", "difumina")  # com entra al vertical un vídeo més ample: retallat o sencer, amb el fons difuminat
+MIDA_FONS = (360, 640)  # el fons difuminat per als altres editors: és borrós, i l'editor l'amplia
+
+
+def difumina(amplada: int, alcada: int, encaix: str) -> bool:
+    """Si aquest vídeo surt sencer amb el fons difuminat: només si és més ample que 9:16."""
+    return encaix == "difumina" and amplada * 16 > alcada * 9
+
+
+def _fons(ow: int, oh: int) -> str:
+    """El fons de l'encaix «difumina»: el vídeo omplint el vertical, difuminat i una mica més fosc."""
+    return (f"scale={ow}:{oh}:flags=bilinear:force_original_aspect_ratio=increase,crop={ow}:{oh},"
+            f"gblur=sigma={max(12, ow // 20)},eq=brightness=-0.06")
 
 
 def _enquadrament(amplada: int, alcada: int, ow: int, oh: int, encaix: str = "retalla") -> str:
     """Retalla el centre fins a 9:16 (si cal) i escala a la mida final. Amb `encaix` «difumina», un vídeo més
     ample que 9:16 hi entra sencer, al mig, i el que queda a dalt i a baix és el mateix vídeo, gran i difuminat."""
-    if amplada * 16 > alcada * 9 and encaix == "difumina":
+    if difumina(amplada, alcada, encaix):
         # El primer «scale=» ha de ser el de la mida final (el llegeix _filtre).
-        return (f"split=2[enq_f][enq_v];[enq_f]scale={ow}:{oh}:flags=bilinear:force_original_aspect_ratio=increase,"
-                f"crop={ow}:{oh},gblur=sigma={max(12, ow // 20)},eq=brightness=-0.06[enq_fons];"
+        return (f"split=2[enq_f][enq_v];[enq_f]{_fons(ow, oh)}[enq_fons];"
                 f"[enq_v]scale={ow}:-2:flags=lanczos[enq_mig];"
                 f"[enq_fons][enq_mig]overlay=(W-w)/2:(H-h)/2,setsar=1,format=yuv420p")
     if amplada * 16 > alcada * 9:      # més ample que 9:16 (p. ex. horitzontal)
@@ -641,4 +652,20 @@ def fes_proxy(video: Path, sortida: Path, progres=None, encaix: str = "retalla")
     _executa(ordre, info["durada"], progres)
     treu_rotacio(temporal)
     temporal.replace(sortida)
+    return sortida
+
+
+def fes_fons(video: Path, sortida: Path, inici: float, final: float, fps: str, progres=None) -> Path:
+    """Només el fons de l'encaix «difumina» (sense el vídeo del mig ni so), d'`inici` a `final` de la gravació,
+    per als altres editors (motor/editors.py): allà va en una pista a sota del vídeo. Petit (MIDA_FONS) i amb
+    fotogrames regulars als fps del vídeo, perquè cada tall hi casi fotograma a fotograma."""
+    ss, t = temps_exactes(inici, final, fps)
+    ordre = [
+        "ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", "-ss", ss, "-t", t, "-i", str(video),
+        "-map", "0:v:0", "-vf", f"{_fons(*MIDA_FONS)},setsar=1,format=yuv420p", "-r", fps,
+        *codec_video("copia", "1M"), "-an",
+        "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(sortida),
+    ]
+    _executa(ordre, final - inici, progres)
+    treu_rotacio(sortida)
     return sortida

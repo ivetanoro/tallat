@@ -98,6 +98,45 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class TestFonsDifuminat(unittest.TestCase):
+    """Un vídeo horitzontal amb l'encaix «difumina»: sencer al mig i, a sota de cada tall, el mateix tros del fons."""
+
+    def pla(self):
+        p = pla()
+        p["info"] = {"amplada": 1920, "alcada": 1080, "durada": 20.0}
+        p["fons"] = {"fitxer": Path("/tmp/fons-difuminat.mp4"), "primer": 10, "fotogrames": 400}
+        return p
+
+    def test_final_cut(self):
+        dom = xml.dom.minidom.parseString(editors.fcpxml("Prova", Path("/tmp/v.mov"), self.pla()))
+        espina = [c for c in dom.getElementsByTagName("asset-clip") if c.getAttribute("ref") == "r3"]
+        self.assertEqual({c.getElementsByTagName("adjust-conform")[0].getAttribute("type") for c in espina}, {"fit"})
+        fons = [c for c in dom.getElementsByTagName("asset-clip") if c.getAttribute("lane") == "-1"]
+        self.assertEqual([c.parentNode for c in fons], espina)  # un a sota de cada tall, que s'hi mou amb ell
+        # Al mateix moment que el tall (temps de l'original) i del mateix tros: el fons comença al fotograma 10.
+        self.assertEqual([(c.getAttribute("offset"), c.getAttribute("start"), c.getAttribute("duration")) for c in fons],
+                         [("1s", "2/3s", "2s"), ("10s", "29/3s", "1s")])
+        self.assertEqual(fons[1].getElementsByTagName("adjust-transform")[0].getAttribute("scale"), "1.15 1.15")
+        self.assertFalse(fons[0].getElementsByTagName("adjust-transform"))  # el zoom, només on n'hi ha
+
+    def test_premiere(self):
+        dom = xml.dom.minidom.parseString(editors.xmeml("Prova", Path("/tmp/v.mov"), self.pla()))
+        valor = lambda node, nom: node.getElementsByTagName(nom)[0].firstChild.data
+        escala = lambda c: next(valor(p, "value") for p in c.getElementsByTagName("parameter")
+                                if valor(p, "parameterid") == "scale")
+        pistes = dom.getElementsByTagName("video")[0].getElementsByTagName("track")
+        fons, video = (p.getElementsByTagName("clipitem") for p in pistes[:2])  # el fons, a la pista de sota
+        self.assertEqual([valor(c, "name") for c in fons], ["fons-difuminat"] * 2)
+        self.assertEqual([(valor(c, "start"), valor(c, "in"), valor(c, "out")) for c in fons],
+                         [("0", "20", "80"), ("60", "290", "320")])
+        self.assertEqual([escala(c) for c in video], ["56.25", "64.69"])  # 1920 → 1080: hi cap sencer
+        self.assertEqual([escala(c) for c in fons], ["300.00", "345.00"])  # 360 → 1080, i amb el zoom
+
+    def test_sense_fons_res_de_nou(self):
+        dom = xml.dom.minidom.parseString(editors.xmeml("Prova", Path("/tmp/v.mov"), pla()))
+        self.assertNotIn("fons-difuminat", dom.toxml())
+
+
 class TestBrollEnTargeta(unittest.TestCase):
     def test_la_targeta_va_al_seu_lloc(self):
         from motor import targetes
