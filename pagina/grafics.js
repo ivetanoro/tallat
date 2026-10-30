@@ -298,12 +298,16 @@
 .tg-anell circle { fill: none; stroke-width: 11; }
 .tg-pista { stroke: var(--tg-ratlla); }
 .tg-arc { stroke: var(--tg-destacat); stroke-linecap: round; stroke-dasharray: 1; }
-.tg-anell .tg-xifra { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 118px; }
+/* Dins del cercle, una xifra llarga («3 de cada 4», «10.000 €») es fa més petita i no en surt (--tg-lletres). */
+.tg-anell .tg-xifra {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; white-space: nowrap;
+  font-size: min(118px, calc(570px / var(--tg-lletres, 4)));
+}
 .tg-progres .tg-cos { min-width: 600px; }
 .tg-barra-prog { position: relative; height: 46px; margin-top: 26px; border-radius: 23px; overflow: hidden; background: var(--tg-ratlla); }
 .tg-barra-prog i { position: absolute; inset: 0; border-radius: inherit; background: var(--tg-destacat); transform-origin: 0 50%; }
 .tg-progres .tg-barra-prog + .tg-xifra-text { margin-top: 22px; }
-.tg-mac.tg-numero .tg-anell .tg-xifra { font-size: 104px; }
+.tg-mac.tg-numero .tg-anell .tg-xifra { font-size: min(104px, calc(570px / var(--tg-lletres, 4))); }
 .tg-mac.tg-progres .tg-pista, .tg-scrapbook.tg-progres .tg-pista { stroke: var(--tg-linia-forta); }
 .tg-mac.tg-progres .tg-barra-prog, .tg-scrapbook.tg-progres .tg-barra-prog { background: var(--tg-linia-forta); }
 .tg-mac.tg-progres .tg-arc, .tg-scrapbook.tg-progres .tg-arc { stroke: var(--tg-principal); }
@@ -317,7 +321,7 @@
 .tg-scrapbook.tg-progres .tg-barra-prog { border-radius: 6px; rotate: -1deg; }
 .tg-editorial.tg-progres .tg-anell circle { stroke-width: 4; }
 .tg-editorial.tg-progres .tg-arc { stroke: var(--tg-text); stroke-linecap: butt; }
-.tg-editorial.tg-progres .tg-anell .tg-xifra { font-size: 140px; }
+.tg-editorial.tg-progres .tg-anell .tg-xifra { font-size: min(140px, calc(640px / var(--tg-lletres, 4))); }
 .tg-editorial.tg-progres .tg-barra-prog { height: 10px; border-radius: 0; }
 .tg-editorial.tg-progres .tg-barra-prog i { background: var(--tg-text); }
 .tg-editorial.tg-progres .tg-barra-prog + .tg-xifra-text { border-top: 0; padding-top: 0; }  /* la barra ja fa de ratlla */
@@ -833,6 +837,7 @@
       } else {
         const NS = "http://www.w3.org/2000/svg";
         const anell = element(doc, "div", "tg-anell");
+        anell.style.setProperty("--tg-lletres", Math.max(4, xifra.textContent.length));
         const svg = doc.createElementNS(NS, "svg");
         svg.setAttribute("viewBox", "0 0 120 120");
         for (const classe of ["tg-pista", "tg-arc"]) {
