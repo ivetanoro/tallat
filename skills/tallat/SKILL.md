@@ -25,7 +25,7 @@ La majoria no són programadores i volen que sigui fàcil. **Guia-la pas a pas:*
 ## Instal·lació (la primera vegada)
 
 Quan la persona digui «instal·la tallat», o una ordre falli perquè falta una eina (ffmpeg, WhisperX, Node…):
-1. Explica-li en una frase què passarà: es baixen uns 2-3 GB (ffmpeg, Node, Python, WhisperX, el navegador de HyperFrames i el model de veu català), triga 10-20 minuts, tot va a la seva carpeta d'usuari (`~/.tallat`) i no demana mai la contrasenya.
+1. Explica-li en una frase què passarà: es baixen uns 2-3 GB (ffmpeg, Node, Python, WhisperX, un navegador per dibuixar els subtítols i el model de veu català), triga 10-20 minuts, tot va a la seva carpeta d'usuari (`~/.tallat`) i no demana mai la contrasenya.
 2. Si no fa servir Descript per transcriure, afegeix `--amb-whisper` (baixa 3 GB més, el model de transcripció).
 3. Executa `./prepara.sh` des de la carpeta de tallat (a **Windows**: `powershell -ExecutionPolicy Bypass -File prepara.ps1`, i `-AmbWhisper` en lloc de `--amb-whisper`). És llarg: fes-ho en una pestanya del terminal on la persona ho vegi, o en segon pla, i ves-li dient com va. Es pot tornar a executar sense por: només fa el que falta.
 4. En acabar, l'instal·lador mateix executa `tallat.py comprova`. Si hi ha cap ✗, llegeix el missatge, torna a executar l'instal·lador i, si continua, explica-li què passa amb paraules senzilles.

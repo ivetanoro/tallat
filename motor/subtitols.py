@@ -410,14 +410,14 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
     if escala == "4k":
         ordre += ["--resolution", "portrait-4k"]
     if avis:
-        avis("Dibuixant subtítols, gràfics i stickers amb HyperFrames…")
+        avis("Dibuixant subtítols, gràfics i stickers…")
     r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0 and "Chrome cannot start" in r.stderr + r.stdout:
         # El primer cop que s'obre el navegador de HyperFrames, el Mac el revisa i HyperFrames no l'espera
         # prou. Un segon intent ja el troba revisat.
         r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0 or not temporal.exists():
-        raise RuntimeError("HyperFrames no ha pogut dibuixar els subtítols:\n" + (r.stderr or r.stdout)[-2000:])
+        raise RuntimeError("No s'han pogut dibuixar els subtítols:\n" + (r.stderr or r.stdout)[-2000:])
     temporal.replace(sortida)
     for vell in base.glob(f"subtitols_{escala}_*.mov"):  # només en guardem un per mida
         if vell != sortida:

@@ -90,7 +90,7 @@ def _carpetes_npx() -> list[Path]:
 def _node() -> list[tuple]:
     node, npx = shutil.which("node"), shutil.which("npx")
     if not node or not npx:
-        return [("error", "Node.js", f"no el trobo (cal per a HyperFrames) → {ARREGLA}")]
+        return [("error", "Node.js", f"no el trobo (cal per dibuixar els subtítols) → {ARREGLA}")]
     versio = ((_executa([node, "--version"]) or subprocess.CompletedProcess([], 1, "", "")).stdout or "").strip()
     major = int(re.sub(r"\D", "", versio.split(".")[0]) or 0)
     if major < 18:
@@ -104,12 +104,12 @@ def _node() -> list[tuple]:
         except (OSError, json.JSONDecodeError):
             continue
     if entorn.VERSIO_HYPERFRAMES not in versions:
-        return resultat + [("avis", "HyperFrames", "es baixarà el primer cop que facis un esborrany (uns segons)")]
+        return resultat + [("avis", "Dibuix de subtítols", "es baixarà el primer cop que facis un esborrany (uns segons)")]
     cami = _executa([npx, "--yes", f"hyperframes@{entorn.VERSIO_HYPERFRAMES}", "browser", "path"], temps=90)
     navegador = cami.stdout.strip().splitlines()[-1] if cami and cami.returncode == 0 and cami.stdout.strip() else ""
     if not navegador or not Path(navegador).exists():
-        return resultat + [("avis", "HyperFrames", f"{entorn.VERSIO_HYPERFRAMES}; el navegador es baixarà el primer cop (uns 100 MB)")]
-    return resultat + [("ok", "HyperFrames", f"{entorn.VERSIO_HYPERFRAMES} amb el seu navegador")]
+        return resultat + [("avis", "Dibuix de subtítols", f"{entorn.VERSIO_HYPERFRAMES}; el navegador es baixarà el primer cop (uns 100 MB)")]
+    return resultat + [("ok", "Dibuix de subtítols", f"{entorn.VERSIO_HYPERFRAMES} amb el seu navegador")]
 
 
 def _models() -> list[tuple]:

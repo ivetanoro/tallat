@@ -144,12 +144,12 @@ if (-not $arrenca) { Falla-Amb "WhisperX no arrenca. Executa «.venv\Scripts\pyt
 $versions = & $PY -c "import importlib.metadata as m; print(m.version('whisperx') + ' · torch ' + m.version('torch'))"
 Fet "WhisperX $versions"
 
-Pas "5/6 · HyperFrames i el seu navegador (per dibuixar els subtítols)"
+Pas "5/6 · El navegador per dibuixar els subtítols"
 $NPX = Join-Path $EINES "npx.cmd"
 if (-not (Prova $NPX @("--yes", "hyperframes@$VERSIO_HYPERFRAMES", "browser", "ensure"))) {
-  Falla-Amb "No he pogut preparar HyperFrames. Torna-ho a provar d'aquí a una estona."
+  Falla-Amb "No he pogut preparar el dibuix dels subtítols. Torna-ho a provar d'aquí a una estona."
 }
-Fet "HyperFrames $VERSIO_HYPERFRAMES"
+Fet "Dibuix de subtítols $VERSIO_HYPERFRAMES"
 
 Pas "6/6 · Model de veu català (per saber quan es diu cada paraula)"
 $env:HF_HUB_VERBOSITY = "error"

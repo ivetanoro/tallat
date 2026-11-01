@@ -112,14 +112,14 @@ fi
   || falla "WhisperX no arrenca. Executa «.venv/bin/python tallat.py comprova» per veure-hi més."
 fet "WhisperX $("$PY" -c 'import importlib.metadata as m; print(m.version("whisperx"))') · torch $("$PY" -c 'import importlib.metadata as m; print(m.version("torch"))')"
 
-pas "5/6 · HyperFrames i el seu navegador (per dibuixar els subtítols)"
+pas "5/6 · El navegador per dibuixar els subtítols"
 npx --yes "hyperframes@$VERSIO_HYPERFRAMES" browser ensure >/dev/null 2>&1 \
-  || falla "No he pogut preparar HyperFrames. Torna-ho a provar d'aquí a una estona."
+  || falla "No he pogut preparar el dibuix dels subtítols. Torna-ho a provar d'aquí a una estona."
 # El primer cop que s'obre un programa acabat de baixar, el Mac el revisa uns segons i HyperFrames no
 # l'espera prou (el primer esborrany fallaria): l'obrim ara un cop, sense pressa.
 NAVEGADOR="$(npx --yes "hyperframes@$VERSIO_HYPERFRAMES" browser path 2>/dev/null | tail -n 1)"
 if [ -x "$NAVEGADOR" ]; then "$NAVEGADOR" --version >/dev/null 2>&1 || true; fi
-fet "HyperFrames $VERSIO_HYPERFRAMES"
+fet "Dibuix de subtítols $VERSIO_HYPERFRAMES"
 
 pas "6/6 · Model de veu català (per saber quan es diu cada paraula)"
 (cd "$CARPETA" && HF_HUB_VERBOSITY=error TRANSFORMERS_VERBOSITY=error "$PY" -) <<'PYTHON' || falla "No he pogut baixar el model de veu català."
