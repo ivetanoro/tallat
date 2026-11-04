@@ -74,18 +74,16 @@ try {
     await dorm(500);
     if (escenari === "edita" && !editat) {
       const m = await pagina.evaluate(() => { try { return tempsMuntatge(); } catch { return 0; } });
-      if (m >= 6) {  // Sona: es treu una paraula de més endavant, sense aturar el vídeo. Es tria amb el teclat del text, com una persona.
+      if (m >= 6) {  // Sona: es treu una paraula de més endavant, sense aturar el vídeo. Amb el clic dret, com una persona (el clic normal salta a la paraula).
         const id = await pagina.evaluate((preferida) => {
           const t = tempsMuntatge();
-          const dins = P.paraules.filter((p) => !p.esborrada && muntatgeDe(p.inici) > t + 3 && p.final - p.inici > 0.25);
+          const dins = P.paraules.filter((p) => !esFora(p.id) && muntatgeDe(p.inici) > t + 3 && p.final - p.inici > 0.25);
           const p = dins.find((x) => x.id >= preferida) || dins[0];
           return p ? p.id : null;
         }, paraulaEdita).catch((e) => { resultat.error_tria = String(e); return null; });
         if (id != null) {
           resultat.paraula_treta = id;
-          await pagina.locator(`#transcripcio .p[data-id="${id}"]`).click({ timeout: 8000 }).catch((e) => { resultat.error_clic = String(e).slice(0, 200); });
-          await dorm(250);
-          await pagina.keyboard.press("Backspace");
+          await pagina.locator(`#transcripcio .p[data-id="${id}"]`).click({ button: "right", timeout: 8000 }).catch((e) => { resultat.error_clic = String(e).slice(0, 200); });
           await pagina.evaluate((x) => window.__sonda.marca("treta", { id: x, audio: window.__sonda.ctx ? window.__sonda.ctx.currentTime : null, munt: tempsMuntatge() }), id);
         }
         editat = true;
