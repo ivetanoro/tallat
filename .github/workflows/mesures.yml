@@ -1,0 +1,159 @@
+# Mesures en ordinadors nets de GitHub: instal·la tallat de zero, passa el camí sencer amb vídeos inventats i
+# obre la pàgina en navegadors de debò. Només en aquesta branca de proves: no va a main ni surt a cap versió.
+name: Mesures
+
+on:
+  push:
+    branches: [proves-altres-pcs]
+  workflow_dispatch:
+
+jobs:
+  mesura:
+    name: ${{ matrix.nom }}
+    runs-on: ${{ matrix.so }}
+    timeout-minutes: 200
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { nom: windows, so: windows-latest }
+          - { nom: mac-nou, so: macos-latest }
+          - { nom: mac-intel, so: macos-26-intel }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Quina màquina és
+        run: |
+          mkdir -p resultats
+          { uname -a; nproc 2>/dev/null || sysctl -n hw.ncpu; sysctl -n hw.memsize 2>/dev/null || true; } | tee resultats/maquina.txt
+          date +%s > resultats/inici-instal.txt
+
+      - name: Instal·la tallat de zero (Mac)
+        if: runner.os == 'macOS'
+        run: ./prepara.sh 2>&1 | tee resultats/instal.log
+
+      - name: Instal·la tallat de zero (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File prepara.ps1
+
+      - name: Prepara l'entorn de les mesures
+        run: |
+          echo "instal·lació: $(( $(date +%s) - $(cat resultats/inici-instal.txt) )) s" | tee resultats/temps-instal.txt
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cygpath -w "$USERPROFILE/.tallat/eines/Library/bin" >> "$GITHUB_PATH"
+            cygpath -w "$USERPROFILE/.tallat/eines" >> "$GITHUB_PATH"
+            echo "PY=.venv/Scripts/python.exe" >> "$GITHUB_ENV"
+            echo "KMP_DUPLICATE_LIB_OK=TRUE" >> "$GITHUB_ENV"
+          else
+            echo "$HOME/.tallat/eines/bin" >> "$GITHUB_PATH"
+            echo "PY=.venv/bin/python" >> "$GITHUB_ENV"
+          fi
+          echo "TALLAT_PREFERENCIES=$RUNNER_TEMP/preferencies.json" >> "$GITHUB_ENV"
+          echo "MV=$RUNNER_TEMP/videos" >> "$GITHUB_ENV"
+
+      - name: Les proves de sempre
+        continue-on-error: true
+        run: $PY -m unittest discover -s proves -t . 2>&1 | tee resultats/proves.log | tail -5
+
+      - name: Fum (el mateix de sempre)
+        continue-on-error: true
+        run: $PY .github/fum.py "$RUNNER_TEMP/fum" 2>&1 | tee resultats/fum.log | tail -3
+
+      - name: "El bloqueig de 10 s: la mateixa petició, moltes vegades, dient on s'encalla"
+        continue-on-error: true
+        run: |
+          set +e
+          $PY .github/mesures/estres_servidor.py 600 4 2>&1 | tee resultats/estres-servidor.log | tail -40
+          for i in 1 2 3 4 5 6 7 8; do
+            $PY -m unittest proves.test_servidor 2>&1 | tail -1
+          done | tee resultats/repeticions-test-servidor.txt
+
+      - name: Eines per obrir navegadors
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm install playwright-core@1.64.1 2>&1 | tail -1
+          npx playwright-core install firefox webkit 2>&1 | tail -3 || true
+
+      - name: Fabrica els vídeos inventats
+        continue-on-error: true
+        run: |
+          set +e
+          F=".github/mesures/fabrica.py"
+          $PY $F "$MV/control" --nom control.mp4 --durada 60 --llavor 7
+          $PY $F "$MV/iphone" --nom "IMG 0002 còpia amb accents.MOV" --durada 120 --codec hevc --rotacio --llavor 21
+          $PY $F "$MV/ntsc" --nom "gravació 29,97 fps.mp4" --durada 120 --fps 30000/1001 --llavor 22
+          $PY $F "$MV/vfr" --nom "mòbil fotogrames variables.MOV" --durada 90 --codec hevc --rotacio --vfr --llavor 23
+          $PY $F "$MV/vfr-suau" --nom "iPhone bona llum.MOV" --durada 90 --codec hevc --rotacio --vfr --suau --llavor 31
+          $PY $F "$MV/llarg" --nom "deu minuts amb espais.mp4" --durada 600 --llavor 27 --bitrate 4M
+
+      - name: Camí sencer amb mesures
+        continue-on-error: true
+        run: |
+          set +e
+          C=".github/mesures/cami.py"
+          $PY $C "$MV/control" resultats/cami-control.json --amb-subtitols --port 8891 2>&1 | tail -2
+          $PY $C "$MV/iphone" resultats/cami-iphone.json --port 8892 2>&1 | tail -2
+          $PY $C "$MV/ntsc" resultats/cami-ntsc.json --port 8893 2>&1 | tail -2
+          $PY $C "$MV/vfr" resultats/cami-vfr.json --port 8894 2>&1 | tail -2
+          $PY $C "$MV/vfr-suau" resultats/cami-vfr-suau.json --qualitats 1080 --port 8899 2>&1 | tail -2
+          $PY $C "$MV/llarg" resultats/cami-llarg.json --qualitats esborrany --port 8895 2>&1 | tail -2
+
+      - name: Pàgina al Chrome (normal, 4× i 6×)
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_CORE: ${{ runner.temp }}/pw/node_modules/playwright-core
+        run: |
+          set +e
+          P=".github/mesures/tanda_pagina.py"
+          $PY $P resultats/pagina.json --video "$MV/control" --motor chrome --canal chrome --cpu 1,4,6 --escenaris fred,calent,edita --segons 50 2>&1 | cut -c1-500
+          $PY $P resultats/pagina.json --video "$MV/llarg" --motor chrome --canal chrome --cpu 1,4 --escenaris fred,calent --segons 60 --port 8902 2>&1 | cut -c1-500
+
+      - name: Pàgina al Firefox
+        continue-on-error: true
+        env:
+          PLAYWRIGHT_CORE: ${{ runner.temp }}/pw/node_modules/playwright-core
+        run: $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor firefox --escenaris fred,calent,edita --segons 50 2>&1 | cut -c1-500
+
+      - name: Pàgina al WebKit
+        continue-on-error: true
+        if: runner.os == 'macOS'
+        env:
+          PLAYWRIGHT_CORE: ${{ runner.temp }}/pw/node_modules/playwright-core
+        run: $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor webkit --escenaris fred,calent,edita --segons 50 2>&1 | cut -c1-500
+
+      - name: Pàgina al Safari de debò
+        continue-on-error: true
+        if: runner.os == 'macOS'
+        run: |
+          set +e
+          sudo safaridriver --enable
+          $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor safari --escenaris fred,calent --segons 50 2>&1 | cut -c1-500
+
+      - name: Windows petit de debò (4 GB i 2 processadors)
+        continue-on-error: true
+        if: runner.os == 'Windows'
+        env:
+          PLAYWRIGHT_CORE: ${{ runner.temp }}/pw/node_modules/playwright-core
+        run: |
+          set +e
+          L=".github/mesures/limita_windows.py"
+          $PY $L 4096 2 -- $PY .github/mesures/cami.py "$MV/iphone" resultats/cami-iphone-petit.json --nom-projecte projecte-petit --port 8896 2>&1 | tail -3 | tee resultats/limitat-cami.txt
+          $PY $L 4096 2 -- $PY .github/mesures/cami.py "$MV/llarg" resultats/cami-llarg-petit.json --qualitats esborrany --nom-projecte projecte-petit --port 8897 2>&1 | tail -3 | tee resultats/limitat-llarg.txt
+          $PY $L 4096 2 -- $PY .github/mesures/tanda_pagina.py resultats/pagina-petit.json --video "$MV/control" --motor chrome --canal chrome --escenaris fred,calent,edita --segons 50 --port 8903 2>&1 | cut -c1-500 | tee resultats/limitat-pagina.txt
+
+      - name: Desa els resultats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultats-${{ matrix.nom }}
+          path: |
+            resultats/**
+            !resultats/**/so.f32
+          if-no-files-found: warn
