@@ -4496,81 +4496,15 @@ function animaQuietes(ara) {
 }
 requestAnimationFrame(animaQuietes);
 
-// --- Els fotogrames de les quietes: un sol vídeo amagat que salta d'un moment a l'altre, d'un en un. ---
-
-const fotogrames = new Map();         // "url|t" → imatge (data URL) o null
-const fotogramesPendents = new Map();
-const cuaFotogrames = [];
-const capturadors = new Map();        // un vídeo per fitxer (la còpia lleugera i cada b-roll): canviar-lo és lent
+// --- Els fotogrames de les quietes: els treu el servidor (el navegador se'ls guarda; l'adreça porta la versió del vídeo). ---
 
 function fotogramaDe(url, t, retalla = false) {
-  const clau = `${url}|${t.toFixed(2)}|${retalla}`;
-  if (fotogrames.has(clau)) return Promise.resolve(fotogrames.get(clau));
-  if (!fotogramesPendents.has(clau)) {
-    fotogramesPendents.set(clau, new Promise((resol) => {
-      cuaFotogrames.push({ url, t, retalla, clau, resol });
-      if (cuaFotogrames.length === 1) capturaSeguent();
-    }));
-  }
-  return fotogramesPendents.get(clau);
-}
-
-async function capturaSeguent() {
-  const feina = cuaFotogrames[0];
-  if (!feina) return;
-  const dades = await captura(feina.url, feina.t, feina.retalla).catch(() => null);
-  fotogrames.set(feina.clau, dades);
-  fotogramesPendents.delete(feina.clau);
-  cuaFotogrames.shift();
-  feina.resol(dades);
-  capturaSeguent();
-}
-
-function capturadorDe(url) {
-  let v = capturadors.get(url);
-  if (v) return v;
-  if (capturadors.size >= 4) {  // els quatre darrers; el més vell se'n va
-    const [vell, el] = capturadors.entries().next().value;
-    el.removeAttribute("src");
-    el.load();
-    el.remove();
-    capturadors.delete(vell);
-  }
-  v = document.createElement("video");
-  Object.assign(v, { muted: true, playsInline: true, preload: "auto", className: "capturador" });
-  v.setAttribute("aria-hidden", "true");
-  document.body.append(v);  // el Safari no dibuixa un vídeo que no és a la pàgina
-  capturadors.set(url, v);
-  return v;
-}
-
-function captura(url, t, retalla) {
+  const src = `/fotograma?font=${encodeURIComponent(url)}&t=${t.toFixed(2)}${retalla ? "&retalla=1" : ""}`;
   return new Promise((resol) => {
-    const v = capturadorDe(url);
-    let temps = null;
-    const acaba = (r) => { clearTimeout(temps); v.removeEventListener("seeked", fet); v.removeEventListener("error", falla); resol(r); };
-    const fet = () => {
-      try {
-        const c = document.createElement("canvas");
-        // Les de la targeta, retallades com el vídeo (9:16); les del b-roll, senceres (la targeta ja les retalla).
-        if (retalla) [c.width, c.height] = [270, 480];
-        else { const r = Math.min(1, 360 / Math.max(v.videoWidth, v.videoHeight)); [c.width, c.height] = [Math.round(v.videoWidth * r), Math.round(v.videoHeight * r)]; }
-        const r = Math.max(c.width / v.videoWidth, c.height / v.videoHeight);
-        const [w, h] = [v.videoWidth * r, v.videoHeight * r];
-        c.getContext("2d").drawImage(v, (c.width - w) / 2, (c.height - h) / 2, w, h);
-        acaba(c.toDataURL("image/jpeg", 0.78));
-      } catch { acaba(null); }
-    };
-    const falla = () => acaba(null);
-    temps = setTimeout(() => acaba(null), 8000);
-    v.addEventListener("error", falla, { once: true });
-    const salta = () => {
-      const desti = limita(t, 0, Math.max(0, (v.duration || t + 1) - 0.05));
-      if (Math.abs(v.currentTime - desti) < 0.001 && v.readyState >= 2) { fet(); return; }
-      v.addEventListener("seeked", fet, { once: true });
-      v.currentTime = desti;
-    };
-    if (v.getAttribute("src") !== url) { v.src = url; v.addEventListener("loadeddata", salta, { once: true }); } else salta();
+    const img = new Image();
+    img.onload = () => resol(src);
+    img.onerror = () => resol(null);
+    img.src = src;
   });
 }
 

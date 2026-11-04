@@ -1625,7 +1625,6 @@ body.vestint.amb-tauler .reproductor, body.vestint.amb-tauler .vesteix-dreta { d
 .clip-progres { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; height: 3px; background: rgba(255, 255, 255, 0.25); opacity: 0; }
 .activa .clip-progres { opacity: 1; }
 .clip-progres i { display: block; width: 0; height: 100%; background: #fff; }
-.capturador { position: fixed; left: 0; top: 0; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
 
 .carta-motiu { margin: 0; font-size: var(--t-peu); line-height: 1.35; color: var(--text-2); overflow-wrap: anywhere; }
 .carta-avis { margin: 0; font-size: var(--t-peu); color: var(--auto); }

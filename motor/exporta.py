@@ -50,6 +50,19 @@ def info_video(video: Path) -> dict:
             "fps": str(Fraction(s["r_frame_rate"])), "durada": float(d["format"]["duration"])}
 
 
+def fotograma(video: Path, t: float, retalla: bool = False) -> bytes:
+    """Un fotograma en JPEG: per a les targetes, retallat com el vídeo (9:16); si no, sencer i petit."""
+    filtre = ("scale=270:480:force_original_aspect_ratio=increase,crop=270:480" if retalla
+              else "scale=360:360:force_original_aspect_ratio=decrease")
+
+    def treu(lloc: list[str]) -> bytes:
+        return subprocess.run(["ffmpeg", "-v", "error", *lloc, "-i", str(video), "-frames:v", "1", "-vf", filtre,
+                               "-pix_fmt", "yuvj420p", "-q:v", "5", "-c:v", "mjpeg", "-f", "image2pipe", "-"],
+                              capture_output=True).stdout
+
+    return treu(["-ss", f"{max(0.0, t):.3f}"]) or treu(["-sseof", "-0.2"])  # passat del final, l'últim
+
+
 def _rotacio(stream: dict) -> int:
     """L'etiqueta «gira'l» d'un vídeo, en graus. Les versions noves de ffprobe la donen a
     side_data_list; les antigues, a tags.rotate."""

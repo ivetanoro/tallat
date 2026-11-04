@@ -8,6 +8,7 @@ import errno
 import hashlib
 import hmac
 import json
+import math
 import mimetypes
 import os
 import secrets
@@ -180,6 +181,7 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
     feina = Feina()
     previa = Previa()
     bloqueig = threading.Lock()
+    fotogrames = threading.BoundedSemaphore(2)  # que les targetes no omplin el Mac de feines alhora
     # Seguretat: el servidor només escolta aquest Mac, però una web oberta al navegador podria
     # intentar enviar-li peticions. Per això: només s'accepten els noms 127.0.0.1 i localhost
     # (contra el «DNS rebinding»), i les peticions que canvien coses han de portar un codi que
@@ -485,6 +487,8 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 return self._segur(PAGINA, ruta[len("/pagina/"):])
             if ruta == "/proxy.mp4":
                 return self._fitxer(projecte.proxy)
+            if ruta == "/fotograma":
+                return self._fotograma(projecte)
             if ruta.startswith("/broll/"):
                 return self._segur(projecte.carpeta_instruccions() / broll.CARPETA, ruta[len("/broll/"):])
             if ruta.startswith("/stickers/"):
@@ -980,6 +984,37 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
                 except ValueError as e:
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                 return self._json({**info_marca(), **instantania()})
+
+        def _fotograma(self, projecte):
+            """El fotograma d'una targeta del tauler (de la còpia lleugera o d'un b-roll). El treu el servidor: el
+            Safari no dibuixa bé un vídeo amagat que encara no s'ha reproduït."""
+            q = parse_qs(urlparse(self.path).query)
+            font = unquote(urlparse(q.get("font", [""])[0]).path)
+            if font == "/proxy.mp4":
+                video = projecte.proxy
+            elif font.startswith("/broll/"):
+                arrel = (projecte.carpeta_instruccions() / broll.CARPETA).resolve()
+                video = (arrel / font[len("/broll/"):]).resolve()
+                if arrel not in video.parents:
+                    return self.send_error(HTTPStatus.FORBIDDEN)
+            else:
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            try:
+                t = float(q["t"][0])
+            except (KeyError, ValueError):
+                return self.send_error(HTTPStatus.BAD_REQUEST)
+            if not math.isfinite(t) or not video.is_file():
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            with fotogrames:
+                dades = exporta.fotograma(video, t, "retalla" in q)
+            if not dades:
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(dades)))
+            self.send_header("Cache-Control", "max-age=86400")  # l'adreça porta la versió del vídeo
+            self.end_headers()
+            self.wfile.write(dades)
 
         def _segur(self, arrel: Path, relatiu: str):
             path = (arrel / relatiu).resolve()

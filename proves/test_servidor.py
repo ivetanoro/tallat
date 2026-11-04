@@ -489,6 +489,32 @@ class TestServidor(unittest.TestCase):
         self.assertEqual((n["copia"].split(":")[0], n["copia_error"]), ("proxy-difumina.mp4", None))
         self.assertEqual(self.peticio("GET", "/proxy.mp4")[0], 200)  # i és la que serveix
 
+    def test_el_fotograma_d_una_targeta(self):
+        """El de les targetes del tauler el treu el servidor, i només d'un vídeo del projecte."""
+        import shutil
+        import subprocess
+        if not shutil.which("ffmpeg"):
+            self.skipTest("cal ffmpeg")
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=640x360:d=1:r=25", "-pix_fmt", "yuv420p",
+                        str(self.carpeta / "proxy.mp4")], check=True)
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
+        def demana(ruta):
+            c.request("GET", ruta, headers={"Host": f"127.0.0.1:{self.port}"})
+            r = c.getresponse()
+            return r.status, r.getheader("Content-Type"), r.read()
+        for t in ("0.5", "99"):  # passat del final, l'últim
+            estat, tipus, cos = demana(f"/fotograma?font=%2Fproxy.mp4%3Fv%3Dx&t={t}&retalla=1")
+            self.assertEqual((estat, tipus, cos[:2]), (200, "image/jpeg", b"\xff\xd8"))
+        foto = self.carpeta / "foto.jpg"
+        foto.write_bytes(cos)
+        mida = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(foto)],
+                              capture_output=True, text=True).stdout.strip()
+        self.assertEqual(mida, "270,480")  # retallat com el vídeo, encara que sigui horitzontal
+        self.assertEqual(demana("/fotograma?font=%2Fedicio.json&t=1")[0], 404)
+        self.assertEqual(demana("/fotograma?font=%2Fbroll%2F..%2Fedicio.json&t=1")[0], 403)
+        self.assertEqual(demana("/fotograma?font=%2Fproxy.mp4")[0], 400)
+        self.assertEqual(demana("/fotograma?font=%2Fproxy.mp4&t=nan")[0], 404)
+
     def test_un_sticker_posat_des_del_tauler(self):
         import shutil
         import subprocess
