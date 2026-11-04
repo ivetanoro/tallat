@@ -78,8 +78,9 @@ class Feina:
         try:
             if qualitat == "editors":
                 if trossos:  # CapCut o iMovie: cada tros com un clip a part
-                    self._actualitza(fase="video", progres=0)
-                    carpeta = editors.exporta_trossos(projecte, progres=lambda pct: self._actualitza(progres=pct))
+                    self._actualitza(fase="subtitols" if capa else "video", progres=0)
+                    carpeta = editors.exporta_trossos(projecte, amb_capa=capa,
+                                                      progres=lambda pct: self._actualitza(fase="video", progres=pct))
                 else:
                     self._actualitza(fase="subtitols" if capa else "editors")
                     carpeta = editors.exporta_editors(projecte, amb_capa=capa,

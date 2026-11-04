@@ -663,6 +663,35 @@ class TestAlProjecte(unittest.TestCase):
         self.assertEqual([x["id"] for x in dibuixa.call_args.kwargs["grafics"]], ["g1"])
         self.assertIn("principal", dibuixa.call_args.kwargs["paleta"])
 
+    def test_els_trossos_per_a_capcut_amb_la_capa(self):
+        import tempfile
+        from unittest import mock
+        from motor import editors
+        p = mock.MagicMock()
+        p.trams.return_value = [(0.0, 2.0)]
+        p.video.stem = "v"
+        p.linies_subtitols.return_value = []
+        p.titol.return_value = None
+        p.grafics.return_value = [{"id": "g1"}]
+        p.estil.return_value = {"subtitols": {}}
+        p.zooms_per_tram.return_value = [False]
+        with tempfile.TemporaryDirectory() as d:
+            capa = Path(d) / "capa.mov"
+            capa.write_bytes(b"mov")
+            p.sortida.return_value = Path(d) / "trossos.mp4"
+            with mock.patch.object(editors, "_plan", return_value={"brolls": [], "stickers": []}), \
+                    mock.patch.object(editors, "_efectes"), mock.patch.object(editors.exporta, "exporta"), \
+                    mock.patch.object(editors.grafics, "paleta", return_value={}), \
+                    mock.patch.object(editors.subtitols, "renderitza", return_value=capa) as dibuixa:
+                desti = editors.exporta_trossos(p, amb_capa=True)
+                self.assertTrue((desti / "subtitols.mov").exists())
+                self.assertIn("subtitols.mov", (desti / "LLEGEIX-ME.txt").read_text(encoding="utf-8"))
+                self.assertEqual([x["id"] for x in dibuixa.call_args.kwargs["grafics"]], ["g1"])
+                (desti / "subtitols.mov").unlink()
+                desti = editors.exporta_trossos(p)  # sense la capa, ho diu
+                self.assertFalse((desti / "subtitols.mov").exists())
+                self.assertIn("no hi són", (desti / "LLEGEIX-ME.txt").read_text(encoding="utf-8"))
+
     def test_la_pagina_no_hi_pot_ficar_brossa(self):
         estat = servidor._estat_de_json({"grafics": [g(estat="canvia", nota="x" * 900), {"tipus": "<script>"}, 5]})
         self.assertEqual(len(estat["grafics"]), 1)

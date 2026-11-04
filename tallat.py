@@ -390,7 +390,8 @@ def ordre_editors(args) -> None:
     projecte = _carrega(args)
     try:
         if args.trossos:
-            carpeta = editors.exporta_trossos(projecte, progres=_barra("exportant els trossos"))
+            carpeta = editors.exporta_trossos(projecte, amb_capa=args.amb_subtitols, avis=print,
+                                              progres=_barra("exportant els trossos"))
         else:
             carpeta = editors.exporta_editors(projecte, amb_capa=args.amb_subtitols, avis=print,
                                               progres=_barra("fent el fons difuminat"))

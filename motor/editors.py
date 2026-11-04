@@ -422,12 +422,12 @@ DaVinci Resolve
   2. Subtítols: importa «{nom}.srt» a la Media Pool i arrossega'l a la línia de temps.
 
 CapCut
-  CapCut no deixa importar projectes d'altres editors. A la pàgina de revisió de tallat, fes
-  Final… → «Trossos per a CapCut o iMovie»: tindràs cada tros com un clip a part, en ordre.
+  CapCut no deixa importar projectes d'altres editors. A la pàgina de tallat, fes Exporta →
+  Per acabar-lo en un altre editor → CapCut o iMovie: tindràs cada tros com un clip a part, en ordre.
 {fons}{capa}
 Els subtítols animats de tallat (estil, colors, animacions) no passen a cap editor amb el
 .srt: només el text i els temps. El títol del ganxo i els gràfics del pla només hi van amb
-la capa animada (a la pàgina, «Inclou-hi els subtítols i els gràfics de tallat»).
+la capa animada (a la pàgina, «Amb els subtítols i els gràfics»).
 """
 
 AMB_FONS = """
@@ -462,6 +462,22 @@ def _efectes(projecte, trams, desti: Path) -> None:
     llegeix.write_text(llegeix.read_text(encoding="utf-8") + EFECTES, encoding="utf-8")
 
 
+def _fes_capa(projecte, trams, linies, desti: Path, avis) -> Path | None:
+    """Els subtítols, el títol del ganxo i els gràfics amb el fons transparent (els stickers van a part)."""
+    titol = projecte.titol(trams)
+    situats = projecte.grafics(trams, linies, sense_bloc=True)  # aquí no hi ha el bloc de color
+    if not (linies or titol or situats):
+        return None
+    estil = projecte.estil()
+    mov = subtitols.renderitza(linies, estil["subtitols"], sum(b - a for a, b in trams),
+                               projecte.carpeta, "1080", avis, fonts=projecte.fonts_subtitols(),
+                               titol=titol, estil_titol=estil.get("titol"),
+                               grafics=situats, paleta=grafics.paleta(estil), imatges=projecte.carpeta_imatges)
+    capa = desti / "subtitols.mov"
+    shutil.copy(mov, capa)
+    return capa
+
+
 def exporta_editors(projecte, amb_capa: bool = False, avis=None, progres=None) -> Path:
     """Escriu la carpeta per a altres editors i en torna el camí. `progres(percentatge)`: com va el fons
     difuminat (només amb l'encaix «difumina», i es fa al final)."""
@@ -475,17 +491,7 @@ def exporta_editors(projecte, amb_capa: bool = False, avis=None, progres=None) -
     _copia_recursos(pla, desti)
     linies = projecte.linies_subtitols(trams)
     (desti / f"{nom}.srt").write_text(srt(linies), encoding="utf-8")
-    capa = None
-    titol = projecte.titol(trams)
-    situats = projecte.grafics(trams, linies, sense_bloc=True)  # aquí no hi ha el bloc de color
-    if amb_capa and (linies or titol or situats):  # subtítols, títol del ganxo i gràfics (els stickers van a part)
-        estil = projecte.estil()
-        mov = subtitols.renderitza(linies, estil["subtitols"], sum(b - a for a, b in trams),
-                                   projecte.carpeta, "1080", avis, fonts=projecte.fonts_subtitols(),
-                                   titol=titol, estil_titol=estil.get("titol"),
-                                   grafics=situats, paleta=grafics.paleta(estil), imatges=projecte.carpeta_imatges)
-        capa = desti / "subtitols.mov"
-        shutil.copy(mov, capa)
+    capa = _fes_capa(projecte, trams, linies, desti, avis) if amb_capa else None
     if pla.get("difumina"):
         pla["fons"] = _fes_fons(projecte.video, pla, desti, progres)
     (desti / f"{nom}.fcpxml").write_text(fcpxml(nom, projecte.video, pla, capa), encoding="utf-8")
@@ -527,10 +533,23 @@ CapCut
      fes-ho a tallat i torna a exportar els trossos: aquí no hi ha imatge de més.
   5. Subtítols: Text → Subtítols locals → Importa «{nom}.srt» (o fes servir els subtítols
      automàtics de CapCut).
-{recursos}
+{capa}{recursos}
 iMovie
   Importa els trossos (Fitxer → Importa contingut), selecciona'ls tots i arrossega'ls a la línia
   de temps. iMovie fa vídeos horitzontals: per a un reel vertical, millor CapCut.
+"""
+
+
+TROSSOS_AMB_CAPA = """
+Subtítols i gràfics animats («subtitols.mov»)
+  Són els subtítols, el títol del ganxo i els gràfics de tallat tal com surten al vídeo final, amb
+  el fons transparent. Arrossega'l a la pista de sobre dels trossos, a l'inici (0:00), i no importis
+  el .srt. Aquesta capa dura tot el muntatge: si escurces un tall a CapCut, deixarà d'anar a temps.
+"""
+
+TROSSOS_SENSE_CAPA = """
+El títol del ganxo i els gràfics no hi són. Per tenir-los, a la pàgina marca «Amb els subtítols i els
+gràfics» abans d'exportar.
 """
 
 
@@ -551,8 +570,9 @@ def _llista_recursos(brolls: list[dict], stickers: list[dict]) -> str:
     return "\n".join(linies) + ("\n" if linies else "")
 
 
-def exporta_trossos(projecte, progres=None) -> Path:
-    """Escriu cada tros del muntatge com un clip numerat, amb el b-roll, els stickers i el .srt."""
+def exporta_trossos(projecte, amb_capa: bool = False, avis=None, progres=None) -> Path:
+    """Escriu cada tros del muntatge com un clip numerat, amb el b-roll, els stickers i el .srt (i, si es
+    demana, la capa amb els subtítols i els gràfics)."""
     trams = projecte.trams()
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
@@ -561,6 +581,8 @@ def exporta_trossos(projecte, progres=None) -> Path:
     desti.mkdir(parents=True, exist_ok=True)
     zooms = projecte.zooms_per_tram(trams)
     xifres = max(2, len(str(len(trams))))
+    linies = projecte.linies_subtitols(trams)
+    capa = _fes_capa(projecte, trams, linies, desti, avis) if amb_capa else None
     for i, tram in enumerate(trams, 1):
         exporta.exporta(projecte.video, [tram], desti / f"{i:0{xifres}d}.mp4", "1080",
                         zooms=[bool(zooms[i - 1])] if i - 1 < len(zooms) else None, encaix=projecte.encaix)
@@ -580,10 +602,10 @@ def exporta_trossos(projecte, progres=None) -> Path:
             else:
                 subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(origen), "-frames:v", "1", str(nou)],
                                check=True, capture_output=True)
-    (desti / f"{nom}.srt").write_text(srt(projecte.linies_subtitols(trams)), encoding="utf-8")
+    (desti / f"{nom}.srt").write_text(srt(linies), encoding="utf-8")
     durada = sum(b - a for a, b in trams)
     (desti / "LLEGEIX-ME.txt").write_text(LLEGEIX_ME_TROSSOS.format(
-        nom=nom, n=len(trams), durada=_moment(durada),
+        nom=nom, n=len(trams), durada=_moment(durada), capa=TROSSOS_AMB_CAPA if capa else TROSSOS_SENSE_CAPA,
         recursos=_llista_recursos(pla["brolls"], pla["stickers"])), encoding="utf-8")
     _efectes(projecte, trams, desti)
     return desti
