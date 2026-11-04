@@ -2835,7 +2835,7 @@ function seguimentFeina(feina) {
   $("#revisa-feina").hidden = !ocupat;
   $("#vesteix-feina").hidden = !ocupat;
   $("#tauler-feina").hidden = !ocupat;
-  for (const b of [$("#nova-versio"), $("#primera-versio"), $("#vesteix-exporta"), $("#tauler-exporta"), $("#ja-esta")]) {
+  for (const b of [$("#nova-versio"), $("#primera-versio"), $("#vesteix-exporta"), $("#tauler-exporta"), $("#revisa-exporta"), $("#ja-esta")]) {
     b.disabled = ocupat;
   }
   // A Revisa, sense cap versió: on hi hauria el botó, el que s'està fent.
@@ -4716,6 +4716,7 @@ function instalaTauler() {
   $("#primeres-propostes").addEventListener("click", demanaRonda);
   $("#nota-ronda").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); demanaRonda(); } });
   $("#tauler-exporta").addEventListener("click", obreFinal);
+  $("#revisa-exporta").addEventListener("click", obreFinal);
   $("#torna-tauler").addEventListener("click", () => { tancaElQueHiHagi(); deixaPeca(); });
   new ResizeObserver(escalaTauler).observe($("#graella-tauler"));
   // Quan s'obre o es tanca un panell de l'esquerra (els colors, el b-roll, el so…), el tauler s'amaga o torna.
@@ -6734,6 +6735,7 @@ function pintaRevisa() {
   $("#revisa-buit").hidden = hiHa;
   $("#revisa-cos").hidden = !hiHa;
   $("#nova-versio").hidden = !hiHa;
+  $("#revisa-exporta").hidden = !hiHa;
   const pills = $("#versions-revisa");
   pills.textContent = "";
   for (const v of versionsRevisa) {
