@@ -127,12 +127,12 @@ class TestMemoriaDelRender(unittest.TestCase):
         # Revisió de Codex: la vista prèvia ja feia servir la font nova, però el vídeo reaprofitava el dibuix vell.
         dibuixos = []
 
-        def hyperframes(ordre, **_):
+        def hyperframes(ordre, progres=None):
             sortida = Path(ordre[ordre.index("--output") + 1])
             sortida.write_bytes(b"mov")
             dibuixos.append(sortida)
             return mock.Mock(returncode=0, stdout="", stderr="")
-        with tempfile.TemporaryDirectory() as d, mock.patch.object(subtitols.subprocess, "run", hyperframes):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(subtitols, "_hyperframes", hyperframes):
             font = Path(d) / "La Meva.ttf"
             font.write_bytes(b"lletra antiga")
             estil = {**ESTIL, "font": "La Meva"}
@@ -149,16 +149,26 @@ class TestMemoriaDelRender(unittest.TestCase):
         # El Mac revisa el navegador acabat de baixar i HyperFrames no l'espera prou.
         intents = []
 
-        def hyperframes(ordre, **_):
+        def hyperframes(ordre, progres=None):
             intents.append(ordre)
             if len(intents) == 1:
                 return mock.Mock(returncode=1, stdout="", stderr="✗  Chrome cannot start\n   (signal SIGTERM, ETIMEDOUT)")
             Path(ordre[ordre.index("--output") + 1]).write_bytes(b"mov")
             return mock.Mock(returncode=0, stdout="", stderr="")
-        with tempfile.TemporaryDirectory() as d, mock.patch.object(subtitols.subprocess, "run", hyperframes):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(subtitols, "_hyperframes", hyperframes):
             linies = [{"inici": 0.0, "final": 1.0, "paraules": [{"text": "hola", "inici": 0.0, "final": 1.0}]}]
             self.assertTrue(subtitols.renderitza(linies, ESTIL, 1.0, Path(d), "esborrany").exists())
         self.assertEqual(len(intents), 2)
+
+    def test_mentre_dibuixa_diu_el_percentatge(self):
+        import sys
+        vistos = []
+        linies = ["  ███ 40%  Encoding", '@hf-progress {"code":"encode","pct":40}', "@hf-progress trencat", '@hf-progress {"pct":90}']
+        codi = f"import sys; sys.stdout.reconfigure(encoding='utf-8'); print(*{linies!r}, sep='\\n'); raise SystemExit(3)"
+        r = subtitols._hyperframes([sys.executable, "-c", codi], vistos.append)
+        self.assertEqual(vistos, [40, 90])
+        self.assertEqual(r.returncode, 3)
+        self.assertIn("Encoding", r.stdout)
 
 
 def frase(text: str, pas: float = 0.3):

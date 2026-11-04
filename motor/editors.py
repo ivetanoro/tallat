@@ -462,7 +462,7 @@ def _efectes(projecte, trams, desti: Path) -> None:
     llegeix.write_text(llegeix.read_text(encoding="utf-8") + EFECTES, encoding="utf-8")
 
 
-def _fes_capa(projecte, trams, linies, desti: Path, avis) -> Path | None:
+def _fes_capa(projecte, trams, linies, desti: Path, avis, progres=None) -> Path | None:
     """Els subtítols, el títol del ganxo i els gràfics amb el fons transparent (els stickers van a part)."""
     titol = projecte.titol(trams)
     situats = projecte.grafics(trams, linies, sense_bloc=True)  # aquí no hi ha el bloc de color
@@ -472,15 +472,16 @@ def _fes_capa(projecte, trams, linies, desti: Path, avis) -> Path | None:
     mov = subtitols.renderitza(linies, estil["subtitols"], sum(b - a for a, b in trams),
                                projecte.carpeta, "1080", avis, fonts=projecte.fonts_subtitols(),
                                titol=titol, estil_titol=estil.get("titol"),
-                               grafics=situats, paleta=grafics.paleta(estil), imatges=projecte.carpeta_imatges)
+                               grafics=situats, paleta=grafics.paleta(estil), imatges=projecte.carpeta_imatges,
+                               progres=progres)
     capa = desti / "subtitols.mov"
     shutil.copy(mov, capa)
     return capa
 
 
-def exporta_editors(projecte, amb_capa: bool = False, avis=None, progres=None) -> Path:
+def exporta_editors(projecte, amb_capa: bool = False, avis=None, progres=None, progres_capa=None) -> Path:
     """Escriu la carpeta per a altres editors i en torna el camí. `progres(percentatge)`: com va el fons
-    difuminat (només amb l'encaix «difumina», i es fa al final)."""
+    difuminat (només amb l'encaix «difumina», i es fa al final); `progres_capa`: com es dibuixa la capa."""
     trams = edicio.cap_endins(projecte.trams(), projecte.fps)  # allà el so va lligat als fotogrames
     if not trams:
         raise ValueError("No queda cap paraula: no hi ha res per exportar.")
@@ -491,7 +492,7 @@ def exporta_editors(projecte, amb_capa: bool = False, avis=None, progres=None) -
     _copia_recursos(pla, desti)
     linies = projecte.linies_subtitols(trams)
     (desti / f"{nom}.srt").write_text(srt(linies), encoding="utf-8")
-    capa = _fes_capa(projecte, trams, linies, desti, avis) if amb_capa else None
+    capa = _fes_capa(projecte, trams, linies, desti, avis, progres_capa) if amb_capa else None
     if pla.get("difumina"):
         pla["fons"] = _fes_fons(projecte.video, pla, desti, progres)
     (desti / f"{nom}.fcpxml").write_text(fcpxml(nom, projecte.video, pla, capa), encoding="utf-8")
@@ -570,7 +571,7 @@ def _llista_recursos(brolls: list[dict], stickers: list[dict]) -> str:
     return "\n".join(linies) + ("\n" if linies else "")
 
 
-def exporta_trossos(projecte, amb_capa: bool = False, avis=None, progres=None) -> Path:
+def exporta_trossos(projecte, amb_capa: bool = False, avis=None, progres=None, progres_capa=None) -> Path:
     """Escriu cada tros del muntatge com un clip numerat, amb el b-roll, els stickers i el .srt (i, si es
     demana, la capa amb els subtítols i els gràfics)."""
     trams = projecte.trams()
@@ -582,7 +583,7 @@ def exporta_trossos(projecte, amb_capa: bool = False, avis=None, progres=None) -
     zooms = projecte.zooms_per_tram(trams)
     xifres = max(2, len(str(len(trams))))
     linies = projecte.linies_subtitols(trams)
-    capa = _fes_capa(projecte, trams, linies, desti, avis) if amb_capa else None
+    capa = _fes_capa(projecte, trams, linies, desti, avis, progres_capa) if amb_capa else None
     for i, tram in enumerate(trams, 1):
         exporta.exporta(projecte.video, [tram], desti / f"{i:0{xifres}d}.mp4", "1080",
                         zooms=[bool(zooms[i - 1])] if i - 1 < len(zooms) else None, encaix=projecte.encaix)

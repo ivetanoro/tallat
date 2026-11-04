@@ -49,6 +49,9 @@ def clau_de(projecte: Projecte) -> str:
     return hashlib.sha1(str(projecte.carpeta).encode()).hexdigest()[:16]
 
 
+PART_DIBUIX = 70  # dibuixar els subtítols i els gràfics ocupa aquesta part de la barra; la resta, fer el vídeo
+
+
 class Feina:
     """Un sol render alhora, en segon pla, amb el seu progrés."""
 
@@ -74,27 +77,34 @@ class Feina:
         with self.bloqueig:
             self.estat.update(canvis)
 
+    def _dibuix(self, pct: int) -> None:
+        self._actualitza(progres=pct * PART_DIBUIX // 100)
+
     def _fes(self, projecte: Projecte, qualitat: str, capa: bool = False, trossos: bool = False) -> None:
         try:
             if qualitat == "editors":
                 if trossos:  # CapCut o iMovie: cada tros com un clip a part
                     self._actualitza(fase="subtitols" if capa else "video", progres=0)
-                    carpeta = editors.exporta_trossos(projecte, amb_capa=capa,
-                                                      progres=lambda pct: self._actualitza(fase="video", progres=pct))
+                    inici = PART_DIBUIX if capa else 0
+                    carpeta = editors.exporta_trossos(
+                        projecte, amb_capa=capa, progres_capa=self._dibuix,
+                        progres=lambda pct: self._actualitza(fase="video", progres=inici + pct * (100 - inici) // 100))
                 else:
-                    self._actualitza(fase="subtitols" if capa else "editors")
+                    self._actualitza(fase="subtitols" if capa else "editors", progres=0)
                     carpeta = editors.exporta_editors(projecte, amb_capa=capa,
+                                                      progres_capa=lambda pct: self._actualitza(progres=pct),
                                                       progres=lambda pct: self._actualitza(fase="fons", progres=pct))
                 copia, avis = _copia(carpeta)
                 self._actualitza(estat="fet", progres=100, fitxer=carpeta.name, copia=copia, avis=avis)
                 return
             sortida = projecte.sortida(qualitat)
             trams = projecte.trams()
-            self._actualitza(fase="subtitols")
-            capa = projecte.capa_subtitols(trams, qualitat)
-            self._actualitza(fase="video", progres=0)
+            self._actualitza(fase="subtitols", progres=0)
+            capa = projecte.capa_subtitols(trams, qualitat, progres=self._dibuix)
+            self._actualitza(fase="video", progres=PART_DIBUIX)
             exporta.exporta(projecte.font(qualitat), trams, sortida, qualitat,
-                            progres=lambda pct: self._actualitza(progres=pct), capa=capa,
+                            progres=lambda pct: self._actualitza(progres=PART_DIBUIX + pct * (100 - PART_DIBUIX) // 100),
+                            capa=capa,
                             zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
                             blocs=projecte.blocs(trams), encaix=projecte.encaix, **projecte.opcions_so(trams))
             projecte.desa_talls(sortida, trams)

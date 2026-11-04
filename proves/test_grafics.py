@@ -571,7 +571,7 @@ class TestAlProjecte(unittest.TestCase):
         foto.write_bytes(b"png")
         p.estat["grafics"] = grafics.fusiona([], p.importa_imatges([{"tipus": "web", "paraula": 1, "imatge": str(foto)}]))
         situats = p.grafics()
-        with mock.patch.object(subtitols.subprocess, "run", side_effect=RuntimeError("prou")):
+        with mock.patch.object(subtitols, "_hyperframes", side_effect=RuntimeError("prou")):
             with self.assertRaises(RuntimeError):
                 subtitols.renderitza([], p.estil_subtitols(), 8.0, p.carpeta, "esborrany", grafics=situats,
                                      paleta=grafics.paleta(p.estil()), imatges=p.carpeta_imatges)

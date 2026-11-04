@@ -2852,9 +2852,9 @@ function seguimentFeina(feina) {
     if (feina.fase === "editors") {
       $("#feina-text").textContent = "Preparant el projecte per a altres editors…";
       $("#feina-progres").style.width = "50%";
-    } else if (feina.fase === "subtitols") {
-      $("#feina-text").textContent = feina.qualitat === "editors" ? "Exportant…" : `${nom}…`;
-      $("#feina-progres").style.width = "12%";
+    } else if (feina.fase === "subtitols" && feina.qualitat === "editors") {
+      $("#feina-text").textContent = `Exportant… ${feina.progres} %`;
+      $("#feina-progres").style.width = `${feina.progres}%`;
     } else if (feina.fase === "fons") {
       $("#feina-text").textContent = `Fent el fons difuminat… ${feina.progres} %`;
       $("#feina-progres").style.width = `${feina.progres}%`;

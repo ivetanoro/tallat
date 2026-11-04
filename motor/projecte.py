@@ -344,7 +344,7 @@ class Projecte:
         return subtitols.grups(self.paraules(), trams if trams is not None else self.trams(),
                                self.estil_subtitols())
 
-    def capa_subtitols(self, trams, qualitat: str, avis=None) -> Path | None:
+    def capa_subtitols(self, trams, qualitat: str, avis=None, progres=None) -> Path | None:
         """Capa transparent amb els subtítols (si estan activats), el títol, els gràfics i els stickers;
         None si no n'hi ha cap."""
         linies = self.linies_subtitols(trams) if self.estat.get("subtitols", True) else []
@@ -358,7 +358,8 @@ class Projecte:
                                     self.carpeta, qualitat, avis, stickers=enganxines,
                                     estil_stickers=estil.get("stickers", {}), fonts=self.fonts_subtitols(),
                                     titol=titol, estil_titol=estil.get("titol"),
-                                    grafics=situats, paleta=grafics.paleta(estil), imatges=self.carpeta_imatges)
+                                    grafics=situats, paleta=grafics.paleta(estil), imatges=self.carpeta_imatges,
+                                    progres=progres)
 
     # --- So --------------------------------------------------------------------
 

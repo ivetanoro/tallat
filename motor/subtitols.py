@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import bisect
+import collections
 
 import functools
 import hashlib
@@ -352,10 +353,26 @@ def _empremta(fitxer) -> str | None:
     return hashlib.sha1(path.read_bytes()).hexdigest() if path.is_file() else None
 
 
+def _hyperframes(ordre: list[str], progres=None) -> subprocess.CompletedProcess:
+    """Com subprocess.run, i mentrestant diu el percentatge (HyperFrames l'escriu en línies «@hf-progress {…}»)."""
+    p = subprocess.Popen(ordre, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                         errors="replace")
+    darreres = collections.deque(maxlen=200)
+    for linia in p.stdout:
+        darreres.append(linia)
+        if progres and linia.startswith("@hf-progress "):
+            try:
+                progres(int(json.loads(linia.split(" ", 1)[1])["pct"]))
+            except (ValueError, KeyError, TypeError):
+                pass
+    return subprocess.CompletedProcess(ordre, p.wait(), "".join(darreres), "")
+
+
 def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qualitat: str,
                avis=None, stickers: list[dict] | None = None, estil_stickers: dict | None = None,
                fonts: list[dict] | None = None, titol: dict | None = None, estil_titol: dict | None = None,
-               grafics: list[dict] | None = None, paleta: dict | None = None, imatges: Path | None = None) -> Path:
+               grafics: list[dict] | None = None, paleta: dict | None = None, imatges: Path | None = None,
+               progres=None) -> Path:
     """Dibuixa subtítols i stickers amb HyperFrames en un .mov transparent (reaprofita el darrer si no ha canviat).
 
     `stickers`: [{"fitxer": Path, "inici": s, "durada": s}].
@@ -411,11 +428,11 @@ def renderitza(linies: list[dict], estil: dict, durada: float, carpeta: Path, qu
         ordre += ["--resolution", "portrait-4k"]
     if avis:
         avis("Dibuixant subtítols, gràfics i stickers…")
-    r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = _hyperframes(ordre, progres)
     if r.returncode != 0 and "Chrome cannot start" in r.stderr + r.stdout:
         # El primer cop que s'obre el navegador de HyperFrames, el Mac el revisa i HyperFrames no l'espera
         # prou. Un segon intent ja el troba revisat.
-        r = subprocess.run(ordre, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        r = _hyperframes(ordre, progres)
     if r.returncode != 0 or not temporal.exists():
         raise RuntimeError("No s'han pogut dibuixar els subtítols:\n" + (r.stderr or r.stdout)[-2000:])
     temporal.replace(sortida)
