@@ -835,9 +835,13 @@
       <button class="boto" id="nova-versio" hidden title="Un esborrany nou amb els canvis d'ara">Fes una versió nova</button>
     </header>
     <div class="revisa-buit" id="revisa-buit" hidden>
-      <h2>Encara no hi ha cap versió per revisar</h2>
-      <p>Una versió és un esborrany: el vídeo tal com quedarà, amb els subtítols, el títol i els gràfics. El mires sencer i hi deixes notes per a Claude. Claude les fa i en treu una versió nova.</p>
+      <h2 id="revisa-buit-titol">Encara no hi ha cap versió per revisar</h2>
+      <p id="revisa-buit-text">Una versió és un esborrany: el vídeo tal com quedarà, amb els subtítols, el títol i els gràfics. El mires sencer i hi deixes notes per a Claude. Claude les fa i en treu una versió nova.</p>
       <button class="boto principal" id="primera-versio">Fes l'esborrany</button>
+      <div class="revisa-fent" id="revisa-fent" role="status" hidden>
+        <span class="barra-progres"><span id="revisa-fent-progres"></span></span>
+        <span id="revisa-fent-text"></span>
+      </div>
     </div>
     <div class="revisa-cos" id="revisa-cos" hidden>
       <div class="revisa-monitor">

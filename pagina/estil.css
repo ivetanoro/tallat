@@ -1007,6 +1007,9 @@ body.revisant .barra, body.revisant .text, body.revisant .reproductor, body.revi
 .revisa-buit { margin: auto; max-width: 440px; padding: var(--e6); text-align: center; }
 .revisa-buit h2 { margin: 0 0 var(--e2); font-size: var(--t-titol); }
 .revisa-buit p { margin: 0 0 var(--e5); color: var(--text-2); font-size: var(--t-cos); line-height: 1.5; }
+.revisa-fent[hidden] { display: none; }
+.revisa-fent { display: flex; flex-direction: column; align-items: center; gap: var(--e2); font-size: var(--t-ui); color: var(--text-2); }
+.revisa-fent .barra-progres { width: 220px; }
 .revisa-cos { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
 .revisa-monitor { min-height: 0; display: flex; flex-direction: column; align-items: center; gap: var(--e3); padding: var(--e5) var(--e6) var(--e6); }
 .revisa-pantalla { position: relative; flex: 1; min-height: 0; width: 100%; container-type: size; display: grid; place-items: center; }

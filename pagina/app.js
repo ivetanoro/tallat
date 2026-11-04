@@ -2826,6 +2826,7 @@ function pintaVersions(exports) {
 // --- Renders --------------------------------------------------------------------------------
 
 let consulta = null;
+const textBuit = {};
 function seguimentFeina(feina) {
   const caixa = $("#feina");
   const ocupat = feina?.estat === "treballant";
@@ -2837,6 +2838,14 @@ function seguimentFeina(feina) {
   for (const b of [$("#nova-versio"), $("#primera-versio"), $("#vesteix-exporta"), $("#tauler-exporta"), $("#ja-esta")]) {
     b.disabled = ocupat;
   }
+  // A Revisa, sense cap versió: on hi hauria el botó, el que s'està fent.
+  const fent = ocupat && feina.qualitat === "esborrany";
+  textBuit.titol ??= $("#revisa-buit-titol").textContent;
+  textBuit.text ??= $("#revisa-buit-text").textContent;
+  $("#revisa-buit-titol").textContent = fent ? "Estic fent l'esborrany" : textBuit.titol;
+  $("#revisa-buit-text").textContent = fent ? "Pot trigar uns minuts. Quan acabi, sortirà aquí sol." : textBuit.text;
+  $("#primera-versio").hidden = fent;
+  $("#revisa-fent").hidden = !fent;
   if (ocupat) {
     const nom = feina.qualitat === "esborrany" ? "Construint l'esborrany"
       : feina.qualitat === "editors" ? "Exportant els trossos" : `Exportant en ${QUALITATS[feina.qualitat]}`;
@@ -2857,6 +2866,8 @@ function seguimentFeina(feina) {
       $(`#${lloc}-feina-text`).textContent = $("#feina-text").textContent;
       $(`#${lloc}-feina-progres`).style.width = $("#feina-progres").style.width;
     }
+    $("#revisa-fent-text").textContent = $("#feina-text").textContent;
+    $("#revisa-fent-progres").style.width = $("#feina-progres").style.width;
     if (!consulta) consulta = setInterval(consultaFeina, 700);
   } else if (consulta) {
     clearInterval(consulta);
