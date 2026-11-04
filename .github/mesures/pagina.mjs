@@ -37,7 +37,7 @@ const navegador = await tipus.launch(opcions);
 const context = await navegador.newContext({ viewport: { width: 1440, height: 900 } });
 const pagina = await context.newPage();
 const consola = [];
-pagina.on("console", (m) => { if (["error", "warning"].includes(m.type())) consola.push({ tipus: m.type(), text: m.text().slice(0, 300) }); });
+pagina.on("console", (m) => { if (["error", "warning"].includes(m.type())) consola.push({ tipus: m.type(), text: m.text().slice(0, 300), on: m.location().url.replace(url, "/") }); });
 pagina.on("pageerror", (e) => consola.push({ tipus: "pageerror", text: String(e).slice(0, 300) }));
 pagina.on("response", (r) => { if (r.status() >= 400) consola.push({ tipus: "http" + r.status(), text: r.url().replace(url, "/").slice(0, 200) }); });
 await pagina.addInitScript({ content: readFileSync(join(aqui, "sonda.js"), "utf8") });

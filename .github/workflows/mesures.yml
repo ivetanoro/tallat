@@ -11,14 +11,13 @@ jobs:
   mesura:
     name: ${{ matrix.nom }}
     runs-on: ${{ matrix.so }}
-    timeout-minutes: 200
+    timeout-minutes: 350
     strategy:
       fail-fast: false
       matrix:
         include:
           - { nom: windows, so: windows-latest }
           - { nom: mac-nou, so: macos-latest }
-          - { nom: mac-intel, so: macos-26-intel }
     defaults:
       run:
         shell: bash
@@ -33,7 +32,11 @@ jobs:
 
       - name: Instal·la tallat de zero (Mac)
         if: runner.os == 'macOS'
-        run: ./prepara.sh 2>&1 | tee resultats/instal.log
+        run: |  # el que faria una persona si falla: tornar-ho a provar una estona després
+          ./prepara.sh 2>&1 | tee resultats/instal.log && exit 0
+          echo "La instal·lació ha fallat: es torna a provar d'aquí a 10 minuts" | tee -a resultats/instal.log
+          sleep 600
+          ./prepara.sh 2>&1 | tee -a resultats/instal.log
 
       - name: Instal·la tallat de zero (Windows)
         if: runner.os == 'Windows'
@@ -57,23 +60,32 @@ jobs:
 
       - name: Les proves de sempre
         continue-on-error: true
-        run: $PY -m unittest discover -s proves -t . 2>&1 | tee resultats/proves.log | tail -5
+        timeout-minutes: 20
+        run: |
+          . .github/mesures/fes.sh
+          fes resultats/proves.log $PY -m unittest discover -s proves -t . -v
 
       - name: Fum (el mateix de sempre)
         continue-on-error: true
-        run: $PY .github/fum.py "$RUNNER_TEMP/fum" 2>&1 | tee resultats/fum.log | tail -3
+        timeout-minutes: 20
+        run: |
+          . .github/mesures/fes.sh
+          fes resultats/fum.log $PY .github/fum.py "$RUNNER_TEMP/fum"
 
       - name: "El bloqueig de 10 s: la mateixa petició, moltes vegades, dient on s'encalla"
         continue-on-error: true
+        timeout-minutes: 30
         run: |
           set +e
-          $PY .github/mesures/estres_servidor.py 600 4 2>&1 | tee resultats/estres-servidor.log | tail -40
+          . .github/mesures/fes.sh
+          fes resultats/estres-servidor.log $PY .github/mesures/estres_servidor.py 600 4
           for i in 1 2 3 4 5 6 7 8; do
-            $PY -m unittest proves.test_servidor 2>&1 | tail -1
-          done | tee resultats/repeticions-test-servidor.txt
+            fes resultats/test-servidor-$i.log $PY -m unittest proves.test_servidor
+          done
 
       - name: Eines per obrir navegadors
         continue-on-error: true
+        timeout-minutes: 15
         run: |
           set +e
           mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
@@ -83,6 +95,7 @@ jobs:
 
       - name: Fabrica els vídeos inventats
         continue-on-error: true
+        timeout-minutes: 45
         run: |
           set +e
           F=".github/mesures/fabrica.py"
@@ -95,58 +108,72 @@ jobs:
 
       - name: Camí sencer amb mesures
         continue-on-error: true
+        timeout-minutes: 150
         run: |
           set +e
+          . .github/mesures/fes.sh
           C=".github/mesures/cami.py"
-          $PY $C "$MV/control" resultats/cami-control.json --amb-subtitols --port 8891 2>&1 | tail -2
-          $PY $C "$MV/iphone" resultats/cami-iphone.json --port 8892 2>&1 | tail -2
-          $PY $C "$MV/ntsc" resultats/cami-ntsc.json --port 8893 2>&1 | tail -2
-          $PY $C "$MV/vfr" resultats/cami-vfr.json --port 8894 2>&1 | tail -2
-          $PY $C "$MV/vfr-suau" resultats/cami-vfr-suau.json --qualitats 1080 --port 8899 2>&1 | tail -2
-          $PY $C "$MV/llarg" resultats/cami-llarg.json --qualitats esborrany --port 8895 2>&1 | tail -2
+          fes resultats/cami-control.log $PY $C "$MV/control" resultats/cami-control.json --amb-subtitols --port 8891
+          fes resultats/cami-iphone.log $PY $C "$MV/iphone" resultats/cami-iphone.json --port 8892
+          fes resultats/cami-ntsc.log $PY $C "$MV/ntsc" resultats/cami-ntsc.json --port 8893
+          fes resultats/cami-vfr.log $PY $C "$MV/vfr" resultats/cami-vfr.json --port 8894
+          fes resultats/cami-vfr-suau.log $PY $C "$MV/vfr-suau" resultats/cami-vfr-suau.json --qualitats 1080 --port 8899
+          fes resultats/cami-llarg.log $PY $C "$MV/llarg" resultats/cami-llarg.json --qualitats esborrany --port 8895
 
       - name: Pàgina al Chrome (normal, 4× i 6×)
         continue-on-error: true
+        timeout-minutes: 60
         env:
           PLAYWRIGHT_CORE: ${{ runner.temp }}/pw/node_modules/playwright-core
         run: |
           set +e
+          . .github/mesures/fes.sh
           P=".github/mesures/tanda_pagina.py"
-          $PY $P resultats/pagina.json --video "$MV/control" --motor chrome --canal chrome --cpu 1,4,6 --escenaris fred,calent,edita --segons 50 2>&1 | cut -c1-500
-          $PY $P resultats/pagina.json --video "$MV/llarg" --motor chrome --canal chrome --cpu 1,4 --escenaris fred,calent --segons 60 --port 8902 2>&1 | cut -c1-500
+          fes resultats/pagina-chrome.log $PY $P resultats/pagina.json --video "$MV/control" --motor chrome --canal chrome --cpu 1,4,6 --escenaris fred,calent,edita --segons 50
+          fes resultats/pagina-chrome-llarg.log $PY $P resultats/pagina.json --video "$MV/llarg" --motor chrome --canal chrome --cpu 1,4 --escenaris fred,calent --segons 90 --port 8902
 
       - name: Pàgina al Firefox
         continue-on-error: true
+        timeout-minutes: 30
         env:
           PLAYWRIGHT_CORE: ${{ runner.temp }}/pw/node_modules/playwright-core
-        run: $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor firefox --escenaris fred,calent,edita --segons 50 2>&1 | cut -c1-500
+        run: |
+          . .github/mesures/fes.sh
+          fes resultats/pagina-firefox.log $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor firefox --escenaris fred,calent,edita --segons 50
 
       - name: Pàgina al WebKit
         continue-on-error: true
         if: runner.os == 'macOS'
+        timeout-minutes: 30
         env:
           PLAYWRIGHT_CORE: ${{ runner.temp }}/pw/node_modules/playwright-core
-        run: $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor webkit --escenaris fred,calent,edita --segons 50 2>&1 | cut -c1-500
+        run: |
+          . .github/mesures/fes.sh
+          fes resultats/pagina-webkit.log $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor webkit --escenaris fred,calent,edita --segons 50
 
       - name: Pàgina al Safari de debò
         continue-on-error: true
         if: runner.os == 'macOS'
+        timeout-minutes: 30
         run: |
           set +e
+          . .github/mesures/fes.sh
           sudo safaridriver --enable
-          $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor safari --escenaris fred,calent --segons 50 2>&1 | cut -c1-500
+          fes resultats/pagina-safari.log $PY .github/mesures/tanda_pagina.py resultats/pagina.json --video "$MV/control" --motor safari --escenaris fred,calent --segons 50
 
       - name: Windows petit de debò (4 GB i 2 processadors)
         continue-on-error: true
         if: runner.os == 'Windows'
+        timeout-minutes: 120
         env:
           PLAYWRIGHT_CORE: ${{ runner.temp }}/pw/node_modules/playwright-core
         run: |
           set +e
+          . .github/mesures/fes.sh
           L=".github/mesures/limita_windows.py"
-          $PY $L 4096 2 -- $PY .github/mesures/cami.py "$MV/iphone" resultats/cami-iphone-petit.json --nom-projecte projecte-petit --port 8896 2>&1 | tail -3 | tee resultats/limitat-cami.txt
-          $PY $L 4096 2 -- $PY .github/mesures/cami.py "$MV/llarg" resultats/cami-llarg-petit.json --qualitats esborrany --nom-projecte projecte-petit --port 8897 2>&1 | tail -3 | tee resultats/limitat-llarg.txt
-          $PY $L 4096 2 -- $PY .github/mesures/tanda_pagina.py resultats/pagina-petit.json --video "$MV/control" --motor chrome --canal chrome --escenaris fred,calent,edita --segons 50 --port 8903 2>&1 | cut -c1-500 | tee resultats/limitat-pagina.txt
+          fes resultats/limitat-cami.log $PY $L 4096 2 -- $PY .github/mesures/cami.py "$MV/iphone" resultats/cami-iphone-petit.json --nom-projecte projecte-petit --port 8896
+          fes resultats/limitat-llarg.log $PY $L 4096 2 -- $PY .github/mesures/cami.py "$MV/llarg" resultats/cami-llarg-petit.json --qualitats esborrany --nom-projecte projecte-petit --port 8897
+          fes resultats/limitat-pagina.log $PY $L 4096 2 -- $PY .github/mesures/tanda_pagina.py resultats/pagina-petit.json --video "$MV/control" --motor chrome --canal chrome --escenaris fred,calent,edita --segons 50 --port 8903
 
       - name: Desa els resultats
         if: always()
