@@ -3683,6 +3683,8 @@ function mostraDreta(quina) {
 }
 
 function pintaPestanyesDreta() {
+  // Amb una peça oberta, ja hi és, a dalt de l'editor; però a les notes l'editor no es veu.
+  $("#torna-tauler").hidden = !!pecaTriada && pestanyaDreta !== "notes";
   for (const b of $$("#pestanyes-dreta button")) {
     b.setAttribute("aria-selected", String(b.dataset.dreta === pestanyaDreta));
     b.tabIndex = b.dataset.dreta === pestanyaDreta ? 0 : -1;
@@ -4728,7 +4730,6 @@ function instalaTauler() {
 function pintaDreta({ refes = false, enfoca = false } = {}) {
   if (!vestint || !estat) return;
   actualitzaTauler();
-  $("#torna-tauler").hidden = !!pecaTriada;  // amb una peça oberta, ja hi és, a dalt de l'editor
   pintaPestanyesDreta();
   for (const b of $$("[data-desfes]")) b.disabled = !desfer.length;
   for (const b of $$("[data-refes]")) b.disabled = !refer.length;
@@ -6668,6 +6669,11 @@ const fmtDecima = (t) => {
 
 function canviaEstacio(nom, { enfoca = true } = {}) {
   const abans = revisant ? "revisa" : vestint ? "vesteix" : "edita";
+  if (abans === "vesteix" && nom === "vesteix") {  // tornar a tocar Vesteix: sempre al tauler
+    tancaElQueHiHagi();
+    deixaPeca();
+    return;
+  }
   revisant = nom === "revisa";
   vestint = nom === "vesteix";
   document.body.classList.toggle("revisant", revisant);
