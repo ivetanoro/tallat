@@ -4163,7 +4163,10 @@ function pintaNotaCarta(c, alternativa) {
     if (!camp.value.trim()) setTimeout(() => pintaNotaCarta(c, false), 0);
   });
   camp.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); camp.blur(); } });
-  cont.append(camp);
+  const pista = document.createElement("p");
+  pista.className = "pista-nota";
+  pista.textContent = "S'envia amb «Demana la ronda següent».";
+  cont.append(camp, pista);
   requestAnimationFrame(() => ajustaAlcada(camp));
 }
 

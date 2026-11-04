@@ -20,6 +20,7 @@
  * ({abans, valor, decimals, despres, milers}), el progrés la xifra, quina part s'omple (`fraccio`, de 0 a 1) i la
  * `forma` (cercle o barra), i l'anotació la `forma` (cercle, subratllat o fletxa) i el
  * `costat` on va. L'anotació s'escriu amb la lletra de mà i el color secundari de la marca.
+ * `lletra` (text, titols, accent o ma), si es vol: tot el gràfic va amb aquesta lletra de la marca.
  * La web porta la captura a `imatge` (i l'adreça de la barra a `text`); el ventall, les fotos als `punts`
  * (cadascuna amb `imatge` i un peu, `text`). `op.imatges`: on són les imatges (per defecte, «imatges/»).
  * Sense GSAP (sense internet), els gràfics surten sencers mentre duren.
@@ -589,6 +590,13 @@
     };
   }
 
+  function posaLletra(lloc, lletra) {
+    for (const nom of ["titols", "text", "accent", "ma"]) {
+      if (nom !== lletra) lloc.style.setProperty(`--tg-f-${nom}`, `var(--tg-f-${lletra})`);
+    }
+    if (lletra !== "ma") lloc.style.setProperty("--tg-ma-majuscules", "none");
+  }
+
   function element(doc, etiqueta, classe, text) {
     const el = doc.createElement(etiqueta);
     if (classe) el.className = classe;
@@ -1010,6 +1018,7 @@
       const tipus = g.tipus === "marcador" ? "frase tg-marcador" : g.tipus === "progres" ? "numero tg-progres" : g.tipus;
       const lloc = element(doc, "div", `tg-lloc tg-${tipus} tg-${g.estil || "net"}${costat}`);
       if (g.id) lloc.dataset.id = g.id;  // la pàgina hi troba el que es toca al vídeo
+      if (g.lletra) posaLletra(lloc, g.lletra);
       const c = cos(doc, g, op);
       lloc.append(c);
       arrel.append(lloc);

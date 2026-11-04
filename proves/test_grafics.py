@@ -20,6 +20,11 @@ def g(**camps):
 
 
 class TestUnGrafic(unittest.TestCase):
+    def test_la_lletra_d_un_grafic(self):
+        self.assertEqual(grafics.net(g(lletra="text"))["lletra"], "text")
+        self.assertIsNone(grafics.net(g(lletra="comic sans"))["lletra"])
+        self.assertIsNone(grafics.net(g())["lletra"])
+
     def test_es_comprova(self):
         net = grafics.net(g(text="  no és  *mandra* ", estil="mac", posicio="lateral", durada=40, punts=["x"]))
         self.assertEqual((net["text"], net["estil"], net["posicio"], net["durada"], net["punts"], net["estat"]),

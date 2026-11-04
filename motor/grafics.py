@@ -91,6 +91,7 @@ FORMES_PROGRES = ("cercle", "barra")
 TOTAL = re.compile(r"(?:\bde(?:\s+cada)?\b|/|\bsobre\b)\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d+))?")  # «3 de 5», «7/10»
 COSTATS = ("esquerra", "dreta")
 ESTILS = ("net", "mac", "scrapbook", "editorial")
+LLETRES = ("text", "titols", "accent", "ma")  # si un gràfic va amb una altra lletra de la marca que la seva
 POSICIONS = ("dalt", "mig", "baix")  # o un número de 0 (dalt) a 1 (baix): on va el centre del gràfic
 # La zona segura d'Instagram (i TikTok) en un vídeo de 1080 × 1920: el 14 % de dalt i el 35 % de baix
 # queden tapats pel nom, el text i els botons. Els gràfics no en surten mai (ni tapen els subtítols).
@@ -126,7 +127,7 @@ ENTRADA_PUNT = 0.35  # quan surt el primer punt d'una llista sense paraules (des
 FI_DE_FRASE = re.compile(r"[.?!…]['\"»”]*$")
 PAUSA_FRASE = 0.7    # un silenci així també tanca una frase
 CAMPS = ("id", "tipus", "paraula", "fins", "durada", "text", "punts", "de", "xifra", "forma", "costat", "imatge",
-         "estil", "posicio", "amaga_subtitols", "bloc", "motiu", "grup", "estat", "nota", "vot", "ronda", "novetat",
+         "estil", "lletra", "posicio", "amaga_subtitols", "bloc", "motiu", "grup", "estat", "nota", "vot", "ronda", "novetat",
          "origen")
 # El que no és el gràfic sinó el que se'n pensa (si Claude torna un gràfic amb això canviat, no l'ha canviat).
 DE_LA_REVISIO = ("id", "estat", "nota", "vot", "ronda", "novetat", "origen")
@@ -239,6 +240,7 @@ def net(g: dict, paraules: int | None = None) -> dict:
     sortida["costat"] = (g.get("costat") if g.get("costat") in COSTATS else "esquerra") if tipus == "anotacio" else None
     sortida["imatge"] = _imatge(g.get("imatge")) if tipus == "web" else ""
     sortida["estil"] = g.get("estil") if g.get("estil") in ESTILS else None
+    sortida["lletra"] = g.get("lletra") if g.get("lletra") in LLETRES else None
     posicio = g.get("posicio")
     if isinstance(posicio, (int, float)) and not isinstance(posicio, bool):
         sortida["posicio"] = round(min(1.0, max(0.0, float(posicio))), 3)
@@ -449,6 +451,8 @@ def dibuix(g: dict, estils, crida: str = "", subtitols: dict | None = None, alca
          "amaga_subtitols": amaga, "limits": limits(subtitols, amaga, alcada)}
     if g.get("grup"):
         d["grup"] = g["grup"]
+    if g.get("lletra"):
+        d["lletra"] = g["lletra"]
     if bloc:
         # El fons: el principal sota les targetes clares (mac, scrapbook); el fosc sota el text clar.
         d["bloc"] = "principal" if d["estil"] in ("mac", "scrapbook") else "fosc"

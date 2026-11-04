@@ -1637,6 +1637,7 @@ body.vestint.amb-tauler .reproductor, body.vestint.amb-tauler .vesteix-dreta { d
 .vots-carta button[data-vot="no"][aria-checked="true"] { font-weight: 700; }
 .carta-nota[hidden] { display: none; }
 .carta-nota .enllac { font-size: var(--t-peu); }
+.pista-nota { margin: var(--e1) 0 0; font-size: var(--t-peu); color: var(--text-3); }
 .nota-carta { width: 100%; min-height: 44px; resize: none; font-size: var(--t-petit); line-height: 1.4; background: var(--proposta-suau); }
 /* La targeta que s'acaba de posar amb «+ Afegeix». */
 .carta-tauler.llum { animation: llum-nota 1.4s var(--molla); }
