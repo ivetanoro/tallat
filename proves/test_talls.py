@@ -12,6 +12,7 @@ from unittest import mock
 
 import numpy as np
 
+import proves  # noqa: F401  (la configuració de les proves, encara que es cridin sense «-t .»)
 from motor import edicio, exporta, transcripcio, veu
 
 

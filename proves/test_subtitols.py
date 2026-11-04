@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import proves  # noqa: F401  (la configuració de les proves, encara que es cridin sense «-t .»)
 from motor import edicio, marca, stickers, subtitols
 
 ESTIL = marca.carrega(marca.PER_DEFECTE)["subtitols"]

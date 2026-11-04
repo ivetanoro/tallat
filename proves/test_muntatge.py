@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 import tallat
+import proves  # noqa: F401  (la configuració de les proves, encara que es cridin sense «-t .»)
 from motor import muntatge
 from motor.projecte import Projecte
 

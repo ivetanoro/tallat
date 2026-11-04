@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import proves  # noqa: F401  (la configuració de les proves, encara que es cridin sense «-t .»)
 from motor import exporta, marca, targetes
 
 ARREL = Path(__file__).resolve().parent.parent

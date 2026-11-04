@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import proves  # noqa: F401  (la configuració de les proves, encara que es cridin sense «-t .»)
 from motor import grafics, marca, servidor, so, subtitols
 from motor.projecte import Projecte
 
