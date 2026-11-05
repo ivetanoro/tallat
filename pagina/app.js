@@ -1309,7 +1309,7 @@ function reprodueix() {
   R.v.play().then(() => registre("play-ok", { video: ev(R.v) })).catch((e) => {
     registre("play-rebutjat", { error: e.name, video: ev(R.v) });
     atura();
-    avis("Toca el botó de reproduir per començar.");
+    avis("Toca el botó de reproduir per començar.", 6000);
   });
 }
 
@@ -2695,7 +2695,24 @@ function pintaMarques(llista, inicis, total) {
   }
 }
 
+// El Safari només deixa sonar sol un vídeo que ja ha fet un play dins d'un clic o d'una tecla. I el play de debò pot
+// arribar més tard, quan el continu és a punt (esperaContinu): 14 de 16 vegades el rebutjava (mesurat). Per això, al
+// primer gest, tots fan un play mut i s'aturen de seguida. No sona ni es mou res.
+function desbloquejaSo() {
+  for (const nom of GESTOS) document.removeEventListener(nom, desbloquejaSo, true);
+  for (const v of [R.proxy, R.muntatge, aEfectes]) {
+    if (!v.paused) continue;
+    const mut = v.muted;
+    v.muted = true;
+    v.play().catch(() => {});  // la pausa següent el fa acabar amb error: és el que es vol
+    v.pause();
+    v.muted = mut;
+  }
+}
+const GESTOS = ["click", "keydown", "touchend"];
+
 function instalaReproductor() {
+  for (const nom of GESTOS) document.addEventListener(nom, desbloquejaSo, true);
   R.proxy.src = urlCopia();
   for (const v of [R.proxy, R.muntatge]) {
     for (const nom of ["play", "pause", "seeking", "seeked", "waiting", "stalled", "error", "ended"]) {

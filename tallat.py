@@ -363,9 +363,12 @@ def ordre_exporta(args) -> None:
     if args.sense_subtitols:
         projecte.estat["subtitols"] = False
     capa = projecte.capa_subtitols(trams, args.qualitat, avis=print)
-    exporta.exporta(projecte.font(args.qualitat), trams, sortida, args.qualitat, progres=_barra("exportant"), capa=capa,
-                    zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
-                    blocs=projecte.blocs(trams), encaix=projecte.encaix, **projecte.opcions_so(trams))
+    try:
+        exporta.exporta(projecte.font(args.qualitat), trams, sortida, args.qualitat, progres=_barra("exportant"), capa=capa,
+                        zooms=projecte.zooms_per_tram(trams), brolls=projecte.brolls(trams),
+                        blocs=projecte.blocs(trams), encaix=projecte.encaix, **projecte.opcions_so(trams))
+    except exporta.SenseMemoria as e:
+        sys.exit(f"\n{e}")
     projecte.desa_talls(sortida, trams)
     avis = exporta.comprova_durades(sortida, sum(b - a for a, b in trams), projecte.dades["fps"])
     if avis:

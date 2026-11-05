@@ -56,6 +56,19 @@ class TestServidor(unittest.TestCase):
         self.dir.cleanup()
         self.casa.cleanup()
 
+    def test_engegar_no_pregunta_res_a_la_xarxa(self):
+        # Mesurat: la pregunta de la biblioteca (getfqdn) trigava 35 s en algunes xarxes, a cada obertura.
+        with mock.patch("socket.getfqdn", side_effect=AssertionError("pregunta a la xarxa")):
+            altre = servidor.crea_servidor(Projecte(self.carpeta), port_lliure())
+        altre.server_close()
+
+    def test_un_video_que_encara_es_fa_no_surt_a_la_llista(self):
+        exports = self.carpeta / "exports"
+        exports.mkdir(exist_ok=True)
+        (exports / ".reel_1080_1.fent.mp4").write_bytes(b"a mitges")
+        (exports / "reel_1080_1.mp4").write_bytes(b"sencer")
+        self.assertEqual([x["nom"] for x in Projecte(self.carpeta).exports()], ["reel_1080_1.mp4"])
+
     def peticio(self, metode, ruta, cos=None, capcaleres=None, host=None):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
         c.putrequest(metode, ruta, skip_host=True)
