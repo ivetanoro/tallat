@@ -1,5 +1,5 @@
-# Tres dubtes concrets de les mesures: què triga tant a engegar la pàgina, quin ritme de fotogrames es llegeix dels
-# vídeos de mòbil i què passa de debò al Safari. Només en aquesta branca de proves: no va a main ni surt a cap versió.
+# Tornar a mesurar el que ha fallat: què triga a engegar la pàgina, quin ritme de fotogrames es llegeix dels vídeos de
+# mòbil, l'export amb poca memòria i què passa de debò al Safari. Només en aquesta branca de proves: no va a main ni surt a cap versió.
 name: Diagnòstic
 
 on:
@@ -17,6 +17,7 @@ jobs:
         include:
           - { nom: windows, so: windows-latest }
           - { nom: mac-nou, so: macos-latest }
+          - { nom: mac-intel, so: macos-26-intel }
     defaults:
       run:
         shell: bash
@@ -55,12 +56,16 @@ jobs:
 
       - name: Fabrica els vídeos inventats
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 40
         run: |
           set +e
-          $PY .github/mesures/fabrica.py "$MV/control" --nom control.mp4 --durada 60 --llavor 7
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            $PY .github/mesures/fabrica.py "$MV/llarg" --nom "deu minuts amb espais.mp4" --durada 600 --llavor 27 --bitrate 4M
+          F=".github/mesures/fabrica.py"
+          $PY $F "$MV/control" --nom control.mp4 --durada 60 --llavor 7
+          $PY $F "$MV/iphone" --nom "IMG 0002 còpia amb accents.MOV" --durada 120 --codec hevc --rotacio --llavor 21
+          $PY $F "$MV/vfr" --nom "mòbil fotogrames variables.MOV" --durada 90 --codec hevc --rotacio --vfr --llavor 23
+          $PY $F "$MV/vfr-suau" --nom "iPhone bona llum.MOV" --durada 90 --codec hevc --rotacio --vfr --suau --llavor 31
+          if [ "${{ matrix.nom }}" = "mac-nou" ]; then
+            $PY $F "$MV/llarg" --nom "deu minuts amb espais.mp4" --durada 600 --llavor 27 --bitrate 4M
           fi
 
       - name: Què triga a engegar la pàgina
@@ -68,22 +73,48 @@ jobs:
         timeout-minutes: 15
         run: |
           . .github/mesures/fes.sh
-          { uname -a; cat /etc/hosts; ipconfig -all; } > resultats/xarxa.txt 2>&1 || true
           fes resultats/engegada.log $PY .github/mesures/diag_engegada.py "$MV/control" 8911
+
+      - name: Quin ritme de fotogrames es llegeix
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          . .github/mesures/fes.sh
+          fes resultats/ritmes.log $PY .github/mesures/diag_ritmes.py "$RUNNER_TEMP/ritmes"
+
+      - name: Camí sencer amb els fotogrames irregulars
+        continue-on-error: true
+        timeout-minutes: 45
+        run: |
+          set +e
+          . .github/mesures/fes.sh
+          C=".github/mesures/cami.py"
+          fes resultats/cami-vfr.log $PY $C "$MV/vfr" resultats/cami-vfr.json --qualitats 1080 --port 8894
+          fes resultats/cami-vfr-suau.log $PY $C "$MV/vfr-suau" resultats/cami-vfr-suau.json --qualitats 1080 --port 8899
+
+      - name: Windows petit de debò (4 GB i 2 processadors)
+        continue-on-error: true
+        if: runner.os == 'Windows'
+        timeout-minutes: 40
+        run: |
+          set +e
+          . .github/mesures/fes.sh
+          fes resultats/limitat-cami.log $PY .github/mesures/limita_windows.py 4096 2 -- $PY .github/mesures/cami.py "$MV/iphone" resultats/cami-iphone-petit.json --qualitats 1080 --nom-projecte projecte-petit --port 8896
 
       - name: Safari de debò, repetit
         continue-on-error: true
-        if: runner.os == 'macOS'
-        timeout-minutes: 90
+        if: matrix.nom == 'mac-nou'
+        timeout-minutes: 75
         run: |
           set +e
           . .github/mesures/fes.sh
           sudo safaridriver --enable
           P=".github/mesures/tanda_pagina.py"
           O="resultats/safari.json"
-          fes resultats/safari-1.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 3 --segons 50 --capta-tard --torna-a-clicar --etiqueta=-tard
-          fes resultats/safari-2.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --segons 50 --torna-a-clicar --etiqueta=-aviat
+          fes resultats/safari-1.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 10 --segons 50 --capta-tard --torna-a-clicar --etiqueta=-tard
+          fes resultats/safari-2.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 3 --segons 50 --torna-a-clicar --etiqueta=-aviat
           fes resultats/safari-3.log $PY $P $O --video "$MV/llarg" --motor safari --escenaris fred --repeticions 3 --segons 110 --capta-tard --torna-a-clicar --etiqueta=-tard --port 8902
+          fes resultats/safari-4.log $PY $P $O --video "$MV/control" --motor safari --escenaris calent,edita --repeticions 2 --segons 50 --capta-tard --torna-a-clicar --etiqueta=-tard
 
       - name: Desa els resultats
         if: always()
