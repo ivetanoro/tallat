@@ -365,6 +365,34 @@ class TestSoExacte(unittest.TestCase):
             self.assertLess(float(np.abs(mostres).max()), 0.02)
 
 
+class TestFotogramesIrregulars(unittest.TestCase):
+    """Mesurat: amb fotogrames que no cauen just al seu lloc, cada tros guanyava algun fotograma i, al final d'un minut
+    de vídeo, el muntatge durava 0,47 s de més (i els subtítols anaven desplaçats)."""
+
+    def test_el_filtre_diu_els_fotogrames_justos(self):
+        self.assertEqual(exporta._fotogrames_justos((1.0, 2.0), "30"), "fps=30,trim=end_frame=30")
+        self.assertEqual(exporta._fotogrames_justos((1001 / 30000, 3003 / 30000), "30000/1001"),
+                         "fps=30000/1001,trim=end_frame=2")
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_el_muntatge_dura_el_que_ha_de_durar(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=30", "-f", "lavfi", "-i", "sine=f=440:d=30",
+                            "-c:v", "libx264", "-bf", "0", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(d / "regular.mp4")], check=True)
+            # Els mateixos fotogrames, cadascun fins a 6 ms lluny del seu lloc (en unitats de 1/600 s).
+            subprocess.run(["ffmpeg", "-v", "error", "-i", str(d / "regular.mp4"), "-c", "copy", "-bsf:v",
+                            "setts=time_base=1/600:ts=round(N*20+3.6*sin(N/3.7)+3.6)", "-video_track_timescale", "600", str(d / "v.mov")], check=True)
+            trams = [edicio.Tram(i * 1.0, i * 1.0 + 0.6) for i in range(25)]
+            esperat = sum(b - a for a, b in trams)
+            final = exporta.exporta(d / "v.mov", trams, d / "final.mp4", "esborrany")
+            info = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,duration", "-of", "json", str(final)],
+                                             capture_output=True, text=True, encoding="utf-8").stdout)
+            durades = {s["codec_type"]: float(s["duration"]) for s in info["streams"]}
+            self.assertAlmostEqual(durades["video"], esperat, delta=0.05)
+            self.assertAlmostEqual(durades["audio"], esperat, delta=0.05)
+
+
 class TestMuntatgeALots(unittest.TestCase):
     """Revisió de Codex: cada tros és una entrada d'ffmpeg i cadascuna guarda fotogrames a la memòria (amb
     un vídeo 4K, 20 trossos ja passaven de 8 GB). Amb molts trossos, el muntatge es fa a lots."""

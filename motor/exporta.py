@@ -55,8 +55,8 @@ def _fraccio(text: str | None) -> Fraction | None:
 
 def ritme_fotogrames(real: str | None, mitja: str | None) -> Fraction:
     """Els fps d'un vídeo, a partir dels dos que diu ffprobe (r_frame_rate i avg_frame_rate). Amb els fotogrames
-    irregulars, el primer pot ser qualsevol cosa: l'ffmpeg 7.1 hi llegeix 600 o 31 en un vídeo de 30 (mesurat:
-    a 600, 30 minuts i 1,5 GB per un minut de vídeo; a 31, els talls acaben 0,3 s desplaçats)."""
+    irregulars, el primer pot ser qualsevol cosa: hi ha llegit 600 o 31 en un vídeo de 30 (mesurat: a 600, 30 minuts
+    i 1,5 GB per un minut de vídeo)."""
     r, m = _fraccio(real), _fraccio(mitja)
     if not m:
         return r if r and r <= RITMES[-1] else Fraction(30)
@@ -259,16 +259,25 @@ def _enquadrament(amplada: int, alcada: int, ow: int, oh: int, encaix: str = "re
     return f"{retall},{escala}" if retall else escala
 
 
-def _uneix_trossos(trams, zooms: list[bool] | None, mida: tuple[int, int] | None) -> list[str]:
+def _fotogrames_justos(tram, fps: str) -> str:
+    """El filtre que deixa un tros amb els fotogrames que li toquen, a ritme regular. Amb els fotogrames irregulars,
+    n'hi entrava algun de més (no cauen just al seu lloc), concat allargava el tros i s'anava sumant: 0,47 s en un
+    minut de vídeo, amb els subtítols cada cop més desplaçats (mesurat). Un vídeo regular surt igual."""
+    f = Fraction(fps)
+    return f"fps={fps},trim=end_frame={max(1, round(Fraction(tram[1]) * f) - round(Fraction(tram[0]) * f))}"
+
+
+def _uneix_trossos(trams, zooms: list[bool] | None, mida: tuple[int, int] | None, fps: str) -> list[str]:
     """Les línies del filtre que uneixen els trossos (entrades 0…n-1, ja retallades amb -ss/-t) en [vc][ac]."""
     parts, entrades = [], []
     for i, tram in enumerate(trams):
+        justos = _fotogrames_justos(tram, fps)
         if zooms and zooms[i] and mida:
             # Apropament: retallem el centre i el tornem a la mida original perquè tots els trossos casin.
-            parts.append(f"[{i}:v]setpts=PTS-STARTPTS,crop=trunc(iw/{ZOOM}/2)*2:trunc(ih/{ZOOM}/2)*2,"
+            parts.append(f"[{i}:v]setpts=PTS-STARTPTS,{justos},crop=trunc(iw/{ZOOM}/2)*2:trunc(ih/{ZOOM}/2)*2,"
                          f"scale={mida[0]}:{mida[1]},setsar=1[v{i}];")
         else:
-            parts.append(f"[{i}:v]setpts=PTS-STARTPTS,setsar=1[v{i}];")  # píxels quadrats: concat els vol iguals
+            parts.append(f"[{i}:v]setpts=PTS-STARTPTS,{justos},setsar=1[v{i}];")  # píxels quadrats: concat els vol iguals
         parts.append(_so_del_tros(i, tram))
         entrades.append(f"[v{i}][a{i}]")
     parts.append(f"{''.join(entrades)}concat=n={len(trams)}:v=1:a=1[vc][ac];")
@@ -296,7 +305,7 @@ def _filtre(trams: list[tuple[float, float]], enquadrament: str, capa: bool = Fa
         parts = ["[0:v]setpts=PTS-STARTPTS[vb0];", "[0:a]asetpts=PTS-STARTPTS[ac];"]
     else:
         n_base = len(trams)
-        parts = _uneix_trossos(trams, zooms, mida)
+        parts = _uneix_trossos(trams, zooms, mida, fps)
         parts.append(f"[vc]{enquadrament}[vb0];")
     actual = "vb0"
     total = sum(b - a for a, b in trams)
@@ -547,7 +556,7 @@ def _munta_lots(video: Path, trams, info, carpeta: Path, codec: list[str], enqua
     fets, noms = 0.0, []
     for k in range(0, len(trams), mida_lot):
         lot = trams[k:k + mida_lot]
-        parts = _uneix_trossos(lot, zooms[k:k + mida_lot] if zooms else None, (info["amplada"], info["alcada"]))
+        parts = _uneix_trossos(lot, zooms[k:k + mida_lot] if zooms else None, (info["amplada"], info["alcada"]), info["fps"])
         parts.append(f"[vc]{enquadrament or 'null'}[v];[ac]anull[a]")
         filtre = carpeta / f"lot_{k:05d}.txt"
         filtre.write_text("\n".join(parts), encoding="utf-8")
@@ -614,7 +623,7 @@ def _exporta(entrades_base, durada, sortida, qualitat, info, filtre, brolls, pec
 
 # Els trossos de la vista prèvia es guarden: després d'un canvi només es fan els nous (un tall parteix un
 # tros en dos) i la resta s'enganxa tal qual. Si canvia com es fa un tros, cal pujar la versió.
-VERSIO_TROSSOS = 2
+VERSIO_TROSSOS = 3
 VIDA_TROSSOS = 3600  # segons: els que ja no fa servir el muntatge d'ara es guarden una hora (per desfer)
 # Quants trossos fa cada ffmpeg. Cada tros té el seu compressor: amb 40 de cop (la primera vegada que s'obre
 # una gravació llarga), més de 3,5 GB de memòria i 1.500 fils. Amb 8, i 2 fils cadascun, uns 350 MB i
@@ -685,7 +694,7 @@ def _fes_trossos(proxy: Path, feina: list, info: dict) -> None:
     Cada sortida s'escriu amb un nom temporal i es canvia al final: mai no queda un tros a mitges."""
     parts = []
     for i, (tram, _) in enumerate(feina):
-        parts.append(f"[{i}:v]setpts=PTS-STARTPTS,setsar=1[v{i}];")
+        parts.append(f"[{i}:v]setpts=PTS-STARTPTS,{_fotogrames_justos(tram, info['fps'])},setsar=1[v{i}];")
         parts.append(_so_del_tros(i, tram))
     marca = f"{os.getpid()}-{threading.get_ident()}"
     sortides = [(nom.with_name(f".{nom.stem}.{marca}.fent.mov"), nom) for _, nom in feina]
@@ -730,7 +739,7 @@ def fes_proxy(video: Path, sortida: Path, progres=None, encaix: str = "retalla")
     temporal = sortida.with_suffix(".tmp.mp4")
     ordre = [
         "ffmpeg", "-y", "-v", "error", "-progress", "pipe:1", "-nostats", "-i", str(video),
-        "-map", "0:v:0", "-map", "0:a:0", "-vf", enquadrament,
+        "-map", "0:v:0", "-map", "0:a:0", "-vf", enquadrament, "-r", info["fps"],
         *codec_video("copia", "3M"),
         "-c:a", "aac", "-b:a", "128k", "-ac", "2",
         "-map_metadata", "-1", "-write_tmcd", "0", "-movflags", "+faststart", str(temporal),
