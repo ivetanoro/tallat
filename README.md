@@ -40,7 +40,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 
 ## Què necessites
 
-- **Un Mac o un Windows.** S'ha provat en un Mac amb processador Intel; en els Mac nous (M1, M2, M3…) hauria de funcionar igual, però encara no s'hi ha provat. **Windows encara està en proves:** passa les proves automàtiques en un Windows 64 bits, però encara no l'ha fet servir ningú de debò. Allà els vídeos es fan amb el processador i van més lents que al Mac.
+- **Un Mac o un Windows.** S'ha provat sobretot en un Mac amb processador Intel; en els Mac nous (M1, M2, M3…) passa la instal·lació de zero i les proves automàtiques. **Windows encara està en proves:** passa les proves automàtiques en un Windows 64 bits, però encara no l'ha fet servir ningú de debò. Allà els vídeos es fan amb el processador i van més lents que al Mac.
 - **L'app de Claude**, amb un pla que inclogui Claude Code (la pestanya **Code**; el més barat és el Pro). **O bé Codex**, d'OpenAI, amb un pla de ChatGPT que l'inclogui.
 - **Uns 5 GB lliures** per a la instal·lació, i espai per als teus vídeos.
 - **Opcional:** [Descript](https://www.descript.com) connectat a Claude. Transcriu millor i conserva el farciment perquè el puguis treure tu. Sense Descript, tallat transcriu al teu ordinador amb WhisperX (més lent).

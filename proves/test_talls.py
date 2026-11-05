@@ -226,6 +226,33 @@ class TestExecutaFfmpeg(unittest.TestCase):
         self.assertFalse(fil.is_alive(), "l'export s'ha quedat encallat")
         self.assertTrue(resultat["error"].endswith("final"))
 
+    def test_sense_memoria_ho_diu_en_catala(self):
+        ordre = [sys.executable, "-c", "import sys; sys.stderr.write('Error: Cannot allocate memory'); sys.exit(1)"]
+        with self.assertRaisesRegex(exporta.SenseMemoria, "No hi ha prou memòria"):
+            exporta._executa(ordre, 1.0, None)
+
+
+class TestRitmeDeFotogrames(unittest.TestCase):
+    """L'ffmpeg 7.1 llegeix 600 o 31 en vídeos de 30 amb els fotogrames irregulars (mesurat a Mac i Windows)."""
+
+    def test_un_video_regular_es_queda_com_es(self):
+        for real, esperat in (("30/1", "30"), ("30000/1001", "30000/1001"), ("25/1", "25"), ("60/1", "60"), ("15/1", "15")):
+            self.assertEqual(str(exporta.ritme_fotogrames(real, real)), esperat)
+
+    def test_un_ritme_impossible_no_es_fa_servir(self):
+        for real, mitja, esperat in (("600/1", "30/1", "30"), ("31/1", "30/1", "30"), ("60000/1", "60/1", "60"),
+                                     ("600/1", "27/1", "30"), ("31/1", "26/1", "30"), ("600/1", "1498/50", "30000/1001"),
+                                     ("90000/1", "12/1", "12")):
+            self.assertEqual(str(exporta.ritme_fotogrames(real, mitja)), esperat, (real, mitja))
+
+    def test_si_baixa_amb_poca_llum_es_queda_el_de_la_camera(self):
+        self.assertEqual(str(exporta.ritme_fotogrames("30/1", "27/1")), "30")
+        self.assertEqual(str(exporta.ritme_fotogrames("60/1", "59/1")), "60")
+
+    def test_si_el_fitxer_no_ho_diu(self):
+        for real, esperat in (("30/1", "30"), ("90000/1", "30"), ("0/0", "30"), (None, "30")):
+            self.assertEqual(str(exporta.ritme_fotogrames(real, "0/0")), esperat, real)
+
 
 class TestTempsExactes(unittest.TestCase):
     def test_29_97(self):
@@ -338,13 +365,98 @@ class TestSoExacte(unittest.TestCase):
             self.assertLess(float(np.abs(mostres).max()), 0.02)
 
 
+class TestFotogramesIrregulars(unittest.TestCase):
+    """Mesurat: amb fotogrames que no cauen just al seu lloc, cada tros guanyava algun fotograma i, al final d'un minut
+    de vídeo, el muntatge durava 0,47 s de més (i els subtítols anaven desplaçats)."""
+
+    def test_el_filtre_diu_els_fotogrames_justos(self):
+        self.assertEqual(exporta._fotogrames_justos((1.0, 2.0), "30"), "fps=30,trim=end_frame=30")
+        self.assertEqual(exporta._fotogrames_justos((1001 / 30000, 3003 / 30000), "30000/1001"),
+                         "fps=30000/1001,trim=end_frame=2")
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_el_muntatge_dura_el_que_ha_de_durar(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=30", "-f", "lavfi", "-i", "sine=f=440:d=30",
+                            "-c:v", "libx264", "-bf", "0", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(d / "regular.mp4")], check=True)
+            # Els mateixos fotogrames, cadascun fins a 6 ms lluny del seu lloc (en unitats de 1/600 s).
+            subprocess.run(["ffmpeg", "-v", "error", "-i", str(d / "regular.mp4"), "-c", "copy", "-bsf:v",
+                            "setts=time_base=1/600:ts=round(N*20+3.6*sin(N/3.7)+3.6)", "-video_track_timescale", "600", str(d / "v.mov")], check=True)
+            trams = [edicio.Tram(i * 1.0, i * 1.0 + 0.6) for i in range(25)]
+            esperat = sum(b - a for a, b in trams)
+            final = exporta.exporta(d / "v.mov", trams, d / "final.mp4", "esborrany")
+            info = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,duration", "-of", "json", str(final)],
+                                             capture_output=True, text=True, encoding="utf-8").stdout)
+            durades = {s["codec_type"]: float(s["duration"]) for s in info["streams"]}
+            self.assertAlmostEqual(durades["video"], esperat, delta=0.05)
+            self.assertAlmostEqual(durades["audio"], esperat, delta=0.05)
+
+
 class TestMuntatgeALots(unittest.TestCase):
     """Revisió de Codex: cada tros és una entrada d'ffmpeg i cadascuna guarda fotogrames a la memòria (amb
     un vídeo 4K, 20 trossos ja passaven de 8 GB). Amb molts trossos, el muntatge es fa a lots."""
 
     def test_quants_per_lot(self):
-        self.assertEqual(exporta.trossos_per_lot({"amplada": 3840, "alcada": 2160}), 8)
-        self.assertEqual(exporta.trossos_per_lot({"amplada": 720, "alcada": 1280}), 40)
+        from unittest import mock
+        with mock.patch.object(exporta, "_memoria_total", return_value=32_000_000_000):
+            self.assertEqual(exporta.trossos_per_lot({"amplada": 3840, "alcada": 2160}), 8)
+            self.assertEqual(exporta.trossos_per_lot({"amplada": 720, "alcada": 1280}), 40)
+        with mock.patch.object(exporta, "_memoria_total", return_value=None):  # si no es pot saber, com sempre
+            self.assertEqual(exporta.trossos_per_lot({"amplada": 3840, "alcada": 2160}), 8)
+
+    def test_amb_poca_memoria_menys_trossos_de_cop(self):
+        from unittest import mock
+        with mock.patch.object(exporta, "_memoria_total", return_value=4_000_000_000):
+            self.assertEqual(exporta.trossos_per_lot({"amplada": 1920, "alcada": 1080}), 13)
+            self.assertEqual(exporta.trossos_per_lot({"amplada": 3840, "alcada": 2160}), 4)
+
+    def test_sap_quanta_memoria_te_l_ordinador(self):
+        self.assertGreater(exporta._memoria_total(), 1_000_000_000)
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_sense_memoria_torna_a_provar_amb_menys_trossos_de_cop(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=8",
+                            "-f", "lavfi", "-i", "sine=f=440:d=8", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                            "-c:a", "aac", "-shortest", str(d / "v.mp4")], check=True)
+            trams = [edicio.Tram(i * 0.6, i * 0.6 + 0.4) for i in range(9)]
+            de_debo, entrades = exporta._executa, []
+
+            def amb_massa_trossos(ordre, durada, progres):
+                entrades.append(ordre.count("-ss"))
+                if ordre.count("-ss") > 4:  # només hi caben 4 trossos de cop
+                    Path(ordre[-1]).write_bytes(b"a mitges")
+                    raise exporta.SenseMemoria("sense memòria")
+                de_debo(ordre, durada, progres)
+            with mock.patch.object(exporta, "_executa", amb_massa_trossos):
+                final = exporta.exporta(d / "v.mp4", trams, d / "final.mp4", "esborrany")
+            self.assertEqual(entrades[0], 9)
+            self.assertEqual(max(entrades[1:]), 4)
+            durada = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(final)],
+                                          capture_output=True, text=True, encoding="utf-8").stdout)
+            self.assertAlmostEqual(durada, sum(b - a for a, b in trams), delta=0.05)
+            self.assertEqual(sorted(f.name for f in d.iterdir()), ["final.mp4", "v.mp4"])
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
+    def test_si_no_hi_ha_manera_no_queda_cap_fitxer_a_mitges(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=180x320:r=30:d=4",
+                            "-f", "lavfi", "-i", "sine=f=440:d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                            "-c:a", "aac", "-shortest", str(d / "v.mp4")], check=True)
+            (d / "final.mp4").write_bytes(b"el video d'abans")
+
+            def sempre_falla(ordre, durada, progres):
+                Path(ordre[-1]).write_bytes(b"a mitges")
+                raise exporta.SenseMemoria("sense memòria")
+            with mock.patch.object(exporta, "_executa", sempre_falla), self.assertRaises(exporta.SenseMemoria):
+                exporta.exporta(d / "v.mp4", [edicio.Tram(i * 0.5, i * 0.5 + 0.3) for i in range(6)], d / "final.mp4", "esborrany")
+            self.assertEqual((d / "final.mp4").read_bytes(), b"el video d'abans")  # l'anterior no es perd
+            self.assertEqual(sorted(f.name for f in d.iterdir()), ["final.mp4", "v.mp4"])
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "cal ffmpeg")
     def test_a_lots_un_video_d_iphone_no_es_torna_a_girar(self):

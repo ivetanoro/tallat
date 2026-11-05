@@ -12,6 +12,7 @@ import math
 import mimetypes
 import os
 import secrets
+import socketserver
 import subprocess
 import sys
 import tempfile
@@ -1038,6 +1039,12 @@ def crea_servidor(inicial: Projecte, port: int) -> ThreadingHTTPServer:
 
 class _Servidor(ThreadingHTTPServer):
     daemon_threads = True  # en tancar la pàgina (Control + C), no esperem les connexions obertes
+
+    def server_bind(self):
+        # El de la biblioteca pregunta a la xarxa com es diu l'ordinador i, segons la xarxa, triga 35 s (mesurat):
+        # tot aquest temps, la pàgina no s'obria. Només escoltem a 127.0.0.1 i aquest nom no el fa servir res.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def handle_error(self, request, client_address):
         # El navegador talla connexions sovint (en saltar pel vídeo): no és cap error de debò.
