@@ -24,10 +24,12 @@ import cami  # noqa: E402
 import mesura  # noqa: E402
 
 
-def engega(projecte: Path, port: int) -> tuple[subprocess.Popen, str, float]:
+def engega(projecte: Path, port: int, fre: float | None = None) -> tuple[subprocess.Popen, str, float]:
     t0 = time.time()
-    s = subprocess.Popen([sys.executable, str(ARREL / "tallat.py"), "revisa", "--projecte", str(projecte), "--port", str(port), "--sense-navegador"],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+    ordre = [sys.executable, str(ARREL / "tallat.py"), "revisa", "--projecte", str(projecte), "--port", str(port), "--sense-navegador"]
+    if fre:  # el servidor i els seus ffmpeg, frenats; el navegador no, perquè el so aturat a batzegades no s'assembla a res de debò
+        ordre = [sys.executable, str(AQUI / "freno.py"), str(fre), "--", *ordre]
+    s = subprocess.Popen(ordre, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
     for linia in s.stdout:
         m = re.search(r"http://127\.0\.0\.1:\d+/", linia)
         if m:
@@ -85,8 +87,10 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8901)
     ap.add_argument("--repeticions", type=int, default=1)
     ap.add_argument("--sense-captura", action="store_true")
+    ap.add_argument("--capta-tard", action="store_true", help="Només Safari: connecta la captura quan el vídeo ja té alguna cosa carregada")
     ap.add_argument("--etiqueta", default="")
     ap.add_argument("--amb-finestra", action="store_true")
+    ap.add_argument("--fre-servidor", type=float)
     a = ap.parse_args()
 
     font = mesura.Font(a.video)
@@ -107,7 +111,7 @@ def main() -> None:
                 edicio_abans = (projecte / "edicio.json").read_bytes()
                 registre = projecte / "registre-pagina.log"
                 registre.unlink(missing_ok=True)
-                servidor, url, arrenca = engega(projecte, a.port)
+                servidor, url, arrenca = engega(projecte, a.port, a.fre_servidor)
                 ordre = ["node", str(AQUI / "pagina.mjs"), url, str(carpeta), "--motor", a.motor, "--cpu", cpu, "--escenari", escenari, "--segons", str(a.segons)]
                 if a.motor == "safari":
                     ordre = [sys.executable, str(AQUI / "safari.py"), url, str(carpeta), "--escenari", escenari, "--segons", str(a.segons)]
@@ -117,6 +121,8 @@ def main() -> None:
                     ordre += ["--canal", a.canal]
                 if a.sense_captura:
                     ordre.append("--sense-captura")
+                if a.capta_tard:
+                    ordre.append("--capta-tard")
                 if a.amb_finestra:
                     ordre.append("--amb-finestra")
                 mem = Memoria()

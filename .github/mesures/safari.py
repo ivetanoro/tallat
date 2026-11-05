@@ -35,6 +35,8 @@ def main() -> None:
     ap.add_argument("--escenari", default="calent")
     ap.add_argument("--segons", type=int, default=60)
     ap.add_argument("--espera-continu", type=int, default=180)
+    ap.add_argument("--sense-captura", action="store_true")
+    ap.add_argument("--capta-tard", action="store_true")
     a = ap.parse_args()
     a.sortida.mkdir(parents=True, exist_ok=True)
     conductor = subprocess.Popen(["safaridriver", "-p", str(PORT)])
@@ -69,13 +71,22 @@ def main() -> None:
                 time.sleep(0.2)
             resultat["espera_continu_ms"] = round((time.time() - t1) * 1000)
         # El so es comença a enregistrar en el mateix clic: el Safari només el deixa engegar així.
-        executa("""const b=document.getElementById('play');b.addEventListener('pointerdown',()=>{window.__sonda.capta().then(s=>window.__sonda.estatCaptura=s).catch(e=>window.__sonda.estatCaptura='error: '+e)},{capture:true,once:true});""")
+        if not a.sense_captura:
+            executa("""const b=document.getElementById('play'),o=arguments[0];b.addEventListener('pointerdown',()=>{window.__sonda.capta(o).then(s=>window.__sonda.estatCaptura=s).catch(e=>window.__sonda.estatCaptura='error: '+e)},{capture:true,once:true});""", {"tard": a.capta_tard})
         boto = crida("POST", f"/session/{sessio}/element", {"using": "css selector", "value": "#play"})
         element = next(iter(boto.values()))
         crida("POST", f"/session/{sessio}/element/{element}/click", {})
-        fi = time.time() + a.segons
+        clic, fotos, editat = time.time(), [10, 20, 30, 40], False
+        fi = clic + a.segons
         while time.time() < fi:
             time.sleep(1)
+            if fotos and time.time() - clic > fotos[0]:  # per veure si la imatge avança: cada fotograma porta el número
+                (a.sortida / f"foto-{fotos.pop(0)}.png").write_bytes(base64.b64decode(crida("GET", f"/session/{sessio}/screenshot")))
+            if a.escenari == "edita" and not editat and executa("try{return tempsMuntatge()>=6}catch(e){return false}"):
+                # Sona: es treu una paraula de més endavant, sense aturar el vídeo (el que fa el clic dret)
+                resultat["paraula_treta"] = executa("""const t=tempsMuntatge(),p=P.paraules.find(x=>!esFora(x.id)&&muntatgeDe(x.inici)>t+3&&x.final-x.inici>0.25);
+                    if(!p)return null;commutaIds([p.id]);window.__sonda.marca('treta',{id:p.id,audio:window.__sonda.ctx?window.__sonda.ctx.currentTime:null,munt:t});return p.id;""")
+                editat = True
             if executa("try{return !R.reproduint && !R.espera && tempsMuntatge()>duradaFinal-0.4}catch(e){return false}"):
                 resultat["ha_arribat_al_final"] = True
                 break

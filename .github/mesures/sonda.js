@@ -2,7 +2,7 @@
 // Apunta què fan els dos vídeos i, quan se li demana, enregistra el que surt de debò pels altaveus.
 (() => {
   if (window.__sonda) return;
-  const S = (window.__sonda = { ev: [], ticks: [], parts: [], primerFrame: null, marques: {} });
+  const S = (window.__sonda = { ev: [], ticks: [], mostres: [], parts: [], primerFrame: null, marques: {} });
   const ara = () => performance.now();
   S.marca = (tipus, d = {}) => S.ev.push({ t: +ara().toFixed(1), tipus, ...d });
   try { localStorage.setItem("tallat.guia-vista", "99"); } catch {}  // sense la visita guiada
@@ -33,6 +33,10 @@
     const preparant = document.getElementById("preparant"), carregant = document.getElementById("carregant");
     S.ticks.push([+ara().toFixed(1), munt, sonant ? 1 : 0, estatVideo(a), estatVideo(m), preparant && !preparant.hidden ? 1 : 0, carregant && !carregant.hidden ? 1 : 0]);
     if (S.ticks.length > 60000) S.ticks.shift();
+    if (m && S.ticks.length % 25 === 0) {  // un cop per segon: si de debò entren imatge i so al vídeo
+      const q = m.getVideoPlaybackQuality ? m.getVideoPlaybackQuality().totalVideoFrames : null;
+      S.mostres.push([+ara().toFixed(0), +m.currentTime.toFixed(2), q, m.webkitVideoDecodedByteCount ?? null, m.webkitAudioDecodedByteCount ?? null]);
+    }
   }
   setInterval(tick, 40);
 
@@ -67,7 +71,7 @@
   }
   registerProcessor("enregistra", Enregistra);`;
 
-  S.capta = async () => {
+  S.capta = async (opcions = {}) => {
     const ctx = (S.ctx = new AudioContext({ sampleRate: 48000 }));
     await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([CODI], { type: "text/javascript" })));
     const node = new AudioWorkletNode(ctx, "enregistra", { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1, channelCountMode: "explicit", channelInterpretation: "speakers" });
@@ -75,7 +79,12 @@
       if (e.data.primer !== undefined) S.primerFrame = e.data.primer;
       else S.parts.push(e.data);
     };
-    for (const id of ["video-a", "video-m"]) ctx.createMediaElementSource(document.getElementById(id)).connect(node);
+    for (const id of ["video-a", "video-m"]) {
+      const v = document.getElementById(id), connecta = () => ctx.createMediaElementSource(v).connect(node);
+      // tard: si el vídeo encara no té res carregat, s'hi connecta quan en tingui (per veure si connectar-hi abans el deixa mut al Safari)
+      if (opcions.tard && v.readyState < 2) v.addEventListener("loadeddata", connecta, { once: true });
+      else connecta();
+    }
     node.connect(ctx.destination);
     await ctx.resume();
     S.mostreig = ctx.sampleRate;
@@ -100,7 +109,7 @@
     try { t = trams; durada = duradaFinal; } catch {}
     const recursos = performance.getEntriesByType("resource").map((r) => ({ nom: r.name.replace(location.origin, "").slice(0, 70), inici: Math.round(r.startTime), ms: Math.round(r.duration), kb: Math.round((r.transferSize || 0) / 1024), tipus: r.initiatorType }))
       .sort((a, b) => (b.inici + b.ms) - (a.inici + a.ms)).slice(0, 14);
-    return { recursos, fcp: pinta?.startTime ?? null, dom: nav?.domContentLoadedEventEnd ?? null, load: nav?.loadEventEnd ?? null, marques: S.marques, ev: S.ev, ticks: S.ticks,
+    return { recursos, fcp: pinta?.startTime ?? null, dom: nav?.domContentLoadedEventEnd ?? null, load: nav?.loadEventEnd ?? null, marques: S.marques, ev: S.ev, ticks: S.ticks, mostres: S.mostres,
       primerFrame: S.primerFrame, mostreig: S.mostreig ?? null, nParts: S.parts.length, qualitat: { a: q("video-a"), m: q("video-m") }, trams: t, duradaFinal: durada,
       memoriaJS: performance.memory ? performance.memory.usedJSHeapSize : null, paraules: document.querySelectorAll("#transcripcio .p").length };
   };

@@ -29,6 +29,7 @@ def main() -> int:
     part = float(sys.argv[1])
     ordre = sys.argv[sys.argv.index("--") + 1:]
     p = subprocess.Popen(ordre)
+    signal.signal(signal.SIGTERM, lambda *_: p.terminate())  # que qui ens aturi també aturi el programa
     arbre = [p.pid]
     para = threading.Event()
 

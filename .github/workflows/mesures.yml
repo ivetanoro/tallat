@@ -3,8 +3,6 @@
 name: Mesures
 
 on:
-  push:
-    branches: [proves-altres-pcs]
   workflow_dispatch:
 
 jobs:

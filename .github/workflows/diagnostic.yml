@@ -1,0 +1,107 @@
+# Tres dubtes concrets de les mesures: què triga tant a engegar la pàgina, quin ritme de fotogrames es llegeix dels
+# vídeos de mòbil i què passa de debò al Safari. Només en aquesta branca de proves: no va a main ni surt a cap versió.
+name: Diagnòstic
+
+on:
+  push:
+    branches: [proves-altres-pcs]
+
+jobs:
+  diagnostic:
+    name: ${{ matrix.nom }}
+    runs-on: ${{ matrix.so }}
+    timeout-minutes: 170
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { nom: windows, so: windows-latest }
+          - { nom: mac-nou, so: macos-latest }
+          - { nom: mac-intel, so: macos-26-intel }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instal·la tallat de zero (Mac)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p resultats
+          ./prepara.sh 2>&1 | tee resultats/instal.log && exit 0
+          echo "La instal·lació ha fallat: es torna a provar d'aquí a 10 minuts" | tee -a resultats/instal.log
+          sleep 600
+          ./prepara.sh 2>&1 | tee -a resultats/instal.log
+
+      - name: Instal·la tallat de zero (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force resultats | Out-Null
+          powershell -ExecutionPolicy Bypass -File prepara.ps1
+
+      - name: Prepara l'entorn de les mesures
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cygpath -w "$USERPROFILE/.tallat/eines/Library/bin" >> "$GITHUB_PATH"
+            cygpath -w "$USERPROFILE/.tallat/eines" >> "$GITHUB_PATH"
+            echo "PY=.venv/Scripts/python.exe" >> "$GITHUB_ENV"
+            echo "KMP_DUPLICATE_LIB_OK=TRUE" >> "$GITHUB_ENV"
+          else
+            echo "$HOME/.tallat/eines/bin" >> "$GITHUB_PATH"
+            echo "PY=.venv/bin/python" >> "$GITHUB_ENV"
+          fi
+          echo "TALLAT_PREFERENCIES=$RUNNER_TEMP/preferencies.json" >> "$GITHUB_ENV"
+          echo "MV=$RUNNER_TEMP/videos" >> "$GITHUB_ENV"
+
+      - name: Ritmes de fotogrames
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          . .github/mesures/fes.sh
+          fes resultats/ritmes.log $PY .github/mesures/diag_ritmes.py "$RUNNER_TEMP/ritmes"
+
+      - name: Fabrica els vídeos inventats
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          set +e
+          $PY .github/mesures/fabrica.py "$MV/control" --nom control.mp4 --durada 60 --llavor 7
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            $PY .github/mesures/fabrica.py "$MV/llarg" --nom "deu minuts amb espais.mp4" --durada 600 --llavor 27 --bitrate 4M
+          fi
+
+      - name: Què triga a engegar la pàgina
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          . .github/mesures/fes.sh
+          { uname -a; cat /etc/hosts 2>/dev/null; scutil --dns 2>/dev/null | head -20; } > resultats/xarxa.txt
+          fes resultats/engegada.log $PY .github/mesures/diag_engegada.py "$MV/control" 8911
+
+      - name: Safari de debò, repetit
+        continue-on-error: true
+        if: runner.os == 'macOS'
+        timeout-minutes: 90
+        run: |
+          set +e
+          . .github/mesures/fes.sh
+          sudo safaridriver --enable
+          P=".github/mesures/tanda_pagina.py"
+          O="resultats/safari.json"
+          fes resultats/safari-1.log $PY $P $O --video "$MV/control" --motor safari --escenaris calent --segons 50 --etiqueta=-primer
+          fes resultats/safari-2.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 3 --segons 50 --etiqueta=-aviat
+          fes resultats/safari-3.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 3 --segons 50 --capta-tard --etiqueta=-tard
+          fes resultats/safari-4.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 2 --segons 50 --sense-captura --etiqueta=-sense
+          fes resultats/safari-5.log $PY $P $O --video "$MV/control" --motor safari --escenaris edita --repeticions 2 --segons 50 --capta-tard --etiqueta=-tard
+          fes resultats/safari-6.log $PY $P $O --video "$MV/llarg" --motor safari --escenaris fred --repeticions 2 --segons 90 --capta-tard --etiqueta=-tard --port 8902
+
+      - name: Desa els resultats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-${{ matrix.nom }}
+          path: |
+            resultats/**
+            !resultats/**/so.f32
+          if-no-files-found: warn
