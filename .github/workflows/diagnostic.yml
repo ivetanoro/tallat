@@ -62,6 +62,7 @@ jobs:
           F=".github/mesures/fabrica.py"
           $PY $F "$MV/control" --nom control.mp4 --durada 60 --llavor 7
           $PY $F "$MV/iphone" --nom "IMG 0002 còpia amb accents.MOV" --durada 120 --codec hevc --rotacio --llavor 21
+          $PY $F "$MV/ntsc" --nom "gravació 29,97 fps.mp4" --durada 120 --fps 30000/1001 --llavor 22
           $PY $F "$MV/vfr" --nom "mòbil fotogrames variables.MOV" --durada 90 --codec hevc --rotacio --vfr --llavor 23
           $PY $F "$MV/vfr-suau" --nom "iPhone bona llum.MOV" --durada 90 --codec hevc --rotacio --vfr --suau --llavor 31
           if [ "${{ matrix.nom }}" = "mac-nou" ]; then
@@ -92,6 +93,17 @@ jobs:
           fes resultats/cami-vfr.log $PY $C "$MV/vfr" resultats/cami-vfr.json --qualitats 1080 --port 8894
           fes resultats/cami-vfr-suau.log $PY $C "$MV/vfr-suau" resultats/cami-vfr-suau.json --qualitats 1080 --port 8899
 
+      - name: Camí sencer amb vídeos normals
+        continue-on-error: true
+        timeout-minutes: 45
+        run: |
+          set +e
+          . .github/mesures/fes.sh
+          C=".github/mesures/cami.py"
+          fes resultats/cami-control.log $PY $C "$MV/control" resultats/cami-control.json --qualitats 1080 --port 8891
+          fes resultats/cami-ntsc.log $PY $C "$MV/ntsc" resultats/cami-ntsc.json --qualitats 1080 --port 8893
+          fes resultats/cami-iphone.log $PY $C "$MV/iphone" resultats/cami-iphone.json --qualitats 1080 --port 8892
+
       - name: Windows petit de debò (4 GB i 2 processadors)
         continue-on-error: true
         if: runner.os == 'Windows'
@@ -111,10 +123,9 @@ jobs:
           sudo safaridriver --enable
           P=".github/mesures/tanda_pagina.py"
           O="resultats/safari.json"
-          fes resultats/safari-1.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 10 --segons 50 --capta-tard --torna-a-clicar --etiqueta=-tard
-          fes resultats/safari-2.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 3 --segons 50 --torna-a-clicar --etiqueta=-aviat
-          fes resultats/safari-3.log $PY $P $O --video "$MV/llarg" --motor safari --escenaris fred --repeticions 3 --segons 110 --capta-tard --torna-a-clicar --etiqueta=-tard --port 8902
-          fes resultats/safari-4.log $PY $P $O --video "$MV/control" --motor safari --escenaris calent,edita --repeticions 2 --segons 50 --capta-tard --torna-a-clicar --etiqueta=-tard
+          fes resultats/safari-1.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 4 --segons 50 --capta-tard --torna-a-clicar --etiqueta=-tard
+          fes resultats/safari-3.log $PY $P $O --video "$MV/llarg" --motor safari --escenaris fred --segons 110 --capta-tard --torna-a-clicar --etiqueta=-tard --port 8902
+          fes resultats/safari-4.log $PY $P $O --video "$MV/control" --motor safari --escenaris calent,edita --segons 50 --capta-tard --torna-a-clicar --etiqueta=-tard
 
       - name: Desa els resultats
         if: always()
