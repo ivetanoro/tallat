@@ -88,6 +88,7 @@ def main() -> None:
     ap.add_argument("--repeticions", type=int, default=1)
     ap.add_argument("--sense-captura", action="store_true")
     ap.add_argument("--capta-tard", action="store_true", help="Només Safari: connecta la captura quan el vídeo ja té alguna cosa carregada")
+    ap.add_argument("--torna-a-clicar", action="store_true", help="Només Safari: si no arrenca sol, es torna a prémer el play")
     ap.add_argument("--etiqueta", default="")
     ap.add_argument("--amb-finestra", action="store_true")
     ap.add_argument("--fre-servidor", type=float)
@@ -123,6 +124,8 @@ def main() -> None:
                     ordre.append("--sense-captura")
                 if a.capta_tard:
                     ordre.append("--capta-tard")
+                if a.torna_a_clicar:
+                    ordre.append("--torna-a-clicar")
                 if a.amb_finestra:
                     ordre.append("--amb-finestra")
                 mem = Memoria()
@@ -139,6 +142,8 @@ def main() -> None:
                     servidor.wait(timeout=15)
                 except subprocess.TimeoutExpired:
                     servidor.kill()
+                if registre.exists() and carpeta.exists():
+                    shutil.copy(registre, carpeta / "registre.log")
                 (projecte / "edicio.json").write_bytes(edicio_abans)  # la paraula treta, enrere: cada prova parteix del mateix
                 if t.returncode != 0 or not (carpeta / "dades.json").exists():
                     tots.append({"nom": nom, "error_driver": (t.stdout[-500:] + t.stderr[-800:])})

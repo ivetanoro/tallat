@@ -17,7 +17,6 @@ jobs:
         include:
           - { nom: windows, so: windows-latest }
           - { nom: mac-nou, so: macos-latest }
-          - { nom: mac-intel, so: macos-26-intel }
     defaults:
       run:
         shell: bash
@@ -54,13 +53,6 @@ jobs:
           echo "TALLAT_PREFERENCIES=$RUNNER_TEMP/preferencies.json" >> "$GITHUB_ENV"
           echo "MV=$RUNNER_TEMP/videos" >> "$GITHUB_ENV"
 
-      - name: Ritmes de fotogrames
-        continue-on-error: true
-        timeout-minutes: 30
-        run: |
-          . .github/mesures/fes.sh
-          fes resultats/ritmes.log $PY .github/mesures/diag_ritmes.py "$RUNNER_TEMP/ritmes"
-
       - name: Fabrica els vídeos inventats
         continue-on-error: true
         timeout-minutes: 30
@@ -76,7 +68,7 @@ jobs:
         timeout-minutes: 15
         run: |
           . .github/mesures/fes.sh
-          { uname -a; cat /etc/hosts 2>/dev/null; scutil --dns 2>/dev/null | head -20; } > resultats/xarxa.txt
+          { uname -a; cat /etc/hosts; ipconfig -all; } > resultats/xarxa.txt 2>&1 || true
           fes resultats/engegada.log $PY .github/mesures/diag_engegada.py "$MV/control" 8911
 
       - name: Safari de debò, repetit
@@ -89,12 +81,9 @@ jobs:
           sudo safaridriver --enable
           P=".github/mesures/tanda_pagina.py"
           O="resultats/safari.json"
-          fes resultats/safari-1.log $PY $P $O --video "$MV/control" --motor safari --escenaris calent --segons 50 --etiqueta=-primer
-          fes resultats/safari-2.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 3 --segons 50 --etiqueta=-aviat
-          fes resultats/safari-3.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 3 --segons 50 --capta-tard --etiqueta=-tard
-          fes resultats/safari-4.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 2 --segons 50 --sense-captura --etiqueta=-sense
-          fes resultats/safari-5.log $PY $P $O --video "$MV/control" --motor safari --escenaris edita --repeticions 2 --segons 50 --capta-tard --etiqueta=-tard
-          fes resultats/safari-6.log $PY $P $O --video "$MV/llarg" --motor safari --escenaris fred --repeticions 2 --segons 90 --capta-tard --etiqueta=-tard --port 8902
+          fes resultats/safari-1.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --repeticions 3 --segons 50 --capta-tard --torna-a-clicar --etiqueta=-tard
+          fes resultats/safari-2.log $PY $P $O --video "$MV/control" --motor safari --escenaris fred --segons 50 --torna-a-clicar --etiqueta=-aviat
+          fes resultats/safari-3.log $PY $P $O --video "$MV/llarg" --motor safari --escenaris fred --repeticions 3 --segons 110 --capta-tard --torna-a-clicar --etiqueta=-tard --port 8902
 
       - name: Desa els resultats
         if: always()

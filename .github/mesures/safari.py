@@ -37,6 +37,7 @@ def main() -> None:
     ap.add_argument("--espera-continu", type=int, default=180)
     ap.add_argument("--sense-captura", action="store_true")
     ap.add_argument("--capta-tard", action="store_true")
+    ap.add_argument("--torna-a-clicar", action="store_true", help="Si el vídeo no ha arrencat sol, es torna a prémer el play, com faria una persona")
     a = ap.parse_args()
     a.sortida.mkdir(parents=True, exist_ok=True)
     conductor = subprocess.Popen(["safaridriver", "-p", str(PORT)])
@@ -73,13 +74,28 @@ def main() -> None:
         # El so es comença a enregistrar en el mateix clic: el Safari només el deixa engegar així.
         if not a.sense_captura:
             executa("""const b=document.getElementById('play'),o=arguments[0];b.addEventListener('pointerdown',()=>{window.__sonda.capta(o).then(s=>window.__sonda.estatCaptura=s).catch(e=>window.__sonda.estatCaptura='error: '+e)},{capture:true,once:true});""", {"tard": a.capta_tard})
-        boto = crida("POST", f"/session/{sessio}/element", {"using": "css selector", "value": "#play"})
-        element = next(iter(boto.values()))
-        crida("POST", f"/session/{sessio}/element/{element}/click", {})
+        def clica() -> None:
+            for _ in range(10):  # si hi ha alguna cosa a sobre un moment, com faria una persona: es torna a provar
+                try:
+                    boto = crida("POST", f"/session/{sessio}/element", {"using": "css selector", "value": "#play"})
+                    crida("POST", f"/session/{sessio}/element/{next(iter(boto.values()))}/click", {})
+                    return
+                except RuntimeError as e:
+                    if "intercepted" not in str(e):
+                        raise
+                    time.sleep(2)
+            raise RuntimeError("No es pot prémer el play")
+        clica()
         clic, fotos, editat = time.time(), [10, 20, 30, 40], False
         fi = clic + a.segons
         while time.time() < fi:
             time.sleep(1)
+            if a.torna_a_clicar and "segon_clic_s" not in resultat and executa("try{return !R.reproduint && !R.espera && tempsMuntatge()<duradaFinal-0.4}catch(e){return false}"):
+                time.sleep(1)  # el temps de llegir l'avís
+                resultat["segon_clic_s"] = round(time.time() - clic, 1)
+                executa("window.__sonda.marca('segon-clic')")
+                clica()
+                fi = time.time() + a.segons  # a partir d'aquí és quan sona
             if fotos and time.time() - clic > fotos[0]:  # per veure si la imatge avança: cada fotograma porta el número
                 (a.sortida / f"foto-{fotos.pop(0)}.png").write_bytes(base64.b64decode(crida("GET", f"/session/{sessio}/screenshot")))
             if a.escenari == "edita" and not editat and executa("try{return tempsMuntatge()>=6}catch(e){return false}"):
