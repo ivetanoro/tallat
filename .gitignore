@@ -28,7 +28,7 @@ transcripts/
 *.vtt
 
 # --- Marca personal (cada persona la té fora del repositori) ---
-# Es publiquen només les plantilles neutres: brand.example.md i brand.example.json
+# Es publiquen només les plantilles neutres: brand.example.md (l'estil neutre és a motor/nucli/estil_neutre.json)
 brand.md
 brand.json
 marca/

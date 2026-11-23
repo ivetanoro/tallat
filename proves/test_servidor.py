@@ -626,8 +626,8 @@ class TestServidor(unittest.TestCase):
         r = c.getresponse()
         zip_ = r.read()
         c.close()
-        self.assertIn("per-a-reels.tallat-kit.zip", r.getheader("Content-Disposition"))
-        self.assertIn("kit.json", zipfile.ZipFile(io.BytesIO(zip_)).namelist())
+        self.assertIn("per-a-reels.estil.zip", r.getheader("Content-Disposition"))
+        self.assertIn("estil.json", zipfile.ZipFile(io.BytesIO(zip_)).namelist())
         estat, cos = self.peticio("POST", "/api/kit/importa?nom=kit.zip", zip_,
                                   self.bones(**{"Content-Type": "application/zip"}))
         importat = json.loads(cos)

@@ -1,0 +1,26 @@
+# Filler words in English (starter list). L'idioma el diu Whisper en transcriure.
+# Una expressió per línia. Les majúscules, la puntuació i les lletres allargades no compten.
+# Per fer-ne una còpia teva: ~/matcha/farciment/en.txt (si hi és, mana sobre aquesta).
+
+[treu]
+uh
+um
+uhm
+er
+erm
+hmm
+mmm
+
+[proposa]
+ah
+you know
+i mean
+basically
+actually
+kind of
+sort of
+# Amb una coma al final: només quan la paraula va seguida de coma («So, the thing is…»).
+like,
+so,
+well,
+okay,

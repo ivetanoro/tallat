@@ -26,7 +26,7 @@ tallat és un editor de reels en català que funciona dins de [Claude](https://c
 - **Un estil per a tot el vídeo d'un sol toc** (subtítols, títol, gràfics i b-roll: Net, Revista, Pop, Suau, Impacte o Apilat). Cada vídeo té el seu estil, i **⌘Z** ho desfà tot.
 - **Vídeo horitzontal.** Si graves en horitzontal, el pots retallar (se'n queda el centre) o posar-lo sencer, amb el mateix vídeo difuminat a dalt i a baix.
 - **Els teus colors i lletres.** Els tries a la pàgina en 2 passos (o, si vols, Claude te'ls pregunta al xat, a partir d'un reel que t'hauria agradat fer), i els subtítols, el títol, els gràfics i el b-roll els fan servir sols.
-- **Uns quants estils.** Desa el teu estil (lletra, colors, animacions, durada del b-roll…) amb un nom, fes-ne uns quants per a tipus de vídeo diferents, tria'n un per a cada vídeo i passa'l a qui vulguis en un `.zip`.
+- **Uns quants estils.** Desa el teu estil (lletra, colors, animacions, durada del b-roll…) amb un nom, fes-ne uns quants per a tipus de vídeo diferents, tria'n un per a cada vídeo i passa'l a qui vulguis en un `.estil.zip`. També obre els estils fets amb altres eines que fan servir el mateix format.
 - **Recorda el teu gust.** Si dius a Claude «els subtítols, més grans» o «no em treguis mai els *vale*», et pregunta si és per sempre i ho aplica a tots els vídeos següents. Per veure les teves regles, pregunta-li «quines regles tinc?».
 - **Exporta** un esborrany ràpid, la versió final en 1080 o 4K vertical, o un projecte per acabar-lo a Premiere, Final Cut, DaVinci Resolve o CapCut.
 

@@ -1,10 +1,10 @@
-# Llista de farciment de tallat.
+# Llista de farciment en català (la comparteixen tallat i matcha).
 # Una expressió per línia (pot ser de més d'una paraula). Les majúscules, la puntuació
 # i les lletres allargades no compten: «Mmmm…» és el mateix que «mmm».
-# Pots editar la teva còpia a ~/.tallat/farciment.txt
+# Cada eina en fa una còpia per a la persona (tallat: ~/.tallat/farciment.txt; matcha: ~/matcha/farciment/ca.txt).
 
 [treu]
-# Sons de dubte: tallat els treu sols (es poden recuperar)
+# Sons de dubte: es treuen sols (es poden recuperar)
 # (no hi posis «em»: en català també és un pronom, com a «em satura»)
 eh
 ehm
@@ -15,7 +15,7 @@ uh
 um
 
 [proposa]
-# Paraules que de vegades són farciment i de vegades no: tallat només les proposa
+# Paraules que de vegades són farciment i de vegades no: només es proposen
 ah
 vale
 saps

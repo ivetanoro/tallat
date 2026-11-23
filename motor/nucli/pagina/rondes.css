@@ -1,0 +1,40 @@
+/* nucli · la peça de votar (rondes.js): un control segmentat amb una peça que llisca fins al vot triat.
+   Colors per defecte del sistema; cada eina els pot canviar amb aquestes variables. */
+.rondes-vot {
+  --rondes-si: #34c759; --rondes-potser: #ff9f0a; --rondes-no: #ff3b30;
+  --rondes-fons: rgba(118, 118, 128, .12); --rondes-superficie: #fff; --rondes-text: inherit;
+  --rondes-molla: cubic-bezier(.2, .9, .25, 1.15); --rondes-durada: 380ms;
+  position: relative; display: grid; grid-template-columns: repeat(3, 1fr);
+  padding: 2px; border-radius: .625rem; background: var(--rondes-fons); isolation: isolate;
+}
+@media (prefers-color-scheme: dark) {
+  .rondes-vot { --rondes-si: #30d158; --rondes-potser: #ff9f0a; --rondes-no: #ff453a;
+                --rondes-fons: rgba(118, 118, 128, .24); --rondes-superficie: #636366; }
+}
+.rondes-vot .rondes-indicador {
+  position: absolute; z-index: -1; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / 3);
+  border-radius: .5rem; background: var(--rondes-superficie); box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 3px 8px rgba(0, 0, 0, .06);
+  opacity: 0; transform: translateX(0) scale(.92);
+  transition: transform var(--rondes-durada) var(--rondes-molla), opacity 160ms ease, background-color 200ms ease;
+}
+.rondes-vot[data-vot="si"] .rondes-indicador { opacity: 1; transform: translateX(0); background: var(--rondes-si); }
+.rondes-vot[data-vot="potser"] .rondes-indicador { opacity: 1; transform: translateX(100%); background: var(--rondes-potser); }
+.rondes-vot[data-vot="no"] .rondes-indicador { opacity: 1; transform: translateX(200%); background: var(--rondes-no); }
+.rondes-vot button {
+  min-height: 44px; border: 0; background: none; border-radius: .5rem; padding: .375rem .25rem; cursor: pointer;
+  font: inherit; font-size: .8125rem; font-weight: 600; letter-spacing: .005em; color: var(--rondes-text);
+  white-space: nowrap; transition: color 200ms ease, transform 100ms ease-out;
+}
+.rondes-vot button:active { transform: scale(.94); }
+.rondes-vot button[aria-checked="true"] { color: #fff; }
+.rondes-vot button:focus-visible { outline: 2px solid var(--rondes-si); outline-offset: 1px; }
+.rondes-vot button:disabled { cursor: not-allowed; }
+.rondes-vot:has(button:disabled) { opacity: .55; }
+@media (prefers-reduced-motion: reduce) {
+  .rondes-vot .rondes-indicador, .rondes-vot button { transition: none; }
+  .rondes-vot button:active { transform: none; }
+}
+@media (prefers-contrast: more) {
+  .rondes-vot { outline: 1px solid currentColor; }
+  .rondes-vot button[aria-checked="true"] { text-decoration: underline; }
+}

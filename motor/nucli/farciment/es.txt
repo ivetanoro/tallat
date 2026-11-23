@@ -1,0 +1,27 @@
+# Farciment en castellà (llista inicial). L'idioma el diu Whisper en transcriure.
+# Una expressió per línia. Les majúscules, la puntuació i les lletres allargades no compten.
+# Per fer-ne una còpia teva: ~/matcha/farciment/es.txt (si hi és, mana sobre aquesta).
+
+[treu]
+eh
+ehm
+ahm
+mmm
+hmm
+uh
+um
+
+[proposa]
+ah
+vale
+o sea
+bueno
+pues
+a ver
+en plan
+sabes
+digamos
+# Amb una coma al final: només quan la paraula va seguida de coma («Bueno, pues…»).
+este,
+tipo,
+pues,

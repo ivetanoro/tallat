@@ -81,7 +81,7 @@ class TestKits(AmbKits):
         marca.desa("subtitols", {"color": "#ABCDEF", "animacio": "fos"})
         marca.desa_font("La Meva.otf", b"OTTO-font")
         nom, contingut = marca.empaqueta_kit("el-meu-estil")
-        self.assertEqual(nom, "el-meu-estil.tallat-kit.zip")
+        self.assertEqual(nom, "el-meu-estil.estil.zip")
         nou = marca.importa_kit(contingut)
         self.assertNotEqual(nou, "el-meu-estil")
         self.assertEqual(next(k["nom"] for k in marca.kits() if k["id"] == nou), "El meu estil (importat)")
@@ -112,6 +112,28 @@ class TestKits(AmbKits):
         for dolent in (b"no soc cap zip", self._zip({"altres.txt": b"x"})):
             with self.assertRaises(ValueError):
                 marca.importa_kit(dolent)
+
+    def test_un_estil_de_matcha_passa_per_tallat_sense_perdre_res(self):
+        """El format comú (.estil.zip): tallat en fa servir els colors i les lletres i en guarda la resta."""
+        zip_ = self._zip({
+            "estil.json": json.dumps({"format": "estil/1", "nom": "De matcha", "quadre": {"w": 1080, "h": 1920},
+                                      "marca": {"lletra_titols": "Figtree", "color_fosc": "#56211F"},
+                                      "ext": {"matcha": {"plans": {"ple": {}}, "origen": "/Users/algu/x.mp4"}}}).encode(),
+            "fonts/Figtree__700.ttf": b"TTF",
+            "receptes/ganxo.html": b"<script></script>",
+            "so/kit/kit.json": b"{}"})
+        kit = marca.importa_kit(zip_)
+        estil = marca.amb_la_marca(marca.carrega(kit=kit))
+        self.assertEqual(estil["titol"]["font"], "Figtree")
+        self.assertEqual(estil["subtitols"]["contorn"], "#56211F")
+        self.assertEqual([f["familia"] for f in marca.fonts_del_kit(kit)], ["Figtree"])
+        nom, contingut = marca.empaqueta_kit(kit)
+        self.assertTrue(nom.endswith(".estil.zip"))
+        z = zipfile.ZipFile(io.BytesIO(contingut))
+        self.assertIn("receptes/ganxo.html", z.namelist())
+        self.assertIn("so/kit/kit.json", z.namelist())
+        ext = json.loads(z.read("estil.json"))["ext"]["matcha"]
+        self.assertEqual(ext, {"plans": {"ple": {}}})  # el camí de l'altre ordinador no viatja
 
     @staticmethod
     def _zip(fitxers: dict) -> bytes:

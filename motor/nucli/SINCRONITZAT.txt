@@ -1,0 +1,2 @@
+Còpia del nucli (projectes/nucli). No l'editis aquí: canvia l'original i fes «python3 sincronitza.py».
+empremta 7a3194b6784d73c3f1c069931b5c1cdfe46ca804d5b04884c9bc2fe414d126b3

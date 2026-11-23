@@ -5,7 +5,7 @@ les fonts pròpies, la lletra). Cada persona en pot tenir uns quants a ~/.tallat
 repositori, triar-ne un per a cada vídeo i passar-ne un a una altra persona (un .zip).
 
   ~/.tallat/kits/<kit>/kit.json   l'estil (els valors que hi falten es prenen de l'estil neutre,
-                                  config/brand.example.json)
+                                  motor/nucli/estil_neutre.json, el format comú)
   ~/.tallat/kits/<kit>/fonts/     les fonts pròpies del kit
   ~/.tallat/kits/kits.json        quin és el kit per defecte (el dels vídeos nous)
 
@@ -14,7 +14,6 @@ converteix en el kit «El meu estil». brand.json no es toca, però ja no es fa 
 """
 from __future__ import annotations
 
-import io
 import json
 import re
 import shutil
@@ -22,11 +21,12 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
-import zipfile
 from pathlib import Path
 
+from motor.nucli import estil as nucli_estil
+
 CONFIG = Path(__file__).resolve().parent.parent / "config"
-PER_DEFECTE = CONFIG / "brand.example.json"
+PER_DEFECTE = nucli_estil.NEUTRE  # l'estil neutre és del nucli: el comparteixen tallat, personalitza i matcha
 ESTILS = CONFIG / "estils_subtitols.json"
 ESTILS_TITOL = CONFIG / "estils_titol.json"
 ESTILS_BROLL = CONFIG / "estils_broll.json"
@@ -40,72 +40,29 @@ PRIMER_KIT = ("el-meu-estil", "El meu estil")
 INFO_KIT = ("Kit d'estil de tallat. Es canvia des de la pàgina de revisió (o a mà, aquí). "
             "Els valors que hi falten es prenen de l'estil neutre de tallat.")
 ID_KIT = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
-MIDA_MAXIMA_KIT = 60 * 1024 * 1024  # un kit importat (amb les seves fonts), com a màxim
-FORMATS_FONT = {".ttf", ".otf", ".woff", ".woff2"}
+MIDA_MAXIMA_KIT = nucli_estil.MIDA_MAXIMA  # un kit importat (amb les seves fonts), com a màxim
+FORMATS_FONT = nucli_estil.FORMATS_FONT
 
-# Què es pot canviar (des de la pàgina o amb les regles del teu gust), i entre quins límits.
-EDITABLES = {"subtitols", "titol", "broll", "stickers", "talls", "so", "marca"}
-RANGS = {
-    "subtitols": {"mida": (0.03, 0.16), "pes": (100, 900), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.05, 0.95),
-                  "amplada_maxima": (0.4, 0.98), "paraules_per_linia": (1, 12), "lletres_per_linia": (4, 60),
-                  "espaiat": (-0.12, 0.3), "interlineat": (0.75, 1.6), "linies_max": (2, 8), "clau_mida": (1.0, 3.5)},
-    "titol": {"mida": (0.03, 0.2), "pes": (100, 900), "clau_mida": (1.0, 4.0), "espaiat": (-0.12, 0.3),
-              "interlineat": (0.75, 1.6), "gruix_contorn": (0.0, 0.2), "posicio_y": (0.05, 0.95),
-              "amplada_maxima": (0.4, 0.98), "durada": (0.5, 10.0), "corba": (-1.0, 1.0)},
-    "broll": {"durada": (0.5, 4.0), "mida": (0.25, 1.0), "posicio_x": (0.0, 1.0), "posicio_y": (0.0, 1.0),
-              "radi": (0.0, 0.5), "vora": (0.0, 0.04), "rotacio": (-15, 15)},
-    "stickers": {"durada": (0.5, 6.0), "mida": (0.08, 0.8), "x": (0.0, 1.0), "y": (0.0, 1.0), "rotacio": (-30, 30)},
-    "talls": {"pausa_maxima": (0.1, 2.0)},
-    "so": {"volum_efectes": (0.0, 1.0)},
-}
-OPCIONS = {
-    "subtitols": {"animacio": {"pop", "fos", "cap", "impacte", "cortina", "pes"}, "apareixen": {"paraula", "linia"},
-                  "destacat": {"color", "caixa", "karaoke", "gran"}, "aspecte": {"normal", "neo", "degradat"},
-                  "fons": {"cap", "pindola"}, "disposicio": {"linia", "apilat", "escampat"},
-                  "alineacio": {"centre", "esquerra", "dreta", "esglao"}},
-    "stickers": {"animacio": {"pop", "cap"}},
-    "so": {"soroll": {"suau", "mitja", "fort"}, "efectes": {"cap", "pocs", "molts"}},
-    "marca": {"grafics": {"pocs", "normal", "molts"}},
-    "broll": {"disposicio": {"pantalla", "targeta", "partida", "carrusel"},
-              "proporcio": {"9:16", "3:4", "4:5", "1:1", "16:9"},
-              "animacio": {"pop", "puja", "llisca", "fos", "cap"}},
-    "titol": {"alineacio": {"centre", "esquerra", "dreta", "esglao"},
-              "animacio": {"puja", "pop", "fos", "cortina", "maquina", "cap"}, "fons": {"cap", "enfosquit", "pindola"},
-              "corba_linies": {"primera", "totes", "darrera"}},
-}
-COLORS = {"color", "color_actiu", "contorn", "fons_color", "clau_color", "vora_color",
-          "color_text", "color_principal", "color_destacat", "color_secundari", "color_clar", "color_fosc"}
-# Opcions que són una llista (se'n pot triar més d'una).
-LLISTES = {"marca": {"energia": {"net", "mac", "scrapbook", "editorial"}}}
-MIDA_TEXT = 600  # els textos de la marca (el compte, la referència…), com a molt
-# La marca s'escampa: cada color i cada lletra fa la seva feina a la resta del kit.
-ENLLACOS_MARCA = {
-    "color_text": [("subtitols", "color"), ("titol", "color")],
-    "color_fosc": [("subtitols", "contorn"), ("titol", "contorn")],  # també el color de les ombres
-    "color_destacat": [("subtitols", "color_actiu"), ("subtitols", "clau_color"), ("titol", "clau_color")],
-    "color_principal": [("broll", "vora_color")],
-    "lletra_text": [("subtitols", "font")],
-    "lletra_titols": [("titol", "font")],
-    "lletra_accent": [("subtitols", "clau_font"), ("titol", "clau_font")],
-}
-NOM_DE_FONT = re.compile(r"^[\w][\w .-]{0,60}$")
-
-
-_neutre: dict = {}
+# Què es pot canviar (des de la pàgina o amb les regles del teu gust), i entre quins límits: és el format
+# comú de l'estil, al nucli (motor/nucli/estil.py).
+EDITABLES = nucli_estil.SECCIONS
+RANGS = nucli_estil.RANGS
+OPCIONS = nucli_estil.OPCIONS
+COLORS = nucli_estil.COLORS
+LLISTES = nucli_estil.LLISTES
+MIDA_TEXT = nucli_estil.MIDA_TEXT
+ENLLACOS_MARCA = nucli_estil.ENLLACOS_MARCA
+NOM_DE_FONT = nucli_estil.NOM_DE_FONT
 
 
 def _estil_neutre() -> dict:
-    """L'estil neutre sense notes (una còpia: qui el fa servir el pot canviar). Es llegeix un sol cop mentre el
-    fitxer no canvia: valida i carrega el demanen a cada opció i a cada petició."""
-    marca_temps = PER_DEFECTE.stat().st_mtime_ns
-    if _neutre.get("temps") != marca_temps:
-        _neutre.update(temps=marca_temps, dades=_sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8"))))
-    return json.loads(json.dumps(_neutre["dades"]))
+    """L'estil neutre sense notes (una còpia: qui el fa servir el pot canviar)."""
+    return nucli_estil.neutre()
 
 
 def _sense_notes(d: dict) -> dict:
     """Treu les claus que comencen per «_» (són explicacions per a les persones)."""
-    return {k: (_sense_notes(v) if isinstance(v, dict) else v) for k, v in d.items() if not k.startswith("_")}
+    return nucli_estil.sense_notes(d)
 
 
 def _llegeix_json(path: Path) -> dict:
@@ -140,7 +97,7 @@ def _inicialitza() -> None:
             subtitols["font_fitxer"] = f"fonts/{origen.name}"
         else:
             subtitols["font_fitxer"] = None
-    dades.update(_info=INFO_KIT, nom=nom)
+    dades.update(_info=INFO_KIT, nom=nom, format=nucli_estil.FORMAT)
     _escriu(dades, carpeta / FITXER_KIT)
     _escriu({"per_defecte": id_}, KITS / INDEX)
 
@@ -212,6 +169,7 @@ def crea_kit(nom: str, copia_de: str | None = None) -> str:
         (KITS / id_).mkdir(parents=True)
         dades = {**json.loads(PER_DEFECTE.read_text(encoding="utf-8")), "_info": INFO_KIT}
     dades["nom"] = nom
+    dades["format"] = nucli_estil.FORMAT
     _escriu(dades, KITS / id_ / FITXER_KIT)
     return id_
 
@@ -244,67 +202,33 @@ def esborra_kit(kit: str) -> Path:
 
 
 def empaqueta_kit(kit: str) -> tuple[str, bytes]:
-    """El kit en un .zip, per passar-lo a una altra persona o a un altre Mac: (nom del fitxer, contingut)."""
+    """El kit en un .estil.zip (el format comú: també l'obren personalitza i matcha), per passar-lo a una altra
+    persona o a un altre Mac: (nom del fitxer, contingut)."""
     if not _existeix(kit):
         raise KeyError(kit)
-    carpeta = KITS / kit
-    memoria = io.BytesIO()
-    with zipfile.ZipFile(memoria, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(carpeta / FITXER_KIT, FITXER_KIT)
-        fonts = carpeta / "fonts"
-        for font in sorted(fonts.iterdir()) if fonts.is_dir() else []:
-            if font.is_file() and font.suffix.lower() in FORMATS_FONT:
-                z.write(font, f"fonts/{font.name}")
-    nom = _llegeix_json(carpeta / FITXER_KIT).get("nom") or kit
-    return f"{_slug(nom)}.tallat-kit.zip", memoria.getvalue()
+    # també el que és d'altres eines (les receptes i el so de matcha): així un estil passa per tallat sense perdre res
+    return nucli_estil.empaqueta(KITS / kit, fitxer=FITXER_KIT, carpetes=tuple(nucli_estil.CARPETES))
 
 
 def importa_kit(contingut: bytes) -> str:
-    """Afegeix un kit d'un .zip (fet amb «Exporta»). Només se'n agafa el que tallat entén: les opcions
-    vàlides de l'estil i les fonts. La resta (camins de fitxers, opcions estranyes) es deixa estar."""
+    """Afegeix un estil d'un .zip: un .estil.zip (de tallat, personalitza o matcha) o un .tallat-kit.zip d'abans.
+    Només se'n agafa el que s'entén: les opcions vàlides, les fonts i el que és de cada eina (`ext`). La resta
+    (camins de fitxers, opcions estranyes) es deixa estar."""
     try:
-        z = zipfile.ZipFile(io.BytesIO(contingut))
-    except zipfile.BadZipFile:
-        raise ValueError("Aquest fitxer no és un kit de tallat (ha de ser el .zip que fa «Exporta»).") from None
-    with z:
-        fitxers = {i.filename: i for i in z.infolist() if not i.is_dir()}
-        if FITXER_KIT not in fitxers:
-            raise ValueError("Aquest .zip no té cap kit.json: no és un kit de tallat.")
-        if sum(i.file_size for i in fitxers.values()) > MIDA_MAXIMA_KIT:
-            raise ValueError("Aquest kit és massa gran.")
-        try:
-            dades = json.loads(z.read(FITXER_KIT).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            raise ValueError("El kit.json d'aquest kit no es pot llegir.") from None
-        if not isinstance(dades, dict):
-            raise ValueError("El kit.json d'aquest kit no es pot llegir.")
-        fonts = {nom[len("fonts/"):]: info for nom, info in fitxers.items()
-                 if re.fullmatch(r"fonts/[^/\\:]+", nom) and not nom[len("fonts/"):].startswith(".")
-                 and Path(nom).suffix.lower() in FORMATS_FONT}
-        net = {"_info": INFO_KIT, "nom": _nom_valid(dades.get("nom") or "Kit importat")}
-        if any(k["nom"] == net["nom"] for k in kits()):
-            net["nom"] = _nom_valid(f"{net['nom']} (importat)")
-        for seccio in sorted(EDITABLES):
-            valors = dades.get(seccio)
-            if not isinstance(valors, dict):
-                continue
-            net[seccio] = {}
-            for clau, valor in valors.items():
-                if clau.startswith("_") or clau in ("font_fitxer", "lut"):
-                    continue
-                try:
-                    net[seccio].update(valida(seccio, {clau: valor}))
-                except ValueError:
-                    continue  # el que no s'entén es deixa: es farà servir el valor neutre
-        font = (dades.get("subtitols") or {}).get("font_fitxer") if isinstance(dades.get("subtitols"), dict) else None
-        if isinstance(font, str) and font.startswith("fonts/") and font[len("fonts/"):] in fonts:
-            net.setdefault("subtitols", {})["font_fitxer"] = font
-        id_ = _id_nou(net["nom"])
-        carpeta = KITS / id_
-        (carpeta / "fonts").mkdir(parents=True)
-        for nom, info in fonts.items():
-            (carpeta / "fonts" / nom).write_bytes(z.read(info))
-        _escriu(net, carpeta / FITXER_KIT)
+        dades, fitxers = nucli_estil.llegeix_zip(contingut)
+    except ValueError as e:
+        raise ValueError(str(e).replace("un estil", "un estil de tallat", 1)) from None
+    net = {"_info": INFO_KIT, **dades, "nom": _nom_valid(dades.get("nom") or "Kit importat")}
+    if any(k["nom"] == net["nom"] for k in kits()):
+        net["nom"] = _nom_valid(f"{net['nom']} (importat)")
+    id_ = _id_nou(net["nom"])
+    carpeta = KITS / id_
+    (carpeta / "fonts").mkdir(parents=True)
+    for nom, cos in fitxers.items():
+        desti = carpeta / nom
+        desti.parent.mkdir(parents=True, exist_ok=True)
+        desti.write_bytes(cos)
+    _escriu(net, carpeta / FITXER_KIT)
     return id_
 
 
@@ -318,7 +242,7 @@ def carrega(path: Path | None = None, kit: str | None = None) -> dict:
     path = path or ruta(kit)
     base = _estil_neutre()
     for seccio, valors in _sense_notes(_llegeix_json(path)).items():
-        if seccio == "nom":  # el nom del kit no és part de l'estil
+        if seccio in ("nom", "format", "ext"):  # el nom, el format i el que és d'altres eines no són part de l'estil
             continue
         if isinstance(valors, dict) and isinstance(base.get(seccio), dict):
             base[seccio].update(valors)
@@ -404,24 +328,8 @@ def neteja_estil_video(estil) -> dict:
 
 
 def amb_la_marca(estil: dict) -> dict:
-    """Els colors i les lletres de la marca, a sobre de les seccions del kit: manen sempre (un estil fet que s'hi
-    hagués triat abans no els trepitja). Els que la marca no té, es queden com són. Sense color destacat, les
-    destacades van del color del text (com _escampa_marca). Després, un vídeo encara els pot canviar (amb_estil_video)."""
-    m = estil.get("marca") or {}
-    for clau, destins in ENLLACOS_MARCA.items():
-        valor = m.get(clau)
-        if clau == "color_destacat" and valor is None:
-            valor = m.get("color_text")
-        if valor is None:
-            continue
-        for seccio, desti in destins:
-            estil.setdefault(seccio, {})[desti] = valor
-            if (seccio, desti) == ("subtitols", "font"):
-                estil["subtitols"]["font_fitxer"] = None
-        if clau == "lletra_accent":  # la paraula emotiva, en cursiva
-            for seccio in ("subtitols", "titol"):
-                estil.setdefault(seccio, {})["clau_cursiva"] = True
-    return estil
+    """Els colors i les lletres de la marca, a sobre de les seccions del kit: manen sempre (vegeu el nucli)."""
+    return nucli_estil.amb_la_marca(estil)
 
 
 def amb_estil_video(base: dict, estil: dict | None) -> dict:
@@ -436,19 +344,7 @@ def amb_estil_video(base: dict, estil: dict | None) -> dict:
 
 def claus_de_la_marca(m: dict) -> dict:
     """{seccio: claus} que hi posa la marca `m` (les que té): a sobre d'aquestes, el kit no hi mana (amb_la_marca)."""
-    claus: dict = {}
-    for clau, destins in ENLLACOS_MARCA.items():
-        valor = m.get(clau) if not (clau == "color_destacat" and m.get(clau) is None) else m.get("color_text")
-        if valor is None:
-            continue
-        for seccio, desti in destins:
-            claus.setdefault(seccio, set()).add(desti)
-            if (seccio, desti) == ("subtitols", "font"):
-                claus[seccio].add("font_fitxer")
-        if clau == "lletra_accent":
-            for seccio in ("subtitols", "titol"):
-                claus.setdefault(seccio, set()).add("clau_cursiva")
-    return claus
+    return nucli_estil.claus_de_la_marca(m)
 
 
 def passa_al_kit(estil: dict, kit: str | None = None, path: Path | None = None) -> dict:
@@ -472,54 +368,7 @@ def passa_al_kit(estil: dict, kit: str | None = None, path: Path | None = None) 
 
 def valida(seccio: str, canvis: dict) -> dict:
     """Comprova els canvis que arriben de la pàgina; llança ValueError amb un missatge clar si n'hi ha cap de dolent."""
-    if seccio not in EDITABLES:
-        raise ValueError(f"No es pot canviar la secció «{seccio}»")
-    base = _estil_neutre()[seccio]
-    net = {}
-    for clau, valor in canvis.items():
-        if clau not in base:
-            raise ValueError(f"Opció desconeguda: {clau}")
-        defecte = base[clau]
-        rangs, opcions = RANGS.get(seccio, {}), OPCIONS.get(seccio, {})
-        if defecte is None and clau in COLORS:  # un color que també pot ser «el de sempre» (null)
-            if valor is not None and not (isinstance(valor, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", valor)):
-                raise ValueError(f"{clau} ha de ser un color com #FFD60A")
-        elif defecte is None and (clau in ("font", "clau_font") or clau.startswith("lletra_")):  # null: la de sempre
-            if valor is not None and not (isinstance(valor, str) and NOM_DE_FONT.match(valor)):
-                raise ValueError("Aquest nom de font no és vàlid")
-        elif defecte is None:  # camins de fitxers (font pròpia, LUT): no es posen per aquí
-            if valor is not None:
-                raise ValueError(f"{clau} no es pot canviar així")
-        elif isinstance(defecte, list):
-            permesos = LLISTES.get(seccio, {}).get(clau, set())
-            if not isinstance(valor, list) or not valor or any(v not in permesos for v in valor):
-                raise ValueError(f"{clau} ha de ser una llista amb alguna d'aquestes: {', '.join(sorted(permesos))}")
-            valor = list(dict.fromkeys(valor))
-        elif isinstance(defecte, bool):
-            if not isinstance(valor, bool):
-                raise ValueError(f"{clau} ha de ser sí o no")
-        elif isinstance(defecte, (int, float)):
-            if isinstance(valor, bool) or not isinstance(valor, (int, float)):
-                raise ValueError(f"{clau} ha de ser un número")
-            if clau in rangs:
-                a, b = rangs[clau]
-                valor = min(b, max(a, valor))
-            if isinstance(defecte, int):
-                valor = int(round(valor))
-            else:
-                valor = round(float(valor), 4)
-        elif isinstance(defecte, str):
-            if not isinstance(valor, str):
-                raise ValueError(f"{clau} ha de ser un text")
-            if clau in COLORS and not re.fullmatch(r"#[0-9A-Fa-f]{6}", valor):
-                raise ValueError(f"{clau} ha de ser un color com #FFD60A")
-            if clau in opcions and valor not in opcions[clau]:
-                raise ValueError(f"{clau} no pot ser «{valor}»")
-            if clau == "font" and not NOM_DE_FONT.match(valor):
-                raise ValueError("Aquest nom de font no és vàlid")
-            valor = valor.strip()[:MIDA_TEXT] if not opcions.get(clau) and clau not in COLORS else valor
-        net[clau] = valor
-    return net
+    return nucli_estil.valida(seccio, canvis)
 
 
 def _escriu(dades: dict, path: Path) -> None:
@@ -541,25 +390,8 @@ def desa(seccio: str, canvis: dict, path: Path | None = None, kit: str | None = 
 
 
 def _escampa_marca(dades: dict, canvis: dict) -> None:
-    """Posa els colors i les lletres de la marca allà on fan la seva feina (si se'n treu un, hi torna
-    el de l'estil neutre). Sense color destacat, les destacades van del color del text. Després cada
-    opció es pot retocar a part."""
-    base = _sense_notes(json.loads(PER_DEFECTE.read_text(encoding="utf-8")))
-    marca_ = dades.get("marca", {})
-    claus = set(canvis)
-    if "color_text" in claus and not marca_.get("color_destacat"):
-        claus.add("color_destacat")
-    for clau in claus:
-        valor = marca_.get(clau)
-        if clau == "color_destacat" and valor is None:
-            valor = marca_.get("color_text")
-        for seccio, desti in ENLLACOS_MARCA.get(clau, []):
-            dades.setdefault(seccio, {})[desti] = valor if valor is not None else base[seccio][desti]
-            if (seccio, desti) == ("subtitols", "font"):
-                dades["subtitols"]["font_fitxer"] = None
-        if clau == "lletra_accent":  # la paraula emotiva, en cursiva
-            for seccio in ("subtitols", "titol"):
-                dades.setdefault(seccio, {})["clau_cursiva"] = valor is not None
+    """Posa els colors i les lletres de la marca allà on fan la seva feina (vegeu el nucli)."""
+    nucli_estil.escampa_marca(dades, canvis)
 
 
 def restableix(seccio: str, path: Path | None = None, kit: str | None = None) -> dict:
